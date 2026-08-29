@@ -20,3 +20,7 @@ Read `CLAUDE.md` at the repo root first.
 - Pricing Ash is comfortable quoting, or a rule for "always route pricing questions to Ash"
 - A sending domain/address Ash wants used for outreach (not necessarily booking@amicomiotour.com)
 - A tracker (Notion) for prospects/leads
+
+## The product to pitch (once live)
+
+Sergio Bar and Carrozze already run on a shared ordering-system core (sala/table management, kitchen order flow, conto + split-bill, Italian fiscal-receipt bridge in progress) — it isn't formalized into a deployable template yet. Draft product spec and what's still needed before it's pitchable: [Locali & Ordinazioni — Reusable Ordering System Template](https://app.notion.com/p/3cb828450aff81bcb0c1e13082902527). Logged as an open item on both sites in Incidenti e interventi (Tipo: Idea) pending Ash's decision on formalizing it.
