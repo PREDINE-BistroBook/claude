@@ -9,12 +9,13 @@ Start at [`CLAUDE.md`](./CLAUDE.md) — it's the constitution every agent reads 
 ```
 CLAUDE.md                          company constitution — read this first
 .claude/agents/                    one file per agent role
-  concierge.md                     Tours booking + guest comms — LIVE, scheduled
+  concierge.md                     Tours booking + guest comms — LIVE, scheduled, auto-sends Template A/B/C (A/B still blocked on template content)
   social-viral.md                  Tours content — LIVE, scheduled
   site-ops.md                      cross-business site health + work queue — LIVE, scheduled
+  partnerships.md                  Tours hostel-referral growth — drafted, not live yet
   client-success.md                Locali & Ordinazioni support — drafted, not live yet
   biz-dev.md                       Locali & Ordinazioni outreach — drafted, not live yet
-  finance-ops.md                   cross-business finance — read-only checks live, sends not live
+  finance-ops.md                   cross-business finance — read-only checks LIVE, scheduled; sends not live
 .claude/skills/
   request-approval/                how every agent stages something for Ash instead of acting alone
   ops-hq-logging/                  how every agent logs to Notion Ops HQ
@@ -39,6 +40,7 @@ Each live agent runs on a Claude Code Routine (a scheduled trigger) that spins u
 | Concierge | `0 7,16 * * *` | 09:00 + 18:00 |
 | Social / Viral | `0 8 * * 1` | Monday 10:00 |
 | Site Ops | `0 6 * * *` | 08:00 daily |
+| Finance Ops (read-only) | `0 8 * * *` | 09:00 daily |
 
 Europe/Rome runs CEST (UTC+2) for most of the year and CET (UTC+1) in winter — the cron above is pinned to UTC, so it drifts one hour relative to local time across the DST changeover. Adjust then, or ask an agent to fix it when it does.
 

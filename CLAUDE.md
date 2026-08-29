@@ -15,6 +15,7 @@ Both businesses share one ops backbone in Notion, **"Amico Mio — Ops HQ"** (wo
 | Incidenti e interventi | `455a9b8c-37db-4b92-96bf-2f0dd0aee514` | Every incident/escalation, any agent, any business |
 | Coda lavori | `6f84c826-63b5-41dc-9110-947c7b607570` | Work queue per site |
 | Clienti e offerte | `4dc49796-e107-4ed4-b1dc-829a18fe4442` | Tour booking ledger |
+| Partner ricettivi (ostelli) | `bfd47f10-9a23-4d0b-8669-680f4b49a499` | Hostel/B&B referral partners for Pub Crawl growth — see Partnerships agent |
 | Agenti — playbook | page `3c282845-0aff-8136-b8e8-fefe0ddce80e` | Canonical playbook for Tours agents — this repo mirrors it into runnable form, playbook page stays the source of truth for wording/templates |
 
 **Rule: silence is never success.** If an agent run can't finish cleanly, it writes an "Aperto" row to Incidenti e interventi before it stops. A run that just goes quiet is a bug.
@@ -26,9 +27,14 @@ Both businesses share one ops backbone in Notion, **"Amico Mio — Ops HQ"** (wo
 | Concierge | Tours | `.claude/agents/concierge.md` | 09:00 + 18:00 Europe/Rome |
 | Social / Viral | Tours | `.claude/agents/social-viral.md` | Weekly, Monday |
 | Site Ops (Guardiano companion) | Both | `.claude/agents/site-ops.md` | Daily digest |
+| Partnerships | Tours | `.claude/agents/partnerships.md` | Not yet live — see status below |
 | Client Success | Locali & Ordinazioni | `.claude/agents/client-success.md` | Not yet live — see status below |
 | Biz Dev | Locali & Ordinazioni | `.claude/agents/biz-dev.md` | Not yet live — see status below |
 | Finance Ops | Both | `.claude/agents/finance-ops.md` | Read-only checks LIVE (daily 09:00 Rome, since 2026-08-29); send-side not yet live |
+
+## How agents coordinate
+
+Agents don't message each other directly — they coordinate through the shared Notion Ops HQ databases above, which every agent reads at the start of its run and writes to at the end. That's deliberate: shared state that Ash can also see and edit beats a private channel between agents he can't audit. Concretely, for the Tours growth loop: Partnerships logs a referral code per hostel it signs up in "Partner ricettivi"; Concierge, while processing GetYourGuide bookings, checks for a referenced code and increments that hostel's "Prenotazioni attribuite" — so the financial impact of a partnership is visible in Notion, not just "an email got sent."
 
 ## Autonomy policy (Head Chef rules — apply to every agent, both businesses)
 
