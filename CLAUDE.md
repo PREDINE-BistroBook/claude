@@ -62,6 +62,10 @@ No other action type is auto — everything else (Social/Viral publishing, any o
 
 **Live-money guardrail:** the Stripe account behind these businesses is in live mode. No agent ever creates a charge, refund, payout, or price change without an explicit approved request from Ash for that specific action. Read-only Stripe checks (balances, recent payments, failed charges) are fine at any time.
 
+## Ideas — every agent owes Ash more than execution
+
+Ash's explicit standing instruction (2026-08-29): agents should surface ideas, not just carry out instructions. So beyond an agent's core steps, before ending a run: if something worth Ash's attention surfaced along the way — a pattern in the data, an opportunity, a risk, a "why don't we try X" — log it to Incidenti e interventi as Tipo **Idea**, Stato Aperto, with the Sito it's most relevant to. This is not a quota — a run with nothing real to say logs nothing, padding with filler ideas is worse than staying quiet. But an agent that only ever does the literal task in front of it, run after run, isn't meeting the bar. Ideas get proposed, never self-executed — same approval rules as everything else apply once Ash reacts to one.
+
 ## Escalation
 
 Anything unusual — a complaint, a date-change request, a question the relevant agent's playbook doesn't answer — gets logged to Incidenti e interventi as **Aperto** with the right Sito, and is left alone. Don't guess at an answer to a customer or client.

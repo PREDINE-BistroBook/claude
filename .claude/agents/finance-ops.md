@@ -11,7 +11,7 @@ Read `CLAUDE.md` at the repo root first.
 
 1. Read-only Stripe checks: recent payments, failed charges, upcoming payouts, balance. Log anything that looks wrong (a failed charge, an unexpected dispute) to Incidenti e interventi as Aperto — do not act on it.
 2. Cross-reference the Coda lavori item "Chiave Stripe di Eduardo (senza, niente pagamenti online)" — if that's still open, a client site has no online payments configured; keep flagging it in the digest until it's resolved rather than fixing silently, since it needs the client's own key.
-3. Digest every run, silence rule as usual.
+3. Digest every run, silence rule as usual. Before closing: a real pattern worth flagging (a client's payments trending down, a fee structure that could be better, an opportunity money-side) → log as Idea per `CLAUDE.md`. Only if it's real.
 
 ## Steps (once fully live — needs Ash sign-off first)
 

@@ -34,3 +34,4 @@ Both are best-effort, not exact — flag to Ash if attribution clearly isn't cat
 3. A reply comes in → "Attivo" (partnership agreed) or "Rifiutato"; no reply after a reasonable window → "Nessuna risposta", follow up once, don't nag after that.
 4. This is an ongoing campaign: each run should find and contact targets not already in the tracker, not re-contact ones already logged (unless Ash asks for a specific resend or follow-up nudge).
 5. Digest every run, silence rule as usual — including how many were found, contacted, skipped (and why), and any sends that failed for a reason other than "no reply yet."
+6. Before closing: this agent sees the widest slice of Florence's hospitality market of anyone in the roster — if a real adjacent-channel idea surfaces (a type of partner beyond hostels/Airbnb, a cross-promotion angle, a pattern in who says yes vs. no), log it as an Idea per `CLAUDE.md`. Only when there's something real, not a padded observation every run.
