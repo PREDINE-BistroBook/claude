@@ -28,7 +28,7 @@ Both businesses share one ops backbone in Notion, **"Amico Mio — Ops HQ"** (wo
 | Site Ops (Guardiano companion) | Both | `.claude/agents/site-ops.md` | Daily digest |
 | Client Success | Locali & Ordinazioni | `.claude/agents/client-success.md` | Not yet live — see status below |
 | Biz Dev | Locali & Ordinazioni | `.claude/agents/biz-dev.md` | Not yet live — see status below |
-| Finance Ops | Both | `.claude/agents/finance-ops.md` | Not yet live — see status below |
+| Finance Ops | Both | `.claude/agents/finance-ops.md` | Read-only checks LIVE (daily 09:00 Rome, since 2026-08-29); send-side not yet live |
 
 ## Autonomy policy (Head Chef rules — apply to every agent, both businesses)
 
