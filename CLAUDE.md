@@ -45,7 +45,13 @@ Both businesses share one ops backbone in Notion, **"Amico Mio — Ops HQ"** (wo
 - New client commitments, contracts, discounts
 - The **first** live send of anything, ever — see Mode below
 
-**Mode: DRAFT.** Every agent that can send email or publish content currently runs in DRAFT mode: it creates the draft/staged item and stops. Nothing goes out until Ash reviews it and explicitly says "switch to auto" for that specific action type. Do not flip an agent to auto-send on your own judgment — that switch is Ash's to flip, and only Ash's.
+**Mode: DRAFT by default.** Every agent that can send email or publish content runs in DRAFT mode unless a specific action type is listed below: it creates the draft/staged item and stops. Nothing goes out until Ash reviews it and explicitly says "switch to auto" for that specific action type. Do not flip an agent to auto-send on your own judgment — that switch is Ash's to flip, and only Ash's.
+
+**Action types Ash has switched to AUTO** (send immediately, no staging — recorded here so every future run knows the current state without re-asking):
+- **2026-08-29** — Concierge's Template C (review-request emails). See `.claude/agents/concierge.md` step 5.
+- **2026-08-29** — Concierge's Template A/B (welcome/gift emails). See `.claude/agents/concierge.md` step 4. **Still blocked in practice** by the open incident (unresolved meeting point / restaurant list / leather-partner placeholders) — auto mode governs sending once the template is real, it does not permit sending a guessed or incomplete template.
+
+No other action type is auto — everything else (Social/Viral publishing, any off-template email, anything touching money, the not-yet-live agents) stays DRAFT/approval-required per the rules above until Ash explicitly extends this list.
 
 **Live-money guardrail:** the Stripe account behind these businesses is in live mode. No agent ever creates a charge, refund, payout, or price change without an explicit approved request from Ash for that specific action. Read-only Stripe checks (balances, recent payments, failed charges) are fine at any time.
 
