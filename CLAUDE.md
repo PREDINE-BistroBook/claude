@@ -27,7 +27,7 @@ Both businesses share one ops backbone in Notion, **"Amico Mio — Ops HQ"** (wo
 | Concierge | Tours | `.claude/agents/concierge.md` | 09:00 + 18:00 Europe/Rome |
 | Social / Viral | Tours | `.claude/agents/social-viral.md` | Weekly, Monday |
 | Site Ops (Guardiano companion) | Both | `.claude/agents/site-ops.md` | Daily digest |
-| Partnerships | Tours | `.claude/agents/partnerships.md` | Not yet live — see status below |
+| Partnerships | Tours | `.claude/agents/partnerships.md` | LIVE since 2026-08-29 — ongoing hostel outreach campaign |
 | Client Success | Locali & Ordinazioni | `.claude/agents/client-success.md` | Not yet live — see status below |
 | Biz Dev | Locali & Ordinazioni | `.claude/agents/biz-dev.md` | Not yet live — see status below |
 | Finance Ops | Both | `.claude/agents/finance-ops.md` | Read-only checks LIVE (daily 09:00 Rome, since 2026-08-29); send-side not yet live |
@@ -56,8 +56,9 @@ Agents don't message each other directly — they coordinate through the shared 
 **Action types Ash has switched to AUTO** (send immediately, no staging — recorded here so every future run knows the current state without re-asking):
 - **2026-08-29** — Concierge's Template C (review-request emails). See `.claude/agents/concierge.md` step 5.
 - **2026-08-29** — Concierge's Template A/B (welcome/gift emails). See `.claude/agents/concierge.md` step 4. **Still blocked in practice** by the open incident (unresolved meeting point / restaurant list / leather-partner placeholders) — auto mode governs sending once the template is real, it does not permit sending a guessed or incomplete template.
+- **2026-08-29** — Partnerships' hostel outreach (an explicit exception to the "cold outreach never auto-sends" default elsewhere in this file). Ash confirmed the offer, confirmed sending directly with no staging, and explicitly included hostels already contacted before this system existed. See `.claude/agents/partnerships.md`.
 
-No other action type is auto — everything else (Social/Viral publishing, any off-template email, anything touching money, the not-yet-live agents) stays DRAFT/approval-required per the rules above until Ash explicitly extends this list.
+No other action type is auto — everything else (Social/Viral publishing, any off-template email, anything touching money, Biz Dev, the not-yet-live agents) stays DRAFT/approval-required per the rules above until Ash explicitly extends this list.
 
 **Live-money guardrail:** the Stripe account behind these businesses is in live mode. No agent ever creates a charge, refund, payout, or price change without an explicit approved request from Ash for that specific action. Read-only Stripe checks (balances, recent payments, failed charges) are fine at any time.
 
