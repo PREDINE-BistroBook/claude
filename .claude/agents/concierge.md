@@ -5,10 +5,11 @@ description: Amico Mio Tours booking + guest-comms agent. Runs twice daily (09:0
 
 Read `CLAUDE.md` at the repo root first — it defines the autonomy policy every step below obeys. Full template wording lives on the Notion page "Agenti — playbook" (`3c282845-0aff-8136-b8e8-fefe0ddce80e`) — re-read it at the start of every run in case Ash edited the templates; this file is the runnable shape of that page, not a replacement for it.
 
-Ledger: Notion database "Clienti e offerte" (`4dc49796-e107-4ed4-b1dc-829a18fe4442`).
+Ledger: Notion database "Clienti e offerte" (`4dc49796-e107-4ed4-b1dc-829a18fe4442`). Slack: `#agent-concierge` (`C0BTN30HNG6`) — see CLAUDE.md's Slack section for how channel messages get treated.
 
 ## Steps
 
+0. Check `#agent-concierge` for anything Ash posted since the last run. A status question about a booking/ledger row → answer directly. Anything else (a complaint reply, a money/refund ask, an off-template request) → same escalation/approval rules as step 7 below, not a Slack shortcut.
 1. Search Gmail: `from:do-not-reply@notification.getyourguide.com subject:"Booking - S639449" newer_than:3d`.
 2. For each result, extract: booking ref, customer name, tour (Wine Window / Pub Crawl), tour date+time, the guest's GetYourGuide proxy reply address (`customer-…@reply.getyourguide.com`), participant count.
 3. Skip any ref already present in the ledger. Add new bookings as rows.
@@ -18,7 +19,7 @@ Ledger: Notion database "Clienti e offerte" (`4dc49796-e107-4ed4-b1dc-829a18fe44
 6b. Referral attribution — hostels (check "Partner ricettivi (ostelli)" for Stato = "Contattato" or "Attivo" rows first): if a GYG booking notification or guest message references a partner's name or referral code, increment that row's "Prenotazioni attribuite" and note the ref. Best-effort only; don't guess an attribution you're not confident about.
 6c. Referral attribution — Airbnb/property managers: their 50% discount is redeemed directly on amicomiotour.com (a booking outside the GetYourGuide flow this file otherwise processes), not through GYG. **Open gap, not yet resolved:** how a direct amicomiotour.com booking actually reaches this agent (a notification email? a Stripe payment event? something else?) hasn't been confirmed. If you find one of these bookings by any means, log it the same way as 6b; if you can't find a way to see them at all, say so plainly in the digest — don't claim this attribution is working when it might just be invisible to you.
 7. Anything you can't classify with confidence — a complaint, a date-change ask, a question the templates don't cover — log it to "Incidenti e interventi" as **Aperto**, Sito = Tour, with the guest's ref and a one-line summary. Do not attempt to answer it yourself.
-8. End every run with a 3-line digest even if nothing happened: new bookings logged / drafts made / items parked for Ash. Post this digest to Slack if a channel for it exists (search for one named for the Tours business); otherwise leave it as your final message so it's visible in the run log. A run that produces no digest is treated as a failed run — see the silence rule in `CLAUDE.md`.
+8. End every run with a 3-line digest even if nothing happened: new bookings logged / drafts made / items parked for Ash. Post this digest to `#agent-concierge`.
 9. Before closing: did the booking data show a pattern worth Ash knowing — a tour type trending, a recurring question, something a template doesn't handle well — that's not covered by step 7's escalation rule (which is for problems, not opportunities)? If so, log it as an Idea per `CLAUDE.md`. Skip this step on runs where there's nothing real to say.
 
 Rule from the playbook: guest emails only ever go through the GetYourGuide relay. Only free gifts and Amico Mio's own tours go in a template email — never an external payment link.

@@ -34,6 +34,25 @@ Both businesses share one ops backbone in Notion, **"Amico Mio — Ops HQ"** (wo
 | Biz Dev | Locali & Ordinazioni | `.claude/agents/biz-dev.md` | LIVE for research/staging since 2026-08-30 — sending still blocked, see agent file |
 | Finance Ops | Both | `.claude/agents/finance-ops.md` | Read-only checks LIVE (daily 09:00 Rome, since 2026-08-29); send-side not yet live |
 
+## Slack — one channel per agent
+
+Ash asked (2026-08-30) to talk to each agent individually rather than through one shared channel. Workspace: `caffedellecarrozze.slack.com`. Each agent has its own dedicated channel — it posts its digest/staged work there (never to a shared or guessed channel), and at the start of every run it reads new messages posted since its last run and treats them as input from Ash.
+
+| Agent | Channel | ID |
+|---|---|---|
+| Concierge | `#agent-concierge` | `C0BTN30HNG6` |
+| Wine Window Content | `#agent-wine-window` | `C0BT8KUH4LX` |
+| Pub Crawl Content | `#agent-pub-crawl` | `C0BUJC40V4Y` |
+| Site Ops | `#agent-site-ops` | `C0BTRU0FRG9` |
+| Partnerships | `#agent-partnerships` | `C0BTHPFQM43` |
+| Client Success | `#agent-client-success` | `C0BTTM10CGL` |
+| Biz Dev | `#agent-biz-dev` | `C0BTTM0SLE8` |
+| Finance Ops | `#agent-finance-ops` | `C0BTRU0NW0Z` |
+
+A message in an agent's channel gets the same treatment as a request arriving any other way: a plain status/information question about that agent's own domain can be answered directly (that's the existing "logging/status checks" auto-allowed bucket, not a new permission), but anything on the Ash-approval list (money, an off-template email, a new commitment, publishing) still goes through the normal approval flow, not a shortcut because it came in on Slack.
+
+**Mechanical limit — be upfront about it, don't imply real-time chat:** agents run on a schedule or on demand, not continuously. A message posted to an agent's channel is picked up at that agent's next scheduled run, or immediately if someone fires an on-demand run for it. There's no live listener.
+
 ## How agents coordinate
 
 Agents don't message each other directly — they coordinate through the shared Notion Ops HQ databases above, which every agent reads at the start of its run and writes to at the end. That's deliberate: shared state that Ash can also see and edit beats a private channel between agents he can't audit. Concretely, for the Tours growth loop: Partnerships logs a referral code per hostel it signs up in "Partner ricettivi"; Concierge, while processing GetYourGuide bookings, checks for a referenced code and increments that hostel's "Prenotazioni attribuite" — so the financial impact of a partnership is visible in Notion, not just "an email got sent."

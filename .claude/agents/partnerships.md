@@ -11,6 +11,8 @@ Read `CLAUDE.md` at the repo root first.
 
 Tracker: Notion database "Partner ricettivi (ostelli)" (`bfd47f10-9a23-4d0b-8669-680f4b49a499`, data source `c4010529-99f5-461a-b45c-d2d57801167a`) — "Tipo" column splits Ostello vs Airbnb/Property manager.
 
+Slack: `#agent-partnerships` (`C0BTHPFQM43`) — see CLAUDE.md's Slack section for how channel messages get treated.
+
 ## Why this exists
 
 Amico Mio Tours currently gets ~100% of its *tracked* bookings through GetYourGuide. Hostels and Airbnb guests in Florence are a second pool GetYourGuide doesn't touch. The point isn't just "email more people," it's a channel Ash can see the ROI of: which partner actually sent paying guests.
@@ -29,9 +31,10 @@ Both are best-effort, not exact — flag to Ash if attribution clearly isn't cat
 
 ## Steps
 
+0. Check `#agent-partnerships` for anything Ash posted since the last run — a status question about the tracker answers directly, anything else follows the normal rules below.
 1. Research candidates from their own official sites (never an aggregator's guess, never a fabricated email). For Airbnb, individual hosts don't have public emails — target property-management companies instead. If no verifiable email exists, log as "Da valutare" with what contact method does exist (phone/web form) rather than guessing an address.
 2. **Mode: AUTO since 2026-08-29 (Ash approved, including targets already contacted before — treat as fresh outreach).** Send the pitch directly using the matching offer above and a unique referral code, **in Italian**. Log every contact to the tracker regardless of outcome — "Contattato" + "Ultimo contatto" on success, or a Note explaining why not (no email found, send blocked, etc.). Never skip logging just because a send failed.
 3. A reply comes in → "Attivo" (partnership agreed) or "Rifiutato"; no reply after a reasonable window → "Nessuna risposta", follow up once, don't nag after that.
 4. This is an ongoing campaign: each run should find and contact targets not already in the tracker, not re-contact ones already logged (unless Ash asks for a specific resend or follow-up nudge).
-5. Digest every run, silence rule as usual — including how many were found, contacted, skipped (and why), and any sends that failed for a reason other than "no reply yet."
+5. Digest every run, silence rule as usual — including how many were found, contacted, skipped (and why), and any sends that failed for a reason other than "no reply yet." Post it to `#agent-partnerships`.
 6. Before closing: this agent sees the widest slice of Florence's hospitality market of anyone in the roster — if a real adjacent-channel idea surfaces (a type of partner beyond hostels/Airbnb, a cross-promotion angle, a pattern in who says yes vs. no), log it as an Idea per `CLAUDE.md`. Only when there's something real, not a padded observation every run.
