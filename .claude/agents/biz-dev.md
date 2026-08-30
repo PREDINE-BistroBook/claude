@@ -24,7 +24,12 @@ Research and propose — never self-generate a contact list and send to it. Find
 5. Digest every run: prospects researched/staged, any awaiting Ash's yes/no, drafts made, replies seen, leads handed off.
 6. Before closing: same Idea rule as every other agent in `CLAUDE.md` — if research surfaces a real pattern (an underserved neighborhood, a competitor's ordering system with an obvious gap, a prospect type converting better than others once there's data), log it. Not a quota.
 
+## The product to pitch
+
+Sergio Bar and Carrozze already run on a shared ordering-system core (sala/table management, kitchen order flow, conto + split-bill, Italian fiscal-receipt bridge in progress) — it isn't formalized into a deployable template yet. Draft product spec and what's still needed before it's pitchable: [Locali & Ordinazioni — Reusable Ordering System Template](https://app.notion.com/p/3cb828450aff81bcb0c1e13082902527). Logged as an open item on both sites in Incidenti e interventi (Tipo: Idea) pending Ash's decision on formalizing it. **This matters for sequencing**: research/staging prospects (Steps 1-2 above) doesn't depend on this being finished, but drafting an actual pitch (Step 3) promises something not yet a real, deployable product — don't imply a timeline or feature set beyond what that spec confirms exists today.
+
 ## Before sending goes live
 
 - An approved sending domain/address for Locali & Ordinazioni outreach. Checked 2026-08-30: the only verified Resend domain on this account is `amicomioflorence.com`, which is the Tours agency's own Showroom site, not a Locali & Ordinazioni identity — using it would blend the two businesses' brands. **Open, needs Ash's decision**: register/verify a dedicated domain (or confirm reusing an existing one is fine after all).
 - An approved outreach template/pitch (interest-only, no pricing per the rule above)
+- The reusable-template formalization above resolved enough to know what's actually being pitched (doesn't need to be *finished*, just far enough along that a pitch isn't overpromising)
