@@ -10,7 +10,8 @@ Start at [`CLAUDE.md`](./CLAUDE.md) — it's the constitution every agent reads 
 CLAUDE.md                          company constitution — read this first
 .claude/agents/                    one file per agent role
   concierge.md                     Tours booking + guest comms — LIVE, scheduled, auto-sends Template A/B/C (A/B still blocked on template content)
-  social-viral.md                  Tours content — LIVE, scheduled
+  wine-window-content.md           Tours content, Wine Window tour only — LIVE, scheduled
+  pub-crawl-content.md             Tours content, Pub Crawl & Club night only — LIVE, scheduled
   site-ops.md                      cross-business site health + work queue — LIVE, scheduled
   partnerships.md                  Tours hostel-referral growth — drafted, not live yet
   client-success.md                Locali & Ordinazioni support — drafted, not live yet
@@ -19,11 +20,12 @@ CLAUDE.md                          company constitution — read this first
 .claude/skills/
   request-approval/                how every agent stages something for Ash instead of acting alone
   ops-hq-logging/                  how every agent logs to Notion Ops HQ
+  short-form-editing-craft/        cut rhythm, comedic timing, why real footage beats forced jokes — used by the two content agents
 ```
 
-## Why three agents are "live" and three aren't
+## Why four agents are "live" and three aren't
 
-Concierge, Social/Viral, and Site Ops mirror a playbook Ash had already fully specified in Notion (templates, cadence, escalation rules) — there was nothing ambiguous left to fill in, so they're wired to real scheduled Routines (below) and can run unattended in DRAFT mode.
+Concierge, Wine Window Content, Pub Crawl Content, and Site Ops mirror a playbook Ash had already fully specified in Notion (templates, cadence, escalation rules) — there was nothing ambiguous left to fill in, so they're wired to real scheduled Routines (below) and can run unattended in DRAFT mode. Wine Window Content and Pub Crawl Content replaced a single generic "Social/Viral" agent on 2026-08-29, when Ash scoped Tours content down to exactly those two products.
 
 Client Success, Biz Dev, and Finance Ops (send-side) touch things a wrong guess would actually hurt — an unconfirmed support inbox, a cold-outreach list nobody approved, a live Stripe account. Each file ends with a short "before this goes live" list of exactly what's missing. Once Ash fills those in, wiring the Routine is a five-minute follow-up, not a redesign.
 
@@ -38,7 +40,7 @@ Each live agent runs on a Claude Code Routine (a scheduled trigger) that spins u
 | Agent | Schedule (UTC) | Local (Europe/Rome) |
 |---|---|---|
 | Concierge | `0 7,16 * * *` | 09:00 + 18:00 |
-| Social / Viral | `0 8 * * 1` | Monday 10:00 |
+| Wine Window Content + Pub Crawl Content | `0 8 * * 1` | Monday 10:00 |
 | Site Ops | `0 6 * * *` | 08:00 daily |
 | Finance Ops (read-only) | `0 8 * * *` | 09:00 daily |
 
