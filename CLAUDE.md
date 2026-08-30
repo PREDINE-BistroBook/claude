@@ -16,6 +16,7 @@ Both businesses share one ops backbone in Notion, **"Amico Mio — Ops HQ"** (wo
 | Coda lavori | `6f84c826-63b5-41dc-9110-947c7b607570` | Work queue per site |
 | Clienti e offerte | `4dc49796-e107-4ed4-b1dc-829a18fe4442` | Tour booking ledger |
 | Partner ricettivi (ostelli) | `bfd47f10-9a23-4d0b-8669-680f4b49a499` | Hostel/B&B referral partners for Pub Crawl growth — see Partnerships agent |
+| Prospect Locali & Ordinazioni | `8d0d9850-172f-46ed-8618-36c68448d937` | Biz Dev's B2B prospect tracker (Locali & Ordinazioni) — added 2026-08-30 |
 | Agenti — playbook | page `3c282845-0aff-8136-b8e8-fefe0ddce80e` | Canonical playbook for Tours agents — this repo mirrors it into runnable form, playbook page stays the source of truth for wording/templates |
 
 **Rule: silence is never success.** If an agent run can't finish cleanly, it writes an "Aperto" row to Incidenti e interventi before it stops. A run that just goes quiet is a bug.
@@ -29,7 +30,7 @@ Both businesses share one ops backbone in Notion, **"Amico Mio — Ops HQ"** (wo
 | Site Ops (Guardiano companion) | Both | `.claude/agents/site-ops.md` | Daily digest |
 | Partnerships | Tours | `.claude/agents/partnerships.md` | LIVE since 2026-08-29 — ongoing hostel outreach campaign |
 | Client Success | Locali & Ordinazioni | `.claude/agents/client-success.md` | Not yet live — see status below |
-| Biz Dev | Locali & Ordinazioni | `.claude/agents/biz-dev.md` | Not yet live — see status below |
+| Biz Dev | Locali & Ordinazioni | `.claude/agents/biz-dev.md` | LIVE for research/staging since 2026-08-30 — sending still blocked, see agent file |
 | Finance Ops | Both | `.claude/agents/finance-ops.md` | Read-only checks LIVE (daily 09:00 Rome, since 2026-08-29); send-side not yet live |
 
 ## How agents coordinate
@@ -57,6 +58,8 @@ Agents don't message each other directly — they coordinate through the shared 
 - **2026-08-29** — Concierge's Template C (review-request emails). See `.claude/agents/concierge.md` step 5.
 - **2026-08-29** — Concierge's Template A/B (welcome/gift emails). See `.claude/agents/concierge.md` step 4. **Still blocked in practice** by the open incident (unresolved meeting point / restaurant list / leather-partner placeholders) — auto mode governs sending once the template is real, it does not permit sending a guessed or incomplete template.
 - **2026-08-29** — Partnerships' hostel outreach (an explicit exception to the "cold outreach never auto-sends" default elsewhere in this file). Ash confirmed the offer, confirmed sending directly with no staging, and explicitly included hostels already contacted before this system existed. See `.claude/agents/partnerships.md`.
+
+**2026-08-30** — Biz Dev moved from fully-blocked to **research + staging live**: Ash approved the sourcing model (agent researches and proposes real candidates, Ash approves the list) and the pricing rule (never quote, always route to Ash). This is not a sending exception — Biz Dev's outreach stays DRAFT-only per its own file, permanently, until Ash separately approves a sending domain and a pitch template. See `.claude/agents/biz-dev.md`.
 
 No other action type is auto — everything else (Social/Viral publishing, any off-template email, anything touching money, Biz Dev, the not-yet-live agents) stays DRAFT/approval-required per the rules above until Ash explicitly extends this list.
 
