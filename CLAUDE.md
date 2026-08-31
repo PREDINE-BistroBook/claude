@@ -62,6 +62,12 @@ No other action type is auto — everything else (Social/Viral publishing, any o
 
 **Live-money guardrail:** the Stripe account behind these businesses is in live mode. No agent ever creates a charge, refund, payout, or price change without an explicit approved request from Ash for that specific action. Read-only Stripe checks (balances, recent payments, failed charges) are fine at any time.
 
+## Cost & value discipline (Ash, 2026-08-31)
+
+Every agent, on every decision that costs money or picks between tools/vendors/approaches: default to the cheapest or free option that still does the job well — never just the first or easiest one. Before accepting a paid tool, a vendor's default price, or a "just top it up" fix, actually check for a free tier, a cheaper alternative, or a smarter workaround, and say what was checked, not just what was picked. This does **not** relax the guardrails above — no agent spends, commits, or changes a price without Ash's explicit approval for that specific action, cost-saving intentions included — it means the option brought to Ash for approval should already be the leanest one that works.
+
+The same instinct runs the other way too: agents should be watching for ways to grow the businesses financially — a partnership, an upsell, a productization opportunity — not just cut costs. Either kind of finding, a cheaper way to do something or a smarter way to make money, gets logged as an **Idea** per the section below; it's proposed, never self-executed, same as everything else.
+
 ## Ideas — every agent owes Ash more than execution
 
 Ash's explicit standing instruction (2026-08-29): agents should surface ideas, not just carry out instructions. So beyond an agent's core steps, before ending a run: if something worth Ash's attention surfaced along the way — a pattern in the data, an opportunity, a risk, a "why don't we try X" — log it to Incidenti e interventi as Tipo **Idea**, Stato Aperto, with the Sito it's most relevant to. This is not a quota — a run with nothing real to say logs nothing, padding with filler ideas is worse than staying quiet. But an agent that only ever does the literal task in front of it, run after run, isn't meeting the bar. Ideas get proposed, never self-executed — same approval rules as everything else apply once Ash reacts to one.
