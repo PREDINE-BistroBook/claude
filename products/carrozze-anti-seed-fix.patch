@@ -1,0 +1,21 @@
+--- a/worker.js
++++ b/worker.js
+@@ -3295,6 +3295,18 @@
+             return Response.json({ ok: false, errore: "menu vuoto ignorato",
+               ver: attuale.ver, dati: ripulisci(attuale.dati, ses && ses.ruolo) }, { status: 409 });
+         }
++        /* ── Scudo anti-seed (vale per ogni locale) ──────────────────────
++           Il catalogo di esempio del bundle NON ha nome locale. Se arriva un
++           salvataggio da titolare col nome vuoto mentre in archivio c'e' un
++           nome vero, e' il seed di default che sta per cancellare il menu
++           reale: si rifiuta e si rimanda lo stato buono. */
++        {
++          const nv = String((attuale.dati.cfg && attuale.dati.cfg.nome) || "").trim();
++          const nn = String((corpo.dati.cfg && corpo.dati.cfg.nome) || "").trim();
++          if (nv && !nn)
++            return Response.json({ ok: false, errore: "salvataggio ignorato",
++              ver: attuale.ver, dati: ripulisci(attuale.dati, ses && ses.ruolo) }, { status: 409 });
++        }
+ 
+         /* ── Rete di sicurezza sui codici ──────────────────────────────
+            Il browser riceve lo stato SENZA i PIN. Se poi rimanda indietro il
