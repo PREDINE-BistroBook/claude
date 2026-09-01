@@ -33,16 +33,24 @@ Client Success, Biz Dev, and Finance Ops (send-side) touch things a wrong guess 
 
 Every live agent runs in **DRAFT mode**: it does the work, produces the draft/log/staged item, and stops. Nothing sends or publishes until Ash approves it — per the Head Chef rules in `CLAUDE.md`. "Live" means "runs on schedule and gets real work ready for approval," not "sends things unattended."
 
+## One session per agent
+
+As of 2026-09-01, each of the 8 agents has its own dedicated, persistent Claude Code session — not a fresh throwaway session per run, and not all agents sharing one thread. Every scheduled Routine for a live agent fires into that same agent's session every time, so the session accumulates that agent's own run history. This is the "one place" answer to "how do I see all my agents and talk to each individually": open the Sessions list in the Claude Code app/web (claude.ai/code) — all 8 agents show up there as separate rows (title = agent name), each with live status (working/blocked/idle), and clicking one opens a direct conversation with that agent alone, with full memory of everything it's done. Slack channels and Notion databases still exist for their original purposes (digests/status, and shared data), but the session list is the roster.
+
+Partnerships and Client Success have dedicated sessions too even though Partnerships isn't on a Routine yet and Client Success isn't live — so the roster is complete and Ash can talk to either directly at any time.
+
 ## Scheduled Routines
 
-Each live agent runs on a Claude Code Routine (a scheduled trigger) that spins up a fresh session, points it at this repo, and tells it to read `CLAUDE.md` plus its own agent file before doing anything:
+Each live agent runs on a Claude Code Routine (a scheduled trigger) bound to that agent's dedicated session (see above), and tells it to read `CLAUDE.md` plus its own agent file before doing anything:
 
 | Agent | Schedule (UTC) | Local (Europe/Rome) |
 |---|---|---|
 | Concierge | `0 7,16 * * *` | 09:00 + 18:00 |
-| Wine Window Content + Pub Crawl Content | `0 8 * * 1` | Monday 10:00 |
+| Wine Window Content | `0 8 * * 1` | Monday 10:00 |
+| Pub Crawl Content | `0 8 * * 1` | Monday 10:00 |
 | Site Ops | `0 6 * * *` | 08:00 daily |
 | Finance Ops (read-only) | `0 8 * * *` | 09:00 daily |
+| Biz Dev (research + staging) | `0 9 * * 3` | Wednesday 11:00 |
 
 Europe/Rome runs CEST (UTC+2) for most of the year and CET (UTC+1) in winter — the cron above is pinned to UTC, so it drifts one hour relative to local time across the DST changeover. Adjust then, or ask an agent to fix it when it does.
 
