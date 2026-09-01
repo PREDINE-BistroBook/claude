@@ -35,6 +35,9 @@ Each agent has a name and job title (added 2026-09-01, so Ash can tell them apar
 | Client Success | Elena — Client Success Manager | Locali & Ordinazioni | `.claude/agents/client-success.md` | Not yet live — see status below |
 | Biz Dev | Matteo — Business Development Lead | Locali & Ordinazioni | `.claude/agents/biz-dev.md` | LIVE for research/staging since 2026-08-30 — sending still blocked, see agent file |
 | Finance Ops | Chiara — Finance Operations Lead | Both | `.claude/agents/finance-ops.md` | Read-only checks LIVE (daily 09:00 Rome, since 2026-08-29); send-side not yet live |
+| Head Chef | Roberto — Head Chef | Both | `.claude/agents/head-chef.md` | Daily, evening — added 2026-09-01 so Ash gets one rundown instead of checking 8 channels |
+
+**Head Chef is a special case**: it reads what the other seven agents did (Notion Ops HQ + their Slack channels) and posts one daily rundown — it has no send/write/approval authority of its own, not even the auto-allowed logging bucket. See `.claude/agents/head-chef.md` for exactly what it can and can't do.
 
 ## Slack — one channel per agent
 
@@ -50,6 +53,7 @@ Ash asked (2026-08-30) to talk to each agent individually rather than through on
 | Client Success | Elena | `#agent-client-success` | `C0BTTM10CGL` |
 | Biz Dev | Matteo | `#agent-biz-dev` | `C0BTTM0SLE8` |
 | Finance Ops | Chiara | `#agent-finance-ops` | `C0BTRU0NW0Z` |
+| Head Chef | Roberto | `#agent-head-chef` | `C0BUC8TLS2G` |
 
 A message in an agent's channel gets the same treatment as a request arriving any other way: a plain status/information question about that agent's own domain can be answered directly (that's the existing "logging/status checks" auto-allowed bucket, not a new permission), but anything on the Ash-approval list (money, an off-template email, a new commitment, publishing) still goes through the normal approval flow, not a shortcut because it came in on Slack.
 
