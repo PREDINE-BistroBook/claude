@@ -23,31 +23,37 @@ Both businesses share one ops backbone in Notion, **"Amico Mio — Ops HQ"** (wo
 
 ## The roster
 
-| Agent | Business | File | Cadence |
-|---|---|---|---|
-| Concierge | Tours | `.claude/agents/concierge.md` | 09:00 + 18:00 Europe/Rome |
-| Wine Window Content | Tours | `.claude/agents/wine-window-content.md` | Weekly, Monday |
-| Pub Crawl Content | Tours | `.claude/agents/pub-crawl-content.md` | Weekly, Monday |
-| Site Ops (Guardiano companion) | Both | `.claude/agents/site-ops.md` | Daily digest |
-| Partnerships | Tours | `.claude/agents/partnerships.md` | LIVE since 2026-08-29 — ongoing hostel outreach campaign |
-| Client Success | Locali & Ordinazioni | `.claude/agents/client-success.md` | Not yet live — see status below |
-| Biz Dev | Locali & Ordinazioni | `.claude/agents/biz-dev.md` | LIVE for research/staging since 2026-08-30 — sending still blocked, see agent file |
-| Finance Ops | Both | `.claude/agents/finance-ops.md` | Read-only checks LIVE (daily 09:00 Rome, since 2026-08-29); send-side not yet live |
+Each agent has a name and job title (added 2026-09-01, so Ash can tell them apart at a glance in digests and Slack — it's a display persona only, it doesn't change the `name:` field in the agent's frontmatter, which is the real identifier used to invoke it).
+
+| Agent | Persona | Business | File | Cadence |
+|---|---|---|---|---|
+| Concierge | Giulia — Guest Concierge | Tours | `.claude/agents/concierge.md` | 09:00 + 18:00 Europe/Rome |
+| Wine Window Content | Marco — Wine Window Content Producer | Tours | `.claude/agents/wine-window-content.md` | Weekly, Monday |
+| Pub Crawl Content | Luca — Pub Crawl Content Producer | Tours | `.claude/agents/pub-crawl-content.md` | Weekly, Monday |
+| Site Ops (Guardiano companion) | Gianni — Site Reliability Lead | Both | `.claude/agents/site-ops.md` | Daily digest |
+| Partnerships | Sofia — Partnerships Manager | Tours | `.claude/agents/partnerships.md` | LIVE since 2026-08-29 — ongoing hostel outreach campaign |
+| Client Success | Elena — Client Success Manager | Locali & Ordinazioni | `.claude/agents/client-success.md` | Not yet live — see status below |
+| Biz Dev | Matteo — Business Development Lead | Locali & Ordinazioni | `.claude/agents/biz-dev.md` | LIVE for research/staging since 2026-08-30 — sending still blocked, see agent file |
+| Finance Ops | Chiara — Finance Operations Lead | Both | `.claude/agents/finance-ops.md` | Read-only checks LIVE (daily 09:00 Rome, since 2026-08-29); send-side not yet live |
+| Head Chef | Roberto — Head Chef | Both | `.claude/agents/head-chef.md` | Daily, evening — added 2026-09-01 so Ash gets one rundown instead of checking 8 channels |
+
+**Head Chef is a special case**: it reads what the other seven agents did (Notion Ops HQ + their Slack channels) and posts one daily rundown — it has no send/write/approval authority of its own, not even the auto-allowed logging bucket. See `.claude/agents/head-chef.md` for exactly what it can and can't do.
 
 ## Slack — one channel per agent
 
 Ash asked (2026-08-30) to talk to each agent individually rather than through one shared channel. Workspace: `caffedellecarrozze.slack.com`. Each agent has its own dedicated channel — it posts its digest/staged work there (never to a shared or guessed channel), and at the start of every run it reads new messages posted since its last run and treats them as input from Ash.
 
-| Agent | Channel | ID |
-|---|---|---|
-| Concierge | `#agent-concierge` | `C0BTN30HNG6` |
-| Wine Window Content | `#agent-wine-window` | `C0BT8KUH4LX` |
-| Pub Crawl Content | `#agent-pub-crawl` | `C0BUJC40V4Y` |
-| Site Ops | `#agent-site-ops` | `C0BTRU0FRG9` |
-| Partnerships | `#agent-partnerships` | `C0BTHPFQM43` |
-| Client Success | `#agent-client-success` | `C0BTTM10CGL` |
-| Biz Dev | `#agent-biz-dev` | `C0BTTM0SLE8` |
-| Finance Ops | `#agent-finance-ops` | `C0BTRU0NW0Z` |
+| Agent | Persona | Channel | ID |
+|---|---|---|---|
+| Concierge | Giulia | `#agent-concierge` | `C0BTN30HNG6` |
+| Wine Window Content | Marco | `#agent-wine-window` | `C0BT8KUH4LX` |
+| Pub Crawl Content | Luca | `#agent-pub-crawl` | `C0BUJC40V4Y` |
+| Site Ops | Gianni | `#agent-site-ops` | `C0BTRU0FRG9` |
+| Partnerships | Sofia | `#agent-partnerships` | `C0BTHPFQM43` |
+| Client Success | Elena | `#agent-client-success` | `C0BTTM10CGL` |
+| Biz Dev | Matteo | `#agent-biz-dev` | `C0BTTM0SLE8` |
+| Finance Ops | Chiara | `#agent-finance-ops` | `C0BTRU0NW0Z` |
+| Head Chef | Roberto | `#agent-head-chef` | `C0BUC8TLS2G` |
 
 A message in an agent's channel gets the same treatment as a request arriving any other way: a plain status/information question about that agent's own domain can be answered directly (that's the existing "logging/status checks" auto-allowed bucket, not a new permission), but anything on the Ash-approval list (money, an off-template email, a new commitment, publishing) still goes through the normal approval flow, not a shortcut because it came in on Slack.
 
