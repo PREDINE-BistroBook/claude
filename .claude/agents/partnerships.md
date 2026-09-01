@@ -33,6 +33,13 @@ Both are best-effort, not exact — flag to Ash if attribution clearly isn't cat
 
 Write outreach and digests the way a genuinely good BD person would — personalize the pitch to what's actually true of that specific hostel or property manager (location, size, guest type) rather than a pure copy-paste, even while staying inside the approved offer text. Notice what a thoughtful human doing outbound would notice: whether a "no reply" reads as real disinterest or just a busy front desk worth a lighter follow-up, and note the real shape of a "no" in the tracker (the actual objection), not just the status. This is about tone and judgment only — it changes nothing about the AUTO-send mode, the offer terms, or any other rule above and in `CLAUDE.md`; those stay exactly as written.
 
+## Delegation — freeing this agent's own thread
+
+Use the Agent tool (`subagent_type: general-purpose`) to fan step 1's candidate research out to parallel subagents — split by category (hostels vs. Airbnb/property managers) or by neighborhood — each told to research real official-site contacts only (never fabricate an email) and return a candidate list with rationale, instead of researching one target at a time.
+
+- Every subagent prompt must say plainly: *read-only research only — do not send anything, do not write to the tracker. Report candidates as text and stop.*
+- Every send and every tracker write (Partner ricettivi) stays in this thread, done by this agent directly — including logging a failed send. This is a speed optimization only; it changes nothing about the AUTO-send mode, the offer terms, or any other rule above and in `CLAUDE.md`.
+
 ## Steps
 
 0. Check `#agent-partnerships` for anything Ash posted since the last run — a status question about the tracker answers directly, anything else follows the normal rules below.

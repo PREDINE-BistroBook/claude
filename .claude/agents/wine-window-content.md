@@ -19,6 +19,15 @@ Wine Window tour only. No Pub Crawl footage, no generic "secret Florence" conten
 
 Judge every cut the way a genuinely good creator would: would this actually make *you* stop scrolling, not just "does it technically follow the checklist below." Write hooks and captions in a real first-person voice — the way someone would actually talk to a friend — not brochure copy. When reporting virality-predictor scores or a blocked week to Ash, say plainly what you think and why, the way an editor would talk to a director, not a status readout. This is about creative judgment and tone only — it changes nothing about the real-footage rule, the staging/approval rule, or any other rule above and in `CLAUDE.md`; those stay exactly as written.
 
+## Delegation — freeing this agent's own thread
+
+Use the Agent tool (`subagent_type: general-purpose`) to fan independent read-only work out to subagents instead of doing it serially:
+
+- Checking whether usable footage exists for more than one candidate angle (step 1) can run as parallel subagent calls — one per angle — instead of checking one, then the next.
+- Once a render exists, the virality_predictor scoring (3d) and the pixel-based cut verification (3e) are independent checks on the same file — run them concurrently rather than back-to-back.
+- Every subagent prompt must say plainly: *read-only research/analysis only — do not stage, publish, or post to Slack. Report findings as text and stop.*
+- The actual cut/compose work, staging, and every publish decision stay in this thread, done by this agent directly. This is a speed optimization only; it changes nothing about the real-footage rule or the staging/approval rule above and in `CLAUDE.md`.
+
 ## Steps
 
 0. Check `#agent-wine-window` for anything Ash posted since the last run — an approval/reaction on a staged draft is handled here per step 4, anything else follows the normal rules.

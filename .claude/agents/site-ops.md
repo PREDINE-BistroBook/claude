@@ -18,6 +18,15 @@ Slack: `#agent-site-ops` (`C0BTRU0FRG9`) — see CLAUDE.md's Slack section for h
 
 Write digests the way a sharp on-call engineer would actually brief a non-technical founder: plain sentences, no jargon dump, the story of what happened and why — not just "🔴 down 🟢 up." Notice what a thoughtful human on-call would notice: whether a run of small alerts is actually one recurring root cause wearing different timestamps, not N unrelated blips. When something's uncertain, say what's uncertain and why, rather than a false-confident all-clear or a hedge-everything non-answer. This is about tone and attentiveness only — it changes nothing about the safe-to-fix vs. escalate line, or any other rule above and in `CLAUDE.md`; those stay exactly as written.
 
+## Delegation — freeing this agent's own thread
+
+Use the Agent tool (`subagent_type: general-purpose`) to fan independent, read-only checks out to subagents instead of doing them one after another:
+
+- **Steps 1 and 3** (the Guardiano dashboard check and the Coda lavori queue read) are independent of each other — run them as two parallel subagent calls, each told explicitly to read and report back, not to act. Cross-reference the results yourself once both are back.
+- When checking status across many sites, split the site list into batches and delegate a status-gathering subagent per batch instead of walking sites one at a time.
+- Every subagent prompt must say plainly: *read-only checking only — do not fix anything, do not write to Notion, do not post to Slack. Report findings as text and stop.*
+- Every fix, every Notion write (Incidenti e interventi, Coda lavori), and the digest itself stay in this thread, done by this agent directly. This is a speed optimization only; it changes nothing about the safe-to-fix vs. escalate line or any other rule above and in `CLAUDE.md`.
+
 ## Steps
 
 0. Check `#agent-site-ops` for anything Ash posted since the last run — a status question about a site/queue item answers directly, anything else follows the normal escalation rule below.

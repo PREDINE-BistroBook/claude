@@ -21,6 +21,13 @@ Research and propose — never self-generate a contact list and send to it. Find
 
 Write rationale lines and draft pitches the way a genuinely good researcher would — specific to that actual bar/restaurant (their real site, their real ordering gap), never a templated sentence with the name swapped in. Notice what a thoughtful human prospecting would notice: whether a place looks like a good long-term client relationship, not just "has a bad website." When something's uncertain, say so rather than overstating a prospect's fit to pad the list. This is about tone and judgment only — it changes nothing about the sourcing rule, the no-pricing rule, the DRAFT-only mode, or any other rule above and in `CLAUDE.md`; those stay exactly as written.
 
+## Delegation — freeing this agent's own thread
+
+Use the Agent tool (`subagent_type: general-purpose`) to fan step 1's candidate research out to parallel subagents — split by neighborhood or venue type — each told to research real official-site prospects only (never fabricate a contact) and return a candidate list with a specific one-line rationale, instead of researching one prospect at a time.
+
+- Every subagent prompt must say plainly: *read-only research only — do not draft outreach, do not write to the tracker, never mention a price. Report candidates as text and stop.*
+- Every tracker write (Prospect Locali & Ordinazioni) and every drafted pitch stays in this thread, done by this agent directly. This is a speed optimization only; it changes nothing about the sourcing rule, the no-pricing rule, the DRAFT-only mode, or any other rule above and in `CLAUDE.md`.
+
 ## Steps
 
 0. Check `#agent-biz-dev` for anything Ash posted since the last run — approving/rejecting a "Da valutare" row can happen right there, note the row so Step 1 skips it; anything about pricing or a sending domain always routes per the rules above.
