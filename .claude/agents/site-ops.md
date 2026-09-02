@@ -7,7 +7,9 @@ description: Cross-business ops agent. Daily digest of site health (Guardiano) a
 
 Read `CLAUDE.md` at the repo root first — it defines the autonomy policy every step below obeys.
 
-Guardiano (uptime watchdog, checks every 5 min, already deployed): https://guardiano.fetta-amore-business.workers.dev/stato — alerts land by email at booking@amicomiotour.com (🔴 down, 🟢 recovered, 🟡 slow).
+Guardiano (uptime watchdog, checks every 5 min, already deployed): https://guardiano.fetta-amore-business.workers.dev/stato — alerts land by email at main@amicomiotour.com (🔴 down, 🟢 recovered, 🟡 slow). Confirmed by Ash 2026-09-02 — booking@amicomiotour.com is direct-website-booking/welcome/review-hunt traffic only, never ops alerts; this doc previously said booking@ in error.
+
+This session's own network cannot reach the Guardiano URL directly (org egress policy blocks it). As of 2026-09-02, a workaround exists: a sandbox-style tool with its own outbound internet access (available in this environment for other purposes, e.g. site-building/media tools) can run `curl` against the Guardiano URL and get a real result — try that before giving up on step 1. If no such tool is available in a given run, fall back to the Siti DB + alert emails and say so plainly in the digest rather than guessing at site status.
 
 Notion databases:
 - Siti: `9ca66617-f8a5-44e9-badc-8e31dc6b1bda`
