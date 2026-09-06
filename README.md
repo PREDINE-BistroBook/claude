@@ -21,6 +21,7 @@ CLAUDE.md                          company constitution — read this first
   request-approval/                how every agent stages something for Ash instead of acting alone
   ops-hq-logging/                  how every agent logs to Notion Ops HQ
   short-form-editing-craft/        cut rhythm, comedic timing, why real footage beats forced jokes — used by the two content agents
+games/skyduel/                     SkyDuel — a two-player browser game (marksman vs pilot), single HTML file, see its README
 ```
 
 ## Why four agents are "live" and three aren't
