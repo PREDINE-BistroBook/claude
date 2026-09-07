@@ -706,15 +706,18 @@ function enterLobby() {
   if (party.active && party.net) { renderLobby(); return; }
   party.active = true; party.error = ''; party.reset();
   renderLobby();
+  const opened = setTimeout(() => { if (party.active && !party.net) { party.error = 'Could not reach the connection service. Party mode needs internet access on this screen — the other modes work offline.'; renderLobby(); } }, 15000);
+  if (typeof SnapNet === 'undefined') { clearTimeout(opened); party.error = 'net.js did not load — host index.html, controller.html and net.js together.'; renderLobby(); return; }
   SnapNet.host({
     onJoin: () => {},
     onLeave: conn => party.leave(conn),
     onMessage: (conn, msg) => party.handle(conn, msg),
     onError: err => { party.error = 'Connection problem: ' + (err.type || err.message || err); renderLobby(); },
   }).then(net => {
+    clearTimeout(opened);
     if (!party.active) { net.close(); return; }
     party.net = net; party.code = net.code; renderLobby(); makeQR();
-  }).catch(err => { party.error = err.message || String(err); renderLobby(); });
+  }).catch(err => { clearTimeout(opened); party.error = err.message || String(err); renderLobby(); });
 }
 function hideLobby() { lobbyEl.hidden = true; }
 function leaveLobby() {
