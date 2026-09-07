@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05060d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Snapwing Controller</title>
+<style>
+  :root { color-scheme: dark; --bg: #05060d; --panel: #0e1224; --ink: #f2f4ff; --mute: #8f98b8; --mint: #a9ffe9; --peach: #ffd6a9; --gold: #ffe37a; --danger: #ff8d8d; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font-family: "Segoe UI", system-ui, -apple-system, sans-serif; overflow: hidden; touch-action: none; overscroll-behavior: none; user-select: none; -webkit-user-select: none; }
+  .screen { position: fixed; inset: 0; display: flex; flex-direction: column; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); }
+  .screen[hidden] { display: none; }
+  h1 { margin: 0; font-size: 28px; font-weight: 900; letter-spacing: .04em; }
+  .sub { color: var(--mute); font-size: 14px; margin-top: 4px; }
+  label { display: block; font-size: 12px; letter-spacing: .14em; color: var(--mute); font-weight: 800; margin: 18px 0 6px; }
+  input { width: 100%; font: inherit; font-size: 22px; font-weight: 700; padding: 14px 16px; border-radius: 14px; border: 1px solid rgba(255,255,255,.14); background: var(--panel); color: var(--ink); user-select: text; -webkit-user-select: text; }
+  input#code { letter-spacing: .3em; text-transform: uppercase; font-size: 32px; text-align: center; }
+  input:focus { outline: 2px solid var(--mint); }
+  .btn { font: inherit; font-weight: 900; letter-spacing: .08em; font-size: 18px; padding: 18px; border-radius: 16px; border: 0; background: var(--mint); color: #06231c; width: 100%; margin-top: 18px; }
+  .btn.secondary { background: rgba(255,255,255,.1); color: var(--ink); }
+  .btn:disabled { opacity: .45; }
+  .btn:active { transform: scale(.98); }
+  .err { color: var(--danger); font-size: 14px; margin-top: 12px; min-height: 18px; }
+  .spacer { flex: 1; }
+  .foot { color: var(--mute); font-size: 12px; text-align: center; }
+
+  /* in-game HUD */
+  .hud { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; padding: 10px 12px; background: var(--panel); border-radius: 16px; }
+  .hud .l { text-align: left; } .hud .r { text-align: right; }
+  .hud .role { font-size: 11px; letter-spacing: .16em; color: var(--mute); font-weight: 800; }
+  .hud .score { font-size: 22px; font-weight: 900; font-variant-numeric: tabular-nums; }
+  .hud .timer { font-size: 34px; font-weight: 900; font-variant-numeric: tabular-nums; min-width: 84px; text-align: center; }
+  .hud .timer.urgent { color: var(--danger); }
+  .hud .round { font-size: 11px; color: var(--mute); text-align: center; letter-spacing: .1em; font-weight: 800; }
+  .frames { display: flex; gap: 6px; justify-content: center; margin-top: 4px; }
+  .frames span { width: 16px; height: 20px; border-radius: 3px; background: rgba(255,255,255,.15); }
+  .frames span.on { background: var(--gold); }
+  .winding { font-size: 11px; color: var(--gold); letter-spacing: .12em; font-weight: 800; text-align: center; min-height: 14px; }
+
+  /* aim map */
+  .map { position: relative; aspect-ratio: 16 / 9; margin-top: 12px; border-radius: 12px; background: linear-gradient(#22345f, #f08a7b 70%, #2e5a3a 70%); overflow: hidden; border: 1px solid rgba(255,255,255,.1); }
+  .map .dot { position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; border: 2px solid var(--mint); border-radius: 4px; box-shadow: 0 0 10px var(--mint); left: 50%; top: 45%; }
+  .map .dot::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px; background: var(--mint); border-radius: 50%; }
+
+  /* snap zone */
+  .snapzone { flex: 1; margin-top: 12px; border-radius: 22px; background: radial-gradient(circle at 50% 45%, rgba(169,255,233,.16), rgba(169,255,233,.03) 60%, transparent 70%), var(--panel); border: 1px solid rgba(169,255,233,.25); display: flex; align-items: center; justify-content: center; flex-direction: column; position: relative; }
+  .snapzone .big { font-size: 44px; font-weight: 900; letter-spacing: .12em; color: var(--mint); }
+  .snapzone .small { color: var(--mute); font-size: 13px; margin-top: 6px; text-align: center; padding: 0 20px; }
+  .snapzone.flash { background: #fff; }
+  .snapzone.flash .big, .snapzone.flash .small { color: #000; }
+  .toolbar { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 12px; }
+  .tool { font: inherit; font-weight: 800; font-size: 13px; letter-spacing: .06em; padding: 14px 6px; border-radius: 12px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.06); color: var(--ink); }
+  .tool:active { background: rgba(255,255,255,.18); }
+  .sens { display: flex; align-items: center; gap: 10px; margin-top: 10px; color: var(--mute); font-size: 12px; letter-spacing: .1em; font-weight: 800; }
+  .sens input[type=range] { flex: 1; padding: 0; background: transparent; border: 0; }
+
+  /* pilot */
+  .pilot-area { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+  .stick { position: relative; border-radius: 22px; background: var(--panel); border: 1px solid rgba(255,214,169,.25); overflow: hidden; }
+  .stick .hint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--mute); font-size: 13px; text-align: center; padding: 20px; }
+  .stick .base { position: absolute; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; border: 2px solid rgba(255,214,169,.35); display: none; }
+  .stick .knob { position: absolute; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%; background: var(--peach); box-shadow: 0 0 18px rgba(255,214,169,.6); display: none; }
+  .dash { border-radius: 22px; border: 1px solid rgba(159,247,255,.3); background: radial-gradient(circle at 50% 50%, rgba(159,247,255,.18), transparent 70%), var(--panel); display: flex; align-items: center; justify-content: center; flex-direction: column; color: #9ff7ff; }
+  .dash .big { font-size: 40px; font-weight: 900; letter-spacing: .12em; }
+  .dash .cd { margin-top: 10px; width: 60%; height: 8px; border-radius: 4px; background: rgba(255,255,255,.12); overflow: hidden; }
+  .dash .cd i { display: block; height: 100%; width: 100%; background: #9ff7ff; }
+  .dash.cooling { color: #6fa0b8; }
+  .dash.cooling .cd i { background: #6fa0b8; }
+
+  .banner { position: fixed; left: 16px; right: 16px; top: 40%; padding: 22px; border-radius: 20px; background: rgba(5,8,20,.92); text-align: center; font-size: 30px; font-weight: 900; letter-spacing: .06em; border: 1px solid rgba(255,255,255,.12); pointer-events: none; transition: opacity .3s; z-index: 5; }
+  .banner small { display: block; font-size: 14px; font-weight: 600; color: var(--mute); margin-top: 6px; letter-spacing: 0; }
+  .banner[hidden] { display: none; }
+  .rolecard { margin-top: 18px; padding: 22px; border-radius: 20px; background: var(--panel); border: 1px solid rgba(255,255,255,.1); text-align: center; }
+  .rolecard .icon { font-size: 54px; }
+  .rolecard .who { font-size: 24px; font-weight: 900; letter-spacing: .06em; margin-top: 6px; }
+  .rolecard .what { color: var(--mute); font-size: 14px; margin-top: 6px; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<section class="screen" id="sJoin">
+  <h1>SNAPWING</h1>
+  <div class="sub">Your phone is the controller. Enter the room code shown on the big screen.</div>
+  <label for="name">YOUR NAME</label>
+  <input id="name" maxlength="14" placeholder="e.g. Ash" autocomplete="nickname">
+  <label for="code">ROOM CODE</label>
+  <input id="code" maxlength="4" placeholder="ABCD" autocapitalize="characters" autocomplete="off" inputmode="text">
+  <button class="btn" id="joinBtn" type="button">JOIN</button>
+  <div class="err" id="joinErr"></div>
+  <div class="spacer"></div>
+  <div class="foot">Works best in Safari or Chrome on the same Wi-Fi as the screen.</div>
+</section>
+
+<section class="screen" id="sWait" hidden>
+  <h1>ROOM <span id="waitCode"></span></h1>
+  <div class="sub" id="waitSub">Connected. Waiting for the screen to start…</div>
+  <div class="rolecard">
+    <div class="icon" id="waitIcon">📷</div>
+    <div class="who" id="waitRole">PHOTOGRAPHER</div>
+    <div class="what" id="waitWhat">Point the phone at the screen like a camera. Tap to snap.</div>
+  </div>
+  <button class="btn" id="startBtn" type="button">START MATCH</button>
+  <button class="btn secondary" id="leaveBtn" type="button">LEAVE</button>
+  <div class="spacer"></div>
+  <div class="foot">Roles swap at half time. One phone is enough, the CPU takes the other role.</div>
+</section>
+
+<section class="screen" id="sPhoto" hidden>
+  <div class="hud">
+    <div class="l"><div class="role">📷 YOU</div><div class="score" id="pScore">0</div></div>
+    <div><div class="round" id="pRound">ROUND 1 / 6</div><div class="timer" id="pTimer">10.0</div><div class="frames" id="pFrames"><span class="on"></span><span class="on"></span><span class="on"></span></div><div class="winding" id="pWinding"></div></div>
+    <div class="r"><div class="role">PILOT</div><div class="score" id="pOther">0</div></div>
+  </div>
+  <div class="map"><div class="dot" id="dot"></div></div>
+  <div class="snapzone" id="snapzone"><div class="big">SNAP</div><div class="small" id="snapHint">Tap anywhere here to take the shot</div></div>
+  <div class="toolbar">
+    <button class="tool" id="recenter" type="button">RECENTER</button>
+    <button class="tool" id="rewind" type="button">REWIND</button>
+    <button class="tool" id="modeBtn" type="button">MOTION</button>
+  </div>
+  <div class="sens">SENSITIVITY <input type="range" id="sens" min="18" max="70" value="36"></div>
+</section>
+
+<section class="screen" id="sPilot" hidden>
+  <div class="hud">
+    <div class="l"><div class="role">🪁 YOU</div><div class="score" id="vScore">0</div></div>
+    <div><div class="round" id="vRound">ROUND 1 / 6</div><div class="timer" id="vTimer">10.0</div><div class="winding" id="vHint">STAY OUT OF FOCUS</div></div>
+    <div class="r"><div class="role">PHOTOGRAPHER</div><div class="score" id="vOther">0</div></div>
+  </div>
+  <div class="pilot-area">
+    <div class="stick" id="stick"><div class="hint">Touch and drag anywhere here to fly</div><div class="base" id="base"></div><div class="knob" id="knob"></div></div>
+    <div class="dash" id="dash"><div class="big">DASH</div><div class="cd"><i id="cdBar"></i></div></div>
+  </div>
+</section>
+
+<section class="screen" id="sLost" hidden>
+  <h1>DISCONNECTED</h1>
+  <div class="sub" id="lostWhy">The screen closed the room or the connection dropped.</div>
+  <button class="btn" id="rejoinBtn" type="button">REJOIN</button>
+  <div class="spacer"></div>
+</section>
+
+<div class="banner" id="banner" hidden></div>
+
+<script src="net.js"></script>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const screens = ['sJoin', 'sWait', 'sPhoto', 'sPilot', 'sLost'];
+function show(id) { for (const s of screens) $(s).hidden = s !== id; }
+function vibrate(p) { try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} }
+
+const S = { link: null, code: '', role: null, slot: -1, phase: 'lobby', lastSend: 0, wake: null };
+
+/* ---------------------------------------------------------------- aiming */
+const aim = { mode: 'motion', x: .5, y: .42, a0: null, b0: null, fov: 36, dirty: true, hasSensor: false, permission: 'unknown' };
+const wrap = d => ((d + 540) % 360) - 180;
+function onOrient(e) {
+  if (e.alpha == null || e.beta == null) return;
+  aim.hasSensor = true;
+  if (aim.a0 == null) { aim.a0 = e.alpha; aim.b0 = e.beta; }
+  if (aim.mode !== 'motion') return;
+  // turning right lowers alpha; tilting up raises beta (phone held upright, back to the screen)
+  const yaw = wrap(aim.a0 - e.alpha), pitch = e.beta - aim.b0;
+  aim.x = clamp(.5 + yaw / aim.fov, -.1, 1.1);
+  aim.y = clamp(.45 - pitch / (aim.fov * 9 / 16), -.1, 1.1);
+  aim.dirty = true;
+}
+function recenter() { aim.a0 = null; aim.b0 = null; aim.x = .5; aim.y = .45; aim.dirty = true; vibrate(10); }
+async function enableMotion() {
+  // iOS needs an explicit permission prompt, and only from a user gesture
+  try {
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      const res = await DeviceOrientationEvent.requestPermission();
+      aim.permission = res;
+      if (res !== 'granted') { setMode('pad'); return; }
+    }
+  } catch (e) { setMode('pad'); return; }
+  window.addEventListener('deviceorientation', onOrient, true);
+  // fall back to the trackpad if no reading arrives (desktop browsers, some Androids)
+  setTimeout(() => { if (!aim.hasSensor && aim.mode === 'motion') setMode('pad', true); }, 2500);
+}
+function setMode(mode, auto) {
+  aim.mode = mode;
+  $('modeBtn').textContent = mode === 'motion' ? 'MOTION' : 'TRACKPAD';
+  $('snapHint').textContent = mode === 'motion' ? 'Point the phone at the screen · tap here to snap' : 'Drag here to move · tap to snap';
+  if (auto) banner('TRACKPAD MODE', 'No motion sensor found — drag on the pad to aim');
+  if (mode === 'motion') recenter();
+}
+function updateDot() { $('dot').style.left = clamp(aim.x, 0, 1) * 100 + '%'; $('dot').style.top = clamp(aim.y, 0, 1) * 100 + '%'; }
+
+/* snap zone: tap = snap, drag = move (trackpad mode) */
+const zone = $('snapzone');
+let zt = null;
+zone.addEventListener('pointerdown', e => { zone.setPointerCapture(e.pointerId); zt = { x: e.clientX, y: e.clientY, t: performance.now(), moved: 0 }; });
+zone.addEventListener('pointermove', e => {
+  if (!zt) return;
+  const dx = e.clientX - zt.x, dy = e.clientY - zt.y;
+  zt.moved += Math.hypot(dx, dy);
+  if (aim.mode === 'pad') { aim.x = clamp(aim.x + dx / zone.clientWidth * 1.2, -.1, 1.1); aim.y = clamp(aim.y + dy / zone.clientHeight * 1.2, -.1, 1.1); aim.dirty = true; }
+  zt.x = e.clientX; zt.y = e.clientY;
+});
+const endZone = e => {
+  if (!zt) return;
+  const tap = zt.moved < 14 && performance.now() - zt.t < 400;
+  zt = null;
+  if (tap) doSnap();
+};
+zone.addEventListener('pointerup', endZone); zone.addEventListener('pointercancel', endZone);
+function doSnap() { if (S.phase !== 'play') return; send({ t: 'snap' }); vibrate(12); zone.classList.add('flash'); setTimeout(() => zone.classList.remove('flash'), 70); }
+$('rewind').addEventListener('click', () => { send({ t: 'rewind' }); vibrate(8); });
+$('recenter').addEventListener('click', () => { if (aim.mode !== 'motion') setMode('motion'); else recenter(); banner('RECENTERED', 'Keep pointing at the middle of the screen'); setTimeout(hideBanner, 900); });
+$('modeBtn').addEventListener('click', () => { if (aim.mode === 'motion') setMode('pad'); else { setMode('motion'); enableMotion(); } });
+$('sens').addEventListener('input', e => { aim.fov = 88 - +e.target.value; }); // slider right = more sensitive = smaller field
+aim.fov = 88 - 36;
+
+/* ---------------------------------------------------------------- pilot stick */
+const stick = $('stick'), knob = $('knob'), base = $('base');
+const js = { id: null, ox: 0, oy: 0, x: 0, y: 0 };
+const R = 60;
+stick.addEventListener('pointerdown', e => {
+  stick.setPointerCapture(e.pointerId); js.id = e.pointerId;
+  const r = stick.getBoundingClientRect(); js.ox = e.clientX - r.left; js.oy = e.clientY - r.top;
+  base.style.display = knob.style.display = 'block';
+  base.style.left = knob.style.left = js.ox + 'px'; base.style.top = knob.style.top = js.oy + 'px';
+  js.x = js.y = 0;
+});
+stick.addEventListener('pointermove', e => {
+  if (e.pointerId !== js.id) return;
+  const r = stick.getBoundingClientRect();
+  let dx = e.clientX - r.left - js.ox, dy = e.clientY - r.top - js.oy;
+  const d = Math.hypot(dx, dy); if (d > R) { dx = dx / d * R; dy = dy / d * R; }
+  knob.style.left = js.ox + dx + 'px'; knob.style.top = js.oy + dy + 'px';
+  js.x = dx / R; js.y = dy / R;
+});
+const endStick = e => { if (e.pointerId !== js.id) return; js.id = null; js.x = js.y = 0; base.style.display = knob.style.display = 'none'; send({ t: 'move', x: 0, y: 0 }); };
+stick.addEventListener('pointerup', endStick); stick.addEventListener('pointercancel', endStick);
+$('dash').addEventListener('pointerdown', e => { e.preventDefault(); send({ t: 'dash' }); vibrate(20); });
+
+/* ---------------------------------------------------------------- send loop (≈30 Hz) */
+function send(msg) { if (S.link) S.link.send(msg); }
+function loop() {
+  const now = performance.now();
+  if (now - S.lastSend >= 33) {
+    if (S.role === 'photo' && aim.dirty) { send({ t: 'aim', x: +aim.x.toFixed(4), y: +aim.y.toFixed(4) }); aim.dirty = false; updateDot(); S.lastSend = now; }
+    else if (S.role === 'pilot' && js.id !== null) { send({ t: 'move', x: +js.x.toFixed(3), y: +js.y.toFixed(3) }); S.lastSend = now; }
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* ---------------------------------------------------------------- messages from the screen */
+let lastResultKey = '';
+function onMessage(msg) {
+  if (!msg || typeof msg !== 'object') return;
+  if (msg.t === 'assigned') {
+    S.slot = msg.slot;
+    setRole(msg.role);
+    return;
+  }
+  if (msg.t === 'fx') {
+    if (msg.k === 'capture') { vibrate([40, 40, 90]); banner('CAPTURED!', 'That’s the shot'); setTimeout(hideBanner, 1400); }
+    else if (msg.k === 'caught') { vibrate([60, 30, 60]); banner('SNAPPED', 'You were in focus'); setTimeout(hideBanner, 1400); }
+    else if (msg.k === 'survive') { vibrate([30, 30, 30]); banner('CAMERA SHY', 'You stayed out of frame'); setTimeout(hideBanner, 1400); }
+    else if (msg.k === 'dash') vibrate(25);
+    return;
+  }
+  if (msg.t === 'bye') { lost('The screen closed the room.'); return; }
+  if (msg.t !== 'state') return;
+  S.phase = msg.phase;
+  if (msg.role !== S.role) setRole(msg.role);
+  const inGame = ['countdown', 'play', 'paused'].includes(msg.phase);
+  if (msg.phase === 'lobby' || msg.phase === 'matchEnd') {
+    show('sWait');
+    $('startBtn').textContent = msg.phase === 'matchEnd' ? 'REMATCH' : 'START MATCH';
+    $('waitSub').textContent = msg.phase === 'matchEnd'
+      ? (msg.winner === 'you' ? `You won ${msg.score} – ${msg.other}!` : msg.winner === 'them' ? `You lost ${msg.score} – ${msg.other}.` : `Dead heat, ${msg.score} each.`)
+      : 'Connected. Press start here or on the screen.';
+  } else if (inGame && S.role === 'photo') {
+    show('sPhoto');
+    $('pScore').textContent = msg.score; $('pOther').textContent = msg.other;
+    $('pRound').textContent = `ROUND ${msg.round} / ${msg.rounds}`;
+    const tm = $('pTimer'); tm.textContent = msg.timer.toFixed(1); tm.classList.toggle('urgent', msg.timer < 3 && msg.phase === 'play' && !msg.result);
+    [...$('pFrames').children].forEach((el, i) => el.classList.toggle('on', i < msg.frames));
+    $('pWinding').textContent = msg.winding ? 'REWINDING…' : msg.phase === 'countdown' ? 'GET READY' : msg.phase === 'paused' ? 'PAUSED' : '';
+  } else if (inGame && S.role === 'pilot') {
+    show('sPilot');
+    $('vScore').textContent = msg.score; $('vOther').textContent = msg.other;
+    $('vRound').textContent = `ROUND ${msg.round} / ${msg.rounds}`;
+    const tm = $('vTimer'); tm.textContent = msg.timer.toFixed(1); tm.classList.toggle('urgent', msg.timer < 3 && msg.phase === 'play' && !msg.result);
+    $('vHint').textContent = msg.phase === 'countdown' ? 'GET READY' : msg.phase === 'paused' ? 'PAUSED' : msg.timer < 6 && msg.timer > 0 ? 'TOP LINE OPEN — ESCAPE FOR BONUS' : 'STAY OUT OF FOCUS';
+    const d = $('dash'); d.classList.toggle('cooling', !msg.canDash); $('cdBar').style.width = (100 * (1 - msg.dashCd / 1.8)) + '%';
+  }
+  if (msg.result) {
+    const key = msg.round + msg.result.kind;
+    if (key !== lastResultKey) { lastResultKey = key; if (msg.result.won) banner(`+${msg.result.pts}`, 'Round to you'); else banner('ROUND LOST', S.role === 'photo' ? 'It got away' : 'It got the shot'); setTimeout(hideBanner, 1600); }
+  }
+}
+function setRole(role) {
+  const was = S.role; S.role = role;
+  const photo = role === 'photo';
+  $('waitIcon').textContent = photo ? '📷' : role === 'pilot' ? '🪁' : '👀';
+  $('waitRole').textContent = photo ? 'PHOTOGRAPHER' : role === 'pilot' ? 'PILOT' : 'SPECTATOR';
+  $('waitWhat').textContent = photo ? 'Point the phone at the screen like a camera. Tap to snap, three frames per roll.' : role === 'pilot' ? 'Thumb-stick on the left to fly, DASH on the right. Stay out of focus.' : 'Both seats are taken. You’ll get one as soon as a phone leaves.';
+  $('startBtn').disabled = role === 'spectator';
+  if (was && was !== role && role !== 'spectator') { banner(photo ? 'YOU HAVE THE CAMERA' : 'YOU HAVE THE WINGS', photo ? 'Point at the screen, tap RECENTER, then snap' : 'Left thumb flies, right thumb dashes'); setTimeout(hideBanner, 2600); vibrate([30, 40, 30]); }
+  if (photo && aim.mode === 'motion') recenter();
+}
+function banner(big, small) { const b = $('banner'); b.innerHTML = ''; b.append(document.createTextNode(big)); if (small) { const s = document.createElement('small'); s.textContent = small; b.append(s); } b.hidden = false; }
+function hideBanner() { $('banner').hidden = true; }
+
+/* ---------------------------------------------------------------- join / leave */
+const params = new URLSearchParams(location.search);
+$('code').value = SnapNet.normCode(params.get('room') || '');
+$('name').value = localStorage.getItem('snapwing.name') || '';
+$('code').addEventListener('input', e => { e.target.value = SnapNet.normCode(e.target.value); });
+async function join() {
+  const code = SnapNet.normCode($('code').value), name = $('name').value.trim().slice(0, 14);
+  if (code.length !== 4) { $('joinErr').textContent = 'The room code is four letters or digits.'; return; }
+  localStorage.setItem('snapwing.name', name);
+  $('joinBtn').disabled = true; $('joinBtn').textContent = 'CONNECTING…'; $('joinErr').textContent = '';
+  enableMotion(); // inside the tap, so iOS shows its permission prompt
+  try { S.wake = await (navigator.wakeLock && navigator.wakeLock.request('screen')); } catch (e) {}
+  try {
+    S.link = await SnapNet.join(code, { onMessage, onClose: () => lost('Connection to the screen dropped.'), onError: () => {} });
+    S.code = code; $('waitCode').textContent = code;
+    send({ t: 'hello', name });
+    show('sWait');
+    history.replaceState(null, '', '?room=' + code);
+  } catch (err) {
+    $('joinErr').textContent = err && err.message ? err.message : 'Could not connect.';
+  }
+  $('joinBtn').disabled = false; $('joinBtn').textContent = 'JOIN';
+}
+function lost(why) { if (S.link) { S.link.close(); S.link = null; } S.role = null; $('lostWhy').textContent = why; show('sLost'); vibrate(40); }
+$('joinBtn').addEventListener('click', join);
+$('code').addEventListener('keydown', e => { if (e.key === 'Enter') join(); });
+$('startBtn').addEventListener('click', () => { send({ t: 'start' }); vibrate(15); });
+$('leaveBtn').addEventListener('click', () => { if (S.link) S.link.close(); S.link = null; S.role = null; show('sJoin'); });
+$('rejoinBtn').addEventListener('click', () => { show('sJoin'); join(); });
+document.addEventListener('visibilitychange', async () => { if (!document.hidden && S.link && !S.wake) { try { S.wake = await navigator.wakeLock.request('screen'); } catch (e) {} } });
+</script>
+</body>
+</html>
