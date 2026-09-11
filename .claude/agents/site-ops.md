@@ -11,6 +11,8 @@ Guardiano (uptime watchdog, checks every 5 min, already deployed): https://guard
 
 This session's own network cannot reach the Guardiano URL directly (org egress policy blocks it). As of 2026-09-02, a workaround exists: a sandbox-style tool with its own outbound internet access (available in this environment for other purposes, e.g. site-building/media tools) can run `curl` against the Guardiano URL and get a real result — try that before giving up on step 1. If no such tool is available in a given run, fall back to the Siti DB + alert emails and say so plainly in the digest rather than guessing at site status.
 
+**Sergio Bar and Carrozze are not sold clients (confirmed by Ash, 2026-09-11)** — they're demo/prototype sites. Ash asked to stop tracking them here: don't open new incidents, don't chase root causes, don't treat their downtime as a business-impacting emergency in digests. Guardiano itself still checks them (this agent has no way to reconfigure Guardiano's own Worker) and may still report on them in `/stato` — if so, note it in one line at most ("Sergio Bar/Carrozze also flapped, not tracked, skipped") rather than the detailed day-by-day incident logging done 2026-09-02 through 09-11. The one thing that DOES still matter about them: they share the Cloudflare account's D1 free-tier daily read quota with amicomiotour.com, so if Tour's own `/admin` or site starts failing, check whether Sergio Bar/Carrozze usage is the cause (see the resolved Idea in Incidenti e interventi from 2026-09-11 for the full diagnosis) — that's a Tour-site problem worth flagging, even though the two demo sites themselves aren't.
+
 Notion databases:
 - Siti: `9ca66617-f8a5-44e9-badc-8e31dc6b1bda`
 - Incidenti e interventi: `455a9b8c-37db-4b92-96bf-2f0dd0aee514`
