@@ -30,7 +30,7 @@
 
 import { CITIES, SLOTS } from "./catalog.js";
 import { randomId, signPayload, verifyPayload, getCookie, setCookie, clearCookie, hashPassword, verifyPassword } from "./auth.js";
-import { CITY_KEYS, USER_COOKIE, ADMIN_COOKIE, json, clean, normEmail, isDate, isTime, fmt, now, today, feeOn, body, isLive, parseIntake, healthFlags, settings, currentUser, currentAdmin, scope, sendEmail, sendSms, stripeCheckout, slotsFor, createUser, sessionCookieFor } from "./lib.js";
+import { CITY_KEYS, USER_COOKIE, ADMIN_COOKIE, json, clean, normEmail, isDate, isTime, fmt, now, today, feeOn, body, isLive, parseIntake, healthFlags, settings, currentUser, currentAdmin, scope, sendEmail, sendSms, stripeCheckout, slotsFor, createUser, sessionCookieFor, welcomeEmail } from "./lib.js";
 import { featureRoute, adminFeatureRoute, giftPaid, packagePaid, authFlags } from "./features.js";
 import { runCron } from "./cron.js";
 
@@ -175,7 +175,7 @@ async function googleCallback(req, env, url) {
   if (claims.aud !== env.GOOGLE_CLIENT_ID || !claims.email || claims.email_verified !== true) return fail("claims");
   const email = normEmail(claims.email);
   let user = await env.DB.prepare("SELECT * FROM users WHERE google_sub = ? OR email = ?").bind(claims.sub, email).first();
-  if (!user) user = await createUser(env, { email, name: clean(claims.name, 80) || email.split("@")[0], ref: st.ref, lang: st.lang, google_sub: claims.sub });
+  if (!user) { user = await createUser(env, { email, name: clean(claims.name, 80) || email.split("@")[0], ref: st.ref, lang: st.lang, google_sub: claims.sub }); await welcomeEmail(env, user); }
   else if (!user.google_sub) await env.DB.prepare("UPDATE users SET google_sub = ? WHERE id = ?").bind(claims.sub, user.id).run();
   const headers = new Headers({ location: `${env.SITE_URL}/account.html` });
   headers.append("set-cookie", await sessionCookieFor(env, user.id)); headers.append("set-cookie", clearCookie(GOOGLE_COOKIE));

@@ -51,6 +51,11 @@ export async function createUser(env, { email, name, ref, city, lang, google_sub
   }
   return env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(id).first();
 }
+// First sign-in through Google/Apple: no magic link was sent, so this is the client's first email from us.
+export async function welcomeEmail(env, user) {
+  const first = (user.name || "").split(" ")[0] || "there";
+  return sendEmail(env, { to: user.email, subject: "Welcome to Zen Recovery", text: [`Hi ${first},`, ``, `Your Zen Recovery account is ready. Cupping, manual therapy and recovery in Cairo, Dahab and Florence.`, ``, `What's in your account: ${env.SITE_URL}/account.html`, `· two minutes of questions so we know which room is nearest and how to work with your body`, `· your sessions, before/after advice, and a progress check-in`, `· rewards: every few sessions one is free, and your friends get a discount through your invite link`, ``, `Book a session: ${env.SITE_URL}/#places`, ``, `See you on the table,`, `Zen Recovery`].join("\n") });
+}
 export async function sessionCookieFor(env, userId) {
   await env.DB.prepare("UPDATE users SET last_login = ? WHERE id = ?").bind(now(), userId).run();
   return setCookie(USER_COOKIE, await signPayload(env.SESSION_SECRET, { uid: userId, exp: Math.floor(Date.now() / 1000) + 30 * 86400 }), 30 * 86400);

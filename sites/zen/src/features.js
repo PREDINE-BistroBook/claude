@@ -4,7 +4,7 @@
 // checked the admin cookie). Everything money-related goes through stripeCheckout() in lib.js (2% platform fee).
 import { CITIES } from "./catalog.js";
 import { randomId, referralCode, signPayload, verifyPayload, getCookie, clearCookie } from "./auth.js";
-import { CITY_KEYS, json, clean, normEmail, isDate, isTime, fmt, now, today, addDays, feeOn, body, isLive, currentUser, scope, sendEmail, stripeCheckout, slotsFor, healthFlags, parseIntake, createUser, sessionCookieFor } from "./lib.js";
+import { CITY_KEYS, json, clean, normEmail, isDate, isTime, fmt, now, today, addDays, feeOn, body, isLive, currentUser, scope, sendEmail, stripeCheckout, slotsFor, healthFlags, parseIntake, createUser, sessionCookieFor, welcomeEmail } from "./lib.js";
 
 const b64u = (s) => btoa(typeof s === "string" ? unescape(encodeURIComponent(s)) : String.fromCharCode(...new Uint8Array(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const cityOf = (k) => (CITY_KEYS.includes(k) ? k : null);
@@ -209,7 +209,7 @@ async function appleCallback(req, env) {
   let name = "";
   try { const uj = JSON.parse(fd.get("user") || "null"); name = clean([uj?.name?.firstName, uj?.name?.lastName].filter(Boolean).join(" "), 80); } catch {}
   let user = await env.DB.prepare("SELECT * FROM users WHERE apple_sub = ? OR email = ?").bind(claims.sub, email).first();
-  if (!user) user = await createUser(env, { email, name: name || email.split("@")[0], ref: st.ref, lang: st.lang, apple_sub: claims.sub });
+  if (!user) { user = await createUser(env, { email, name: name || email.split("@")[0], ref: st.ref, lang: st.lang, apple_sub: claims.sub }); await welcomeEmail(env, user); }
   else if (!user.apple_sub) await env.DB.prepare("UPDATE users SET apple_sub = ? WHERE id = ?").bind(claims.sub, user.id).run();
   const headers = new Headers({ location: `${env.SITE_URL}/account.html` });
   headers.append("set-cookie", await sessionCookieFor(env, user.id)); headers.append("set-cookie", clearCookie(APPLE_COOKIE));
