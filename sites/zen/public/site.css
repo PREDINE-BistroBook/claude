@@ -340,7 +340,7 @@ legend{font-family:var(--label); font-size:.62rem; letter-spacing:.2em; text-tra
 .therapist{display:flex; gap:12px; align-items:center}
 .therapist .ph{width:44px; height:44px; border-radius:50%; flex:none; background:linear-gradient(135deg, var(--mark-soft), var(--mark)); overflow:hidden; display:grid; place-items:center; color:#fff; font-family:var(--display); font-weight:800; font-style:italic}
 .therapist .ph img{width:100%; height:100%; object-fit:cover; display:block}
-.therapist b{font-weight:500; display:block} .therapist span{font-size:.86rem; color:var(--ink-soft)}
+.therapist b{font-weight:500; display:block} .therapist span{font-size:.86rem; color:var(--ink-soft)} .therapist .where{display:block; font-size:.8rem; color:var(--ink-mute)} .therapist .where a{color:var(--mark)} .therapist.near{background:color-mix(in srgb, var(--mark) 8%, transparent); border-radius:12px; padding:6px 8px; margin:-6px -8px} .near-tag{font-style:normal; font-size:.7rem; letter-spacing:.06em; text-transform:uppercase; color:var(--mark); margin-inline-start:6px}
 .maps{font-size:.9rem} .maps a{color:var(--mark); text-decoration:none; font-weight:500}
 .gift{background:var(--ground-3); padding:clamp(56px, 10vh, 110px) var(--gutter)}
 .gift-shell{display:grid; grid-template-columns:.9fr 1.1fr; gap:clamp(28px, 5vw, 80px); align-items:start; max-width:1180px; margin-inline:auto}
