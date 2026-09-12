@@ -95,7 +95,7 @@ One-time, Ash, in GitHub → repo → Settings → Secrets and variables → Act
 | `ADMIN_BOOTSTRAP_PASSWORD` | the first owner password (email is fetta.amore.business@gmail.com); change it in the admin after first login |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | later, when Stripe Connect is set up |
 
-Then Actions → "Deploy Zen Recovery" → Run workflow (or ask a Claude session to trigger it; it can). The workflow: applies the schema, deploys, sets the Worker secrets, generates `SESSION_SECRET` once, and — as soon as zenrecovery.club is a zone in the Cloudflare account — attaches the custom domain and adds the four Resend DNS records itself. Before the zone exists it deploys to `zen-recovery.fetta-amore-business.workers.dev` and says so. Pushes to `main` touching `sites/zen/` redeploy automatically.
+Then Actions → "Deploy Zen Recovery" → Run workflow (or ask a Claude session to trigger it; it can). The workflow: applies the schema, deploys, sets the Worker secrets, generates `SESSION_SECRET` once, and — as soon as zenrecovery.club is a zone in the Cloudflare account — attaches the custom domain and adds the four Resend DNS records itself. Before the zone exists it deploys to `zen-recovery.fetta-amore-business.workers.dev` and says so. Pushes to the repo's default branch touching `sites/zen/` redeploy automatically. GitHub only registers the workflow once the file is on the default branch, so the Zen branch has to be merged before the first run.
 
 Local run: `npx wrangler dev` with `DEV_MAGIC_LINK = "1"` returns the sign-in link in the API response, so accounts can be tested without email.
 The preview banner on the public page is already off (`PREVIEW = false`); the account/admin pages show a banner only while no API answers.

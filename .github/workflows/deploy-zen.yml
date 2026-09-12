@@ -1,7 +1,8 @@
 name: Deploy Zen Recovery
 
 # Deploys sites/zen to Cloudflare from GitHub's runners (the Claude web sessions can't reach api.cloudflare.com).
-# Trigger by hand from the Actions tab, or automatically on a push to main that touches sites/zen.
+# Trigger by hand from the Actions tab, or automatically on a push to the default branch that touches sites/zen.
+# (GitHub only registers a workflow once the file exists on the default branch — currently claude/ai-agent-company-automation-i3l9vx.)
 #
 # Repository secrets (Settings → Secrets and variables → Actions):
 #   CLOUDFLARE_API_TOKEN      Workers Scripts:Edit, D1:Edit, Workers Routes:Edit, Zone:Read, DNS:Edit on zenrecovery.club
@@ -14,7 +15,7 @@ name: Deploy Zen Recovery
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [claude/ai-agent-company-automation-i3l9vx, main]
     paths: ["sites/zen/**", ".github/workflows/deploy-zen.yml"]
 
 concurrency: deploy-zen
