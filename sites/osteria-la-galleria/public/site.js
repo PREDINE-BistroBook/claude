@@ -6,6 +6,10 @@
   const T = {
     "skip":                { it: "Vai al menu", en: "Skip to the menu" },
     "nav.reserve":         { it: "Prenota", en: "Reserve" },
+    "nav.findus":          { it: "Dove siamo", en: "Find us" },
+    "filter.empty":        { it: "Nessuna opera in mostra con questi filtri. Chiedi in sala: la cucina adatta molti piatti.", en: "Nothing on view with these filters. Ask the staff: the kitchen adapts many dishes." },
+    "scale.weight":        { it: "Peso della bistecca", en: "Steak weight" },
+    "scale.cut":           { it: "Taglio", en: "Cut" },
     "hero.eyebrow":        { it: "Firenze · Di fronte a Palazzo Pitti", en: "Florence · Opposite Palazzo Pitti" },
     "hero.plaque.medium":  { it: "Cucina toscana · Chianina IGP · Tartufo fresco · Pinsa · Buchetta del vino", en: "Tuscan kitchen · Chianina IGP beef · Fresh truffle · Pinsa · Wine window" },
     "atrio.eyebrow":       { it: "Prima di entrare", en: "Before you come in" },
@@ -104,10 +108,14 @@
     document.querySelectorAll("[data-i18n]").forEach(el => { el.textContent = t(el.dataset.i18n); });
     document.querySelectorAll(".lang button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.lang === lang)));
     document.getElementById("hh").hidden = !(SITE.happyHour && SITE.happyHour.price);
+    const cta = document.getElementById("nav-cta");
+    if (SITE.whatsapp) { cta.href = "https://wa.me/" + SITE.whatsapp; cta.rel = "noopener"; cta.textContent = t("nav.reserve"); }
+    else if (SITE.phone) { cta.href = "tel:" + SITE.phone.replace(/\s+/g, ""); cta.textContent = t("nav.reserve"); }
+    else { cta.href = "#visita"; cta.textContent = t("nav.findus"); }
   }
 
   /* ---------- rooms ---------- */
-  function dishHtml(d, room) {
+  function dishHtml(d, room, level) {
     const marks = d.v ? ' <span class="vmark" title="' + esc(t("v.note")) + '">V</span>' : "";
     const star = d.star ? "<sup>*</sup>" : "";
     let desc = lang === "it" ? (d.dit || "") : (d.en || "");
@@ -120,7 +128,7 @@
     const cls = ["work", d.feature ? "feature" : ""].join(" ").trim();
     return '<li class="' + cls + '" data-a="' + al.join(",") + '" data-v="' + (d.v ? 1 : 0) + '">' +
       '<article class="plaque">' +
-        '<h4 class="work-title">' + esc(d.it) + star + marks + "</h4>" +
+        "<" + level + ' class="work-title" lang="it">' + esc(d.it) + star + marks + "</" + level + ">" +
         (desc ? '<p class="work-desc">' + esc(desc) + "</p>" : '<p class="work-desc"></p>') +
         '<div class="work-meta">' + alHtml + '<span class="price">' + money(d.price, unit) + "</span></div>" +
       "</article></li>";
@@ -131,10 +139,10 @@
     return '<div class="scale" id="scale">' +
       '<div><h3>' + esc(t("scale.title")) + "</h3><p>" + esc(t("scale.text")) + "</p></div>" +
       '<div>' +
-        '<div class="scale-cuts" role="radiogroup">' + cuts.map((c, i) =>
+        '<div class="scale-cuts" role="radiogroup" aria-label="' + esc(t("scale.cut")) + '">' + cuts.map((c, i) =>
           '<label><input type="radio" name="cut" value="' + c.price + '"' + (i === 0 ? " checked" : "") + ">" + esc(c.it) + " · " + money(c.price, "perkg") + "</label>").join("") + "</div>" +
         '<div class="scale-readout"><span class="scale-kg" id="scale-kg"></span><span class="scale-eur" id="scale-eur"></span></div>' +
-        '<input type="range" id="scale-range" min="600" max="2000" step="50" value="1000" aria-label="' + esc(t("scale.kg")) + '">' +
+        '<input type="range" id="scale-range" min="600" max="2000" step="50" value="1000" aria-label="' + esc(t("scale.weight")) + '">' +
         '<div class="scale-for"><span>600 g</span><span id="scale-for"></span><span>2 kg</span></div>' +
       "</div></div>";
   }
@@ -144,7 +152,7 @@
     host.innerHTML = ROOMS.map(room => {
       const groups = room.groups.map(g =>
         '<div class="group">' + (g.title ? '<h3 class="group-title">' + esc(g.title[lang]) + "</h3>" : "") +
-        '<ol class="works">' + g.items.map(d => dishHtml(d, room)).join("") + "</ol></div>").join("");
+        '<ol class="works">' + g.items.map(d => dishHtml(d, room, g.title ? "h4" : "h3")).join("") + "</ol></div>").join("");
       return '<section class="room' + (room.compact ? " compact" : "") + '" id="room-' + room.id + '" data-wall="' + room.wall + '" data-ink="' + room.ink + '" aria-labelledby="h-' + room.id + '">' +
         '<div class="rail" aria-hidden="true"></div>' +
         '<header class="room-head"><span class="numeral" aria-hidden="true">' + room.numeral + "</span>" +
@@ -174,7 +182,9 @@
       const people = Math.max(1, Math.round(kg / 0.55));
       document.getElementById("scale-kg").innerHTML = (lang === "it" ? kg.toFixed(2).replace(".", ",") : kg.toFixed(2)) + "<small>" + t("scale.kg") + "</small>";
       document.getElementById("scale-eur").textContent = lang === "it" ? eur + " €" : "€" + eur;
-      document.getElementById("scale-for").textContent = t("scale.for", { p: people === 1 ? t("scale.one") : t("scale.many", { n: people }) });
+      const forWho = t("scale.for", { p: people === 1 ? t("scale.one") : t("scale.many", { n: people }) });
+      document.getElementById("scale-for").textContent = forWho;
+      range.setAttribute("aria-valuetext", (lang === "it" ? kg.toFixed(2).replace(".", ",") + " kg, " + eur + " €" : kg.toFixed(2) + " kg, €" + eur) + ", " + forWho);
     };
     range.addEventListener("input", update);
     document.querySelectorAll('input[name="cut"]').forEach(r => r.addEventListener("change", update));
@@ -207,7 +217,8 @@
       if (ok) on++;
     });
     const tally = document.getElementById("tally");
-    tally.textContent = active.size ? t("filter.tally", { n: on, t: works.length }) : "";
+    tally.textContent = active.size ? (on ? t("filter.tally", { n: on, t: works.length }) : t("filter.empty")) : "";
+    tally.classList.toggle("empty", active.size > 0 && on === 0);
     const count = document.getElementById("filter-count");
     count.hidden = !active.size;
     count.textContent = active.size;
@@ -223,7 +234,7 @@
       root.style.setProperty("--ink", ink);
       root.style.setProperty("--gold", gold);
       root.style.setProperty("--gold-soft", "color-mix(in srgb, " + gold + " 45%, transparent)");
-      root.style.setProperty("--muted", "color-mix(in srgb, " + ink + " 64%, transparent)");
+      root.style.setProperty("--muted", "color-mix(in srgb, " + ink + " 74%, transparent)");
       document.querySelector('meta[name="theme-color"]').setAttribute("content", wall);
       document.querySelectorAll(".route-pill").forEach(p => p.classList.toggle("active", p.dataset.room === id));
       const pill = document.querySelector(".route-pill.active");

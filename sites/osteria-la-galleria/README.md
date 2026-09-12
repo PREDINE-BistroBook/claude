@@ -17,6 +17,8 @@ Status: **built, not deployed, not yet shown to the owner.** Location known (in 
 
 Fonts: Bodoni Moda (titles, numerals), Cormorant Garamond (dish names, blurbs), Work Sans (plaques, labels). Loaded from Google Fonts with real fallbacks.
 
+Quality floor (checked 2026-09-12 with a scripted audit at 1440 px and 375 px): no text under 12 px, every tap target at least 36 px tall with 8 px between them, heading levels never skip, no horizontal scroll, sticky bars accounted for in `scroll-padding-top` so keyboard focus is never hidden, the steak slider announces "1,05 kg, 71 €, per 2 persone" to screen readers, the filter tally is a live region with an empty state, and Italian dish names carry `lang="it"` inside the English page. Photos ship as WebP with JPEG fallback. The nav button reads "Dove siamo / Find us" until a phone or WhatsApp number is set in `SITE`, then becomes "Prenota / Reserve" and dials or opens WhatsApp directly.
+
 ```
 sites/osteria-la-galleria/
   public/index.html     the page shell (hero, route bar, filters, visit info, footer)
