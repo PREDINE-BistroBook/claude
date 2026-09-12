@@ -2,6 +2,12 @@ name = "zen-recovery"
 main = "src/worker.js"
 compatibility_date = "2025-06-01"
 
+# Custom domain (must stay above the first [table] — TOML would otherwise attach it to that table).
+routes = [
+  { pattern = "zenrecovery.club", custom_domain = true },
+  { pattern = "www.zenrecovery.club", custom_domain = true },
+]
+
 [assets]
 directory = "./public"
 binding = "ASSETS"
@@ -18,13 +24,6 @@ database_id = "35c5461a-9065-4552-a6bf-bac39d1ec8f8"   # created 2026-09-12 (WEU
 #   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, RESEND_API_KEY,
 #   SESSION_SECRET (any long random string, signs login cookies),
 #   ADMIN_BOOTSTRAP_EMAIL + ADMIN_BOOTSTRAP_PASSWORD (first owner login; only honoured while no admin exists yet)
-
-# Custom domain. Requires zenrecovery.club to be a zone in this Cloudflare account (README "Domain").
-# If deploying before the nameservers have moved, comment these four lines out and use the workers.dev URL.
-routes = [
-  { pattern = "zenrecovery.club", custom_domain = true },
-  { pattern = "www.zenrecovery.club", custom_domain = true },
-]
 
 [vars]
 SITE_URL = "https://zenrecovery.club"
