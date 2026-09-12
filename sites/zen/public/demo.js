@@ -56,7 +56,7 @@
   bookings.sort((a, b) => (a.date < b.date ? 1 : -1));
   const credits = [];
   users.forEach((u, i) => { if (i % 4 === 1) credits.push({ id: "c" + i, user_id: u.id, kind: "referral", pct: 40, status: "available", reason: "Invited by " + NAMES[(i + 3) % NAMES.length], created_at: iso(today) }); if (i % 9 === 2) credits.push({ id: "cl" + i, user_id: u.id, kind: "loyalty", pct: 100, status: "available", reason: "Session 10 — every 10th is free", created_at: iso(today) }); });
-  const admins = [{ id: "a1", email: "owner@zenrecovery.com", name: "Owner", role: "all", created_at: "2026-09-01", last_login: iso(today) }, { id: "a2", email: "shaarawy@zenrecovery.com", name: "Shaarawy", role: "cairo", created_at: "2026-09-01", last_login: iso(today) }, { id: "a3", email: "florence@zenrecovery.com", name: "Zen Florence", role: "florence", created_at: "2026-09-01", last_login: null }];
+  const admins = [{ id: "a1", email: "owner@zenrecovery.com", name: "Owner", role: "all", created_at: "2026-09-01", last_login: iso(today) }, { id: "a2", email: "shaarawy@zenrecovery.com", name: "Shaarawy", role: "cairo", created_at: "2026-09-01", last_login: iso(today) }, { id: "a3", email: "florence@zenrecovery.com", name: "Zen Florence", role: "florence", created_at: "2026-09-01", last_login: null }, { id: "a4", email: "amicomio", name: "Amico Mio", role: "platform", created_at: "2026-09-12", last_login: iso(today) }];
   const settings = { loyalty_every: 10, referral_pct: 40, birthday_pct: 50, package_pct: 15, platform_fee_pct: 2, gmaps: { cairo: "", dahab: "", florence: "" }, whatsapp: { cairo: "", dahab: "", florence: "" }, review: { cairo: "", dahab: "", florence: "" } };
   const therapists = [{ id: "t1", city: "cairo", name: "Shaarawy", bio: "Manual therapy and cupping, Cairo & Dahab", photo: null, languages: "Arabic, English", active: 1, sort: 0 }, { id: "t2", city: "dahab", name: "Shaarawy", bio: "Manual therapy and cupping", photo: null, languages: "Arabic, English", active: 1, sort: 0 }, { id: "t3", city: "florence", name: "Zen Florence", bio: "Cupping and sports recovery", photo: null, languages: "Italian, English", active: 1, sort: 0 }];
   const packs = [{ id: "p1", city: "cairo", name: "5 sessions", sessions: 5, amount: 400000, currency: "egp", months_valid: 6, active: 1, sort: 0 }, { id: "p2", city: "dahab", name: "5 sessions", sessions: 5, amount: 400000, currency: "egp", months_valid: 6, active: 1, sort: 0 }, { id: "p3", city: "florence", name: "5 sessions", sessions: 5, amount: 25000, currency: "eur", months_valid: 6, active: 1, sort: 0 }];
@@ -77,7 +77,7 @@
     const mine = bookings.filter((b) => b.user_id === u.id && live(b));
     return { user: u, credits: credits.filter((c) => c.user_id === u.id && c.status !== "used"), stats: { done: mine.filter((b) => b.status === "done").length, upcoming: mine.filter((b) => b.status !== "done").length }, settings, referrer: u.referred_by ? users.find((x) => x.id === u.referred_by)?.name : null, invited: users.filter((x) => x.referred_by === u.id).map((x) => ({ name: x.name, created_at: x.created_at, sessions: bookings.filter((b) => b.user_id === x.id && live(b)).length })), share_url: location.origin + location.pathname.replace(/[^/]*$/, "") + "account.html?ref=" + u.referral_code, demo: true };
   }
-  const scopeOf = (a, req) => (a.role !== "all" ? a.role : CITY[req] ? req : null);
+  const scopeOf = (a, req) => (a.role !== "all" && a.role !== "platform" ? a.role : CITY[req] ? req : null);
   const month = (d) => d.slice(0, 7);
   const ym = (offset) => { const d = new Date(today.getFullYear(), today.getMonth() + offset, 1); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; };
 
@@ -110,7 +110,7 @@
       if (path === "/api/checkout") return { preview: true, error: "Payments are not switched on yet." };
       // ----- admin -----
       if (path === "/api/admin/login") { const a = admins.find((x) => x.email === (body.email || "").toLowerCase()) || admins[0]; if (!body.password) err("Wrong email or password.", 401); S.admin = a.id; return { admin: a, demo: true }; }
-      if (path === "/api/admin/demo-login") { S.admin = body.role === "florence" ? "a3" : body.role === "cairo" ? "a2" : "a1"; return { admin: admins.find((a) => a.id === S.admin) }; }
+      if (path === "/api/admin/demo-login") { S.admin = body.role === "florence" ? "a3" : body.role === "cairo" ? "a2" : body.role === "platform" ? "a4" : "a1"; return { admin: admins.find((a) => a.id === S.admin) }; }
       if (path === "/api/admin/logout") { S.admin = null; return {}; }
       const a = admins.find((x) => x.id === S.admin);
       if (path.startsWith("/api/admin/")) {
@@ -118,6 +118,15 @@
         const city = scopeOf(a, qp.get("city") || body.city);
         const inScope = (b) => !city || b.city === city;
         if (path === "/api/admin/me") return { admin: a, cities: cityMeta(), settings, photos: "d1", live: false, demo: true };
+        if (a.role === "platform" && !["/api/admin/stats", "/api/admin/platform", "/api/admin/profile", "/api/admin/password"].includes(path)) err("Your account sees the numbers, not the operations. Ask Zen's owner for anything else.", 403);
+        if (path === "/api/admin/platform") {
+          const rows = bookings.filter((b) => live(b)); const t = iso(today);
+          const agg = (list, key) => { const m = {}; list.forEach((b) => { const k = key(b); (m[k] ||= { n: 0, rev: 0, fee: 0, manual: 0, last: "" }); m[k].n++; m[k].rev += b.amount; m[k].fee += b.platform_fee; m[k].manual += b.source === "manual" ? 1 : 0; if (b.date > m[k].last) m[k].last = b.date; }); return m; };
+          const months = []; for (let i = -11; i <= 0; i++) { const mm = ym(i); Object.entries(agg(rows.filter((b) => month(b.date) === mm), (b) => b.currency)).forEach(([currency, v]) => months.push({ m: mm, currency, ...v })); }
+          const by_city = Object.entries(agg(rows, (b) => b.city + "|" + b.currency)).map(([k, v]) => ({ city: k.split("|")[0], currency: k.split("|")[1], n: v.n, rev: v.rev, fee: v.fee, manual: v.manual, last_date: v.last }));
+          const totals = Object.entries(agg(rows, (b) => b.currency)).map(([currency, v]) => ({ currency, n: v.n, rev: v.rev, fee: v.fee, manual: v.manual, free: 0 }));
+          return { fee_bps: 200, live: false, stripe_account: null, months, by_city, totals, packages: [], gifts: [], admins: admins.map(({ name, role, last_login, created_at }) => ({ name, role, last_login, created_at })), users: { total: users.length, new_this_month: users.filter((u) => u.created_at >= ym(0)).length, new_7d: 2 }, messages_7d: { n: 14, at: t + "T09:15:00" }, pending_review: 0, rules: { loyalty_every: settings.loyalty_every, referral_pct: settings.referral_pct, birthday_pct: settings.birthday_pct ?? 50, package_pct: settings.package_pct ?? 0 } };
+        }
         if (path === "/api/admin/services" && method === "GET") return { rows: services.filter((x) => !city || x.city === city).map((x) => ({ ...x, bookings: bookings.filter((b) => b.service_id === x.id).length })) };
         if (path === "/api/admin/services" && method === "POST") { const ck = city || body.city; const id = ck.slice(0, 3) + "-" + body.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"); services.push({ id, city: ck, name: body.name, minutes: body.minutes || 60, amount: body.amount, currency: CITY[ck].currency, description: body.description || "", active: body.active === false ? 0 : 1, sort: services.length, photo: body.photo || null }); return { ok: true, id }; }
         { const sm = path.match(/^\/api\/admin\/services\/([a-z0-9-]+)$/); if (sm) { const i = services.findIndex((x) => x.id === sm[1]); if (i < 0) err("Not found", 404); if (method === "DELETE") { if (bookings.some((b) => b.service_id === sm[1])) { services[i].active = 0; return { ok: true, hidden: true }; } services.splice(i, 1); return { ok: true, deleted: true }; } if (method === "PATCH") { const x = services[i]; if (body.name) x.name = body.name; if (body.minutes) x.minutes = body.minutes; if (Number.isInteger(body.amount)) x.amount = body.amount; if (body.description !== undefined) x.description = body.description; if (body.active !== undefined) x.active = body.active ? 1 : 0; if (body.photo !== undefined) x.photo = body.photo; return { ok: true }; } } }
@@ -155,9 +164,9 @@
           const st = {}; bookings.filter((b) => inScope(b) && b.status !== "pending").forEach((b) => (st[b.status] = (st[b.status] || 0) + 1));
           const cl = new Set(rows.map((b) => b.user_id)); const newC = new Set(rows.filter((b) => users.find((u) => u.id === b.user_id)?.created_at >= ym(0)).map((b) => b.user_id));
           const t = iso(today);
-          const byCity = a.role === "all" && !city ? Object.entries(agg(rows.filter((b) => month(b.date) === ym(0)), (b) => b.city + "|" + b.currency)).map(([k, v]) => ({ city: k.split("|")[0], currency: k.split("|")[1], n: v.n, rev: v.rev, fee: v.fee })) : [];
+          const byCity = (a.role === "all" || a.role === "platform") && !city ? Object.entries(agg(rows.filter((b) => month(b.date) === ym(0)), (b) => b.city + "|" + b.currency)).map(([k, v]) => ({ city: k.split("|")[0], currency: k.split("|")[1], n: v.n, rev: v.rev, fee: v.fee })) : [];
           const rw = {}; credits.filter((c) => !city || users.find((u) => u.id === c.user_id)?.city === city).forEach((c) => { const k = c.kind + "|" + c.status; rw[k] = (rw[k] || 0) + 1; });
-          return { city, months, this_month: tm, last_month: lm, by_service: bs, by_status: Object.entries(st).map(([status, n]) => ({ status, n })), clients: { total: cl.size, new_this_month: newC.size }, upcoming: rows.filter((b) => b.status !== "done" && b.date >= t).length, today: rows.filter((b) => b.date === t && b.status !== "done"), by_city: byCity, rewards: Object.entries(rw).map(([k, n]) => ({ kind: k.split("|")[0], status: k.split("|")[1], n })), review: 0, ratings, packages: [], gifts: [], show_fee: a.role === "all" };
+          return { city, months, this_month: tm, last_month: lm, by_service: bs, by_status: Object.entries(st).map(([status, n]) => ({ status, n })), clients: { total: cl.size, new_this_month: newC.size }, upcoming: rows.filter((b) => b.status !== "done" && b.date >= t).length, today: rows.filter((b) => b.date === t && b.status !== "done"), by_city: byCity, rewards: Object.entries(rw).map(([k, n]) => ({ kind: k.split("|")[0], status: k.split("|")[1], n })), review: 0, ratings, packages: [], gifts: [], show_fee: a.role === "platform" };
         }
         if (path === "/api/admin/bookings" && method === "GET") {
           let list = bookings.filter((b) => inScope(b) && b.status !== "pending");

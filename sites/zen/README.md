@@ -33,8 +33,9 @@ sites/zen/
 - Credits are applied at checkout: the Worker recomputes the price server-side and takes the 2% platform fee on the discounted amount. A cancelled booking hands the credit back.
 - Sessions added by hand in the admin (cash, walk-in) count toward loyalty if the email matches an account. They carry **no platform fee** — see the note under Ideas.
 
-**Admins** — two kinds, one page (`/admin.html`):
-- *Owner* (`role = all`): sees every city, can switch the overview between All / Cairo / Dahab / Florence, changes the reward rules, adds and removes admins.
+**Admins** — three kinds, one page (`/admin.html`). Sign-in is an email **or a plain username** (a username gets no booking emails):
+- *Amico Mio* (`role = platform`, Ash's account, added 2026-09-12 evening): sees the numbers only — Overview (with the 2% platform fee shown), a **Platform** tab (fee per month and per city, revenue, packs/gifts fees, payments live or off, registered clients, who signs in) and its own profile/password. Every operational endpoint (bookings, clients, services, calendar, team, packs, partners, review, settings, admins) answers 403 to this role. The owner sees the account in "Who can sign in" but can't change or remove it; the role is set straight in D1, never from the UI.
+- *Owner* (`role = all`, username `owner` in production): everything the site can do — every city, the reward rules, services and prices, admins. Does **not** see the platform fee anywhere: that's Amico Mio's business, not Zen's.
 - *City admin* (`role = florence` etc.): sees only that city's bookings, clients (only people who've had a session there) and money. Cannot see the platform fee, other cities, the rules, or other admins. This is enforced in the Worker (`scope()`), not by hiding buttons.
 - Everyone can change their own password. Passwords are PBKDF2-hashed; sessions are signed HttpOnly cookies (12 h for admins, 30 days for clients).
 - First owner: set `ADMIN_BOOTSTRAP_EMAIL` and `ADMIN_BOOTSTRAP_PASSWORD` as secrets, sign in once with them, then add the real admins from Settings. The bootstrap only works while the admins table is empty.
@@ -171,6 +172,8 @@ Everything from the ideas list below numbered 15–30 is now in the code and dep
 | Apple sign-in | "Continue with Apple" (hidden until configured) | — | Apple Developer account: Services ID → `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID` vars in `wrangler.toml`; `.p8` key contents as the `APPLE_PRIVATE_KEY` GitHub secret; return URL `https://zenrecovery.club/api/auth/apple/callback` |
 | SMS sign-in link | "Prefer a text?" box (hidden until configured); works for accounts that already have a phone | — | Twilio: `TWILIO_FROM` var, `TWILIO_SID` + `TWILIO_TOKEN` secrets |
 | Head Chef line | — | — | Done: the daily rundown now reads Zen's D1 for bookings, ratings and the 2% |
+
+**Owner account (2026-09-12 evening).** Zen's owner signs in with username `owner`; the first password was given to Ash in chat, so the owner must change it under Settings → Your password on first sign-in. Ash's own account (fetta.amore.business@gmail.com) is now `platform`: numbers only.
 
 **Still open from before:** roll the Cloudflare API token that was pasted in chat (Cloudflare → My Profile → API Tokens → roll, then update the `CLOUDFLARE_API_TOKEN` GitHub secret); change the owner's admin password (Settings → Your password); decide the Stripe Connect entity for Egypt (see above) and set `ZEN_STRIPE_ACCOUNT` + the Stripe secrets to switch payments on; add Google OAuth client id/secret for the Google button.
 

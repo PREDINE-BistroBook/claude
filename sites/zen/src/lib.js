@@ -30,7 +30,7 @@ export async function catalog(env, { all = false } = {}) {
 export async function serviceOf(env, city, id) { if (!CITY_KEYS.includes(city) || !id) return null; const c = await catalog(env); return c[city].services[id] || null; }
 // Who hears about a new booking / gift / pack in a city: ZEN_NOTIFY_EMAIL plus every admin who asked for it (owner: everything).
 export async function notifyList(env, city) {
-  const rows = (await env.DB.prepare("SELECT email FROM admins WHERE notify = 1 AND (role = 'all' OR role = ?)").bind(city || "").all()).results;
+  const rows = (await env.DB.prepare("SELECT email FROM admins WHERE notify = 1 AND email LIKE '%@%' AND (role IN ('all','platform') OR role = ?)").bind(city || "").all()).results;
   return [...new Set([env.ZEN_NOTIFY_EMAIL, ...rows.map((r) => r.email)].filter(Boolean))];
 }
 // Photos are stored as data URLs. Only a clean base64 image is accepted, so nothing can break out of an <img src="…"> in the admin.
@@ -86,8 +86,13 @@ export async function sessionCookieFor(env, userId) {
   await env.DB.prepare("UPDATE users SET last_login = ? WHERE id = ?").bind(now(), userId).run();
   return setCookie(USER_COOKIE, await signPayload(env.SESSION_SECRET, { uid: userId, exp: Math.floor(Date.now() / 1000) + 30 * 86400 }), 30 * 86400);
 }
+// Roles: "platform" = Locali & Ordinazioni (Ash): numbers, payments, the 2%, who's signed in — nothing operational.
+//        "all"      = Zen's owner: everything, every city.   "cairo" | "dahab" | "florence" = one city's team.
+export const isPlatform = (a) => a.role === "platform";
+export const isOwner = (a) => a.role === "all";
+export const seesAll = (a) => a.role === "all" || a.role === "platform";
 // The one place city access is decided for admins. Returns the city an admin may see (null = all).
-export function scope(admin, requested) { if (admin.role !== "all") return admin.role; return CITY_KEYS.includes(requested) ? requested : null; }
+export function scope(admin, requested) { if (!seesAll(admin)) return admin.role; return CITY_KEYS.includes(requested) ? requested : null; }
 
 // Every email goes out as plain text plus a simple HTML version with the logo on top (same words, links clickable).
 const escHtml = (v) => String(v).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));

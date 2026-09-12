@@ -72,14 +72,14 @@
   <section class="login" id="login-view" hidden>
     <div><p class="eyebrow">Zen Recovery</p><h1>Admin sign-in</h1></div>
     <form class="card" id="login-form" novalidate>
-      <div class="field"><label for="a-email">Email</label><input id="a-email" type="email" autocomplete="username" required></div>
+      <div class="field"><label for="a-email">Email or username</label><input id="a-email" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
       <div class="field"><label for="a-pass">Password</label><input id="a-pass" type="password" autocomplete="current-password" required></div>
       <p class="err" id="login-err" hidden></p>
       <button class="btn" type="submit" id="login-btn">Sign in</button>
     </form>
     <div class="card" id="demo-login" hidden>
       <h3>Reviewing the preview?</h3>
-      <div class="row"><button class="btn small" data-role="all">Preview as owner</button><button class="btn small ghost" data-role="florence">Preview as Florence admin</button><button class="btn small ghost" data-role="cairo">Preview as Cairo admin</button></div>
+      <div class="row"><button class="btn small" data-role="all">Preview as owner</button><button class="btn small ghost" data-role="florence">Preview as Florence admin</button><button class="btn small ghost" data-role="cairo">Preview as Cairo admin</button><button class="btn small ghost" data-role="platform">Preview as Amico Mio</button></div>
     </div>
   </section>
 
@@ -94,6 +94,7 @@
       <button role="tab" aria-selected="false" data-tab="team">Team</button>
       <button role="tab" aria-selected="false" data-tab="offers">Packs &amp; partners</button>
       <button role="tab" aria-selected="false" data-tab="review">Needs review<span class="count" id="review-count" hidden></span></button>
+      <button role="tab" aria-selected="false" data-tab="platform" hidden>Platform</button>
       <button role="tab" aria-selected="false" data-tab="settings">Settings</button>
     </div>
 
@@ -300,12 +301,33 @@
     </div>
 
     <!-- settings -->
+    <!-- platform (Amico Mio: the 2% and how the site is doing; no client data) -->
+    <div id="tab-platform" hidden>
+      <details class="help"><summary>What this page is</summary>
+        <ul>
+          <li><b>Platform fee</b> is Amico Mio's share of every card payment (2%), taken by Stripe at checkout and paid out to Amico Mio directly. Sessions the team enters by hand carry no fee.</li>
+          <li><b>Revenue</b> is the total Zen's clients paid on the site. Euro and Egyptian pound are never added together.</li>
+          <li>Names, phone numbers, health answers and bookings belong to Zen's team and the owner: this account can't open them.</li>
+        </ul>
+      </details>
+      <div class="grid cols-4" id="pf-kpis"></div>
+      <div class="charts">
+        <div class="card chart-card"><h3>Platform fee per month <span id="pf-fee-note">last 12 months</span></h3><div id="pf-ch-fee"></div></div>
+        <div class="card chart-card"><h3>Revenue per month <span>last 12 months</span></h3><div id="pf-ch-rev"></div></div>
+        <div class="card"><h3>Per city <span style="font-family:var(--body);font-size:.8rem;color:var(--ink-mute);font-weight:400">all time</span></h3><div class="table-wrap"><table id="pf-city"><thead><tr><th>City</th><th>Sessions</th><th>Revenue</th><th>Fee</th><th>Manual</th><th>Last session</th></tr></thead><tbody></tbody></table></div></div>
+        <div class="card"><h3>Payments &amp; site</h3><div class="mini" id="pf-site"></div></div>
+        <div class="card"><h3>Packs &amp; gifts</h3><div class="mini" id="pf-extra"></div></div>
+        <div class="card"><h3>Who signs in</h3><div class="mini" id="pf-admins"></div></div>
+      </div>
+    </div>
+
     <div id="tab-settings" hidden>
       <details class="help"><summary>About this page</summary>
         <ul>
           <li><b>Rewards rules</b> (owner only): the free-session count and the invite discount. Changes apply to future sessions; rewards already earned stay as they are.</li>
           <li><b>Who can sign in</b> (owner only): add one account per team member. "Florence only" sees Florence bookings, clients and money and nothing else. "All cities" sees everything and can change these settings.</li>
           <li>Everyone can change their own password here. Forgotten one? The owner removes the account and adds it again with a new password.</li>
+          <li>A sign-in can be an email (gets booking emails) or a plain username (no emails). The <b>Amico Mio</b> account sees only money and site health, and is managed by Amico Mio, not from here.</li>
         </ul>
       </details>
       <div class="settings-grid">
@@ -324,7 +346,7 @@
           <form id="profile-form" class="grid" style="gap:12px">
             <div class="profile-row"><span class="avatar lg" id="me-avatar"></span><div class="row"><label class="btn small ghost" for="me-photo">Change photo<input id="me-photo" type="file" accept="image/*"></label><button class="btn small ghost" type="button" id="me-photo-remove">Remove</button></div></div>
             <div class="row"><div class="field" style="flex:1"><label for="me-name">Name</label><input id="me-name" autocomplete="name"></div><div class="field" style="flex:1"><label for="me-phone">WhatsApp number <span class="tiny">(optional)</span></label><input id="me-phone" type="tel"></div></div>
-            <div class="field"><label for="me-email">Email</label><input id="me-email" type="email" disabled><span class="tiny">This is your sign-in. To change it, the owner adds a new account.</span></div>
+            <div class="field"><label for="me-email">Email or username</label><input id="me-email" type="text" disabled><span class="tiny">This is your sign-in. To change it, the owner adds a new account.</span></div>
             <label class="row" style="gap:8px;font-size:.92rem"><input type="checkbox" id="me-notify"> Email me about new bookings, gifts and packs <span class="tiny" id="me-notify-scope"></span></label>
             <div class="row"><button class="btn small" type="submit">Save profile</button><span class="ok" id="me-ok" hidden>Saved</span><span class="err" id="me-err" hidden></span></div>
           </form>
@@ -348,7 +370,7 @@
           <div class="table-wrap" style="margin-bottom:16px"><table id="admins-table"><thead><tr><th>Name</th><th>Email</th><th>Sees</th><th>Last sign-in</th><th></th></tr></thead><tbody></tbody></table></div>
           <form id="admin-form" class="filters" style="align-items:end">
             <div class="field"><label for="n-name">Name</label><input id="n-name" required></div>
-            <div class="field"><label for="n-email">Email</label><input id="n-email" type="email" required></div>
+            <div class="field"><label for="n-email">Email or username</label><input id="n-email" type="text" autocapitalize="none" required></div>
             <div class="field"><label for="n-role">Sees</label><select id="n-role"><option value="florence">Florence only</option><option value="cairo">Cairo only</option><option value="dahab">Dahab only</option><option value="all">All cities (owner)</option></select></div>
             <div class="field"><label for="n-pass">Password</label><input id="n-pass" type="text" autocomplete="off" placeholder="10+ characters"></div>
             <button class="btn small" type="submit">Add admin</button>
@@ -428,6 +450,8 @@ const monthLabel = (m) => new Date(m + "-01T12:00:00").toLocaleDateString("en-GB
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 let A = null, CITIES = {}, SETTINGS = {}, cityFilter = "";
 const isOwner = () => A.role === "all";
+const isPlatform = () => A.role === "platform";
+const OPS_TABS = ["bookings", "clients", "services", "calendar", "team", "offers", "review"];
 
 async function boot() {
   try { const r = await ZenAPI("GET", "/api/admin/me"); start(r); }
@@ -438,14 +462,18 @@ function start(r) {
   A = r.admin; CITIES = r.cities; SETTINGS = r.settings;
   $("#login-view").hidden = true; $("#app-view").hidden = false; $("#who").hidden = false;
   $("#admin-name").textContent = A.name; $("#admin-avatar").innerHTML = A.photo ? `<img src="${A.photo}" alt="">` : initials(A.name);
-  $("#scope-badge").textContent = isOwner() ? "All cities" : CITY_NAME[A.role]; $("#scope-badge").className = "badge " + (isOwner() ? "all" : "city-" + A.role);
-  $("#city-pills").innerHTML = isOwner() ? `<span class="tiny">Showing</span><div class="pills">${[["", "All cities"], ["cairo", "Cairo"], ["dahab", "Dahab"], ["florence", "Florence"]].map(([k, n]) => `<button class="pill" data-city="${k}" aria-pressed="${k === cityFilter}">${n}</button>`).join("")}</div>` : `<span class="tiny">You see ${CITY_NAME[A.role]} only. Bookings, clients and money from the other cities aren't visible to this account.</span>`;
+  $("#scope-badge").textContent = isPlatform() ? "Amico Mio" : isOwner() ? "All cities" : CITY_NAME[A.role]; $("#scope-badge").className = "badge " + (isOwner() || isPlatform() ? "all" : "city-" + A.role);
+  // Amico Mio's account: Overview + Platform + own profile. No bookings, clients, services, calendar, team, offers or review.
+  $$(".tabs button").forEach((b) => { if (OPS_TABS.includes(b.dataset.tab)) b.hidden = isPlatform(); if (b.dataset.tab === "platform") b.hidden = !isPlatform(); });
+  $("#me-email").previousElementSibling.textContent = A.email.includes("@") ? "Email" : "Username";
+  $("#city-pills").innerHTML = isOwner() || isPlatform() ? `<span class="tiny">Showing</span><div class="pills">${[["", "All cities"], ["cairo", "Cairo"], ["dahab", "Dahab"], ["florence", "Florence"]].map(([k, n]) => `<button class="pill" data-city="${k}" aria-pressed="${k === cityFilter}">${n}</button>`).join("")}</div>` : `<span class="tiny">You see ${CITY_NAME[A.role]} only. Bookings, clients and money from the other cities aren't visible to this account.</span>`;
   $$("#city-pills .pill").forEach((p) => p.addEventListener("click", () => { cityFilter = p.dataset.city; $$("#city-pills .pill").forEach((x) => x.setAttribute("aria-pressed", x === p)); loadOverview(); }));
   $("#f-city-wrap").hidden = !isOwner(); $("#rules-card").hidden = !isOwner(); $("#admins-card").hidden = !isOwner(); $("#links-card").hidden = !isOwner(); $("#pack-form").hidden = !isOwner();
   const cityKeys = isOwner() ? Object.keys(CITIES) : [A.role];
   ["av-city", "bl-city", "th-city", "pv-city"].forEach((id) => { $("#" + id).innerHTML = cityKeys.map((k) => `<option value="${k}">${CITY_NAME[k]}</option>`).join(""); });
   ["av-city-wrap", "bl-city-wrap", "th-city-wrap"].forEach((id) => ($("#" + id).hidden = !isOwner()));
   $("#pv-date").value = new Date().toISOString().slice(0, 10);
+  if (isPlatform()) { loadOverview(); return; }
   loadTeamList().then(() => { loadOverview(); refreshReviewCount(); });
 }
 async function refreshReviewCount() { try { const r = await ZenAPI("GET", "/api/admin/review"); const n = r.bookings.length + r.clients.length; $("#review-count").textContent = n; $("#review-count").hidden = !n; } catch {} }
@@ -475,6 +503,31 @@ async function loadOverview() {
   $("#extras").innerHTML = `<dl class="kv"><dt>Rating</dt><dd>${rt.n ? `${Number(rt.avg).toFixed(1)} ★ from ${rt.n} · ${rt.five} five-star` : "no ratings yet"}</dd><dt>Packs sold</dt><dd>${pk.length ? pk.map((p) => `${p.n} · ${money(p.rev, p.currency)} · ${p.remaining} sessions unused`).join("<br>") : "none yet"}</dd><dt>Gifts</dt><dd>${gf.length ? gf.map((g) => `${g.n} sold · ${money(g.rev, g.currency)} · ${g.unused} unused`).join("<br>") : "none yet"}</dd>${s.review ? `<dt>Needs review</dt><dd><b style="color:var(--bad)">${s.review} booking${s.review > 1 ? "s" : ""}</b> waiting for a therapist's OK</dd>` : ""}</dl>`;
   if (isOwner()) { try { const { rows } = await ZenAPI("GET", "/api/admin/leaderboard"); $("#lb-card").hidden = !rows.length; $("#leaderboard").innerHTML = rows.slice(0, 8).map((r, i) => `<div><span>${i + 1}. ${esc(r.name)} <span class="tiny">${r.city ? CITY_NAME[r.city] : ""}</span></span><span class="num">${r.converted} booked · ${r.invited} invited</span></div>`).join(""); } catch {} }
   $("#rewards").innerHTML = `<dl class="kv"><dt>Free sessions</dt><dd>${rw("loyalty", "available")} waiting · ${rw("loyalty", "used")} used</dd><dt>Invite discounts</dt><dd>${rw("referral", "available")} waiting · ${rw("referral", "used")} used</dd><dt>Rules</dt><dd>every ${SETTINGS.loyalty_every}th free · ${SETTINGS.referral_pct}% for invites</dd></dl>`;
+}
+
+/* ---------- platform (Amico Mio) ---------- */
+async function loadPlatform() {
+  const r = await ZenAPI("GET", "/api/admin/platform");
+  const cur = (list) => [...new Set(list.map((x) => x.currency))];
+  const tot = r.totals || [], pct = (r.fee_bps / 100).toFixed(r.fee_bps % 100 ? 1 : 0) + "%";
+  const feeTiles = tot.map((t) => `<div class="kpi"><span class="label">Platform fee, all time${tot.length > 1 ? " · " + t.currency.toUpperCase() : ""}</span><span class="value">${money(t.fee, t.currency)}</span><span class="delta">${pct} of ${money(t.rev, t.currency)} paid on the site</span></div>`);
+  const thisM = new Date().toISOString().slice(0, 7), mm = (r.months || []).filter((x) => x.m === thisM);
+  $("#pf-kpis").innerHTML = (feeTiles.length ? feeTiles.join("") : `<div class="kpi"><span class="label">Platform fee, all time</span><span class="value">—</span><span class="delta">no paid sessions yet</span></div>`) +
+    `<div class="kpi"><span class="label">Fee this month</span><span class="value">${mm.length ? mm.map((x) => money(x.fee, x.currency)).join(" + ") : "—"}</span><span class="delta">${mm.reduce((a, x) => a + x.n, 0)} sessions · ${mm.reduce((a, x) => a + (x.manual || 0), 0)} entered by hand (no fee)</span></div>` +
+    `<div class="kpi"><span class="label">Registered clients</span><span class="value">${r.users?.total || 0}</span><span class="delta">${r.users?.new_this_month || 0} new this month · ${r.users?.new_7d || 0} this week</span></div>` +
+    `<div class="kpi"><span class="label">Card payments</span><span class="value">${r.live ? "Live" : "Off"}</span><span class="delta">${r.live ? "Stripe Connect, fee taken at checkout" : "Stripe not connected yet: sessions are paid in person, no fee"}</span></div>`;
+  const months = []; for (let i = -11; i <= 0; i++) { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + i); months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); }
+  const cs = cur(r.months || []);
+  $("#pf-fee-note").textContent = cs.length > 1 ? "EUR and EGP shown separately" : "last 12 months";
+  const draw = (el, field) => { $(el).innerHTML = cs.map((c) => `<p class="tiny" style="margin:8px 0 2px">${c.toUpperCase()}</p><div class="chart" data-cur="${c}"></div>`).join("") || `<div class="empty">Nothing paid on the site yet.</div>`;
+    cs.forEach((c) => barChart($(`${el} .chart[data-cur="${c}"]`), months.map((m) => ({ label: monthLabel(m), key: m, value: r.months.filter((x) => x.m === m && x.currency === c).reduce((a, x) => a + (x[field] || 0), 0) })), { fmt: (v) => money(v, c), short: (v) => short(v, c), height: 150 })); };
+  draw("#pf-ch-fee", "fee"); draw("#pf-ch-rev", "rev");
+  $("#pf-city tbody").innerHTML = (r.by_city || []).length ? r.by_city.map((c) => `<tr><td><i class="dot ${c.city}"></i>${CITY_NAME[c.city] || c.city}</td><td class="num">${c.n}</td><td class="num">${money(c.rev, c.currency)}</td><td class="num">${money(c.fee, c.currency)}</td><td class="num">${c.manual || 0}</td><td class="num">${c.last_date ? fmtDate(c.last_date) : "—"}</td></tr>`).join("") : `<tr><td class="empty" colspan="6">No paid sessions yet.</td></tr>`;
+  $("#pf-site").innerHTML = `<dl class="kv"><dt>Payments</dt><dd>${r.live ? `live · Stripe account ${esc(r.stripe_account)}` : "off · Stripe Connect not set up yet"}</dd><dt>Fee rule</dt><dd>${pct} of every card payment, in the code</dd><dt>Rewards</dt><dd>free session every ${r.rules?.loyalty_every}th · invite ${r.rules?.referral_pct}% · birthday ${r.rules?.birthday_pct}% · packs ${r.rules?.package_pct ?? "—"}%</dd><dt>Messages sent</dt><dd>${r.messages_7d?.n || 0} in the last 7 days${r.messages_7d?.at ? ` · last ${esc(String(r.messages_7d.at).slice(0, 16).replace("T", " "))}` : ""}</dd><dt>Waiting on a therapist</dt><dd>${r.pending_review || 0} flagged booking${r.pending_review === 1 ? "" : "s"}</dd></dl>`;
+  const pk = r.packages || [], gf = r.gifts || [];
+  $("#pf-extra").innerHTML = `<dl class="kv"><dt>Packs</dt><dd>${pk.length ? pk.map((p) => `${p.n} sold · ${money(p.rev, p.currency)} · fee ${money(p.fee, p.currency)}`).join("<br>") : "none yet"}</dd><dt>Gift vouchers</dt><dd>${gf.length ? gf.map((g) => `${g.n} sold · ${money(g.rev, g.currency)} · fee ${money(g.fee, g.currency)}`).join("<br>") : "none yet"}</dd></dl>`;
+  const ROLE = { all: "Owner · all cities", platform: "Amico Mio · numbers only", cairo: "Cairo team", dahab: "Dahab team", florence: "Florence team" };
+  $("#pf-admins").innerHTML = `<dl class="kv">${(r.admins || []).map((a) => `<dt>${esc(a.name)}</dt><dd>${ROLE[a.role] || esc(a.role)} · ${a.last_login ? "last sign-in " + esc(String(a.last_login).slice(0, 10)) : "never signed in"}</dd>`).join("")}</dl>`;
 }
 
 /* ---------- charts (single hue, thin marks, hover tooltip, table fallback) ---------- */
@@ -682,12 +735,12 @@ let tc; $("#c-q").addEventListener("input", () => { clearTimeout(tc); tc = setTi
 async function loadSettings() {
   $("#s-every").value = SETTINGS.loyalty_every; $("#s-pct").value = SETTINGS.referral_pct; $("#s-bday").value = SETTINGS.birthday_pct ?? 50; $("#s-fee").textContent = SETTINGS.platform_fee_pct + "%";
   if (isOwner()) $("#links-form").innerHTML = Object.keys(CITY_NAME).map((k) => `<b style="font-size:.9rem">${CITY_NAME[k]}</b><div class="row"><div class="field" style="flex:1"><label for="lk-gm-${k}">Google Maps link</label><input id="lk-gm-${k}" type="url" placeholder="https://maps.app.goo.gl/…" value="${esc(SETTINGS.gmaps?.[k] || "")}"></div><div class="field" style="flex:1"><label for="lk-rv-${k}">Google review link</label><input id="lk-rv-${k}" type="url" placeholder="https://g.page/r/…/review" value="${esc(SETTINGS.review?.[k] || "")}"></div><div class="field" style="flex:1"><label for="lk-wa-${k}">WhatsApp number</label><input id="lk-wa-${k}" placeholder="+20 …" value="${esc(SETTINGS.whatsapp?.[k] || "")}"></div></div><div class="row"><div class="field" style="flex:2"><label for="lk-ad-${k}">Address <span class="tiny">(one line per row, shown on the booking page)</span></label><textarea id="lk-ad-${k}" rows="3" placeholder="Zen Recovery · ${CITY_NAME[k]}&#10;Street and number&#10;Area">${esc(SETTINGS.address?.[k] || "")}</textarea></div><div class="field" style="flex:1"><label for="lk-tm-${k}">Team line</label><input id="lk-tm-${k}" placeholder="Shaarawy — manual therapy & cupping" value="${esc(SETTINGS.team?.[k] || "")}"></div></div>`).join("");
-  if (isOwner()) { const { admins } = await ZenAPI("GET", "/api/admin/admins"); $("#admins-table tbody").innerHTML = admins.map((a) => `<tr><td><span class="row" style="gap:8px"><span class="avatar" style="width:28px;height:28px;font-size:.7rem">${a.photo ? `<img src="${a.photo}" alt="">` : initials(a.name)}</span>${esc(a.name)}${a.phone ? `<span class="tiny">${esc(a.phone)}</span>` : ""}</span></td><td>${esc(a.email)}<div class="tiny">${a.notify ? "gets booking emails" : "no booking emails"}</div></td><td>${a.id === A.id ? `<span class="badge all">All cities</span>` : `<select data-role="${a.id}" style="font:inherit;font-size:.85rem;padding:5px 8px;border:1px solid var(--line);border-radius:8px">${[["all", "All cities (owner)"], ["cairo", "Cairo only"], ["dahab", "Dahab only"], ["florence", "Florence only"]].map(([v, l]) => `<option value="${v}" ${a.role === v ? "selected" : ""}>${l}</option>`).join("")}</select>`}</td><td class="tiny">${a.last_login ? esc(a.last_login.slice(0, 10)) : "never"}</td><td>${a.id === A.id ? "<span class='tiny'>you</span>" : `<div class="actions"><button class="btn ghost" data-pw="${a.id}">New password</button><button class="btn ghost danger" data-del="${a.id}">Remove</button></div>`}</td></tr>`).join("");
+  if (isOwner()) { const { admins } = await ZenAPI("GET", "/api/admin/admins"); $("#admins-table tbody").innerHTML = admins.map((a) => `<tr><td><span class="row" style="gap:8px"><span class="avatar" style="width:28px;height:28px;font-size:.7rem">${a.photo ? `<img src="${a.photo}" alt="">` : initials(a.name)}</span>${esc(a.name)}${a.phone ? `<span class="tiny">${esc(a.phone)}</span>` : ""}</span></td><td>${esc(a.email)}<div class="tiny">${a.notify ? "gets booking emails" : "no booking emails"}</div></td><td>${a.id === A.id ? `<span class="badge all">All cities</span>` : a.role === "platform" ? `<span class="badge all">Amico Mio · numbers only</span>` : `<select data-role="${a.id}" style="font:inherit;font-size:.85rem;padding:5px 8px;border:1px solid var(--line);border-radius:8px">${[["all", "All cities (owner)"], ["cairo", "Cairo only"], ["dahab", "Dahab only"], ["florence", "Florence only"]].map(([v, l]) => `<option value="${v}" ${a.role === v ? "selected" : ""}>${l}</option>`).join("")}</select>`}</td><td class="tiny">${a.last_login ? esc(a.last_login.slice(0, 10)) : "never"}</td><td>${a.id === A.id ? "<span class='tiny'>you</span>" : a.role === "platform" ? "<span class='tiny'>managed by Amico Mio</span>" : `<div class="actions"><button class="btn ghost" data-pw="${a.id}">New password</button><button class="btn ghost danger" data-del="${a.id}">Remove</button></div>`}</td></tr>`).join("");
     $$("#admins-table [data-del]").forEach((b) => b.addEventListener("click", async () => { if (confirm("Remove this admin's access?")) { await ZenAPI("DELETE", "/api/admin/admins/" + b.dataset.del); loadSettings(); } }));
     $$("#admins-table [data-role]").forEach((s) => s.addEventListener("change", async () => { await ZenAPI("PATCH", "/api/admin/admins/" + s.dataset.role, { role: s.value }); loadSettings(); }));
     $$("#admins-table [data-pw]").forEach((b) => b.addEventListener("click", async () => { const pw = prompt("New password for this admin (10+ characters). Tell it to them in person, not by email."); if (!pw) return; try { await ZenAPI("PATCH", "/api/admin/admins/" + b.dataset.pw, { password: pw }); alert("Password changed."); } catch (ex) { alert(ex.message); } })); }
   // my profile
-  $("#me-name").value = A.name || ""; $("#me-phone").value = A.phone || ""; $("#me-email").value = A.email; $("#me-notify").checked = A.notify !== 0; $("#me-notify-scope").textContent = isOwner() ? "(all cities)" : `(${CITY_NAME[A.role]})`;
+  $("#me-name").value = A.name || ""; $("#me-phone").value = A.phone || ""; $("#me-email").value = A.email; $("#me-notify").checked = A.notify !== 0; $("#me-notify-scope").textContent = isOwner() || isPlatform() ? "(all cities)" : `(${CITY_NAME[A.role]})`; $("#me-notify").closest("label").hidden = !A.email.includes("@");
   renderMeAvatar();
 }
 $("#rules-form").addEventListener("submit", async (e) => { e.preventDefault(); $("#rules-ok").hidden = true; $("#rules-err").hidden = true; try { SETTINGS = await ZenAPI("PUT", "/api/admin/settings", { loyalty_every: +$("#s-every").value, referral_pct: +$("#s-pct").value, birthday_pct: +$("#s-bday").value }); $("#rules-ok").hidden = false; } catch (ex) { $("#rules-err").textContent = ex.message; $("#rules-err").hidden = false; } });
@@ -736,7 +789,7 @@ $("#svc-form").addEventListener("submit", async (e) => { e.preventDefault(); con
   catch (ex) { err.textContent = ex.message; err.hidden = false; } });
 
 /* ---------- tabs, login ---------- */
-$$(".tabs button").forEach((b) => b.addEventListener("click", () => { $$(".tabs button").forEach((x) => x.setAttribute("aria-selected", x === b)); ["overview", "bookings", "clients", "services", "calendar", "team", "offers", "review", "settings"].forEach((t) => ($("#tab-" + t).hidden = t !== b.dataset.tab)); closeDrawer(); ({ overview: loadOverview, bookings: loadBookings, clients: loadClients, services: loadServices, calendar: loadCalendar, team: loadTeamTab, offers: loadOffers, review: loadReview, settings: loadSettings })[b.dataset.tab](); }));
+$$(".tabs button").forEach((b) => b.addEventListener("click", () => { $$(".tabs button").forEach((x) => x.setAttribute("aria-selected", x === b)); ["overview", "bookings", "clients", "services", "calendar", "team", "offers", "review", "platform", "settings"].forEach((t) => ($("#tab-" + t).hidden = t !== b.dataset.tab)); closeDrawer(); ({ overview: loadOverview, platform: loadPlatform, bookings: loadBookings, clients: loadClients, services: loadServices, calendar: loadCalendar, team: loadTeamTab, offers: loadOffers, review: loadReview, settings: loadSettings })[b.dataset.tab](); }));
 $("#login-form").addEventListener("submit", async (e) => { e.preventDefault(); const err = $("#login-err"); err.hidden = true; $("#login-btn").disabled = true; try { await ZenAPI("POST", "/api/admin/login", { email: $("#a-email").value.trim(), password: $("#a-pass").value }); start(await ZenAPI("GET", "/api/admin/me")); } catch (ex) { err.textContent = ex.message; err.hidden = false; } finally { $("#login-btn").disabled = false; } });
 $$("#demo-login [data-role]").forEach((b) => b.addEventListener("click", async () => { await ZenAPI("POST", "/api/admin/demo-login", { role: b.dataset.role }); start(await ZenAPI("GET", "/api/admin/me")); }));
 $("#signout").addEventListener("click", async (e) => { e.preventDefault(); await ZenAPI("POST", "/api/admin/logout").catch(() => {}); location.reload(); });
