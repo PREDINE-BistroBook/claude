@@ -9,15 +9,15 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira:ital,wght@0,300;0,400;1,800&family=Michroma&family=Figtree:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="app.css">
 <style>
-  .login{max-width:460px;margin:8vh auto 0;display:grid;gap:18px}
+  .login{max-width:520px;margin:6vh auto 0;display:grid;gap:18px}
   .login .card{display:grid;gap:14px}
+  .steps-intro{display:grid;gap:10px;font-size:.92rem;color:var(--ink-soft)}
+  .steps-intro li{margin:0}
   .head{display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin-top:6px}
   .head .meta{display:grid;gap:4px}
-  .head .meta .row{gap:8px}
   .rewards{display:grid;grid-template-columns:1.2fr 1fr;gap:16px}
   @media (max-width:760px){.rewards{grid-template-columns:1fr}}
   .progress{display:flex;gap:18px;align-items:center}
-  .progress p{font-size:.95rem}
   .credits{display:grid;gap:10px;margin-top:14px}
   .invite .code{font-family:var(--mono);font-size:1.6rem;letter-spacing:.14em;padding:10px 14px;border:1.5px dashed var(--line);border-radius:12px;background:#fff;display:inline-block}
   .invite .link{font-family:var(--mono);font-size:.8rem;color:var(--ink-soft);word-break:break-all}
@@ -25,15 +25,59 @@
   .friends li{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
   .photo-edit{display:flex;gap:16px;align-items:center}
   .photo-edit input{display:none}
-  .profile-form{display:grid;gap:16px;max-width:560px}
-  .profile-form .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  @media (max-width:560px){.profile-form .two{grid-template-columns:1fr}}
+  .profile-form{display:grid;gap:16px;max-width:600px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media (max-width:560px){.two{grid-template-columns:1fr}}
   .session-card{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;padding:14px 16px;border:1px solid var(--line);border-radius:14px;background:var(--ground-3)}
   .session-card .d{font-family:var(--display);font-size:1.3rem;line-height:1;text-align:center;min-width:52px}
   .session-card .d small{display:block;font-family:var(--label);font-size:.5rem;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-soft);margin-top:4px}
   .session-card .info{display:grid;gap:2px;font-size:.92rem}
   .session-card .info b{font-weight:500}
   .sessions{display:grid;gap:10px}
+  .prep{margin-top:10px;padding:14px 16px;border-radius:12px;background:color-mix(in srgb,var(--mark) 8%,var(--ground-3));border:1px solid color-mix(in srgb,var(--mark) 30%,transparent);font-size:.9rem}
+  .prep h4{margin:0 0 6px;font-family:var(--display);font-weight:400;font-size:1.05rem}
+  /* questionnaire */
+  .wizard{max-width:680px;margin-inline:auto;display:grid;gap:18px}
+  .wizard .bar{height:4px;background:var(--ground-2);border-radius:2px;overflow:hidden}
+  .wizard .bar i{display:block;height:100%;background:var(--mark);transition:width .4s var(--ease)}
+  .wizard .step{display:grid;gap:14px}
+  .wizard .step[hidden]{display:none}
+  .wizard h2{font-size:clamp(1.5rem,3vw,2rem)}
+  .wizard .why{font-size:.9rem;color:var(--ink-soft)}
+  .choice{display:grid;gap:8px}
+  .choice label{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start;padding:12px 14px;border:1.5px solid var(--line);border-radius:12px;background:var(--ground-3);cursor:pointer}
+  .choice label:has(input:checked){border-color:var(--mark);box-shadow:0 0 0 3px var(--mark-glow)}
+  .choice label b{font-weight:500;display:block}
+  .choice label span{font-size:.84rem;color:var(--ink-soft)}
+  .choice input{margin-top:4px}
+  .choice.inline{display:flex;flex-wrap:wrap}
+  .choice.inline label{grid-template-columns:auto auto;padding:9px 12px}
+  .rec{display:flex;gap:14px;align-items:center;padding:16px;border-radius:14px;background:var(--ink);color:var(--ground)}
+  .rec b{font-family:var(--display);font-size:1.4rem;font-weight:400;display:block}
+  .rec p{font-size:.88rem;color:rgba(237,238,234,.75)}
+  .bodywrap{display:grid;grid-template-columns:200px 1fr;gap:18px;align-items:start}
+  @media (max-width:560px){.bodywrap{grid-template-columns:1fr}}
+  .bodymap{width:100%;max-width:200px;height:auto;display:block;color:var(--ink)}
+  .bodymap .part{fill:var(--ground-2);stroke:var(--line);stroke-width:1;transition:fill .2s}
+  .bodymap.interactive .part{cursor:pointer}
+  .bodymap.interactive .part:hover{fill:var(--mark-soft)}
+  .bodymap .part.on{fill:var(--mark)}
+  .bodymap .bm-caption{font-family:var(--label);font-size:6px;letter-spacing:.12em;text-transform:uppercase;fill:var(--ink-mute)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{padding:6px 10px;border-radius:999px;background:var(--ground-2);font-size:.82rem}
+  .chip.flag{background:color-mix(in srgb,var(--bad) 14%,transparent);color:#7A1F17}
+  .wizard .nav{display:flex;justify-content:space-between;gap:10px;align-items:center}
+  .flag-note{padding:12px 14px;border-left:3px solid var(--bad);background:var(--ground-3);font-size:.9rem;border-radius:0 10px 10px 0}
+  /* guide */
+  .guide{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media (max-width:860px){.guide{grid-template-columns:1fr}}
+  .advice{margin:8px 0 0;padding-left:18px;display:grid;gap:8px;font-size:.93rem}
+  .guide .card h3{display:flex;align-items:baseline;gap:10px}
+  .guide .card h3 small{font-family:var(--label);font-size:.5rem;letter-spacing:.16em;text-transform:uppercase;color:var(--mark)}
+  .service-pick{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+  .summary-box{display:grid;gap:10px}
+  .summary-box dl{display:grid;grid-template-columns:140px 1fr;gap:6px 12px;margin:0;font-size:.9rem}
+  .summary-box dt{color:var(--ink-soft)} .summary-box dd{margin:0}
 </style>
 </head>
 <body>
@@ -52,26 +96,105 @@
   <section class="login" id="login-view" hidden>
     <div>
       <p class="eyebrow">Your account</p>
-      <h1>Your sessions, your rewards, one place.</h1>
-      <p class="muted" style="margin-top:8px">No password to remember: we email you a link that signs you in.</p>
+      <h1>Your sessions, your rewards, your guide. One place.</h1>
+      <p class="muted" style="margin-top:8px">No password to remember. Type your email and we send you a link that signs you in.</p>
     </div>
     <form class="card" id="login-form" novalidate>
       <p class="ok" id="ref-note" hidden></p>
       <p class="err" id="expired-note" hidden>That link has expired. Ask for a fresh one below.</p>
-      <div class="field"><label for="l-email">Email</label><input id="l-email" type="email" autocomplete="email" required placeholder="you@example.com"></div>
-      <div class="field" id="name-field"><label for="l-name">Your name <span class="tiny">(first time only)</span></label><input id="l-name" autocomplete="name" placeholder="How should we greet you?"></div>
+      <div class="field"><label for="l-email">Email</label><input id="l-email" type="email" autocomplete="email" required placeholder="you@example.com"><span class="tiny">We use it only to sign you in and confirm sessions.</span></div>
+      <div class="field" id="name-field"><label for="l-name">Your name</label><input id="l-name" autocomplete="name" placeholder="How should we greet you?"><span class="tiny">Only needed the first time.</span></div>
       <p class="err" id="login-err" hidden></p>
       <button class="btn" type="submit" id="login-btn">Email me a sign-in link</button>
-      <p class="tiny">By continuing you agree that Zen Recovery keeps your booking history and the notes you choose to share with your therapist.</p>
+      <ol class="steps-intro" style="padding-left:18px;margin:0">
+        <li>Open the email and tap the link. It works for 20 minutes.</li>
+        <li>First time? We ask a few questions about you, two minutes, so we know which room is nearest and how to work with your body.</li>
+        <li>Then book, track your sessions, and collect rewards.</li>
+      </ol>
     </form>
     <div class="card flat" id="sent" hidden>
       <h3>Check your inbox</h3>
-      <p class="muted">We sent a sign-in link to <b id="sent-email"></b>. It works for 20 minutes. No email? Check spam, or try again.</p>
+      <p class="muted">We sent a sign-in link to <b id="sent-email"></b>. It works for 20 minutes. No email? Look in spam or promotions, then try again.</p>
     </div>
     <div class="card" id="demo-login" hidden>
       <h3>Reviewing the preview?</h3>
       <p class="muted">Sign-in emails aren't live yet. Open the account area with a sample client instead.</p>
-      <button class="btn ghost" type="button" id="demo-btn">Preview as a sample client</button>
+      <div class="row"><button class="btn ghost" type="button" id="demo-btn">Preview as a sample client</button><button class="btn ghost" type="button" id="demo-new">Preview as a brand-new client</button></div>
+    </div>
+  </section>
+
+  <!-- ===== first-time questionnaire ===== -->
+  <section class="wizard" id="wizard" hidden>
+    <div><p class="eyebrow">Two minutes, once</p><h1 id="wiz-title">Tell us about you.</h1><p class="muted" style="margin-top:6px">Your answers go to your therapist only. They decide which room we recommend, what we ask before your first session, and what advice you see here.</p></div>
+    <div class="bar"><i id="wiz-bar" style="width:14%"></i></div>
+
+    <div class="step" data-step="0">
+      <h2>Where do you live?</h2>
+      <p class="why">So we can point you to the nearest room, and speak to you in the right currency.</p>
+      <div class="choice inline" id="w-country">
+        <label><input type="radio" name="country" value="EG"><b>Egypt</b></label>
+        <label><input type="radio" name="country" value="IT"><b>Italy</b></label>
+        <label><input type="radio" name="country" value="other"><b>Somewhere else</b></label>
+      </div>
+      <div class="field"><label for="w-city">City or area</label><input id="w-city" list="city-list" placeholder="Start typing: Maadi, Sharm, Prato…" autocomplete="off"><datalist id="city-list"></datalist></div>
+      <div id="w-rec" hidden></div>
+      <div class="choice inline" id="w-pick-city" hidden>
+        <label><input type="radio" name="nearest" value="cairo"><b>Cairo</b></label>
+        <label><input type="radio" name="nearest" value="dahab"><b>Dahab</b></label>
+        <label><input type="radio" name="nearest" value="florence"><b>Florence</b></label>
+      </div>
+    </div>
+
+    <div class="step" data-step="1" hidden>
+      <h2>What brings you to us?</h2>
+      <p class="why">Pick everything that applies. It changes how we plan your first session.</p>
+      <div class="choice" id="w-goals"></div>
+    </div>
+
+    <div class="step" data-step="2" hidden>
+      <h2>Where does it hurt, or feel tight?</h2>
+      <p class="why">Tap the body. Skip it if nothing in particular; we'll find out on the table.</p>
+      <div class="bodywrap"><div id="w-body"></div><div><div class="chips" id="w-pain-chips"><span class="tiny">Nothing selected yet.</span></div></div></div>
+    </div>
+
+    <div class="step" data-step="3" hidden>
+      <h2>How active are you?</h2>
+      <p class="why">Recovery for a daily athlete and for someone at a desk all day are different sessions.</p>
+      <div class="choice" id="w-activity"></div>
+      <div class="field"><label for="w-sport">Your sport or activity <span class="tiny">(optional)</span></label><input id="w-sport" placeholder="Gym, football, diving, climbing, running…"></div>
+      <h3 style="margin-top:8px">Have you had cupping before?</h3>
+      <div class="choice inline" id="w-experience"></div>
+    </div>
+
+    <div class="step" data-step="4" hidden>
+      <h2>Anything we must know before touching you?</h2>
+      <p class="why">This is the important one. Cupping is safe for most people, but a few conditions change how, where, or whether we work. Nobody but your therapist sees this.</p>
+      <div class="choice" id="w-health"></div>
+      <div class="field"><label for="w-health-notes">Details, medication names, anything else <span class="tiny">(optional)</span></label><textarea id="w-health-notes" placeholder="e.g. daily aspirin 100mg · slipped disc L5 in 2024 · allergic to latex"></textarea></div>
+      <div class="flag-note" id="w-flag-note" hidden></div>
+    </div>
+
+    <div class="step" data-step="5" hidden>
+      <h2>How should we reach you?</h2>
+      <p class="why">We confirm the exact hour of every session personally.</p>
+      <div class="field"><label for="w-phone">WhatsApp number</label><input id="w-phone" type="tel" placeholder="+20 … or +39 …"></div>
+      <h3>Prefer</h3>
+      <div class="choice inline" id="w-contact"></div>
+      <h3 style="margin-top:8px">Best time for sessions</h3>
+      <div class="choice inline" id="w-time"></div>
+    </div>
+
+    <div class="step" data-step="6" hidden>
+      <h2>Done. Here's what we'll do with it.</h2>
+      <div class="summary-box card" id="w-summary"></div>
+      <p class="tiny">You can change any of this later under Profile.</p>
+    </div>
+
+    <p class="err" id="wiz-err" hidden></p>
+    <div class="nav">
+      <button class="btn ghost small" type="button" id="wiz-back">Back</button>
+      <span class="tiny" id="wiz-count"></span>
+      <button class="btn" type="button" id="wiz-next">Continue</button>
     </div>
   </section>
 
@@ -88,42 +211,60 @@
     <div class="tabs" role="tablist">
       <button role="tab" aria-selected="true" data-tab="rewards">Rewards</button>
       <button role="tab" aria-selected="false" data-tab="sessions">Sessions</button>
+      <button role="tab" aria-selected="false" data-tab="guide">Your guide</button>
       <button role="tab" aria-selected="false" data-tab="profile">Profile</button>
     </div>
 
     <!-- rewards -->
-    <div id="tab-rewards" class="rewards">
-      <div class="card">
-        <p class="eyebrow">Loyalty</p>
-        <h3 id="loyalty-title">Every 10th session is free</h3>
-        <div class="progress">
-          <div class="ring" id="ring"><i id="ring-n">0</i></div>
-          <p id="loyalty-text" class="muted"></p>
+    <div id="tab-rewards">
+      <div class="rec" id="rec-card" style="margin-bottom:16px" hidden></div>
+      <div class="rewards">
+        <div class="card">
+          <p class="eyebrow">Loyalty</p>
+          <h3 id="loyalty-title">Every 10th session is free</h3>
+          <div class="progress">
+            <div class="ring" id="ring"><i id="ring-n">0</i></div>
+            <p id="loyalty-text" class="muted"></p>
+          </div>
+          <div class="credits" id="credits"></div>
+          <p class="tiny" style="margin-top:12px">A session counts once your therapist marks it as done. Sessions in any city count.</p>
         </div>
-        <div class="credits" id="credits"></div>
-      </div>
-      <div class="card invite">
-        <p class="eyebrow">Invite a friend</p>
-        <h3 id="invite-title">40% off, for both of you</h3>
-        <p class="muted" style="font-size:.92rem">Your friend gets the discount on their first session. You get yours as soon as they've booked.</p>
-        <div style="margin:14px 0 8px"><span class="code" id="ref-code"></span></div>
-        <p class="link" id="share-url"></p>
-        <div class="row" style="margin-top:12px">
-          <a class="btn small accent" id="share-wa" target="_blank" rel="noopener">Share on WhatsApp</a>
-          <button class="btn small ghost" type="button" id="copy-link">Copy link</button>
-          <span class="ok" id="copied" hidden>Copied</span>
+        <div class="card invite">
+          <p class="eyebrow">Invite a friend</p>
+          <h3 id="invite-title">40% off, for both of you</h3>
+          <p class="muted" style="font-size:.92rem">Your friend gets the discount on their first session. You get yours as soon as they've booked.</p>
+          <div style="margin:14px 0 8px"><span class="code" id="ref-code"></span></div>
+          <p class="link" id="share-url"></p>
+          <div class="row" style="margin-top:12px">
+            <a class="btn small accent" id="share-wa" target="_blank" rel="noopener">Share on WhatsApp</a>
+            <button class="btn small ghost" type="button" id="copy-link">Copy link</button>
+            <span class="ok" id="copied" hidden>Copied</span>
+          </div>
+          <p class="tiny" id="referrer-line" hidden></p>
+          <ul class="friends" id="friends"></ul>
         </div>
-        <p class="tiny" id="referrer-line" hidden></p>
-        <ul class="friends" id="friends"></ul>
       </div>
     </div>
 
     <!-- sessions -->
     <div id="tab-sessions" hidden>
-      <div class="section-head"><h2>Upcoming</h2><a class="btn small" href="index.html#places">Book another</a></div>
+      <div class="section-head"><h2>Upcoming</h2><a class="btn small" id="book-link" href="index.html#places">Book a session</a></div>
       <div class="sessions" id="upcoming"></div>
       <div class="section-head"><h2>Past sessions</h2><span class="tiny" id="past-count"></span></div>
       <div class="sessions" id="past"></div>
+    </div>
+
+    <!-- guide -->
+    <div id="tab-guide" hidden>
+      <div class="section-head"><div><h2>Before and after a session</h2><p class="tiny">Written by the team. Pick the session type to see what changes.</p></div></div>
+      <div class="service-pick" id="guide-pick"></div>
+      <div class="guide">
+        <div class="card"><h3>Before <small id="g-before-k"></small></h3><div id="g-before"></div></div>
+        <div class="card"><h3>After, same day <small id="g-after-k"></small></h3><div id="g-after"></div></div>
+        <div class="card"><h3>The day after</h3><div id="g-dayafter"></div></div>
+        <div class="card"><h3>How often</h3><div id="g-between"></div></div>
+        <div class="card" style="grid-column:1/-1"><h3>When to skip a session and tell us</h3><div id="g-skip"></div><p class="tiny" style="margin-top:10px">Cupping is a complementary therapy. It sits alongside your doctor and physiotherapist, never instead of them. Unsure? Message the room before booking.</p></div>
+      </div>
     </div>
 
     <!-- profile -->
@@ -141,64 +282,165 @@
           <div class="field"><label for="p-phone">WhatsApp number</label><input id="p-phone" type="tel" autocomplete="tel"></div>
         </div>
         <div class="two">
-          <div class="field"><label for="p-email">Email</label><input id="p-email" type="email" disabled></div>
-          <div class="field"><label for="p-city">Home city</label>
-            <select id="p-city"><option value="">Choose</option><option value="cairo">Cairo</option><option value="dahab">Dahab</option><option value="florence">Florence</option></select></div>
+          <div class="field"><label for="p-email">Email</label><input id="p-email" type="email" disabled><span class="tiny">To change it, message us.</span></div>
+          <div class="field"><label for="p-birthday">Birthday <span class="tiny">(optional)</span></label><input id="p-birthday" type="date"></div>
         </div>
-        <div class="field"><label for="p-birthday">Birthday <span class="tiny">(optional)</span></label><input id="p-birthday" type="date"></div>
+        <div class="two">
+          <div class="field"><label for="p-country">Country</label><select id="p-country"><option value="">Choose</option><option value="EG">Egypt</option><option value="IT">Italy</option><option value="other">Somewhere else</option></select></div>
+          <div class="field"><label for="p-city-text">City or area</label><input id="p-city-text" list="city-list"></div>
+        </div>
+        <div class="field"><label for="p-city">Your room</label>
+          <select id="p-city"><option value="">Choose</option><option value="cairo">Cairo</option><option value="dahab">Dahab</option><option value="florence">Florence</option></select><span class="tiny" id="p-rec-hint"></span></div>
         <div class="field"><label for="p-notes">Notes for your therapist <span class="tiny">(injuries, areas to avoid, what works for you)</span></label><textarea id="p-notes"></textarea></div>
+        <div class="card" style="padding:16px">
+          <div class="row" style="justify-content:space-between"><b>Your answers</b><button class="btn small ghost" type="button" id="redo-intake">Update answers</button></div>
+          <div class="chips" id="p-intake" style="margin-top:10px"></div>
+        </div>
         <div class="row"><button class="btn" type="submit" id="save-btn">Save changes</button><span class="ok" id="saved" hidden>Saved</span><span class="err" id="save-err" hidden></span></div>
       </form>
     </div>
   </section>
 </main>
 
+<script src="guide.js"></script>
 <script src="demo.js"></script>
 <script>
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-const CITY_NAME = { cairo: "Cairo", dahab: "Dahab", florence: "Florence" };
+const G = window.ZenGuide, CITY_NAME = G.CITY_NAME;
 const SLOT = { morning: "Morning", afternoon: "Afternoon", evening: "Evening" };
 const money = (minor, cur) => new Intl.NumberFormat("en", { style: "currency", currency: cur.toUpperCase(), maximumFractionDigits: cur === "egp" ? 0 : 2 }).format(minor / 100);
 const initials = (n) => (n || "?").split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 const fmtDate = (d) => new Date(d + "T12:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 let me = null;
 
 async function boot() {
   const params = new URLSearchParams(location.search);
   if (params.get("ref")) { $("#ref-note").textContent = "You've been invited: your first session is 40% off once you sign in."; $("#ref-note").hidden = false; }
   if (params.get("expired")) $("#expired-note").hidden = false;
+  $("#city-list").innerHTML = [...G.EGYPT_SUGGEST, ...G.ITALY_SUGGEST].map((c) => `<option value="${c}">`).join("");
   const data = await ZenAPI("GET", "/api/me").catch(() => ({ user: null }));
   if (ZenAPI.isDemo()) { $("#demo-banner").hidden = false; $("#demo-login").hidden = false; }
-  if (data.user) show(data); else $("#login-view").hidden = false;
+  if (data.user) { me = data; data.user.intake?.completed_at ? show(data) : startWizard(); } else $("#login-view").hidden = false;
 }
 
+/* ================= questionnaire ================= */
+const W = { step: 0, country: "", city_text: "", nearest: null, goals: [], pain: [], activity: "", sport: "", experience: "", health: [], health_notes: "", contact: "whatsapp", time_pref: "any", phone: "" };
+const STEPS = 7;
+function startWizard() {
+  $("#login-view").hidden = true; $("#app-view").hidden = true; $("#signout").hidden = false; $("#wizard").hidden = false;
+  const u = me.user, i = u.intake || {};
+  Object.assign(W, { country: u.country || "", city_text: u.city_text || "", nearest: u.nearest_city || null, goals: i.goals || [], pain: i.pain || [], activity: i.activity || "", sport: i.sport || "", experience: i.experience || "", health: i.health || [], health_notes: i.health_notes || "", contact: i.contact || "whatsapp", time_pref: i.time_pref || "any", phone: u.phone || "" });
+  $("#wiz-title").textContent = `Tell us about you, ${u.name.split(" ")[0]}.`;
+  // build option lists
+  const radios = (id, group, name, chosen) => ($("#" + id).innerHTML = G.OPTIONS[group].map((o) => `<label><input type="radio" name="${name}" value="${o.id}" ${chosen === o.id ? "checked" : ""}><span><b>${o.label}</b>${o.hint ? `<span>${o.hint}</span>` : ""}</span></label>`).join(""));
+  const checks = (id, group, name, chosen) => ($("#" + id).innerHTML = G.OPTIONS[group].map((o) => `<label><input type="checkbox" name="${name}" value="${o.id}" ${chosen.includes(o.id) ? "checked" : ""}><span><b>${o.label}</b>${o.hint ? `<span>${o.hint}</span>` : ""}</span></label>`).join(""));
+  checks("w-goals", "goals", "goals", W.goals); radios("w-activity", "activity", "activity", W.activity); radios("w-experience", "experience", "experience", W.experience);
+  checks("w-health", "health", "health", W.health); radios("w-contact", "contact", "contact", W.contact); radios("w-time", "time", "time_pref", W.time_pref);
+  if (W.country) $(`#w-country input[value="${W.country}"]`).checked = true;
+  $("#w-city").value = W.city_text; $("#w-sport").value = W.sport; $("#w-health-notes").value = W.health_notes; $("#w-phone").value = W.phone;
+  renderBody(); updateRec(); showStep(0);
+}
+function showStep(n) {
+  W.step = n; $$("#wizard .step").forEach((s) => (s.hidden = Number(s.dataset.step) !== n));
+  $("#wiz-bar").style.width = ((n + 1) / STEPS) * 100 + "%"; $("#wiz-count").textContent = `${n + 1} of ${STEPS}`;
+  $("#wiz-back").style.visibility = n === 0 ? "hidden" : "visible"; $("#wiz-next").textContent = n === STEPS - 1 ? "Save and open my account" : n === 2 && !W.pain.length ? "Skip for now" : "Continue";
+  $("#wiz-err").hidden = true; if (n === 6) renderSummary(); window.scrollTo({ top: 0, behavior: "smooth" });
+}
+function collect() {
+  W.country = $("#w-country input:checked")?.value || ""; W.city_text = $("#w-city").value.trim();
+  W.goals = $$("#w-goals input:checked").map((i) => i.value); W.activity = $("#w-activity input:checked")?.value || ""; W.sport = $("#w-sport").value.trim();
+  W.experience = $("#w-experience input:checked")?.value || ""; W.health = $$("#w-health input:checked").map((i) => i.value); W.health_notes = $("#w-health-notes").value.trim();
+  W.contact = $("#w-contact input:checked")?.value || "whatsapp"; W.time_pref = $("#w-time input:checked")?.value || "any"; W.phone = $("#w-phone").value.trim();
+  const picked = $("#w-pick-city input:checked")?.value; if (picked) W.nearest = picked;
+}
+function updateRec() {
+  collect();
+  const r = G.recommend(W.country, W.city_text);
+  const box = $("#w-rec"), pick = $("#w-pick-city");
+  if (!W.country) { box.hidden = true; pick.hidden = true; return; }
+  if (r.city) { W.nearest = r.city; box.hidden = false; pick.hidden = true; box.innerHTML = `<div class="rec"><div><span class="eyebrow" style="color:var(--mark-soft)">Nearest room</span><b>${CITY_NAME[r.city]}</b><p>${esc(r.reason)}</p></div></div>`; }
+  else { box.hidden = false; box.innerHTML = `<p class="muted" style="font-size:.9rem">${esc(r.reason)}</p>`; pick.hidden = false; if (W.nearest) $(`#w-pick-city input[value="${W.nearest}"]`).checked = true; }
+}
+$("#w-country").addEventListener("change", updateRec); $("#w-city").addEventListener("input", updateRec); $("#w-pick-city").addEventListener("change", collect);
+function renderBody() {
+  $("#w-body").innerHTML = G.bodyMap(W.pain, true);
+  $$("#w-body .part").forEach((p) => p.addEventListener("click", () => { const id = p.dataset.part; W.pain = W.pain.includes(id) ? W.pain.filter((x) => x !== id) : [...W.pain, id]; renderBody(); }));
+  $("#w-pain-chips").innerHTML = W.pain.length ? W.pain.map((id) => `<span class="chip">${G.label("pain", id)}</span>`).join("") : `<span class="tiny">Nothing selected yet.</span>`;
+  if (W.step === 2) $("#wiz-next").textContent = W.pain.length ? "Continue" : "Skip for now";
+}
+$("#w-health").addEventListener("change", (e) => {
+  if (e.target.value === "none" && e.target.checked) $$("#w-health input").forEach((i) => { if (i.value !== "none") i.checked = false; });
+  else if (e.target.checked) { const n = $("#w-health input[value=none]"); if (n) n.checked = false; }
+  collect(); const f = G.flagged(W.health); const note = $("#w-flag-note");
+  note.hidden = !f.length; if (f.length) note.innerHTML = `<b>Thank you for telling us.</b> With ${f.map((id) => G.label("health", id).toLowerCase()).join(", ")}, your therapist will adapt the session or ask you to check with your doctor first. That's not a no, it's how we keep you safe. Please add details below.`;
+});
+function renderSummary() {
+  const f = G.flagged(W.health);
+  $("#w-summary").innerHTML = `<dl>
+    <dt>Your room</dt><dd>${W.nearest ? `<b>${CITY_NAME[W.nearest]}</b> · we'll preselect it when you book` : "not chosen yet"}</dd>
+    <dt>Why you're coming</dt><dd>${W.goals.length ? W.goals.map((g) => G.label("goals", g)).join(" · ") : "—"}</dd>
+    <dt>Focus areas</dt><dd>${W.pain.length ? W.pain.map((p) => G.label("pain", p)).join(", ") : "we'll find out on the table"}</dd>
+    <dt>Activity</dt><dd>${W.activity ? G.label("activity", W.activity) : "—"}${W.sport ? " · " + esc(W.sport) : ""}</dd>
+    <dt>Experience</dt><dd>${W.experience ? G.label("experience", W.experience) : "—"}</dd>
+    <dt>Health</dt><dd>${W.health.length ? W.health.map((h) => G.label("health", h)).join(", ") : "nothing noted"}${f.length ? `<br><span class="tiny" style="color:var(--bad)">Flagged for your therapist to review before the first session.</span>` : ""}</dd>
+    <dt>Contact</dt><dd>${G.label("contact", W.contact)}${W.phone ? " · " + esc(W.phone) : ""} · ${G.label("time", W.time_pref)}</dd>
+  </dl>`;
+}
+$("#wiz-back").addEventListener("click", () => showStep(Math.max(0, W.step - 1)));
+$("#wiz-next").addEventListener("click", async () => {
+  collect();
+  const err = $("#wiz-err"); err.hidden = true;
+  if (W.step === 0 && !W.country) { err.textContent = "Tell us which country you're in."; err.hidden = false; return; }
+  if (W.step === 0 && !W.nearest) { err.textContent = "Pick the room you'd come to."; err.hidden = false; return; }
+  if (W.step === 5 && W.contact === "whatsapp" && !W.phone) { err.textContent = "Add your WhatsApp number, or choose email."; err.hidden = false; return; }
+  if (W.step < STEPS - 1) return showStep(W.step + 1);
+  $("#wiz-next").disabled = true;
+  try {
+    const data = await ZenAPI("PUT", "/api/me", { country: W.country, city_text: W.city_text, nearest_city: W.nearest, city: W.nearest, phone: W.phone, intake: { goals: W.goals, pain: W.pain, activity: W.activity, sport: W.sport, experience: W.experience, health: W.health, health_notes: W.health_notes, contact: W.contact, time_pref: W.time_pref, completed_at: new Date().toISOString() } });
+    $("#wizard").hidden = true; show(data);
+  } catch (ex) { err.textContent = ex.message; err.hidden = false; } finally { $("#wiz-next").disabled = false; }
+});
+
+/* ================= account ================= */
 function show(data) {
   me = data;
-  $("#login-view").hidden = true; $("#app-view").hidden = false; $("#signout").hidden = false;
-  const u = data.user;
+  $("#login-view").hidden = true; $("#wizard").hidden = true; $("#app-view").hidden = false; $("#signout").hidden = false;
+  const u = data.user, i = u.intake || {};
   renderAvatar($("#avatar"), u); renderAvatar($("#avatar-edit"), u);
   $("#hello").textContent = `Hi ${u.name.split(" ")[0]}.`;
-  $("#home-city").textContent = u.city ? CITY_NAME[u.city] : "No home city yet"; $("#home-city").className = "badge" + (u.city ? " city-" + u.city : "");
+  const room = u.nearest_city || u.city;
+  $("#home-city").textContent = room ? "Your room: " + CITY_NAME[room] : "No room chosen yet"; $("#home-city").className = "badge" + (room ? " city-" + room : "");
   $("#since").textContent = "With Zen since " + new Date(u.created_at.replace(" ", "T")).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+  $("#book-link").href = room ? `index.html?city=${room}#book` : "index.html#places";
+  // recommendation card
+  const rc = $("#rec-card"); rc.hidden = !room;
+  if (room) rc.innerHTML = `<div style="flex:1"><span class="eyebrow" style="color:var(--mark-soft)">Nearest room${u.city_text ? " · you're in " + esc(u.city_text) : ""}</span><b>${CITY_NAME[room]}</b><p>${i.experience === "first" ? "First time? Read \"Your guide\" before you come. It takes three minutes and makes the session better." : "Book when you like; we confirm the hour on WhatsApp."}</p></div><a class="btn small accent" href="index.html?city=${room}#book">Book in ${CITY_NAME[room]}</a>`;
   // loyalty
   const every = data.settings.loyalty_every, done = data.stats.done, into = done % every, left = every - into;
   $("#loyalty-title").textContent = `Every ${every}th session is free`;
   $("#ring").style.setProperty("--p", (into / every) * 100); $("#ring-n").textContent = `${into}/${every}`;
   $("#loyalty-text").textContent = done === 0 ? `Your first session starts the count. After ${every} you get one on us.` : left === every ? `You just earned a free session. It's waiting below.` : `${done} session${done === 1 ? "" : "s"} so far. ${left} more and the next one is on us.`;
   const cr = data.credits.filter((c) => c.status === "available");
-  $("#credits").innerHTML = cr.length ? cr.map((c) => `<div class="reward"><b>${c.pct === 100 ? "Free session" : c.pct + "% off"}</b><span class="muted" style="flex:1;font-size:.9rem">${c.reason}</span><a class="btn small" href="index.html#places">Use it</a></div>`).join("") : `<p class="tiny">No rewards waiting right now.</p>`;
+  $("#credits").innerHTML = cr.length ? cr.map((c) => `<div class="reward"><b>${c.pct === 100 ? "Free session" : c.pct + "% off"}</b><span class="muted" style="flex:1;font-size:.9rem">${esc(c.reason)}</span><a class="btn small" href="index.html${room ? "?city=" + room : ""}#book">Use it</a></div>`).join("") : `<p class="tiny">No rewards waiting right now.</p>`;
   // invite
   $("#invite-title").textContent = `${data.settings.referral_pct}% off, for both of you`;
   $("#ref-code").textContent = u.referral_code; $("#share-url").textContent = data.share_url;
   $("#share-wa").href = "https://wa.me/?text=" + encodeURIComponent(`Try Zen Recovery with me — cupping and recovery in Cairo, Dahab and Florence. We both get ${data.settings.referral_pct}% off with this link: ${data.share_url}`);
   if (data.referrer) { $("#referrer-line").textContent = `You joined through ${data.referrer}.`; $("#referrer-line").hidden = false; }
-  $("#friends").innerHTML = data.invited.map((f) => `<li><span>${f.name}</span><span class="tiny">${f.sessions ? f.sessions + " session" + (f.sessions === 1 ? "" : "s") : "signed up, not booked yet"}</span></li>`).join("");
+  $("#friends").innerHTML = data.invited.map((f) => `<li><span>${esc(f.name)}</span><span class="tiny">${f.sessions ? f.sessions + " session" + (f.sessions === 1 ? "" : "s") : "signed up, not booked yet"}</span></li>`).join("");
   // profile
-  $("#p-name").value = u.name || ""; $("#p-phone").value = u.phone || ""; $("#p-email").value = u.email; $("#p-city").value = u.city || ""; $("#p-birthday").value = u.birthday || ""; $("#p-notes").value = u.notes || "";
+  $("#p-name").value = u.name || ""; $("#p-phone").value = u.phone || ""; $("#p-email").value = u.email; $("#p-birthday").value = u.birthday || "";
+  $("#p-country").value = u.country || ""; $("#p-city-text").value = u.city_text || ""; $("#p-city").value = room || ""; $("#p-notes").value = u.notes || "";
+  const f = G.flagged(i.health || []);
+  $("#p-intake").innerHTML = [...(i.goals || []).map((g) => `<span class="chip">${G.label("goals", g)}</span>`), ...(i.pain || []).map((p) => `<span class="chip">${G.label("pain", p)}</span>`), ...(i.health || []).filter((h) => h !== "none").map((h) => `<span class="chip${f.includes(h) ? " flag" : ""}">${G.label("health", h)}</span>`), i.activity ? `<span class="chip">${G.label("activity", i.activity)}</span>` : "", i.experience ? `<span class="chip">${G.label("experience", i.experience)}</span>` : ""].join("") || `<span class="tiny">Not answered yet.</span>`;
+  renderGuide(i.experience === "first" ? "cupping" : "cupping");
   loadSessions();
 }
 function renderAvatar(el, u) { el.innerHTML = u.photo ? `<img src="${u.photo}" alt="">` : initials(u.name); }
+$("#p-country").addEventListener("change", profileHint); $("#p-city-text").addEventListener("input", profileHint);
+function profileHint() { const r = G.recommend($("#p-country").value, $("#p-city-text").value); $("#p-rec-hint").textContent = r.city ? `Nearest to you: ${CITY_NAME[r.city]}.` : ""; if (r.city) $("#p-city").value = r.city; }
 
 async function loadSessions() {
   const { bookings } = await ZenAPI("GET", "/api/me/bookings");
@@ -207,37 +449,53 @@ async function loadSessions() {
   const past = bookings.filter((b) => !up.includes(b));
   const card = (b) => { const d = new Date(b.date + "T12:00:00"); return `<div class="session-card">
       <div class="d">${d.getDate()}<small>${d.toLocaleDateString("en-GB", { month: "short" })}</small></div>
-      <div class="info"><b>${b.service_name.split(" · ")[0]} · ${CITY_NAME[b.city]}</b><span class="muted">${fmtDate(b.date)} · ${SLOT[b.slot] || b.slot}${b.discount_kind ? " · " + (b.discount_kind === "loyalty" ? "free session" : "reward applied") : ""}</span></div>
+      <div class="info"><b>${esc(b.service_name.split(" · ")[0])} · ${CITY_NAME[b.city]}</b><span class="muted">${fmtDate(b.date)} · ${SLOT[b.slot] || esc(b.slot)}${b.discount_kind ? " · " + (b.discount_kind === "loyalty" ? "free session" : "reward applied") : ""}</span></div>
       <div style="text-align:right;display:grid;gap:6px;justify-items:end"><span class="num">${b.amount === 0 ? "Free" : money(b.amount, b.currency)}</span><span class="status ${b.status}">${label(b.status)}</span></div></div>`; };
-  $("#upcoming").innerHTML = up.length ? up.map(card).join("") : `<div class="empty">Nothing booked. <a href="index.html#places">Pick a day.</a></div>`;
-  $("#past").innerHTML = past.length ? past.map(card).join("") : `<div class="empty">Your first session will show up here.</div>`;
+  // contextual advice: next session → before; a session done in the last 2 days → after
+  let upHtml = up.map(card).join("");
+  if (up.length) { const k = G.serviceKey(up[0].service_name); upHtml += `<div class="prep"><h4>Before your ${G.SERVICE_LABEL[k].toLowerCase()} session on ${fmtDate(up[0].date)}</h4>${G.list("before", k)}</div>`; }
+  const recent = past.find((b) => b.status === "done" && (Date.now() - new Date(b.date + "T12:00:00")) < 2 * 86400e3);
+  let pastHtml = past.map(card).join("");
+  if (recent) { const k = G.serviceKey(recent.service_name); pastHtml = `<div class="prep"><h4>After your ${G.SERVICE_LABEL[k].toLowerCase()} session</h4>${G.list("after", k)}</div>` + pastHtml; }
+  $("#upcoming").innerHTML = up.length ? upHtml : `<div class="empty">Nothing booked. <a href="${$("#book-link").href}">Pick a day.</a></div>`;
+  $("#past").innerHTML = past.length ? pastHtml : `<div class="empty">Your first session will show up here, with what you paid and how it went.</div>`;
   $("#past-count").textContent = past.length ? `${past.filter((b) => b.status === "done").length} completed` : "";
 }
-const label = (s) => ({ paid: "Reserved", confirmed: "Confirmed", done: "Done", cancelled: "Cancelled", no_show: "Missed" })[s] || s;
+const label = (s) => ({ paid: "Reserved · hour to confirm", confirmed: "Confirmed", done: "Done", cancelled: "Cancelled", no_show: "Missed" })[s] || s;
 
-// tabs
-$$(".tabs button").forEach((b) => b.addEventListener("click", () => { $$(".tabs button").forEach((x) => x.setAttribute("aria-selected", x === b)); ["rewards", "sessions", "profile"].forEach((t) => ($("#tab-" + t).hidden = t !== b.dataset.tab)); }));
+/* guide */
+function renderGuide(key) {
+  $("#guide-pick").innerHTML = ["cupping", "manual", "fire", "hijama", "facial"].map((k) => `<button class="pill" type="button" data-k="${k}" aria-pressed="${k === key}">${G.SERVICE_LABEL[k]}</button>`).join("");
+  $$("#guide-pick .pill").forEach((p) => p.addEventListener("click", () => renderGuide(p.dataset.k)));
+  $("#g-before-k").textContent = G.SERVICE_LABEL[key]; $("#g-after-k").textContent = G.SERVICE_LABEL[key];
+  $("#g-before").innerHTML = G.list("before", key); $("#g-after").innerHTML = G.list("after", key);
+  $("#g-dayafter").innerHTML = G.list("dayAfter"); $("#g-between").innerHTML = G.list("between"); $("#g-skip").innerHTML = G.list("skip");
+}
 
-// login
+/* tabs */
+$$(".tabs button").forEach((b) => b.addEventListener("click", () => { $$(".tabs button").forEach((x) => x.setAttribute("aria-selected", x === b)); ["rewards", "sessions", "guide", "profile"].forEach((t) => ($("#tab-" + t).hidden = t !== b.dataset.tab)); }));
+if (location.hash === "#guide") setTimeout(() => $$(".tabs button")[2]?.click(), 300);
+
+/* login */
 $("#login-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const btn = $("#login-btn"), err = $("#login-err"); err.hidden = true; btn.disabled = true;
   const ref = new URLSearchParams(location.search).get("ref");
   try {
     const r = await ZenAPI("POST", "/api/auth/request-link", { email: $("#l-email").value.trim(), name: $("#l-name").value.trim(), ref });
-    if (r.link) { location.href = r.link; return; } // local dev only
+    if (r.link) { location.href = r.link; return; }
     $("#login-form").hidden = true; $("#sent").hidden = false; $("#sent-email").textContent = $("#l-email").value.trim();
   } catch (ex) { err.textContent = ex.message; err.hidden = false; if (ex.data?.needName) $("#l-name").focus(); }
   finally { btn.disabled = false; }
 });
-$("#demo-btn").addEventListener("click", async () => show(await ZenAPI("POST", "/api/auth/demo-login")));
+$("#demo-btn").addEventListener("click", async () => { me = await ZenAPI("POST", "/api/auth/demo-login"); me.user.intake?.completed_at ? show(me) : startWizard(); });
+$("#demo-new").addEventListener("click", async () => { me = await ZenAPI("POST", "/api/auth/demo-login", { fresh: true }); startWizard(); });
 $("#signout").addEventListener("click", async (e) => { e.preventDefault(); await ZenAPI("POST", "/api/auth/logout").catch(() => {}); location.href = "index.html"; });
-
-// invite
 $("#copy-link").addEventListener("click", async () => { try { await navigator.clipboard.writeText(me.share_url); $("#copied").hidden = false; setTimeout(() => ($("#copied").hidden = true), 1800); } catch {} });
+$("#redo-intake").addEventListener("click", () => startWizard());
 
-// profile
-let photoData; // undefined = unchanged, null = removed, string = new
+/* profile */
+let photoData;
 $("#photo").addEventListener("change", (e) => {
   const f = e.target.files[0]; if (!f) return;
   const img = new Image(); img.onload = () => {
@@ -250,9 +508,9 @@ $("#photo-remove").addEventListener("click", () => { photoData = null; $("#avata
 $("#profile-form").addEventListener("submit", async (e) => {
   e.preventDefault(); const btn = $("#save-btn"); btn.disabled = true; $("#saved").hidden = true; $("#save-err").hidden = true;
   try {
-    const body = { name: $("#p-name").value.trim(), phone: $("#p-phone").value.trim(), city: $("#p-city").value, birthday: $("#p-birthday").value || null, notes: $("#p-notes").value.trim() };
+    const body = { name: $("#p-name").value.trim(), phone: $("#p-phone").value.trim(), birthday: $("#p-birthday").value || null, notes: $("#p-notes").value.trim(), country: $("#p-country").value || undefined, city_text: $("#p-city-text").value.trim(), nearest_city: $("#p-city").value || null, city: $("#p-city").value || undefined };
     if (photoData !== undefined) body.photo = photoData;
-    const data = await ZenAPI("PUT", "/api/me", body); photoData = undefined; show(data); $("#saved").hidden = false; $$(".tabs button")[2].click();
+    const data = await ZenAPI("PUT", "/api/me", body); photoData = undefined; show(data); $("#saved").hidden = false; $$(".tabs button")[3].click();
   } catch (ex) { $("#save-err").textContent = ex.message; $("#save-err").hidden = false; }
   finally { btn.disabled = false; }
 });

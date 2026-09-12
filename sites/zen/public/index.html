@@ -294,6 +294,10 @@ legend{font-family:var(--label); font-size:.62rem; letter-spacing:.2em; text-tra
 .book-actions .fine a{color:var(--ink-soft)}
 #rewards-box .fine{font-size:.86rem;color:var(--ink-soft)} #rewards-box .fine a{color:var(--mark);font-weight:500}
 #rewards-user{display:grid;gap:10px}
+.prep-box{padding:14px 16px;border-radius:14px;background:var(--ground-2);display:grid;gap:6px}
+.prep-box:empty{display:none}
+.prep-box .fine{font-size:.86rem;color:var(--ink-soft)} .prep-box .fine b{color:var(--ink);font-weight:500} .prep-box a{color:var(--mark)}
+.prep-list{margin:0;padding-left:18px;font-size:.9rem;display:grid;gap:4px}
 .err{color:var(--mark); font-size:.9rem}
 .err[hidden]{display:none}
 @media (max-width:860px){
@@ -729,6 +733,8 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
         <div class="field"><label for="note">Anything we should know? <span style="color:var(--ink-mute);font-weight:400">(optional)</span></label><textarea id="note" name="note" placeholder="An old injury, a spot to avoid, a first time…"></textarea></div>
       </fieldset>
 
+      <div id="prep-box" class="prep-box"></div>
+
       <fieldset id="rewards-box">
         <legend>Your rewards</legend>
         <p class="fine" id="rewards-guest">Have an account? <a href="account.html">Sign in</a> to use your rewards and make this session count toward your free one.</p>
@@ -796,6 +802,7 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
   </div>
 </dialog>
 
+<script src="guide.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
 <script>
@@ -918,6 +925,7 @@ fetch("/api/me", { credentials: "same-origin" }).then(r => (r.headers.get("conte
   $("#rewards-guest").hidden = true; $("#rewards-user").hidden = false;
   const cr = d.credits.filter(c => c.status === "available");
   $("#rewards-who").textContent = `Signed in as ${d.user.name}. ${cr.length ? "Pick a reward to use on this session:" : `${d.stats.done % d.settings.loyalty_every}/${d.settings.loyalty_every} toward your free session.`}`;
+  if (d.user.nearest_city && !city) choose(d.user.nearest_city, true);
   $("#credit-options").innerHTML = cr.length ? [`<span class="slot"><input type="radio" name="credit" id="cr-none" value="" checked><label for="cr-none">No reward</label></span>`, ...cr.map(c => `<span class="slot"><input type="radio" name="credit" id="cr-${c.id}" value="${c.id}" data-pct="${c.pct}"><label for="cr-${c.id}">${c.pct === 100 ? "Free session" : c.pct + "% off"}</label></span>`)].join("") : "";
   if (cr.length) { $("#cr-" + cr[0].id).checked = true; }
   updateSummary();
@@ -930,7 +938,7 @@ panels.addEventListener("click", (e) => {
   const btn = e.target.closest(".panel"); if (!btn) return;
   choose(btn.dataset.city);
 });
-function choose(key) {
+function choose(key, quiet) {
   city = key;
   const c = CITIES[key];
   $$(".panel").forEach(p => p.setAttribute("aria-pressed", String(p.dataset.city === key)));
@@ -957,8 +965,17 @@ function choose(key) {
   $("#phone").placeholder = c.currency === "EUR" ? "+39 …" : "+20 …";
   updateSummary();
   if (!reduced) window.gsap?.from("#booking > *", { y: 18, opacity: 0, duration: .7, stagger: .07, ease: "power2.out", clearProps: "all" });
-  setTimeout(() => $("#book").scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" }), 120);
+  if (!quiet) setTimeout(() => $("#book").scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" }), 120);
+  renderPrep();
 }
+function renderPrep() {
+  const cur = current(); if (!cur || !cur.s) return;
+  const k = ZenGuide.serviceKey(cur.s.name);
+  const items = [...ZenGuide.ADVICE.before.general.slice(0, 3), ...(ZenGuide.ADVICE.before[k] || []).slice(0, 2)];
+  $("#prep-box").innerHTML = `<p class="fine"><b>Before a ${ZenGuide.SERVICE_LABEL[k].toLowerCase()} session</b></p><ul class="prep-list">${items.map((t) => `<li>${t}</li>`).join("")}</ul><p class="fine">Full guide, before and after, in <a href="account.html#guide">your account</a>.</p>`;
+}
+// ?city=… from the account area preselects a room
+{ const pre = new URLSearchParams(location.search).get("city"); if (pre && CITIES[pre]) setTimeout(() => choose(pre, true), 50); }
 function current() {
   if (!city) return null;
   const c = CITIES[city];
@@ -978,7 +995,7 @@ function updateSummary() {
   $("#sum-total").textContent = total === 0 ? "Nothing to pay" : money(total, c.currency, c.locale);
   $("#pay").textContent = total === 0 ? "Reserve my free session" : "Reserve and pay";
 }
-$("#booking").addEventListener("change", updateSummary);
+$("#booking").addEventListener("change", (e) => { updateSummary(); if (e.target.name === "service") renderPrep(); });
 $("#booking").addEventListener("input", (e) => { if (e.target.id === "date") updateSummary(); });
 
 const dlg = $("#dlg");

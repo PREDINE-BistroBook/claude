@@ -10,7 +10,9 @@ sites/zen/
   public/account.html   client area: rewards + invite link, session history, profile with photo
   public/admin.html     team area: overview + statistics, bookings, clients, settings, admins (role-scoped)
   public/app.css        shared styles for the two areas
+  public/guide.js       questionnaire options, nearest-room logic, body map, before/after advice (shared by all pages)
   public/demo.js        API client; answers from sample data when no API is present (preview builds)
+  migrations/           schema changes applied to the live database after the first deploy
   public/success.html   "Reserved" page Stripe sends the client back to
   public/img/           real photos — see img/README.md
   src/worker.js         Cloudflare Worker: static site + the whole API (checkout, webhook, accounts, admin)
@@ -35,6 +37,8 @@ sites/zen/
 - *City admin* (`role = florence` etc.): sees only that city's bookings, clients (only people who've had a session there) and money. Cannot see the platform fee, other cities, the rules, or other admins. This is enforced in the Worker (`scope()`), not by hiding buttons.
 - Everyone can change their own password. Passwords are PBKDF2-hashed; sessions are signed HttpOnly cookies (12 h for admins, 30 days for clients).
 - First owner: set `ADMIN_BOOTSTRAP_EMAIL` and `ADMIN_BOOTSTRAP_PASSWORD` as secrets, sign in once with them, then add the real admins from Settings. The bootstrap only works while the admins table is empty.
+
+**Questionnaire + guide (added 2026-09-12, evening).** On first sign-in a client answers seven short steps: where they live (→ nearest room recommended: Sinai/Red Sea → Dahab, rest of Egypt → Cairo, Italy → Florence, elsewhere → they pick), why they're coming, where it hurts (tap-able body map), activity and experience, health conditions (seven of them are *flags*: pregnancy, blood thinners, bleeding disorders, heart, diabetes, skin, recent surgery), contact preference. Stored in `users.intake` (JSON) + `country`, `city_text`, `nearest_city`. The account then shows a "Your guide" tab (before / after / day after / how often / when to skip, per session type, content in `public/guide.js`), the next session's before-list on the Sessions tab, and the after-list for 48 h after a completed session. The homepage preselects their room (`?city=`) and shows a short before-list under the booking form; the success page shows the checklist. In the admin, every booking and client shows the answers, a read-only body map, and a red **health** flag that must be read before the session. Help boxes on every admin tab explain what the numbers and buttons mean.
 
 **Statistics** (Overview tab): sessions this month with change vs last month, revenue per currency (EUR and EGP are never summed), clients and new clients, upcoming, sessions per month for 12 months, revenue per month per currency, sessions by type, sessions by city (owner, all-cities view), today's list, rewards issued/used. Every chart has a hover tooltip and a table view.
 
