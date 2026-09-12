@@ -105,6 +105,8 @@ const pub = (a) => ({ id: a.id, email: a.email, username: a.username || null, na
 // A username: 3–24 of a-z 0-9 . _ - (lowercased). Returns null to clear, false when invalid.
 const validUsername = (v) => { if (v === null || v === "") return null; const u = String(v).trim().toLowerCase(); return /^[a-z0-9._-]{3,24}$/.test(u) && !u.includes("@") ? u : false; };
 const validEmail = (v) => { const e = normEmail(v); return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) ? e : false; };
+// A sign-in name (email or username) must be unique across both columns, so "shika" can't be one account's username and another's sign-in.
+async function signinTaken(env, names, exceptId) { for (const n of names.filter(Boolean)) { const r = await env.DB.prepare("SELECT id FROM admins WHERE (email = ? OR username = ?) AND id != ?").bind(n, n, exceptId || "").first(); if (r) return n; } return null; }
 async function cityMeta(env) { const c = await catalog(env); return Object.fromEntries(CITY_KEYS.map((k) => [k, { name: c[k].name, currency: c[k].currency, services: Object.values(c[k].services).map(({ photo, ...s }) => ({ ...s, has_photo: Boolean(photo) })) }])); }
 // What the website reads on load: services and prices per city (from the admin), address/team/WhatsApp/Maps per city (settings)
 async function publicCatalog(env) {
@@ -452,7 +454,7 @@ const cityWhere = (city, col = "city") => (city ? { sql: ` AND ${col} = ?`, args
 async function adminLogin(req, env) {
   const b = await body(req);
   const email = normEmail(b.email), password = String(b.password || "");
-  let a = await env.DB.prepare("SELECT * FROM admins WHERE email = ? OR username = ?").bind(email, email).first();
+  let a = (await env.DB.prepare("SELECT * FROM admins WHERE email = ?").bind(email).first()) || (await env.DB.prepare("SELECT * FROM admins WHERE username = ?").bind(email).first());
   if (!a) { // first owner: bootstrap from secrets while the table is empty
     const count = await env.DB.prepare("SELECT COUNT(*) n FROM admins").first();
     if (count.n === 0 && env.ADMIN_BOOTSTRAP_EMAIL && email === normEmail(env.ADMIN_BOOTSTRAP_EMAIL) && password && password === env.ADMIN_BOOTSTRAP_PASSWORD) {
@@ -659,6 +661,7 @@ async function adminCreate(req, env, admin) {
   const email = normEmail(b.email), name = clean(b.name, 80), role = ["all", ...CITY_KEYS].includes(b.role) ? b.role : null, password = String(b.password || "");
   if (!email || !name || !role || password.length < 10) return json({ error: "Name, email or username, role and a password of at least 10 characters." }, 400);
   const username = b.username === undefined ? null : validUsername(b.username); if (username === false) return json({ error: "A username is 3 to 24 letters, digits, dots, dashes or underscores." }, 400);
+  const taken0 = await signinTaken(env, [email, username], null); if (taken0) return json({ error: `"${taken0}" is already another account's sign-in.` }, 409);
   const { hash, salt } = await hashPassword(password);
   try { await env.DB.prepare("INSERT INTO admins (id, email, name, role, pass_hash, salt, username) VALUES (?,?,?,?,?,?,?)").bind(randomId(), email, name, role, hash, salt, username).run(); }
   catch { return json({ error: "That email or username already has admin access." }, 409); }
@@ -680,6 +683,7 @@ async function adminProfile(req, env, admin) {
   if (b.username !== undefined) { username = validUsername(b.username); if (username === false) return json({ error: "A username is 3 to 24 letters, digits, dots, dashes or underscores." }, 400); }
   if (b.email !== undefined && b.email !== null && String(b.email).trim() !== "" && normEmail(b.email) !== admin.email) { email = validEmail(b.email); if (!email) return json({ error: "That doesn't look like an email address." }, 400); }
   if (!email.includes("@") && !username) return json({ error: "Keep a username until you've added an email." }, 400);
+  const taken = await signinTaken(env, [username, email], admin.id); if (taken) return json({ error: `"${taken}" is already another account's sign-in.` }, 409);
   try { await env.DB.prepare("UPDATE admins SET name = ?, phone = ?, photo = ?, notify = ?, username = ?, email = ? WHERE id = ?").bind(clean(b.name, 80) || admin.name, b.phone === undefined ? admin.phone : clean(b.phone, 40), photo, b.notify === undefined ? admin.notify ?? 1 : b.notify ? 1 : 0, username, email, admin.id).run(); }
   catch { return json({ error: "That username or email is already used by another account." }, 409); }
   return json({ admin: pub(await env.DB.prepare("SELECT * FROM admins WHERE id = ?").bind(admin.id).first()) });
@@ -695,7 +699,7 @@ async function adminEdit(req, env, admin, id) {
   if (id === admin.id && role !== "all") return json({ error: "You can't remove your own owner access." }, 400);
   let hash = a.pass_hash, salt = a.salt;
   if (b.password !== undefined) { if (String(b.password).length < 10) return json({ error: "Use at least 10 characters." }, 400); ({ hash, salt } = await hashPassword(String(b.password))); }
-  let username = a.username || null; if (b.username !== undefined) { username = validUsername(b.username); if (username === false) return json({ error: "A username is 3 to 24 letters, digits, dots, dashes or underscores." }, 400); }
+  let username = a.username || null; if (b.username !== undefined) { username = validUsername(b.username); if (username === false) return json({ error: "A username is 3 to 24 letters, digits, dots, dashes or underscores." }, 400); const t2 = await signinTaken(env, [username], id); if (t2) return json({ error: `"${t2}" is already another account's sign-in.` }, 409); }
   try { await env.DB.prepare("UPDATE admins SET name = ?, role = ?, pass_hash = ?, salt = ?, username = ? WHERE id = ?").bind(clean(b.name, 80) || a.name, role, hash, salt, username, id).run(); }
   catch { return json({ error: "That username is already used by another account." }, 409); }
   // an account narrowed to one city can't stay linked to a therapist profile in another
