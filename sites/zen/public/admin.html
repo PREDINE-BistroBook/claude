@@ -169,6 +169,7 @@
           <li>Didn't show up? <b>Missed</b>. Cancelled in time? <b>Cancel</b> (their reward, if they used one, is given back).</li>
           <li>Walk-ins, WhatsApp bookings and cash: <b>Add a booking</b>. If the email matches an account, it counts for their rewards too.</li>
           <li>A red <b>!</b> next to a name means the client told us about a health condition. Open the row and read it before the session.</li>
+          <li><b>Who sees what:</b> a therapist's account sees only the bookings assigned to them, plus the ones where the client didn't choose anyone. Open one of those and <b>Accept</b> it to make it yours. Only the owner can hand a booking to a specific person.</li>
         </ol>
       </details>
       <div class="legend-status"><span><span class="status paid">Reserved</span> paid online, hour not agreed yet</span><span><span class="status confirmed">Confirmed</span> hour agreed</span><span><span class="status done">Done</span> session happened</span><span><span class="status no_show">Missed</span></span><span><span class="status cancelled">Cancelled</span></span><span><span class="status review">Needs review</span> health flag, not charged yet</span></div>
@@ -558,7 +559,7 @@ async function boot() {
 }
 function start(r) {
   A = r.admin; T = r.therapist || null; CITIES = r.cities; SETTINGS = r.settings;
-  $("#f-mine-wrap").hidden = !T; if (T) $("#f-mine").value = "me"; $("#me-profile-note").hidden = !T; if (T) $("#me-profile-note").innerHTML = `You're linked to the therapist profile <b>${esc(T.name)}</b> (${CITY_NAME[T.city]}). The photo and bio clients see are edited under <b>Team</b>; Bookings opens on your own sessions.`;
+  $("#f-mine-wrap").hidden = !T && isOwner(); if (!isOwner()) { $("#f-mine").innerHTML = `<option value="">${T ? "Mine and unassigned" : "Unassigned"}</option>${T ? `<option value="me">Only mine</option><option value="open">Only unassigned</option>` : ""}`; $("#f-mine").value = ""; } else if (T) $("#f-mine").value = "me"; $("#me-profile-note").hidden = !T; if (T) $("#me-profile-note").innerHTML = `You're linked to the therapist profile <b>${esc(T.name)}</b> (${CITY_NAME[T.city]}). The photo and bio clients see are edited under <b>Team</b>; Bookings opens on your own sessions.`;
   $("#login-view").hidden = true; $("#app-view").hidden = false; $("#who").hidden = false;
   $("#admin-name").textContent = A.name; $("#admin-avatar").innerHTML = A.photo ? `<img src="${A.photo}" alt="">` : initials(A.name);
   $("#scope-badge").textContent = isPlatform() ? "Amico Mio" : isOwner() ? "All cities" : CITY_NAME[A.role]; $("#scope-badge").className = "badge " + (isOwner() || isPlatform() ? "all" : "city-" + A.role);
@@ -666,13 +667,13 @@ function hover(el, rows, o, anchor) {
 async function loadBookings() {
   const q = new URLSearchParams({ city: isOwner() ? $("#f-city").value : "", status: $("#f-status").value, from: $("#f-from").value, to: $("#f-to").value, q: $("#f-q").value.trim() });
   let { bookings } = await ZenAPI("GET", "/api/admin/bookings?" + q);
-  if (T && $("#f-mine").value === "me") bookings = bookings.filter((b) => b.therapist_id === T.id);
+  if (T && $("#f-mine").value === "me") bookings = bookings.filter((b) => b.therapist_id === T.id); if ($("#f-mine").value === "open") bookings = bookings.filter((b) => !b.therapist_id);
   const tb = $("#bookings-table tbody");
   tb.innerHTML = bookings.length ? bookings.map((b) => `<tr class="click" data-id="${b.id}">
       <td class="num">${fmtDate(b.date)}<div class="tiny">${SLOT[b.slot] || b.slot}</div></td>
       <td>${esc(b.name)}${b.flags?.length ? ` <span class="flag" title="${b.flags.map((f) => G.label("health", f)).join(", ")}">health</span>` : ""}${b.experience === "first" ? ` <span class="chip" style="font-size:.7rem;padding:2px 7px">first time</span>` : ""}<div class="tiny">${esc(b.phone || b.email || "")}</div></td>
       <td><i class="dot ${b.city}"></i>${CITY_NAME[b.city]}</td>
-      <td>${esc(b.service_name.split(" · ")[0])}${b.therapist ? `<div class="tiny">with ${esc(b.therapist)}</div>` : ""}${b.discount_kind ? `<div class="tiny">${DISC[b.discount_kind] || b.discount_kind}${b.partner_code ? " " + esc(b.partner_code) : ""}</div>` : ""}${b.source === "manual" ? `<div class="tiny">added by hand</div>` : ""}</td>
+      <td>${esc(b.service_name.split(" · ")[0])}${b.therapist ? `<div class="tiny">with ${esc(b.therapist)}</div>` : `<div class="tiny" style="color:var(--mark)">unassigned${T && !isOwner() ? " · open to accept" : ""}</div>`}${b.discount_kind ? `<div class="tiny">${DISC[b.discount_kind] || b.discount_kind}${b.partner_code ? " " + esc(b.partner_code) : ""}</div>` : ""}${b.source === "manual" ? `<div class="tiny">added by hand</div>` : ""}</td>
       <td class="num">${b.status === "review" ? "at session" : b.amount === 0 ? "Free" : money(b.amount, b.currency)}${b.platform_fee != null && b.platform_fee > 0 ? `<div class="tiny">fee ${money(b.platform_fee, b.currency)}</div>` : ""}</td>
       <td><span class="status ${b.status}">${STATUS[b.status]}</span></td>
       <td><div class="actions">${actionsFor(b)}</div></td></tr>`).join("") : `<tr><td colspan="7" class="empty">No bookings match.</td></tr>`;
@@ -684,7 +685,7 @@ async function setStatus(id, status) { await ZenAPI("PATCH", "/api/admin/booking
 function openBooking(b) {
   const d = $("#drawer");
   d.innerHTML = `<button class="btn small ghost close" id="dr-close">Close</button><p class="eyebrow">Booking</p><h2>${esc(b.name)}</h2><span class="status ${b.status}">${STATUS[b.status]}</span>
-    <dl class="kv"><dt>When</dt><dd>${fmtDate(b.date)} · <input id="dr-slot" value="${esc(b.slot)}" style="width:90px;font:inherit;padding:3px 6px;border:1px solid var(--line);border-radius:6px"> ${teamIn(b.city).length ? `<select id="dr-th" style="font:inherit;padding:3px 6px;border:1px solid var(--line);border-radius:6px"><option value="">any therapist</option>${teamIn(b.city).map((t) => `<option value="${t.id}" ${t.id === b.therapist_id ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select>` : ""} <button class="btn small ghost" id="dr-save-slot">Save</button></dd>
+    <dl class="kv"><dt>When</dt><dd>${fmtDate(b.date)} · <input id="dr-slot" value="${esc(b.slot)}" style="width:90px;font:inherit;padding:3px 6px;border:1px solid var(--line);border-radius:6px"> ${isOwner() ? `${teamIn(b.city).length ? `<select id="dr-th" style="font:inherit;padding:3px 6px;border:1px solid var(--line);border-radius:6px"><option value="">any therapist</option>${teamIn(b.city).map((t) => `<option value="${t.id}" ${t.id === b.therapist_id ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select>` : ""}` : b.therapist ? `<span class="tiny">with <b>${esc(b.therapist)}</b></span>` : T ? `<button class="btn small" id="dr-accept" type="button">Accept this booking</button>` : `<span class="tiny">unassigned · the owner or a therapist accepts it</span>`} <button class="btn small ghost" id="dr-save-slot">Save</button></dd>
     <dt>City</dt><dd>${CITY_NAME[b.city]}</dd><dt>Session</dt><dd>${esc(b.service_name)}</dd><dt>Paid</dt><dd>${b.status === "review" ? "Nothing yet — pays at the session" : b.amount === 0 ? `Free (${DISC[b.discount_kind] || "reward"})` : money(b.amount, b.currency)}${b.list_amount !== b.amount ? ` <span class="tiny">list ${money(b.list_amount, b.currency)}${b.discount_kind ? " · " + (DISC[b.discount_kind] || b.discount_kind) : ""}${b.gift_code ? " " + esc(b.gift_code) : ""}${b.partner_code ? " " + esc(b.partner_code) : ""}</span>` : ""}</dd>
     <dt>Contact</dt><dd>${esc(b.phone || "")}${b.phone ? ` · <a href="https://wa.me/${b.phone.replace(/\D/g, "")}" target="_blank" rel="noopener">WhatsApp</a>` : ""}<br>${esc(b.email || "")}</dd><dt>Source</dt><dd>${b.source === "manual" ? "added by hand" : "website"}</dd><dt>Booked</dt><dd>${esc(b.created_at)}</dd></dl>
     ${b.flags?.length ? `<div class="help" style="border-color:var(--bad);background:color-mix(in srgb,var(--bad) 7%,var(--ground-3))"><b>Health: ${b.flags.map((f) => G.label("health", f)).join(", ")}.</b> Adapt the session or ask for a doctor's okay first. Details in the client's notes below.</div>` : ""}
@@ -697,6 +698,7 @@ function openBooking(b) {
     <div class="actions" style="margin-top:18px">${actionsFor(b)}</div>`;
   d.classList.add("open"); d.setAttribute("aria-hidden", "false");
   $("#dr-close").onclick = closeDrawer;
+  const acc = $("#dr-accept"); if (acc) acc.onclick = async () => { acc.disabled = true; try { const r = await ZenAPI("POST", "/api/admin/bookings/" + b.id + "/accept"); await ask({ title: "It's yours", text: `${esc(b.name)} on ${fmtDate(b.date)} is now assigned to ${r.therapist}. Say hello on WhatsApp and confirm the hour.`, ok: "OK" }); closeDrawer(); loadBookings(); if (!$("#tab-calendar").hidden) loadCalendar(); } catch (ex) { await ask({ title: "Couldn't accept it", text: ex.message, ok: "OK" }); acc.disabled = false; } };
   $("#dr-save-slot").onclick = async () => { await ZenAPI("PATCH", "/api/admin/bookings/" + b.id, { slot: $("#dr-slot").value, therapist_id: $("#dr-th")?.value ?? undefined }); $("#dr-ok").hidden = false; loadBookings(); };
   $("#dr-save-note").onclick = async () => { await ZenAPI("PATCH", "/api/admin/bookings/" + b.id, { note: $("#dr-note").value, therapist_note: $("#dr-tnote").value }); $("#dr-ok").hidden = false; };
   d.querySelectorAll("button[data-act]").forEach((btn) => (btn.onclick = async () => { await setStatus(b.id, btn.dataset.act); closeDrawer(); }));

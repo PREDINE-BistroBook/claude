@@ -4,7 +4,7 @@
 // checked the admin cookie). Everything money-related goes through stripeCheckout() in lib.js (2% platform fee).
 import { CITIES } from "./catalog.js";
 import { randomId, referralCode, signPayload, verifyPayload, getCookie, clearCookie, hashPassword } from "./auth.js";
-import { CITY_KEYS, json, clean, normEmail, isDate, isTime, fmt, now, today, addDays, feeOn, body, isLive, currentUser, scope, sendEmail, stripeCheckout, slotsFor, healthFlags, parseIntake, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, isOwner } from "./lib.js";
+import { CITY_KEYS, json, clean, normEmail, isDate, isTime, fmt, now, today, addDays, feeOn, body, isLive, currentUser, scope, sendEmail, stripeCheckout, slotsFor, healthFlags, parseIntake, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, isOwner, therapistOf, visibleWhere } from "./lib.js";
 
 const b64u = (s) => btoa(typeof s === "string" ? unescape(encodeURIComponent(s)) : String.fromCharCode(...new Uint8Array(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const cityOf = (k) => (CITY_KEYS.includes(k) ? k : null);
@@ -453,7 +453,8 @@ async function listGifts(env, admin, url) {
 // ---------- health-flag review: clients who ticked a red flag book "for review" instead of paying ----------
 async function reviewList(env, admin) {
   const city = isOwner(admin) ? null : admin.role;
-  const bookings = await env.DB.prepare("SELECT b.id, b.user_id, b.name, b.email, b.phone, b.city, b.service_name, b.date, b.slot, b.amount, b.currency, b.note, b.created_at, u.intake FROM bookings b LEFT JOIN users u ON u.id = b.user_id WHERE b.status = 'review'" + (city ? " AND b.city = ?" : "") + " ORDER BY b.date").bind(...(city ? [city] : [])).all();
+  const v = visibleWhere(admin, isOwner(admin) ? null : await therapistOf(env, admin), "b.therapist_id");
+  const bookings = await env.DB.prepare("SELECT b.id, b.user_id, b.name, b.email, b.phone, b.city, b.service_name, b.date, b.slot, b.amount, b.currency, b.note, b.created_at, b.therapist_id, u.intake FROM bookings b LEFT JOIN users u ON u.id = b.user_id WHERE b.status = 'review'" + (city ? " AND b.city = ?" : "") + v.sql + " ORDER BY b.date").bind(...(city ? [city] : []), ...v.args).all();
   bookings.results.forEach((b) => { const i = parseIntake(b.intake); b.flags = healthFlags(b.intake); b.health_notes = i?.health_notes || ""; delete b.intake; });
   const users = await env.DB.prepare("SELECT id, name, email, phone, nearest_city, intake, created_at FROM users WHERE approved = 0 AND intake IS NOT NULL" + (city ? " AND (nearest_city = ? OR city = ?)" : "") + " ORDER BY created_at DESC LIMIT 200").bind(...(city ? [city, city] : [])).all();
   const flagged = users.results.map((u) => { const i = parseIntake(u.intake); return { ...u, intake: undefined, flags: healthFlags(u.intake), health_notes: i?.health_notes || "" }; }).filter((u) => u.flags.length);
