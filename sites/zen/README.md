@@ -125,7 +125,7 @@ Keep the domain in Ash's GoDaddy/Cloudflare accounts, not Zen's: it's the one pi
 
 ## Things to know about the build
 
-- **D1 is now used** (accounts, bookings, rewards, admins). It shares the account's free-tier daily read quota with amicomiotour.com and the two demo sites; a booking site this size uses a few thousand reads a day, far from the 5M limit, but if the demo sites ever exhaust the quota this site's admin would fail too. Deleting Sergio Bar / Carrozze's databases, or moving Zen to its own Cloudflare account, removes that risk.
+- **D1 is used** (accounts, bookings, rewards, admins). Ash upgraded the Cloudflare account to the paid Workers plan on 2026-09-12, so the old free-tier daily read cap that the demo sites used to hit is gone; nothing to watch here.
 - **Prices are enforced server-side** (`src/catalog.js`). The browser sends a service id; if someone edits the page they still pay the catalog price.
 - **Emails go through Resend.** `FROM_EMAIL` must be on a verified domain. Today the only verified domain on the account is `amicomioflorence.com`, which is the Tours agency's brand. Either accept that for now or verify a Zen domain.
 - **Availability is not live.** The client picks a day and a morning/afternoon/evening window; Zen confirms the exact hour on WhatsApp. This matches how the team already works via Instagram DMs and avoids building a calendar nobody maintains. A real calendar (Cal.com embed, or a small KV-backed slot table) is a follow-up if Zen wants it.
