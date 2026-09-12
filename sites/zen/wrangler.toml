@@ -25,6 +25,9 @@ crons = ["15 * * * *"]
 #R2# binding = "PHOTOS"
 #R2# bucket_name = "zen-photos"
 
+[ai]
+binding = "AI"   # Workers AI: translates team profiles to Italian / Arabic on save (and hourly for anything missing)
+
 [[d1_databases]]
 binding = "DB"
 database_name = "zen-recovery"

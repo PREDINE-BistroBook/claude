@@ -30,7 +30,8 @@
 
 import { CITIES, SLOTS } from "./catalog.js";
 import { randomId, signPayload, verifyPayload, getCookie, setCookie, clearCookie, hashPassword, verifyPassword } from "./auth.js";
-import { CITY_KEYS, USER_COOKIE, ADMIN_COOKIE, json, clean, normEmail, isDate, isTime, fmt, now, today, feeOn, body, isLive, parseIntake, healthFlags, settings, currentUser, currentAdmin, scope, sendEmail, sendSms, stripeCheckout, slotsFor, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, maybeRewardLoyalty, isPlatform, isOwner, seesAll, therapistOf, visibleWhere, canSeeBooking, isPartner, isEmployee, managesCity } from "./lib.js";
+import { CITY_KEYS, USER_COOKIE, ADMIN_COOKIE, json, clean, normEmail, isDate, isTime, fmt, now, today, feeOn, body, isLive, parseIntake, healthFlags, settings, currentUser, currentAdmin, scope, sendEmail, sendSms, stripeCheckout, slotsFor, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, maybeRewardLoyalty, isPlatform, isOwner, seesAll, therapistOf, visibleWhere, canSeeBooking, isPartner, isEmployee, managesCity, pickLang, userLang } from "./lib.js";
+import { M, paidLineFor } from "./mail.js";
 import { featureRoute, adminFeatureRoute, giftPaid, packagePaid, authFlags } from "./features.js";
 import { runCron } from "./cron.js";
 
@@ -148,11 +149,7 @@ async function requestLink(req, env) {
     created = true;
   }
   let link; try { link = await loginLink(env, user.id); } catch (e) { if (e.status) return json({ error: e.message }, e.status); throw e; }
-  await sendEmail(env, {
-    to: email,
-    subject: created ? "Welcome to Zen Recovery — your sign-in link" : "Your Zen Recovery sign-in link",
-    text: [`Hi ${user.name},`, ``, `Tap to sign in (the link works for 20 minutes):`, link, ``, `If you didn't ask for this, ignore it.`, ``, `Zen Recovery`].join("\n"),
-  });
+  await sendEmail(env, { to: email, ...M("magic_link", pickLang(b.lang, user.lang), { name: user.name, link, created }) });
   return json({ ok: true, created, ...(env.DEV_MAGIC_LINK === "1" ? { link } : {}) });
 }
 async function loginLink(env, userId) {
@@ -334,7 +331,7 @@ async function checkout(req, env) {
   }
   const flagged = Boolean(b.flagged) || Boolean(user && !user.approved && healthFlags(user.intake).length);
   const id = randomId();
-  const base = { id, user_id: user?.id || null, email, name, phone, city: cityKey, service_id: svc.id, service_name: svc.name, date, slot, note, list_amount: list, amount, currency: city.currency, discount_kind, credit_id: credit?.id || null, platform_fee: feeOn(amount), therapist_id, package_id: pack?.id || null, gift_code: gift?.code || null, partner_code: partner?.code || null };
+  const base = { lang: pickLang(b.lang, user?.lang), id, user_id: user?.id || null, email, name, phone, city: cityKey, service_id: svc.id, service_name: svc.name, date, slot, note, list_amount: list, amount, currency: city.currency, discount_kind, credit_id: credit?.id || null, platform_fee: feeOn(amount), therapist_id, package_id: pack?.id || null, gift_code: gift?.code || null, partner_code: partner?.code || null };
 
   if (flagged) { // no card: a therapist checks the health answers first
     await insertBooking(env, { ...base, status: "review" });
@@ -362,7 +359,7 @@ async function checkout(req, env) {
 }
 
 async function insertBooking(env, o) {
-  const cols = ["id", "user_id", "email", "name", "phone", "city", "service_id", "service_name", "date", "slot", "note", "list_amount", "amount", "currency", "discount_kind", "credit_id", "platform_fee", "status", "source", "stripe_session", "payment_intent", "paid_at", "done_at", "therapist_id", "package_id", "gift_code", "partner_code"];
+  const cols = ["id", "user_id", "email", "name", "phone", "city", "service_id", "service_name", "date", "slot", "note", "list_amount", "amount", "currency", "discount_kind", "credit_id", "platform_fee", "status", "source", "stripe_session", "payment_intent", "paid_at", "done_at", "therapist_id", "package_id", "gift_code", "partner_code", "lang"];
   await env.DB.prepare(`INSERT INTO bookings (${cols.join(",")}) VALUES (${cols.map(() => "?").join(",")})`).bind(...cols.map((c) => o[c] ?? (c === "source" ? "web" : null))).run();
 }
 // Use up whatever paid for the booking (reward credit, gift, package session). restore() undoes it on cancel.
@@ -423,7 +420,7 @@ async function whereLine(env, bk) {
 // After a booking is paid (card, free reward, or manual): referral reward for the inviter, emails to Zen and the client.
 async function afterPaid(env, bk) {
   if (bk.user_id) await maybeRewardReferrer(env, bk.user_id);
-  const city = CITIES[bk.city], exact = isTime(bk.slot), th = await therapistName(env, bk.therapist_id), where = await whereLine(env, bk);
+  const city = CITIES[bk.city], exact = isTime(bk.slot), th = await therapistName(env, bk.therapist_id), where = await whereLine(env, bk), lang = pickLang(bk.lang, await userLang(env, bk.user_id));
   await Promise.all([
     sendEmail(env, {
       to: await notifyList(env, bk.city, bk.therapist_id),
@@ -432,21 +429,16 @@ async function afterPaid(env, bk) {
         `Client:   ${bk.name}`, `WhatsApp: ${bk.phone}`, `Email:    ${bk.email}`, `Note:     ${bk.note || "—"}`, bk.partner_code ? `Partner:  ${bk.partner_code}` : null, ``, `Paid:     ${paidLine(bk)}`, ``,
         exact ? `The time is fixed. Mark it "Confirmed" in the admin once you've said hello on WhatsApp: ${env.SITE_URL}/admin` : `Confirm the exact hour with the client on WhatsApp, then mark it "Confirmed" in the admin: ${env.SITE_URL}/admin`].filter((l) => l !== null).join("\n"),
     }),
-    sendEmail(env, {
-      to: bk.email,
-      subject: `Your Zen Recovery session in ${city.name} — ${bk.date}`,
-      text: [`Hi ${bk.name},`, ``, `Your session is reserved: ${bk.service_name}, ${bk.date}, ${slotLabel(bk.slot)}${th ? ` with ${th}` : ""}. ${paidLine(bk)}.`, ``, where, where ? `` : null,
-        exact ? `Zen will message you on WhatsApp (${bk.phone}) ${where ? "before the session with anything to bring" : "with the address and anything to bring"}.` : `Zen will message you on WhatsApp (${bk.phone}) to confirm the exact hour.`, ``,
-        `Before: eat something light, drink water. After: keep warm, no cold showers or swimming for about six hours.`, ``,
-        `Your sessions, rewards and invite link: ${env.SITE_URL}/account`, ``, `See you soon,`, `Zen Recovery`].filter((l) => l !== null).join("\n"),
-    }),
+    sendEmail(env, { to: bk.email, ...M("booking_confirmed", lang, { name: bk.name, city: cityNameIn(bk.city, lang), service: bk.service_name, date: bk.date, slot: slotLabel(bk.slot), therapist: th, paid: paidLineFor(lang, bk, fmt), where: where ? where.replace(/^Where:\s*/, "") : "", exact, phone: bk.phone, site: env.SITE_URL }) }),
   ]);
 }
+const CITY_I18N = { cairo: { it: "Il Cairo", ar: "القاهرة" }, dahab: { it: "Dahab", ar: "دهب" }, florence: { it: "Firenze", ar: "فلورنسا" } };
+const cityNameIn = (k, lang) => CITY_I18N[k]?.[lang] || CITIES[k]?.name || k;
 async function afterReview(env, bk) {
-  const city = CITIES[bk.city];
+  const city = CITIES[bk.city], lang = pickLang(bk.lang, await userLang(env, bk.user_id));
   await Promise.all([
     sendEmail(env, { to: await notifyList(env, bk.city, bk.therapist_id), subject: `Needs a therapist's OK · ${city.name} · ${bk.name} · ${bk.date}`, text: [`${bk.name} booked ${bk.service_name} for ${bk.date} ${slotLabel(bk.slot)} but ticked a health red flag (pregnancy, blood thinners, bleeding/heart condition, recent surgery…).`, ``, `Nothing was charged. Read their answers and approve or cancel in the admin → Needs review: ${env.SITE_URL}/admin`, ``, `WhatsApp: ${bk.phone} · Email: ${bk.email}`, `Note: ${bk.note || "—"}`].join("\n") }),
-    sendEmail(env, { to: bk.email, subject: `Zen Recovery — one quick check before ${bk.date}`, text: [`Hi ${bk.name},`, ``, `Thanks for booking ${bk.service_name} in ${city.name} on ${bk.date} (${slotLabel(bk.slot)}).`, ``, `Because of what you told us about your health, a therapist looks at your answers first — that's normal and usually quick. Nothing has been charged. You'll get a confirmation (and a WhatsApp) once it's approved, and you pay at the session.`, ``, `Zen Recovery`].join("\n") }),
+    sendEmail(env, { to: bk.email, ...M("booking_review", lang, { name: bk.name, city: cityNameIn(bk.city, lang), service: bk.service_name, date: bk.date, slot: slotLabel(bk.slot) }) }),
   ]);
 }
 

@@ -6,6 +6,8 @@ const lines = (s) => String(s || "").split(/\n+/).map((l) => l.trim()).filter(Bo
 const cityName = (k) => t((CITIES[k] || {}).name || k);
 const words = (s) => String(s).split(/\s+/).filter(Boolean).map((w) => `<span class="w"><span>${esc(w)}</span></span>`).join(" ");
 const RTL = () => document.documentElement.dir === "rtl";
+// A profile field in the language the visitor is reading (Italian / Arabic from the translated copy), else the original.
+const LF = (th, k) => (I.lang !== "en" && th.i18n && th.i18n[I.lang] && th.i18n[I.lang][k]) || th[k] || "";
 const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
 let LIST = [], cityFilter = "";
 
@@ -16,16 +18,16 @@ function card(th, i) {
   const book = `booking.html?city=${encodeURIComponent(th.city)}&therapist=${encodeURIComponent(th.id)}`;
   const first = th.name.split(" ")[0];
   const photo = th.photo ? `<img src="${esc(th.photo)}" alt="${esc(th.name)}" loading="${i < 2 ? "eager" : "lazy"}">` : `<span class="ph-init">${esc(th.name.slice(0, 1))}</span>`;
-  const text = paras(th.story).length ? paras(th.story) : th.bio ? [th.bio] : [];
+  const text = paras(LF(th, "story")).length ? paras(LF(th, "story")) : LF(th, "bio") ? [LF(th, "bio")] : [];
   return `<article class="tm-feature ${i % 2 ? "flip" : ""}" data-city="${esc(th.city)}" data-id="${esc(th.id)}">
     <div class="tm-photo"><div class="tm-photo-in">${photo}</div><span class="tm-num">${String(i + 1).padStart(2, "0")}</span><span class="tm-citytag"><i class="dot ${esc(th.city)}"></i>${cityName(th.city)}</span></div>
     <div class="tm-body">
-      <p class="eyebrow tm-role">${esc(th.title || t("Therapist"))}</p>
-      <h2 class="tm-name">${words(th.name)}</h2>
+      <p class="eyebrow tm-role">${esc(LF(th, "title") || t("Therapist"))}</p>
+      <h2 class="tm-name" dir="auto">${words(th.name)}</h2>
       <svg class="tm-line" viewBox="0 0 160 14" aria-hidden="true"><path d="M2 9 C 30 2, 60 13, 90 7 S 140 3, 158 8" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
-      <p class="tm-meta">${th.languages ? `<span>${t("Speaks {langs}", { langs: esc(th.languages) })}</span>` : ""}${th.area ? `<span>${t("Works in {area}", { area: esc(th.area) })}${th.maps_url ? ` · <a href="${esc(th.maps_url)}" target="_blank" rel="noopener">${t("Map")}</a>` : ""}</span>` : ""}</p>
+      <p class="tm-meta">${LF(th, "languages") ? `<span>${t("Speaks {langs}", { langs: esc(LF(th, "languages")) })}</span>` : ""}${LF(th, "area") ? `<span>${t("Works in {area}", { area: esc(LF(th, "area")) })}${th.maps_url ? ` · <a href="${esc(th.maps_url)}" target="_blank" rel="noopener">${t("Map")}</a>` : ""}</span>` : ""}</p>
       <div class="tm-text">${text.map((p) => `<p class="tm-story">${esc(p)}</p>`).join("")}</div>
-      ${th.certs ? `<h3 class="tm-h">${t("Certifications")}</h3><ul class="tm-certs">${lines(th.certs).map((c) => `<li><i></i><span>${esc(c)}</span></li>`).join("")}</ul>` : ""}
+      ${LF(th, "certs") ? `<h3 class="tm-h">${t("Certifications")}</h3><ul class="tm-certs">${lines(LF(th, "certs")).map((c) => `<li><i></i><span>${esc(c)}</span></li>`).join("")}</ul>` : ""}
       <div class="tm-actions"><a class="btn" href="${book}">${t("Book with {name}", { name: esc(first) })}</a>${th.instagram ? `<a class="btn ghost" href="https://instagram.com/${esc(th.instagram)}" target="_blank" rel="noopener">${t("Follow on Instagram")} · @${esc(th.instagram)}</a>` : ""}</div>
     </div>
   </article>`;
