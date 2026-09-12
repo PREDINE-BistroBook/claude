@@ -54,15 +54,16 @@
   .cities{display:flex; gap:10px; flex-wrap:wrap}
   .cities a{display:inline-flex; align-items:center; gap:8px; padding:12px 18px; border-radius:999px; background:var(--ground); color:var(--ink); text-decoration:none; font-weight:500}
   .cities a i{width:9px; height:9px; border-radius:50%; display:inline-block}
-  .others{max-width:1180px; margin:40px auto 0; display:grid; gap:12px}
-  .others-list{display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:8px}
-  .others-list a{display:grid; gap:6px; padding:14px 16px; border:1px solid var(--line); border-radius:14px; text-decoration:none; color:inherit; background:var(--ground-3); font-size:.92rem}
-  .others-list a b{font-family:var(--display); font-weight:400; font-size:1.05rem} .others-list a span{color:var(--ink-mute); font-size:.82rem}
-  .others-list a[aria-current="page"]{border-color:var(--ink); background:var(--ink); color:var(--ground)} .others-list a[aria-current="page"] span{color:rgba(237,238,234,.6)}
+  .others-list{display:flex; flex-wrap:wrap; gap:8px; margin:4px 0 10px}
+  .others-list a{display:inline-flex; align-items:center; gap:8px; padding:9px 14px; border:1px solid rgba(237,238,234,.22); border-radius:999px; text-decoration:none; color:rgba(237,238,234,.85); font-size:.9rem; transition:border-color .2s, background .2s}
+  .others-list a:hover{border-color:rgba(237,238,234,.6)}
+  .others-list a b{font-weight:500} .others-list a span{display:none}
+  .others-list a[aria-current="page"]{background:var(--ground); color:var(--ink); border-color:var(--ground)}
+  @media (max-width:640px){ .others-list{overflow-x:auto; flex-wrap:nowrap; padding-bottom:4px; margin-inline:calc(var(--gutter) * -1); padding-inline:var(--gutter); scrollbar-width:none} .others-list::-webkit-scrollbar{display:none} .others-list a{white-space:nowrap; flex:none} }
   .back{display:inline-flex; gap:8px; align-items:center; color:var(--mark-soft); text-decoration:none; font-size:.9rem}
   footer{padding:32px var(--gutter); font-size:.82rem; color:rgba(231,237,232,.55); display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; background:var(--ink)}
   footer a{color:inherit}
-  @media (max-width:640px){ .hide-sm{display:none} .top nav{gap:8px} .top .btn.small{padding:7px 10px} }
+  @media (max-width:640px){ .hide-sm{display:none} .top nav{gap:8px; font-size:.86rem} .top nav a{white-space:nowrap} .top .btn.small{padding:7px 10px} }
   @media (prefers-reduced-motion:reduce){.step{opacity:1!important}}
 </style>
 </head>
@@ -81,6 +82,7 @@
   <section class="explain" aria-labelledby="m-title">
     <div class="explain-head">
       <a class="back" href="index.html#methods">← All methods</a>
+      <div class="others-list" id="others" aria-label="Methods"></div>
       <p class="eyebrow">How it works</p>
       <h1 id="m-title"></h1>
       <p class="tag" id="m-tag"></p>
@@ -105,10 +107,6 @@
       <h2 id="b-title"></h2>
       <p>Pick your city. The session is preselected in the booking form; prices are in the local currency.</p>
       <div class="cities" id="b-cities"></div>
-    </div>
-    <div class="others">
-      <p class="eyebrow">Other methods</p>
-      <div class="others-list" id="others"></div>
     </div>
   </section>
 </main>
@@ -143,6 +141,7 @@ function render() {
   $("#b-title").textContent = t("{method} in Cairo, Dahab or Florence.", { method: t(m.title) });
   $("#b-cities").innerHTML = Object.entries(CITY).map(([k, n]) => `<a href="booking.html?city=${k}&svc=${id}"><i style="background:var(--${k})"></i>${t("Book in {city}", { city: t(n) })}</a>`).join("");
   $("#others").innerHTML = M.ORDER.map((k) => `<a href="method.html?m=${k}" ${k === id ? 'aria-current="page"' : ""}><b>${esc(t(M.METHODS[k].title))}</b><span>${esc(t(M.METHODS[k].tagline))}</span></a>`).join("");
+  const cur = $("#others a[aria-current]"); if (cur) $("#others").scrollLeft = Math.max(0, cur.offsetLeft - 16); // phones: the current chip starts in view
   I.apply();
 }
 render();
