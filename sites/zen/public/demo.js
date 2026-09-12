@@ -62,13 +62,16 @@
   const packs = [{ id: "p1", city: "cairo", name: "5 sessions", sessions: 5, amount: 400000, currency: "egp", months_valid: 6, active: 1, sort: 0 }, { id: "p2", city: "dahab", name: "5 sessions", sessions: 5, amount: 400000, currency: "egp", months_valid: 6, active: 1, sort: 0 }, { id: "p3", city: "florence", name: "5 sessions", sessions: 5, amount: 25000, currency: "eur", months_valid: 6, active: 1, sort: 0 }];
   const partners = [{ id: "pa1", code: "DIVERS10", name: "Dahab Divers", city: "dahab", pct: 10, active: 1, bookings: 4, this_month: 1, revenue: 360000, last_booking: iso(today) }];
   const availability = [], blocked = [];
+  const DESC = { man: "Deep tissue and sports massage, hands only.", dry: "Cups placed and left still. The classic session.", slide: "Oiled skin, gliding cups. Massage with the lift built in.", fire: "Glass cups, a flash of flame, deeper warmth.", hij: "Wet cupping with sterile single-use equipment.", face: "Light, gliding, no marks." };
+  const services = Object.entries(CITY).flatMap(([city, c]) => c.services.map(([id, name, amount], i) => ({ id, city, name: name.split(" · ")[0], minutes: Number(name.split(" · ")[1]), amount, currency: c.currency, description: DESC[id.split("-")[1]] || "", active: 1, sort: i })));
+  const svcMeta = (k) => services.filter((x) => x.city === k && x.active).map((x) => ({ id: x.id, name: `${x.name} · ${x.minutes} min · ${CITY[k].name}`, short: x.name, amount: x.amount, minutes: x.minutes, description: x.description }));
 
   // demo "sessions"
   const S = { get user() { try { return sessionStorage.getItem("zen_demo_user"); } catch { return null; } }, set user(v) { try { v ? sessionStorage.setItem("zen_demo_user", v) : sessionStorage.removeItem("zen_demo_user"); } catch {} },
               get admin() { try { return sessionStorage.getItem("zen_demo_admin"); } catch { return null; } }, set admin(v) { try { v ? sessionStorage.setItem("zen_demo_admin", v) : sessionStorage.removeItem("zen_demo_admin"); } catch {} } };
   const live = (b) => ["paid", "confirmed", "done"].includes(b.status);
   const err = (msg, status = 400) => { throw Object.assign(new Error(msg), { status, data: { error: msg } }); };
-  const cityMeta = () => Object.fromEntries(Object.entries(CITY).map(([k, c]) => [k, { name: c.name, currency: c.currency, services: c.services.map(([id, name, amount]) => ({ id, name, amount })) }]));
+  const cityMeta = () => Object.fromEntries(Object.entries(CITY).map(([k, c]) => [k, { name: c.name, currency: c.currency, services: svcMeta(k) }]));
 
   function bundle(u) {
     const mine = bookings.filter((b) => b.user_id === u.id && live(b));
@@ -83,6 +86,7 @@
       const url = new URL(path, location.origin); path = url.pathname; const qp = url.searchParams;
       // ----- client -----
       if (path === "/api/status") return { live: false, preview: true, google: false, apple: false, sms: false, demo: true, settings: { loyalty_every: settings.loyalty_every, referral_pct: settings.referral_pct, birthday_pct: settings.birthday_pct, package_pct: settings.package_pct }, gmaps: settings.gmaps, whatsapp: settings.whatsapp, review: settings.review };
+      if (path === "/api/catalog") return { cities: Object.fromEntries(Object.entries(CITY).map(([k, c]) => [k, { name: c.name, currency: c.currency.toUpperCase(), address: null, team: null, whatsapp: null, gmaps: null, services: svcMeta(k).map((x) => ({ id: x.id, name: x.short, dur: x.minutes, price: x.amount, desc: x.description })) }])) };
       if (path === "/api/slots") return { mode: "windows", slots: [] };
       if (path === "/api/team") { const c = qp.get("city"); return { therapists: therapists.filter((t) => t.active && (!c || t.city === c)) }; }
       if (path === "/api/packages") { const c = qp.get("city"); return { packages: packs.filter((p) => p.active && (!c || p.city === c)).map((p) => ({ ...p, per_session: Math.round(p.amount / p.sessions) })) }; }
@@ -114,6 +118,10 @@
         const city = scopeOf(a, qp.get("city") || body.city);
         const inScope = (b) => !city || b.city === city;
         if (path === "/api/admin/me") return { admin: a, cities: cityMeta(), settings, photos: "d1", live: false, demo: true };
+        if (path === "/api/admin/services" && method === "GET") return { rows: services.filter((x) => !city || x.city === city).map((x) => ({ ...x, bookings: bookings.filter((b) => b.service_id === x.id).length })) };
+        if (path === "/api/admin/services" && method === "POST") { const ck = city || body.city; const id = ck.slice(0, 3) + "-" + body.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"); services.push({ id, city: ck, name: body.name, minutes: body.minutes || 60, amount: body.amount, currency: CITY[ck].currency, description: body.description || "", active: body.active === false ? 0 : 1, sort: services.length }); return { ok: true, id }; }
+        { const sm = path.match(/^\/api\/admin\/services\/([a-z0-9-]+)$/); if (sm) { const i = services.findIndex((x) => x.id === sm[1]); if (i < 0) err("Not found", 404); if (method === "DELETE") { if (bookings.some((b) => b.service_id === sm[1])) { services[i].active = 0; return { ok: true, hidden: true }; } services.splice(i, 1); return { ok: true, deleted: true }; } if (method === "PATCH") { const x = services[i]; if (body.name) x.name = body.name; if (body.minutes) x.minutes = body.minutes; if (Number.isInteger(body.amount)) x.amount = body.amount; if (body.description !== undefined) x.description = body.description; if (body.active !== undefined) x.active = body.active ? 1 : 0; return { ok: true }; } } }
+        if (path === "/api/admin/profile") { Object.assign(a, { name: body.name || a.name, phone: body.phone ?? a.phone, photo: body.photo === undefined ? a.photo : body.photo, notify: body.notify === undefined ? (a.notify ?? 1) : body.notify ? 1 : 0 }); return { admin: a }; }
         if (path === "/api/admin/availability" && method === "GET") return { rows: availability.filter((r) => !city || r.city === city) };
         if (path === "/api/admin/availability" && method === "POST") { (body.weekdays || []).forEach((d) => availability.push({ id: "av" + availability.length, city: body.city, therapist_id: body.therapist_id || null, weekday: d, start: body.start, end: body.end, slot_minutes: body.slot_minutes || 60 })); return { ok: true }; }
         if (path === "/api/admin/blocked" && method === "GET") return { rows: blocked.filter((r) => !city || r.city === city) };
@@ -180,6 +188,7 @@
         if (path === "/api/admin/admins" && method === "GET") { if (a.role !== "all") err("Only the owner can see this.", 403); return { admins }; }
         if (path === "/api/admin/admins" && method === "POST") { if (a.role !== "all") err("Only the owner can add admins.", 403); if (!body.email || !body.name || (body.password || "").length < 10) err("Name, email, role and a password of at least 10 characters."); admins.push({ id: "a" + (admins.length + 1), email: body.email, name: body.name, role: body.role, created_at: iso(today), last_login: null }); return { ok: true }; }
         mm = path.match(/^\/api\/admin\/admins\/(\w+)$/);
+        if (mm && method === "PATCH") { if (a.role !== "all") err("Only the owner can change admins.", 403); const x = admins.find((y) => y.id === mm[1]); if (!x) err("Not found", 404); if (body.role) x.role = body.role; if (body.name) x.name = body.name; return { ok: true }; }
         if (mm && method === "DELETE") { if (mm[1] === a.id) err("You can't remove yourself."); const i = admins.findIndex((x) => x.id === mm[1]); if (i >= 0) admins.splice(i, 1); return { ok: true }; }
         if (path === "/api/admin/password") { if ((body.password || "").length < 10) err("Use at least 10 characters."); return { ok: true }; }
       }

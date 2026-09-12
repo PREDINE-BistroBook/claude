@@ -980,6 +980,12 @@ function applySettings(st) {
   const bd = ZenGuide.SETTINGS.birthday_pct || 20; $("#rw-bday").textContent = bd; $("#rw-bday-title").textContent = t("Your birthday month: {pct}% off.", { pct: bd });
 }
 let ST = { settings: {}, gmaps: {}, whatsapp: {}, review: {} };
+// Services, prices, addresses and team lines come from the admin (D1). The CITIES above is the fallback for the preview build.
+fetch("/api/catalog").then(r => (r.headers.get("content-type") || "").includes("json") ? r.json() : null).then(d => {
+  if (!d?.cities) return;
+  for (const [k, c] of Object.entries(d.cities)) { if (!CITIES[k]) continue; if (c.services?.length) CITIES[k].services = c.services; if (c.address?.length) CITIES[k].address = c.address; if (c.team) CITIES[k].team = c.team; if (c.whatsapp) CITIES[k].whatsapp = c.whatsapp; }
+  if (city) { renderServices(); updateSummary(); renderPrep(); } giftServices();
+}).catch(() => {});
 fetch("/api/status").then(r => (r.headers.get("content-type") || "").includes("json") ? r.json() : {}).then(s => { ST = { ...ST, ...s }; applySettings(s.settings); if (city) placeLinks(); }).catch(() => applySettings());
 document.addEventListener("zen:lang", () => { applySettings(); if (city) { renderServices(); updateSummary(); renderPrep(); $("#chosen-text").textContent = t("You're booking in {city}.", { city: t(CITIES[city].name) }); } });
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;

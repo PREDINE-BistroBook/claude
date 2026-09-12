@@ -4,7 +4,7 @@
 // checked the admin cookie). Everything money-related goes through stripeCheckout() in lib.js (2% platform fee).
 import { CITIES } from "./catalog.js";
 import { randomId, referralCode, signPayload, verifyPayload, getCookie, clearCookie } from "./auth.js";
-import { CITY_KEYS, json, clean, normEmail, isDate, isTime, fmt, now, today, addDays, feeOn, body, isLive, currentUser, scope, sendEmail, stripeCheckout, slotsFor, healthFlags, parseIntake, createUser, sessionCookieFor, welcomeEmail } from "./lib.js";
+import { CITY_KEYS, json, clean, normEmail, isDate, isTime, fmt, now, today, addDays, feeOn, body, isLive, currentUser, scope, sendEmail, stripeCheckout, slotsFor, healthFlags, parseIntake, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList } from "./lib.js";
 
 const b64u = (s) => btoa(typeof s === "string" ? unescape(encodeURIComponent(s)) : String.fromCharCode(...new Uint8Array(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const cityOf = (k) => (CITY_KEYS.includes(k) ? k : null);
@@ -74,7 +74,7 @@ export async function packagePaid(env, rowId, paymentIntent) {
   await env.DB.prepare("UPDATE client_packages SET status = 'paid', paid_at = ?, expires_at = ? WHERE id = ?").bind(now(), exp.toISOString().slice(0, 10), rowId).run();
   const u = await env.DB.prepare("SELECT email, name FROM users WHERE id = ?").bind(cp.user_id).first();
   await sendEmail(env, { to: u.email, subject: `Your ${cp.name} is ready — ${cp.sessions} sessions in ${CITIES[cp.city].name}`, text: [`Hi ${u.name.split(" ")[0]},`, ``, `${cp.sessions} sessions are waiting in your account, valid until ${exp.toISOString().slice(0, 10)}. When you book, pick "Use my package" and there's nothing to pay.`, ``, `${env.SITE_URL}/?city=${cp.city}#book`, ``, `Zen Recovery`].join("\n") });
-  await sendEmail(env, { to: env.ZEN_NOTIFY_EMAIL, subject: `Package sold · ${CITIES[cp.city].name} · ${cp.name} · ${fmt(cp.amount, cp.currency)}`, text: `${u.name} (${u.email}) bought ${cp.name} (${cp.sessions} sessions) in ${CITIES[cp.city].name} for ${fmt(cp.amount, cp.currency)}.` });
+  await sendEmail(env, { to: await notifyList(env, cp.city), subject: `Package sold · ${CITIES[cp.city].name} · ${cp.name} · ${fmt(cp.amount, cp.currency)}`, text: `${u.name} (${u.email}) bought ${cp.name} (${cp.sessions} sessions) in ${CITIES[cp.city].name} for ${fmt(cp.amount, cp.currency)}.` });
 }
 async function myPackages(req, env) {
   const u = await currentUser(req, env); if (!u) return need(u);
@@ -85,7 +85,7 @@ async function myPackages(req, env) {
 // ---------- gift vouchers ----------
 async function giftCheckout(req, env) {
   const b = await body(req);
-  const city = CITIES[b.city], svc = city?.services[b.service];
+  const city = CITIES[b.city], svc = city ? await serviceOf(env, b.city, clean(b.service, 40)) : null;
   if (!city || !svc) return json({ error: "Pick a city and a session." }, 400);
   const buyer_name = clean(b.buyer_name, 80), buyer_email = normEmail(b.buyer_email), recipient_name = clean(b.recipient_name, 80), recipient_email = normEmail(b.recipient_email), message = clean(b.message, 300);
   if (!buyer_name || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(buyer_email) || !recipient_name) return json({ error: "Your name and email, and who the gift is for." }, 400);
@@ -94,7 +94,7 @@ async function giftCheckout(req, env) {
   const { url, id: sid } = await stripeCheckout(env, { amount: svc.amount, currency: city.currency, name: `Gift: ${svc.name}`, description: `For ${recipient_name}. Sent by email as a code after payment.`, email: buyer_email,
     success: `${env.SITE_URL}/success.html?gift=1`, cancel: `${env.SITE_URL}/#gift`, metadata: { kind: "gift", gift_id: id } });
   await env.DB.prepare("INSERT INTO gifts (id, code, city, service_id, service_name, amount, currency, platform_fee, buyer_name, buyer_email, recipient_name, recipient_email, message, status, stripe_session) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-    .bind(id, code, b.city, b.service, svc.name, svc.amount, city.currency, feeOn(svc.amount), buyer_name, buyer_email, recipient_name, recipient_email || null, message, "pending", sid).run();
+    .bind(id, code, b.city, svc.id, svc.name, svc.amount, city.currency, feeOn(svc.amount), buyer_name, buyer_email, recipient_name, recipient_email || null, message, "pending", sid).run();
   return json({ url });
 }
 export async function giftPaid(env, giftId) {
@@ -105,7 +105,7 @@ export async function giftPaid(env, giftId) {
   const lines = [`${g.buyer_name} has given you a ${g.service_name.split(" · ")[0]} session with Zen Recovery in ${cityName}.`, ``, g.message ? `"${g.message}"` : null, g.message ? `` : null, `Your gift code: ${g.code}`, ``, `Book your session here (the code fills itself in): ${link}`, ``, `Zen Recovery`].filter((l) => l !== null);
   await sendEmail(env, { to: g.buyer_email, subject: `Your gift for ${g.recipient_name} — code ${g.code}`, text: [`Hi ${g.buyer_name.split(" ")[0]},`, ``, `Thank you. The gift is paid: ${g.service_name} in ${cityName}.`, ``, `Code: ${g.code}`, `Booking link: ${link}`, ``, g.recipient_email ? `We've emailed ${g.recipient_name} too.` : `Forward the code or the link to ${g.recipient_name}.`, ``, `Zen Recovery`].join("\n") });
   if (g.recipient_email) await sendEmail(env, { to: g.recipient_email, subject: `A gift from ${g.buyer_name}: a Zen Recovery session`, text: lines.join("\n") });
-  await sendEmail(env, { to: env.ZEN_NOTIFY_EMAIL, subject: `Gift sold · ${cityName} · ${g.service_name} · ${fmt(g.amount, g.currency)}`, text: `${g.buyer_name} (${g.buyer_email}) bought a gift for ${g.recipient_name}. Code ${g.code}.` });
+  await sendEmail(env, { to: await notifyList(env, g.city), subject: `Gift sold · ${cityName} · ${g.service_name} · ${fmt(g.amount, g.currency)}`, text: `${g.buyer_name} (${g.buyer_email}) bought a gift for ${g.recipient_name}. Code ${g.code}.` });
 }
 async function giftLookup(env, code) {
   const g = await env.DB.prepare("SELECT code, city, service_id, service_name, amount, currency, status, recipient_name FROM gifts WHERE code = ?").bind(code.toUpperCase()).first();
@@ -224,6 +224,10 @@ export async function adminFeatureRoute(req, env, url, admin) {
   const p = url.pathname, m = req.method;
   const owner = () => (admin.role === "all" ? null : json({ error: "Only the owner can do this." }, 403));
   let mm;
+  if (p === "/api/admin/services" && m === "GET") return listServices(env, admin, url);
+  if (p === "/api/admin/services" && m === "POST") return saveService(req, env, admin, null);
+  if ((mm = p.match(/^\/api\/admin\/services\/([a-z0-9-]+)$/)) && m === "PATCH") return saveService(req, env, admin, mm[1]);
+  if (mm && m === "DELETE") return deleteService(env, admin, mm[1]);
   if (p === "/api/admin/availability" && m === "GET") return listRows(env, admin, url, "availability", "ORDER BY city, weekday, start");
   if (p === "/api/admin/availability" && m === "POST") return addAvailability(req, env, admin);
   if ((mm = p.match(/^\/api\/admin\/availability\/([a-z0-9]+)$/)) && m === "DELETE") return deleteRow(env, admin, "availability", mm[1]);
@@ -257,6 +261,45 @@ export async function adminFeatureRoute(req, env, url, admin) {
 }
 
 const cityFilter = (admin, url) => scope(admin, url.searchParams.get("city"));
+
+// ---------- services and prices (what the website sells) ----------
+async function listServices(env, admin, url) {
+  const city = cityFilter(admin, url);
+  const r = await env.DB.prepare("SELECT s.*, (SELECT COUNT(*) FROM bookings b WHERE b.service_id = s.id AND b.status IN ('paid','confirmed','done','review')) bookings FROM services s WHERE 1=1" + (city ? " AND s.city = ?" : "") + " ORDER BY s.city, s.sort, s.name").bind(...(city ? [city] : [])).all();
+  return json({ rows: r.results, city });
+}
+async function saveService(req, env, admin, id) {
+  const b = await body(req);
+  const cur = id ? await env.DB.prepare("SELECT * FROM services WHERE id = ?").bind(id).first() : null;
+  if (id && !cur) return json({ error: "Not found" }, 404);
+  if (cur && admin.role !== "all" && cur.city !== admin.role) return json({ error: "Not your city." }, 403);
+  const city = cur ? cur.city : cityFor(admin, b.city);
+  const name = clean(b.name, 60) || cur?.name;
+  const minutes = Number.isInteger(b.minutes) && b.minutes >= 10 && b.minutes <= 240 ? b.minutes : cur?.minutes || 60;
+  const amount = Number.isInteger(b.amount) && b.amount >= 0 && b.amount < 100000000 ? b.amount : cur?.amount;
+  if (!city || !name || amount === undefined || amount === null) return json({ error: "City, a name and a price." }, 400);
+  const vals = [name, minutes, amount, CITIES[city].currency, b.description === undefined ? cur?.description || "" : clean(b.description, 160), b.active === undefined ? cur?.active ?? 1 : b.active ? 1 : 0, Number.isInteger(b.sort) ? b.sort : cur?.sort || 0, now()];
+  if (cur) await env.DB.prepare("UPDATE services SET name = ?, minutes = ?, amount = ?, currency = ?, description = ?, active = ?, sort = ?, updated_at = ? WHERE id = ?").bind(...vals, id).run();
+  else {
+    const base = city.slice(0, 3) + "-" + name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 20);
+    let nid = base, n = 2; while (await env.DB.prepare("SELECT 1 FROM services WHERE id = ?").bind(nid).first()) nid = `${base}-${n++}`;
+    const maxSort = (await env.DB.prepare("SELECT MAX(sort) m FROM services WHERE city = ?").bind(city).first()).m;
+    if (!Number.isInteger(b.sort)) vals[6] = (maxSort ?? -1) + 1;
+    await env.DB.prepare("INSERT INTO services (id, city, name, minutes, amount, currency, description, active, sort, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)").bind(nid, city, ...vals).run();
+    id = nid;
+  }
+  return json({ ok: true, id });
+}
+// Remove a service: gone for good if nobody ever booked it, otherwise just taken off the website (bookings keep their history).
+async function deleteService(env, admin, id) {
+  const cur = await env.DB.prepare("SELECT * FROM services WHERE id = ?").bind(id).first();
+  if (!cur) return json({ error: "Not found" }, 404);
+  if (admin.role !== "all" && cur.city !== admin.role) return json({ error: "Not your city." }, 403);
+  const used = (await env.DB.prepare("SELECT COUNT(*) n FROM bookings WHERE service_id = ?").bind(id).first()).n;
+  if (used) { await env.DB.prepare("UPDATE services SET active = 0, updated_at = ? WHERE id = ?").bind(now(), id).run(); return json({ ok: true, hidden: true }); }
+  await env.DB.prepare("DELETE FROM services WHERE id = ?").bind(id).run();
+  return json({ ok: true, deleted: true });
+}
 async function listRows(env, admin, url, table, order, extra = "") {
   const city = cityFilter(admin, url);
   const r = await env.DB.prepare(`SELECT * FROM ${table} WHERE 1=1 ${extra}` + (city ? " AND city = ?" : "") + " " + order).bind(...(city ? [city] : [])).all();

@@ -16,6 +16,23 @@ export const addDays = (d, n) => { const x = new Date(d + "T12:00:00Z"); x.setUT
 export const feeOn = (amount) => Math.round((amount * PLATFORM_FEE_BPS) / 10000);
 export const body = async (req) => (await req.json().catch(() => null)) || {};
 export const isLive = (env) => Boolean(env.STRIPE_SECRET_KEY && env.ZEN_STRIPE_ACCOUNT);
+// Services come from the D1 `services` table (editable in the admin); src/catalog.js is only the seed/fallback.
+// Shape matches the old static catalog: { cairo: { name, currency, tz, services: { id: { name, amount, minutes, description } } } }
+// Names are built as "Dry cupping · 45 min · Cairo" so bookings keep the same service_name convention.
+export async function catalog(env, { all = false } = {}) {
+  const out = {}; for (const k of CITY_KEYS) out[k] = { ...CITIES[k], services: {} };
+  let rows = [];
+  try { rows = (await env.DB.prepare("SELECT * FROM services" + (all ? "" : " WHERE active = 1") + " ORDER BY city, sort, name").all()).results; } catch (e) { console.error("services table missing, using static catalog", e.message); }
+  if (!rows.length) { for (const k of CITY_KEYS) for (const [id, s] of Object.entries(CITIES[k].services)) out[k].services[id] = { id, name: s.name, amount: s.amount, minutes: 60, description: "", active: 1, sort: 0, short: s.name.split(" · ")[0] }; return out; }
+  for (const r of rows) { if (!out[r.city]) continue; out[r.city].services[r.id] = { id: r.id, name: `${r.name} · ${r.minutes} min · ${CITIES[r.city].name}`, short: r.name, amount: r.amount, minutes: r.minutes, description: r.description || "", active: r.active, sort: r.sort }; }
+  return out;
+}
+export async function serviceOf(env, city, id) { if (!CITY_KEYS.includes(city) || !id) return null; const c = await catalog(env); return c[city].services[id] || null; }
+// Who hears about a new booking / gift / pack in a city: ZEN_NOTIFY_EMAIL plus every admin who asked for it (owner: everything).
+export async function notifyList(env, city) {
+  const rows = (await env.DB.prepare("SELECT email FROM admins WHERE notify = 1 AND (role = 'all' OR role = ?)").bind(city || "").all()).results;
+  return [...new Set([env.ZEN_NOTIFY_EMAIL, ...rows.map((r) => r.email)].filter(Boolean))];
+}
 export const FLAGS = ["pregnant", "anticoagulant", "bleeding", "heart", "diabetes", "skin", "surgery"];
 export function parseIntake(t) { try { return t ? JSON.parse(t) : null; } catch { return null; } }
 export function healthFlags(intakeText) { const i = parseIntake(intakeText); return i?.health ? i.health.filter((h) => FLAGS.includes(h)) : []; }
@@ -25,7 +42,8 @@ export async function settings(env) {
   const s = Object.fromEntries(rows.map((r) => [r.key, r.value]));
   return { loyalty_every: Number(s.loyalty_every || 10), referral_pct: Number(s.referral_pct || 40), birthday_pct: Number(s.birthday_pct || 20), package_pct: Number(s.package_pct || 15),
     platform_fee_pct: PLATFORM_FEE_BPS / 100, gmaps: { cairo: s.gmaps_cairo || "", dahab: s.gmaps_dahab || "", florence: s.gmaps_florence || "" }, whatsapp: { cairo: s.wa_cairo || "", dahab: s.wa_dahab || "", florence: s.wa_florence || "" },
-    review: { cairo: s.review_cairo || "", dahab: s.review_dahab || "", florence: s.review_florence || "" } };
+    review: { cairo: s.review_cairo || "", dahab: s.review_dahab || "", florence: s.review_florence || "" },
+    address: { cairo: s.addr_cairo || "", dahab: s.addr_dahab || "", florence: s.addr_florence || "" }, team: { cairo: s.team_cairo || "", dahab: s.team_dahab || "", florence: s.team_florence || "" } };
 }
 export async function currentUser(req, env) {
   const t = await verifyPayload(env.SESSION_SECRET, getCookie(req, USER_COOKIE));
@@ -64,8 +82,9 @@ export async function sessionCookieFor(env, userId) {
 export function scope(admin, requested) { if (admin.role !== "all") return admin.role; return CITY_KEYS.includes(requested) ? requested : null; }
 
 export async function sendEmail(env, { to, subject, text }) {
-  if (!env.RESEND_API_KEY || !to) return false;
-  const r = await fetch("https://api.resend.com/emails", { method: "POST", headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" }, body: JSON.stringify({ from: env.FROM_EMAIL, to: [to], subject, text }) });
+  const list = [...new Set((Array.isArray(to) ? to : [to]).filter(Boolean))];
+  if (!env.RESEND_API_KEY || !list.length) return false;
+  const r = await fetch("https://api.resend.com/emails", { method: "POST", headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" }, body: JSON.stringify({ from: env.FROM_EMAIL, to: list, subject, text }) });
   if (!r.ok) console.error("resend error", await r.text());
   return r.ok;
 }

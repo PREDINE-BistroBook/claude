@@ -30,7 +30,7 @@
 
 import { CITIES, SLOTS } from "./catalog.js";
 import { randomId, signPayload, verifyPayload, getCookie, setCookie, clearCookie, hashPassword, verifyPassword } from "./auth.js";
-import { CITY_KEYS, USER_COOKIE, ADMIN_COOKIE, json, clean, normEmail, isDate, isTime, fmt, now, today, feeOn, body, isLive, parseIntake, healthFlags, settings, currentUser, currentAdmin, scope, sendEmail, sendSms, stripeCheckout, slotsFor, createUser, sessionCookieFor, welcomeEmail } from "./lib.js";
+import { CITY_KEYS, USER_COOKIE, ADMIN_COOKIE, json, clean, normEmail, isDate, isTime, fmt, now, today, feeOn, body, isLive, parseIntake, healthFlags, settings, currentUser, currentAdmin, scope, sendEmail, sendSms, stripeCheckout, slotsFor, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList } from "./lib.js";
 import { featureRoute, adminFeatureRoute, giftPaid, packagePaid, authFlags } from "./features.js";
 import { runCron } from "./cron.js";
 
@@ -52,6 +52,7 @@ export default {
 async function route(req, env, url, ctx) {
   const p = url.pathname, m = req.method;
   if (p === "/api/status") return status(env);
+  if (p === "/api/catalog" && m === "GET") return publicCatalog(env);
   if (p === "/api/auth/google" && m === "GET") return googleStart(env, url);
   if (p === "/api/auth/google/callback" && m === "GET") return googleCallback(req, env, url);
   if (p === "/api/me/checkins" && m === "GET") return myCheckins(req, env);
@@ -72,7 +73,8 @@ async function route(req, env, url, ctx) {
   if (p.startsWith("/api/admin/")) {
     const admin = await currentAdmin(req, env);
     if (!admin) return json({ error: "Sign in first." }, 401);
-    if (p === "/api/admin/me") return json({ admin: pub(admin), cities: cityMeta(), settings: await settings(env), photos: authFlags(env).photos, live: isLive(env) });
+    if (p === "/api/admin/me") return json({ admin: pub(admin), cities: await cityMeta(env), settings: await settings(env), photos: authFlags(env).photos, live: isLive(env) });
+    if (p === "/api/admin/profile" && m === "PUT") return adminProfile(req, env, admin);
     if (p === "/api/admin/stats" && m === "GET") return adminStats(env, admin, url);
     if (p === "/api/admin/bookings" && m === "GET") return adminBookings(env, admin, url);
     if (p === "/api/admin/bookings" && m === "POST") return adminCreateBooking(req, env, admin);
@@ -87,6 +89,7 @@ async function route(req, env, url, ctx) {
     if (p === "/api/admin/admins" && m === "POST") return adminCreate(req, env, admin);
     mm = p.match(/^\/api\/admin\/admins\/([a-z0-9]+)$/);
     if (mm && m === "DELETE") return adminDelete(env, admin, mm[1]);
+    if (mm && m === "PATCH") return adminEdit(req, env, admin, mm[1]);
     if (p === "/api/admin/password" && m === "POST") return adminPassword(req, env, admin);
     return adminFeatureRoute(req, env, url, admin);
   }
@@ -94,8 +97,14 @@ async function route(req, env, url, ctx) {
 }
 
 // ---------- small helpers ----------
-const pub = (a) => ({ id: a.id, email: a.email, name: a.name, role: a.role });
-const cityMeta = () => Object.fromEntries(CITY_KEYS.map((k) => [k, { name: CITIES[k].name, currency: CITIES[k].currency, services: Object.entries(CITIES[k].services).map(([id, s]) => ({ id, ...s })) }]));
+const pub = (a) => ({ id: a.id, email: a.email, name: a.name, role: a.role, photo: a.photo || null, phone: a.phone || "", notify: a.notify ?? 1 });
+async function cityMeta(env) { const c = await catalog(env); return Object.fromEntries(CITY_KEYS.map((k) => [k, { name: c[k].name, currency: c[k].currency, services: Object.values(c[k].services) }])); }
+// What the website reads on load: services and prices per city (from the admin), address/team/WhatsApp/Maps per city (settings)
+async function publicCatalog(env) {
+  const [c, st] = await Promise.all([catalog(env), settings(env)]);
+  return json({ cities: Object.fromEntries(CITY_KEYS.map((k) => [k, { name: c[k].name, currency: c[k].currency.toUpperCase(), address: st.address[k] ? st.address[k].split("\n").map((l) => l.trim()).filter(Boolean) : null, team: st.team[k] || null, whatsapp: st.whatsapp[k] || null, gmaps: st.gmaps[k] || null,
+    services: Object.values(c[k].services).map((s) => ({ id: s.id, name: s.short, dur: s.minutes, price: s.amount, desc: s.description })) }])) }, 200, { "cache-control": "no-store" });
+}
 const INTAKE_LISTS = ["goals", "pain", "health"], INTAKE_STR = ["activity", "sport", "experience", "health_notes", "contact", "time_pref", "completed_at"];
 function cleanIntake(v) { // whitelist keys, cap sizes; stored as JSON text
   if (!v || typeof v !== "object") return null;
@@ -268,7 +277,7 @@ async function myBookings(req, env) {
 async function checkout(req, env) {
   const b = await body(req);
   const cityKey = b.city, city = CITIES[cityKey];
-  const svc = city?.services[b.service];
+  const svc = city ? await serviceOf(env, cityKey, clean(b.service, 40)) : null;
   if (!city || !svc) return json({ error: "Unknown city or session." }, 400);
   const name = clean(b.name, 80), email = normEmail(b.email), phone = clean(b.phone, 40), note = clean(b.note, 500), date = clean(b.date, 10);
   if (!name || !email || !phone || !isDate(date)) return json({ error: "Please fill in your name, WhatsApp number, email and a day." }, 400);
@@ -311,7 +320,7 @@ async function checkout(req, env) {
   }
   const flagged = Boolean(b.flagged) || Boolean(user && !user.approved && healthFlags(user.intake).length);
   const id = randomId();
-  const base = { id, user_id: user?.id || null, email, name, phone, city: cityKey, service_id: b.service, service_name: svc.name, date, slot, note, list_amount: list, amount, currency: city.currency, discount_kind, credit_id: credit?.id || null, platform_fee: feeOn(amount), therapist_id, package_id: pack?.id || null, gift_code: gift?.code || null, partner_code: partner?.code || null };
+  const base = { id, user_id: user?.id || null, email, name, phone, city: cityKey, service_id: svc.id, service_name: svc.name, date, slot, note, list_amount: list, amount, currency: city.currency, discount_kind, credit_id: credit?.id || null, platform_fee: feeOn(amount), therapist_id, package_id: pack?.id || null, gift_code: gift?.code || null, partner_code: partner?.code || null };
 
   if (flagged) { // no card: a therapist checks the health answers first
     await insertBooking(env, { ...base, status: "review" });
@@ -395,7 +404,7 @@ async function afterPaid(env, bk) {
   const city = CITIES[bk.city], exact = isTime(bk.slot), th = await therapistName(env, bk.therapist_id);
   await Promise.all([
     sendEmail(env, {
-      to: env.ZEN_NOTIFY_EMAIL,
+      to: await notifyList(env, bk.city),
       subject: `New booking · ${city.name} · ${bk.service_name} · ${bk.date} ${slotLabel(bk.slot)}`,
       text: [`New booking through the website.`, ``, `City:     ${city.name}`, `Session:  ${bk.service_name}`, `Day:      ${bk.date}`, `Time:     ${slotLabel(bk.slot)}`, th ? `Therapist: ${th}` : null, ``,
         `Client:   ${bk.name}`, `WhatsApp: ${bk.phone}`, `Email:    ${bk.email}`, `Note:     ${bk.note || "—"}`, bk.partner_code ? `Partner:  ${bk.partner_code}` : null, ``, `Paid:     ${paidLine(bk)}`, ``,
@@ -414,7 +423,7 @@ async function afterPaid(env, bk) {
 async function afterReview(env, bk) {
   const city = CITIES[bk.city];
   await Promise.all([
-    sendEmail(env, { to: env.ZEN_NOTIFY_EMAIL, subject: `Needs a therapist's OK · ${city.name} · ${bk.name} · ${bk.date}`, text: [`${bk.name} booked ${bk.service_name} for ${bk.date} ${slotLabel(bk.slot)} but ticked a health red flag (pregnancy, blood thinners, bleeding/heart condition, recent surgery…).`, ``, `Nothing was charged. Read their answers and approve or cancel in the admin → Needs review: ${env.SITE_URL}/admin.html`, ``, `WhatsApp: ${bk.phone} · Email: ${bk.email}`, `Note: ${bk.note || "—"}`].join("\n") }),
+    sendEmail(env, { to: await notifyList(env, bk.city), subject: `Needs a therapist's OK · ${city.name} · ${bk.name} · ${bk.date}`, text: [`${bk.name} booked ${bk.service_name} for ${bk.date} ${slotLabel(bk.slot)} but ticked a health red flag (pregnancy, blood thinners, bleeding/heart condition, recent surgery…).`, ``, `Nothing was charged. Read their answers and approve or cancel in the admin → Needs review: ${env.SITE_URL}/admin.html`, ``, `WhatsApp: ${bk.phone} · Email: ${bk.email}`, `Note: ${bk.note || "—"}`].join("\n") }),
     sendEmail(env, { to: bk.email, subject: `Zen Recovery — one quick check before ${bk.date}`, text: [`Hi ${bk.name},`, ``, `Thanks for booking ${bk.service_name} in ${city.name} on ${bk.date} (${slotLabel(bk.slot)}).`, ``, `Because of what you told us about your health, a therapist looks at your answers first — that's normal and usually quick. Nothing has been charged. You'll get a confirmation (and a WhatsApp) once it's approved, and you pay at the session.`, ``, `Zen Recovery`].join("\n") }),
   ]);
 }
@@ -512,7 +521,7 @@ async function adminCreateBooking(req, env, admin) {
   const b = await body(req);
   const cityKey = scope(admin, b.city) || b.city;
   const city = CITIES[cityKey];
-  const svc = city?.services[b.service];
+  const svc = city ? await serviceOf(env, cityKey, clean(b.service, 40)) : null;
   if (!city || !svc) return json({ error: "Pick a city and a session." }, 400);
   const name = clean(b.name, 80), email = normEmail(b.email), phone = clean(b.phone, 40), date = clean(b.date, 10);
   if (!name || !isDate(date)) return json({ error: "Name and day are required." }, 400);
@@ -521,7 +530,7 @@ async function adminCreateBooking(req, env, admin) {
   const user = email ? await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(email).first() : null;
   const id = randomId();
   const slot = isTime(b.slot) || SLOTS[b.slot] ? b.slot : "morning";
-  await insertBooking(env, { id, user_id: user?.id || null, email: email || null, name, phone, city: cityKey, service_id: b.service, service_name: svc.name, date, slot, note: clean(b.note, 500), list_amount: svc.amount, amount, currency: city.currency, discount_kind: amount !== svc.amount ? "manual" : null, platform_fee: 0, status, source: "manual", paid_at: now(), done_at: status === "done" ? now() : null, therapist_id: clean(b.therapist_id, 40) || null });
+  await insertBooking(env, { id, user_id: user?.id || null, email: email || null, name, phone, city: cityKey, service_id: svc.id, service_name: svc.name, date, slot, note: clean(b.note, 500), list_amount: svc.amount, amount, currency: city.currency, discount_kind: amount !== svc.amount ? "manual" : null, platform_fee: 0, status, source: "manual", paid_at: now(), done_at: status === "done" ? now() : null, therapist_id: clean(b.therapist_id, 40) || null });
   if (user) { await maybeRewardReferrer(env, user.id); if (status === "done") await maybeRewardLoyalty(env, user.id); }
   return json({ ok: true, id });
 }
@@ -598,13 +607,15 @@ async function adminSaveSettings(req, env, admin) {
     if (b.gmaps?.[c] !== undefined) stmts.push(env.DB.prepare("INSERT OR REPLACE INTO settings VALUES (?, ?)").bind(`gmaps_${c}`, link(b.gmaps[c])));
     if (b.review?.[c] !== undefined) stmts.push(env.DB.prepare("INSERT OR REPLACE INTO settings VALUES (?, ?)").bind(`review_${c}`, link(b.review[c])));
     if (b.whatsapp?.[c] !== undefined) stmts.push(env.DB.prepare("INSERT OR REPLACE INTO settings VALUES (?, ?)").bind(`wa_${c}`, clean(b.whatsapp[c], 20).replace(/[^\d+]/g, "")));
+    if (b.address?.[c] !== undefined) stmts.push(env.DB.prepare("INSERT OR REPLACE INTO settings VALUES (?, ?)").bind(`addr_${c}`, String(b.address[c] ?? "").replace(/[^\S\n]+/g, " ").split("\n").map((l) => clean(l, 80)).filter(Boolean).slice(0, 4).join("\n")));
+    if (b.team?.[c] !== undefined) stmts.push(env.DB.prepare("INSERT OR REPLACE INTO settings VALUES (?, ?)").bind(`team_${c}`, clean(b.team[c], 120)));
   }
   await env.DB.batch(stmts);
   return json(await settings(env));
 }
 async function adminList(env, admin) {
   if (admin.role !== "all") return json({ error: "Only the owner can see this." }, 403);
-  const r = await env.DB.prepare("SELECT id, email, name, role, created_at, last_login FROM admins ORDER BY created_at").all();
+  const r = await env.DB.prepare("SELECT id, email, name, role, photo, phone, notify, created_at, last_login FROM admins ORDER BY created_at").all();
   return json({ admins: r.results });
 }
 async function adminCreate(req, env, admin) {
@@ -621,6 +632,26 @@ async function adminDelete(env, admin, id) {
   if (admin.role !== "all") return json({ error: "Only the owner can remove admins." }, 403);
   if (id === admin.id) return json({ error: "You can't remove yourself." }, 400);
   await env.DB.prepare("DELETE FROM admins WHERE id = ?").bind(id).run();
+  return json({ ok: true });
+}
+// Any admin: own name, phone, photo, "email me about bookings"
+async function adminProfile(req, env, admin) {
+  const b = await body(req);
+  const photo = typeof b.photo === "string" && b.photo.startsWith("data:image/") && b.photo.length < 160000 ? b.photo : b.photo === null ? null : admin.photo;
+  await env.DB.prepare("UPDATE admins SET name = ?, phone = ?, photo = ?, notify = ? WHERE id = ?").bind(clean(b.name, 80) || admin.name, b.phone === undefined ? admin.phone : clean(b.phone, 40), photo, b.notify === undefined ? admin.notify ?? 1 : b.notify ? 1 : 0, admin.id).run();
+  return json({ admin: pub(await env.DB.prepare("SELECT * FROM admins WHERE id = ?").bind(admin.id).first()) });
+}
+// Owner: change another admin's name, role or reset their password
+async function adminEdit(req, env, admin, id) {
+  if (admin.role !== "all") return json({ error: "Only the owner can change admins." }, 403);
+  const a = await env.DB.prepare("SELECT * FROM admins WHERE id = ?").bind(id).first();
+  if (!a) return json({ error: "Not found" }, 404);
+  const b = await body(req);
+  const role = ["all", ...CITY_KEYS].includes(b.role) ? b.role : a.role;
+  if (id === admin.id && role !== "all") return json({ error: "You can't remove your own owner access." }, 400);
+  let hash = a.pass_hash, salt = a.salt;
+  if (b.password !== undefined) { if (String(b.password).length < 10) return json({ error: "Use at least 10 characters." }, 400); ({ hash, salt } = await hashPassword(String(b.password))); }
+  await env.DB.prepare("UPDATE admins SET name = ?, role = ?, pass_hash = ?, salt = ? WHERE id = ?").bind(clean(b.name, 80) || a.name, role, hash, salt, id).run();
   return json({ ok: true });
 }
 async function adminPassword(req, env, admin) {
