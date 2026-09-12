@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zen Recovery · How it works</title>
+<meta name="description" content="How each Zen Recovery method works, step by step: dry cupping, sliding cupping, fire cupping, hijama, manual therapy and facial cupping.">
+<meta name="theme-color" content="#1B1E1D">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="img/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira:ital,wght@0,300;0,400;1,800&family=Michroma&family=Figtree:wght@400;500;600&family=DM+Mono:wght@400;500&family=Cairo:wght@300;400;600;800&display=swap">
+<link rel="stylesheet" href="app.css">
+<style>
+  :root{--banner-h:0px}
+  body{background:var(--ink);color:var(--ground)}
+  .top{background:color-mix(in srgb,var(--ink) 86%,transparent);border-bottom-color:rgba(237,238,234,.12)}
+  .top nav a{color:rgba(237,238,234,.75)} .top nav a:hover{color:var(--ground)} .top .wm b{color:var(--ground)}
+  .top .btn{background:var(--ground);color:var(--ink);border-color:var(--ground)}
+  .lang-switch{border-color:rgba(237,238,234,.25);background:transparent} .lang-switch button{color:rgba(237,238,234,.7)} .lang-switch button[aria-pressed="true"]{background:var(--ground);color:var(--ink)}
+  .explain .eyebrow{color:var(--mark-soft)}
+  .explain-head{padding:clamp(40px, 7vh, 90px) var(--gutter) 0; display:grid; gap:16px; max-width:56rem}
+  .explain-head h1{font-size:clamp(2.2rem, 5vw, 4rem); font-weight:300; line-height:1.02}
+  .explain-head .tag{font-family:var(--display); font-size:clamp(1.1rem, 2vw, 1.5rem); color:rgba(231,237,232,.85)}
+  .explain-head p.lead{color:rgba(231,237,232,.72); font-size:1.08rem; max-width:36rem}
+  .meta{display:flex; gap:10px; flex-wrap:wrap; font-size:.86rem; color:rgba(231,237,232,.7)}
+  .meta span{padding:6px 12px; border:1px solid rgba(237,238,234,.2); border-radius:999px}
+  .explain-grid{display:grid; grid-template-columns:1fr 1fr; gap:var(--gutter); padding:0 var(--gutter)}
+  .figure{position:sticky; top:0; height:100svh; display:grid; place-items:center}
+  .figure svg{width:min(100%, 520px); height:auto; overflow:visible}
+  .steps{padding-bottom:20vh}
+  .step{min-height:88svh; display:flex; flex-direction:column; justify-content:center; gap:16px; max-width:30rem; transition:opacity .5s var(--ease)}
+  .has-gsap .step{opacity:.32} .has-gsap .step.active{opacity:1}
+  .step .eyebrow{display:flex; align-items:center; gap:12px} .step .eyebrow::before{content:""; width:28px; height:1px; background:var(--mark-soft)}
+  .step h3{font-size:clamp(1.5rem, 2.8vw, 2.2rem); font-weight:300; color:var(--ground)}
+  .step p{color:rgba(231,237,232,.78); font-size:1.02rem}
+  @media (max-width:860px){
+    .explain-grid{grid-template-columns:1fr; gap:0}
+    .figure{order:2; top:auto; bottom:0; height:40svh; z-index:2; background:linear-gradient(transparent, var(--ink) 22%); padding-top:12px}
+    .steps{order:1; padding-bottom:6vh}
+    .figure svg{width:min(78%, 300px)}
+    .step{min-height:60svh; justify-content:flex-start; padding-top:12px}
+  }
+  /* after the explainer: who it's for, before/after, book, other methods */
+  .after{background:var(--ground); color:var(--ink); padding:clamp(48px, 8vh, 96px) var(--gutter)}
+  .after .eyebrow{color:var(--ink-soft)}
+  .after-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:16px; max-width:1180px; margin:0 auto}
+  .after .card{display:grid; gap:10px; align-content:start}
+  .after .card h3{display:flex; align-items:baseline; gap:10px}
+  .advice{margin:0; padding-inline-start:18px; display:grid; gap:8px; font-size:.93rem; color:var(--ink-soft)}
+  .book{max-width:1180px; margin:40px auto 0; display:grid; gap:14px; padding:26px; border-radius:var(--radius); background:var(--ink); color:var(--ground)}
+  .book h2{font-size:clamp(1.4rem, 2.6vw, 1.9rem)} .book p{color:rgba(231,237,232,.72)}
+  .cities{display:flex; gap:10px; flex-wrap:wrap}
+  .cities a{display:inline-flex; align-items:center; gap:8px; padding:12px 18px; border-radius:999px; background:var(--ground); color:var(--ink); text-decoration:none; font-weight:500}
+  .cities a i{width:9px; height:9px; border-radius:50%; display:inline-block}
+  .others{max-width:1180px; margin:40px auto 0; display:grid; gap:12px}
+  .others-list{display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:8px}
+  .others-list a{display:grid; gap:6px; padding:14px 16px; border:1px solid var(--line); border-radius:14px; text-decoration:none; color:inherit; background:var(--ground-3); font-size:.92rem}
+  .others-list a b{font-family:var(--display); font-weight:400; font-size:1.05rem} .others-list a span{color:var(--ink-mute); font-size:.82rem}
+  .others-list a[aria-current="page"]{border-color:var(--ink); background:var(--ink); color:var(--ground)} .others-list a[aria-current="page"] span{color:rgba(237,238,234,.6)}
+  .back{display:inline-flex; gap:8px; align-items:center; color:var(--mark-soft); text-decoration:none; font-size:.9rem}
+  footer{padding:32px var(--gutter); font-size:.82rem; color:rgba(231,237,232,.55); display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; background:var(--ink)}
+  footer a{color:inherit}
+  @media (max-width:640px){ .hide-sm{display:none} .top nav{gap:8px} .top .btn.small{padding:7px 10px} }
+  @media (prefers-reduced-motion:reduce){.step{opacity:1!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <a class="wm no-i18n" href="index.html"><b>ZEN</b><small>RECOVERY</small></a>
+  <nav>
+    <a href="index.html#methods" class="hide-sm">Methods</a>
+    <span id="lang-slot"></span>
+    <a href="account.html" id="nav-account">Sign in</a>
+    <a href="index.html#places" class="btn small">Book a session</a>
+  </nav>
+</header>
+
+<main>
+  <section class="explain" aria-labelledby="m-title">
+    <div class="explain-head">
+      <a class="back" href="index.html#methods">← All methods</a>
+      <p class="eyebrow">How it works</p>
+      <h1 id="m-title"></h1>
+      <p class="tag" id="m-tag"></p>
+      <p class="lead" id="m-lead"></p>
+      <div class="meta"><span id="m-min"></span><span id="m-for"></span></div>
+    </div>
+    <div class="explain-grid">
+      <div class="figure" aria-hidden="true" id="figure"></div>
+      <div class="steps" id="steps"></div>
+    </div>
+  </section>
+
+  <section class="after">
+    <div class="after-grid">
+      <div class="card"><p class="eyebrow">Who it's for</p><h3 id="a-for"></h3><p class="muted" id="a-lead"></p></div>
+      <div class="card"><h3>Before</h3><ul class="advice" id="a-before"></ul></div>
+      <div class="card"><h3>After</h3><ul class="advice" id="a-after"></ul></div>
+      <div class="card"><h3>When to skip it and tell us</h3><ul class="advice" id="a-skip"></ul></div>
+    </div>
+    <div class="book">
+      <p class="eyebrow" style="color:var(--mark-soft)">Book this session</p>
+      <h2 id="b-title"></h2>
+      <p>Pick your city. The session is preselected in the booking form; prices are in the local currency.</p>
+      <div class="cities" id="b-cities"></div>
+    </div>
+    <div class="others">
+      <p class="eyebrow">Other methods</p>
+      <div class="others-list" id="others"></div>
+    </div>
+  </section>
+</main>
+<footer><span>© <span id="year"></span> Zen Recovery · Cairo, Dahab, Florence</span><span>Cupping is a complementary therapy and not a substitute for medical care. <a href="index.html">Home</a> · <a href="account.html">My account</a></span></footer>
+
+<script src="i18n.js"></script>
+<script src="guide.js"></script>
+<script src="methods.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script>
+const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const I = window.ZenI18n, t = (s, v) => I.t(s, v), G = window.ZenGuide, M = window.ZenMethods;
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const id = M.METHODS[new URLSearchParams(location.search).get("m")] ? new URLSearchParams(location.search).get("m") : "dry";
+const m = M.METHODS[id];
+const ORD = ["Step one", "Step two", "Step three", "Step four", "Step five", "Step six"];
+const CITY = { cairo: "Cairo", dahab: "Dahab", florence: "Florence" };
+$("#lang-slot").innerHTML = I.switcher(); $("#year").textContent = new Date().getFullYear();
+document.documentElement.classList.add("js");
+
+function render() {
+  document.title = `Zen Recovery · ${t(m.title)}`;
+  $("#m-title").textContent = t(m.title); $("#m-tag").textContent = t(m.tagline); $("#m-lead").textContent = t(m.lead);
+  $("#m-min").textContent = t(m.minutes); $("#m-for").textContent = t("For · {who}", { who: t(m.forWho) });
+  $("#figure").innerHTML = m.scene;
+  $("#steps").innerHTML = m.steps.map((s, i) => `<article class="step" data-step="${i}"><p class="eyebrow">${t(ORD[i])}</p><h3>${esc(t(s.h))}</h3><p>${esc(t(s.p))}</p></article>`).join("");
+  $("#a-for").textContent = t(m.forWho); $("#a-lead").textContent = t(m.lead);
+  $("#a-before").innerHTML = [...G.ADVICE.before.general.slice(0, 3), ...(G.ADVICE.before[m.key] || []).slice(0, 3)].map((x) => `<li>${esc(t(x))}</li>`).join("");
+  $("#a-after").innerHTML = [...G.ADVICE.after.general.slice(0, 3), ...(G.ADVICE.after[m.key] || []).slice(0, 3)].map((x) => `<li>${esc(t(x))}</li>`).join("");
+  $("#a-skip").innerHTML = G.ADVICE.skip.slice(0, 4).map((x) => `<li>${esc(t(x))}</li>`).join("");
+  $("#b-title").textContent = t("{method} in Cairo, Dahab or Florence.", { method: t(m.title) });
+  $("#b-cities").innerHTML = Object.entries(CITY).map(([k, n]) => `<a href="index.html?city=${k}&svc=${id}#book"><i style="background:var(--${k})"></i>${t("Book in {city}", { city: t(n) })}</a>`).join("");
+  $("#others").innerHTML = M.ORDER.map((k) => `<a href="method.html?m=${k}" ${k === id ? 'aria-current="page"' : ""}><b>${esc(t(M.METHODS[k].title))}</b><span>${esc(t(M.METHODS[k].tagline))}</span></a>`).join("");
+  I.apply();
+}
+render();
+document.addEventListener("zen:lang", () => { render(); });
+
+/* signed-in name in the top bar */
+fetch("/api/me", { credentials: "same-origin" }).then((r) => (r.headers.get("content-type") || "").includes("json") ? r.json() : { user: null }).then((d) => { if (d.user) { $("#nav-account").textContent = d.user.name.split(" ")[0]; if (d.user.lang && d.user.lang !== I.lang && !new URLSearchParams(location.search).get("lang")) I.set(d.user.lang); } }).catch(() => {});
+
+/* scroll-driven animation, same mechanics as the home page */
+(function () {
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const steps = $$(".step");
+  if (!window.gsap || !window.ScrollTrigger) return;
+  gsap.registerPlugin(ScrollTrigger);
+  document.documentElement.classList.add("has-gsap");
+  steps[0].classList.add("active");
+  steps.forEach((st) => ScrollTrigger.create({ trigger: st, start: "top 60%", end: "bottom 40%", onToggle: (self) => { if (self.isActive) { steps.forEach((s) => s.classList.remove("active")); st.classList.add("active"); } } }));
+  if (reduced) { m.still(gsap); return; }
+  const tl = gsap.timeline({ scrollTrigger: { trigger: "#steps", start: "top 70%", end: "bottom 70%", scrub: 1.2 }, defaults: { ease: "none" } });
+  m.animate(gsap, tl);
+})();
+</script>
+</body>
+</html>
