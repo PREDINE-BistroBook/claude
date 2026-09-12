@@ -53,6 +53,10 @@
   .slot-chips{display:flex;gap:6px;flex-wrap:wrap} .slot-chips span{padding:5px 10px;border-radius:999px;background:var(--ground-2);font-family:var(--mono);font-size:.82rem}
   .lb{display:grid;gap:6px;font-size:.9rem} .lb div{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid var(--line)}
   .subtabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 16px}
+  .top .who .avatar{width:32px;height:32px;font-size:.8rem}
+  .profile-row{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+  .profile-row input[type=file]{display:none}
+  .svc-off td{opacity:.55}
   @media (max-width:860px){.settings-grid{grid-template-columns:1fr}}
 </style>
 </head>
@@ -60,7 +64,7 @@
 <div class="banner" id="demo-banner" hidden>Preview — sample data. Choose "owner" to see every city, or "Florence admin" to see how a city account is walled off.</div>
 <header class="top">
   <div class="row" style="gap:14px"><a class="wm" href="index.html"><b>ZEN</b><small>RECOVERY</small></a><span class="badge">Admin</span></div>
-  <div class="who" id="who" hidden><span class="badge" id="scope-badge"></span><span id="admin-name"></span><a href="#" id="signout" class="tiny">Sign out</a></div>
+  <div class="who" id="who" hidden><span class="badge" id="scope-badge"></span><span class="avatar" id="admin-avatar"></span><span id="admin-name"></span><a href="#" id="signout" class="tiny">Sign out</a></div>
 </header>
 
 <main class="wrap">
@@ -85,6 +89,7 @@
       <button role="tab" aria-selected="true" data-tab="overview">Overview</button>
       <button role="tab" aria-selected="false" data-tab="bookings">Bookings</button>
       <button role="tab" aria-selected="false" data-tab="clients">Clients</button>
+      <button role="tab" aria-selected="false" data-tab="services">Services &amp; prices</button>
       <button role="tab" aria-selected="false" data-tab="calendar">Calendar</button>
       <button role="tab" aria-selected="false" data-tab="team">Team</button>
       <button role="tab" aria-selected="false" data-tab="offers">Packs &amp; partners</button>
@@ -98,7 +103,7 @@
         <b style="font-family:var(--display);font-size:1.3rem;font-weight:400">Welcome. Four things to do first.</b>
         <ol>
           <li><b>Add your team</b> in Settings: one account per person, locked to their city.</li>
-          <li><b>Check prices and session names</b> with us; they're placeholders until confirmed.</li>
+          <li><b>Check prices and session names</b> in "Services &amp; prices": they're placeholders until you set them. What you write there is what the website sells.</li>
           <li><b>Add today's bookings by hand</b> (Bookings → Add a booking) so the statistics and the clients' loyalty count start from day one.</li>
           <li><b>Share the site</b>: put zenrecovery.club in the Instagram bio. Clients who register get their invite link and rewards automatically.</li>
         </ol>
@@ -160,6 +165,21 @@
       </details>
       <div class="filters"><div class="field" style="flex:1"><label for="c-q">Search</label><input id="c-q" placeholder="name, email, phone"></div></div>
       <div class="table-wrap"><table id="clients-table"><thead><tr><th></th><th>Client</th><th>Room</th><th>Sessions</th><th>Last visit</th><th>Rewards</th><th>Invited by</th></tr></thead><tbody></tbody></table></div>
+    </div>
+
+    <!-- services & prices -->
+    <div id="tab-services" hidden>
+      <div class="section-head"><h2>Services &amp; prices</h2><button class="btn small" id="add-service">Add a service</button></div>
+      <details class="help" open><summary>What you're editing</summary>
+        <ul>
+          <li>This is exactly what the website sells, per city. Change a price here and the booking page shows the new price immediately; the server charges what's written here, never what the browser says.</li>
+          <li><b>Hide</b> takes a service off the website without losing its history (past bookings keep their name and price). <b>Show</b> puts it back. Removing a service that was never booked deletes it for good.</li>
+          <li>Prices are in the city's currency: Egyptian pounds for Cairo and Dahab, euro for Florence. Duration is what clients see ("45 min") and what the calendar uses for slot length.</li>
+          <li>Gift vouchers and packs bought earlier keep the value they were bought at.</li>
+        </ul>
+      </details>
+      <div class="scope" id="svc-pills"></div>
+      <div class="table-wrap"><table id="services-table"><thead><tr><th>City</th><th>Service</th><th>Minutes</th><th>Price</th><th>Booked</th><th>On the site</th><th></th></tr></thead><tbody></tbody></table></div>
     </div>
 
     <!-- calendar: opening hours, days off, waitlist -->
@@ -299,11 +319,21 @@
             <div class="row"><button class="btn small" type="submit">Save rules</button><span class="ok" id="rules-ok" hidden>Saved</span><span class="err" id="rules-err" hidden></span></div>
           </form>
         </div>
+        <div class="card" id="profile-card">
+          <h3>My profile</h3>
+          <form id="profile-form" class="grid" style="gap:12px">
+            <div class="profile-row"><span class="avatar lg" id="me-avatar"></span><div class="row"><label class="btn small ghost" for="me-photo">Change photo<input id="me-photo" type="file" accept="image/*"></label><button class="btn small ghost" type="button" id="me-photo-remove">Remove</button></div></div>
+            <div class="row"><div class="field" style="flex:1"><label for="me-name">Name</label><input id="me-name" autocomplete="name"></div><div class="field" style="flex:1"><label for="me-phone">WhatsApp number <span class="tiny">(optional)</span></label><input id="me-phone" type="tel"></div></div>
+            <div class="field"><label for="me-email">Email</label><input id="me-email" type="email" disabled><span class="tiny">This is your sign-in. To change it, the owner adds a new account.</span></div>
+            <label class="row" style="gap:8px;font-size:.92rem"><input type="checkbox" id="me-notify"> Email me about new bookings, gifts and packs <span class="tiny" id="me-notify-scope"></span></label>
+            <div class="row"><button class="btn small" type="submit">Save profile</button><span class="ok" id="me-ok" hidden>Saved</span><span class="err" id="me-err" hidden></span></div>
+          </form>
+        </div>
         <div class="card" id="links-card" hidden>
-          <h3>Links per city</h3>
-          <p class="tiny" style="margin-bottom:10px">Google Maps link shows "Open in Google Maps" on the booking page. The review link is what a client is sent to after a 5-star rating. WhatsApp number is the one clients message from the site.</p>
+          <h3>Per city: address, team, links</h3>
+          <p class="tiny" style="margin-bottom:10px">Address and team line appear on the booking page. Google Maps link shows "Open in Google Maps". The review link is what a client is sent to after a 5-star rating. WhatsApp number is the one clients message from the site.</p>
           <form id="links-form" class="grid" style="gap:10px"></form>
-          <div class="row" style="margin-top:10px"><button class="btn small" type="submit" form="links-form">Save links</button><span class="ok" id="links-ok" hidden>Saved</span><span class="err" id="links-err" hidden></span></div>
+          <div class="row" style="margin-top:10px"><button class="btn small" type="submit" form="links-form">Save</button><span class="ok" id="links-ok" hidden>Saved</span><span class="err" id="links-err" hidden></span></div>
         </div>
         <div class="card">
           <h3>Your password</h3>
@@ -332,6 +362,19 @@
 
 <!-- booking drawer -->
 <aside class="drawer" id="drawer" aria-hidden="true"></aside>
+
+<!-- add / edit service -->
+<dialog id="dlg-svc">
+  <form class="inner" id="svc-form" method="dialog" novalidate>
+    <h3 id="sv-title">Add a service</h3>
+    <div class="row"><div class="field" style="flex:1" id="sv-city-wrap"><label for="sv-city">City</label><select id="sv-city"></select></div><div class="field" style="flex:2"><label for="sv-name">Name <span class="tiny">(as clients see it)</span></label><input id="sv-name" required placeholder="Dry cupping"></div></div>
+    <div class="row"><div class="field" style="flex:1"><label for="sv-min">Minutes</label><input id="sv-min" type="number" min="10" max="240" step="5" value="60"></div><div class="field" style="flex:1"><label for="sv-amount">Price <span class="tiny" id="sv-cur"></span></label><input id="sv-amount" type="number" min="0" step="0.01" required></div></div>
+    <div class="field"><label for="sv-desc">One line about it <span class="tiny">(optional)</span></label><input id="sv-desc" placeholder="Cups placed and left still. The classic session."></div>
+    <label class="row" style="gap:8px;font-size:.92rem"><input type="checkbox" id="sv-active" checked> Shown on the website</label>
+    <p class="err" id="sv-err" hidden></p>
+    <div class="row" style="justify-content:flex-end"><button class="btn small ghost" type="button" id="sv-cancel">Cancel</button><button class="btn small" type="submit">Save</button></div>
+  </form>
+</dialog>
 
 <!-- add booking -->
 <dialog id="dlg-add">
@@ -393,7 +436,7 @@ async function boot() {
 function start(r) {
   A = r.admin; CITIES = r.cities; SETTINGS = r.settings;
   $("#login-view").hidden = true; $("#app-view").hidden = false; $("#who").hidden = false;
-  $("#admin-name").textContent = A.name;
+  $("#admin-name").textContent = A.name; $("#admin-avatar").innerHTML = A.photo ? `<img src="${A.photo}" alt="">` : initials(A.name);
   $("#scope-badge").textContent = isOwner() ? "All cities" : CITY_NAME[A.role]; $("#scope-badge").className = "badge " + (isOwner() ? "all" : "city-" + A.role);
   $("#city-pills").innerHTML = isOwner() ? `<span class="tiny">Showing</span><div class="pills">${[["", "All cities"], ["cairo", "Cairo"], ["dahab", "Dahab"], ["florence", "Florence"]].map(([k, n]) => `<button class="pill" data-city="${k}" aria-pressed="${k === cityFilter}">${n}</button>`).join("")}</div>` : `<span class="tiny">You see ${CITY_NAME[A.role]} only. Bookings, clients and money from the other cities aren't visible to this account.</span>`;
   $$("#city-pills .pill").forEach((p) => p.addEventListener("click", () => { cityFilter = p.dataset.city; $$("#city-pills .pill").forEach((x) => x.setAttribute("aria-pressed", x === p)); loadOverview(); }));
@@ -637,17 +680,58 @@ let tc; $("#c-q").addEventListener("input", () => { clearTimeout(tc); tc = setTi
 /* ---------- settings ---------- */
 async function loadSettings() {
   $("#s-every").value = SETTINGS.loyalty_every; $("#s-pct").value = SETTINGS.referral_pct; $("#s-bday").value = SETTINGS.birthday_pct ?? 20; $("#s-fee").textContent = SETTINGS.platform_fee_pct + "%";
-  if (isOwner()) $("#links-form").innerHTML = Object.keys(CITY_NAME).map((k) => `<b style="font-size:.9rem">${CITY_NAME[k]}</b><div class="row"><div class="field" style="flex:1"><label for="lk-gm-${k}">Google Maps link</label><input id="lk-gm-${k}" type="url" placeholder="https://maps.app.goo.gl/…" value="${esc(SETTINGS.gmaps?.[k] || "")}"></div><div class="field" style="flex:1"><label for="lk-rv-${k}">Google review link</label><input id="lk-rv-${k}" type="url" placeholder="https://g.page/r/…/review" value="${esc(SETTINGS.review?.[k] || "")}"></div><div class="field" style="flex:1"><label for="lk-wa-${k}">WhatsApp number</label><input id="lk-wa-${k}" placeholder="+20 …" value="${esc(SETTINGS.whatsapp?.[k] || "")}"></div></div>`).join("");
-  if (isOwner()) { const { admins } = await ZenAPI("GET", "/api/admin/admins"); $("#admins-table tbody").innerHTML = admins.map((a) => `<tr><td>${esc(a.name)}</td><td>${esc(a.email)}</td><td><span class="badge ${a.role === "all" ? "all" : "city-" + a.role}">${a.role === "all" ? "All cities" : CITY_NAME[a.role]}</span></td><td class="tiny">${a.last_login ? esc(a.last_login.slice(0, 10)) : "never"}</td><td>${a.id === A.id ? "<span class='tiny'>you</span>" : `<button class="btn small danger" data-del="${a.id}">Remove</button>`}</td></tr>`).join(""); $$("#admins-table [data-del]").forEach((b) => b.addEventListener("click", async () => { if (confirm("Remove this admin's access?")) { await ZenAPI("DELETE", "/api/admin/admins/" + b.dataset.del); loadSettings(); } })); }
+  if (isOwner()) $("#links-form").innerHTML = Object.keys(CITY_NAME).map((k) => `<b style="font-size:.9rem">${CITY_NAME[k]}</b><div class="row"><div class="field" style="flex:1"><label for="lk-gm-${k}">Google Maps link</label><input id="lk-gm-${k}" type="url" placeholder="https://maps.app.goo.gl/…" value="${esc(SETTINGS.gmaps?.[k] || "")}"></div><div class="field" style="flex:1"><label for="lk-rv-${k}">Google review link</label><input id="lk-rv-${k}" type="url" placeholder="https://g.page/r/…/review" value="${esc(SETTINGS.review?.[k] || "")}"></div><div class="field" style="flex:1"><label for="lk-wa-${k}">WhatsApp number</label><input id="lk-wa-${k}" placeholder="+20 …" value="${esc(SETTINGS.whatsapp?.[k] || "")}"></div></div><div class="row"><div class="field" style="flex:2"><label for="lk-ad-${k}">Address <span class="tiny">(one line per row, shown on the booking page)</span></label><textarea id="lk-ad-${k}" rows="3" placeholder="Zen Recovery · ${CITY_NAME[k]}&#10;Street and number&#10;Area">${esc(SETTINGS.address?.[k] || "")}</textarea></div><div class="field" style="flex:1"><label for="lk-tm-${k}">Team line</label><input id="lk-tm-${k}" placeholder="Shaarawy — manual therapy & cupping" value="${esc(SETTINGS.team?.[k] || "")}"></div></div>`).join("");
+  if (isOwner()) { const { admins } = await ZenAPI("GET", "/api/admin/admins"); $("#admins-table tbody").innerHTML = admins.map((a) => `<tr><td><span class="row" style="gap:8px"><span class="avatar" style="width:28px;height:28px;font-size:.7rem">${a.photo ? `<img src="${a.photo}" alt="">` : initials(a.name)}</span>${esc(a.name)}${a.phone ? `<span class="tiny">${esc(a.phone)}</span>` : ""}</span></td><td>${esc(a.email)}<div class="tiny">${a.notify ? "gets booking emails" : "no booking emails"}</div></td><td>${a.id === A.id ? `<span class="badge all">All cities</span>` : `<select data-role="${a.id}" style="font:inherit;font-size:.85rem;padding:5px 8px;border:1px solid var(--line);border-radius:8px">${[["all", "All cities (owner)"], ["cairo", "Cairo only"], ["dahab", "Dahab only"], ["florence", "Florence only"]].map(([v, l]) => `<option value="${v}" ${a.role === v ? "selected" : ""}>${l}</option>`).join("")}</select>`}</td><td class="tiny">${a.last_login ? esc(a.last_login.slice(0, 10)) : "never"}</td><td>${a.id === A.id ? "<span class='tiny'>you</span>" : `<div class="actions"><button class="btn ghost" data-pw="${a.id}">New password</button><button class="btn ghost danger" data-del="${a.id}">Remove</button></div>`}</td></tr>`).join("");
+    $$("#admins-table [data-del]").forEach((b) => b.addEventListener("click", async () => { if (confirm("Remove this admin's access?")) { await ZenAPI("DELETE", "/api/admin/admins/" + b.dataset.del); loadSettings(); } }));
+    $$("#admins-table [data-role]").forEach((s) => s.addEventListener("change", async () => { await ZenAPI("PATCH", "/api/admin/admins/" + s.dataset.role, { role: s.value }); loadSettings(); }));
+    $$("#admins-table [data-pw]").forEach((b) => b.addEventListener("click", async () => { const pw = prompt("New password for this admin (10+ characters). Tell it to them in person, not by email."); if (!pw) return; try { await ZenAPI("PATCH", "/api/admin/admins/" + b.dataset.pw, { password: pw }); alert("Password changed."); } catch (ex) { alert(ex.message); } })); }
+  // my profile
+  $("#me-name").value = A.name || ""; $("#me-phone").value = A.phone || ""; $("#me-email").value = A.email; $("#me-notify").checked = A.notify !== 0; $("#me-notify-scope").textContent = isOwner() ? "(all cities)" : `(${CITY_NAME[A.role]})`;
+  renderMeAvatar();
 }
 $("#rules-form").addEventListener("submit", async (e) => { e.preventDefault(); $("#rules-ok").hidden = true; $("#rules-err").hidden = true; try { SETTINGS = await ZenAPI("PUT", "/api/admin/settings", { loyalty_every: +$("#s-every").value, referral_pct: +$("#s-pct").value, birthday_pct: +$("#s-bday").value }); $("#rules-ok").hidden = false; } catch (ex) { $("#rules-err").textContent = ex.message; $("#rules-err").hidden = false; } });
 $("#links-form").addEventListener("submit", async (e) => { e.preventDefault(); $("#links-ok").hidden = true; $("#links-err").hidden = true; const ks = Object.keys(CITY_NAME); const pick = (p) => Object.fromEntries(ks.map((k) => [k, $(`#lk-${p}-${k}`).value.trim()]));
-  try { SETTINGS = await ZenAPI("PUT", "/api/admin/settings", { gmaps: pick("gm"), review: pick("rv"), whatsapp: pick("wa") }); $("#links-ok").hidden = false; } catch (ex) { $("#links-err").textContent = ex.message; $("#links-err").hidden = false; } });
+  try { SETTINGS = await ZenAPI("PUT", "/api/admin/settings", { gmaps: pick("gm"), review: pick("rv"), whatsapp: pick("wa"), address: pick("ad"), team: pick("tm") }); $("#links-ok").hidden = false; } catch (ex) { $("#links-err").textContent = ex.message; $("#links-err").hidden = false; } });
 $("#pw-form").addEventListener("submit", async (e) => { e.preventDefault(); $("#pw-ok").hidden = true; $("#pw-err").hidden = true; try { await ZenAPI("POST", "/api/admin/password", { current: $("#pw-cur").value, password: $("#pw-new").value }); $("#pw-ok").hidden = false; e.target.reset(); } catch (ex) { $("#pw-err").textContent = ex.message; $("#pw-err").hidden = false; } });
 $("#admin-form").addEventListener("submit", async (e) => { e.preventDefault(); $("#admin-err").hidden = true; try { await ZenAPI("POST", "/api/admin/admins", { name: $("#n-name").value.trim(), email: $("#n-email").value.trim(), role: $("#n-role").value, password: $("#n-pass").value }); e.target.reset(); loadSettings(); } catch (ex) { $("#admin-err").textContent = ex.message; $("#admin-err").hidden = false; } });
 
+let mePhoto;
+function renderMeAvatar() { const src = mePhoto === undefined ? A.photo : mePhoto; $("#me-avatar").innerHTML = src ? `<img src="${src}" alt="">` : initials($("#me-name").value || A.name); $("#admin-avatar").innerHTML = A.photo ? `<img src="${A.photo}" alt="">` : initials(A.name); }
+$("#me-photo").addEventListener("change", async (e) => { const f = e.target.files[0]; if (!f) return; try { mePhoto = await shrink(f, 256, .82); renderMeAvatar(); } catch (ex) { $("#me-err").textContent = ex.message; $("#me-err").hidden = false; } });
+$("#me-photo-remove").addEventListener("click", () => { mePhoto = null; renderMeAvatar(); });
+$("#profile-form").addEventListener("submit", async (e) => { e.preventDefault(); $("#me-ok").hidden = true; $("#me-err").hidden = true;
+  try { const body = { name: $("#me-name").value.trim(), phone: $("#me-phone").value.trim(), notify: $("#me-notify").checked }; if (mePhoto !== undefined) body.photo = mePhoto; const r = await ZenAPI("PUT", "/api/admin/profile", body); A = { ...A, ...r.admin }; mePhoto = undefined; $("#admin-name").textContent = A.name; renderMeAvatar(); $("#me-ok").hidden = false; }
+  catch (ex) { $("#me-err").textContent = ex.message; $("#me-err").hidden = false; } });
+
+/* ---------- services & prices ---------- */
+let svcCity = "";
+// the add-booking dialog and the stats use CITIES from /api/admin/me: refresh it after any change to services
+async function refreshCities() { try { CITIES = (await ZenAPI("GET", "/api/admin/me")).cities; } catch {} }
+async function loadServices() {
+  if (isOwner()) { $("#svc-pills").innerHTML = `<span class="tiny">Showing</span><div class="pills">${[["", "All cities"], ["cairo", "Cairo"], ["dahab", "Dahab"], ["florence", "Florence"]].map(([k, n]) => `<button class="pill" data-city="${k}" aria-pressed="${k === svcCity}">${n}</button>`).join("")}</div>`; $$("#svc-pills .pill").forEach((p) => p.addEventListener("click", () => { svcCity = p.dataset.city; loadServices(); })); }
+  const { rows } = await ZenAPI("GET", "/api/admin/services?city=" + svcCity);
+  $("#services-table tbody").innerHTML = rows.length ? rows.map((s) => `<tr class="${s.active ? "" : "svc-off"}"><td><i class="dot ${s.city}"></i>${CITY_NAME[s.city]}</td><td><b>${esc(s.name)}</b><div class="tiny">${esc(s.description || "")}</div></td><td class="num">${s.minutes}</td><td class="num">${money(s.amount, s.currency)}</td><td class="num">${s.bookings}</td><td>${s.active ? `<span class="status confirmed">shown</span>` : `<span class="status cancelled">hidden</span>`}</td><td><div class="actions"><button class="btn ghost" data-edit="${s.id}">Edit</button><button class="btn ghost" data-toggle="${s.id}" data-active="${s.active}">${s.active ? "Hide" : "Show"}</button><button class="btn ghost danger" data-remove="${s.id}">Remove</button></div></td></tr>`).join("") : `<tr><td colspan="7" class="empty">No services yet.</td></tr>`;
+  $$("#services-table [data-toggle]").forEach((b) => (b.onclick = async () => { await ZenAPI("PATCH", "/api/admin/services/" + b.dataset.toggle, { active: b.dataset.active !== "1" }); await refreshCities(); loadServices(); }));
+  $$("#services-table [data-remove]").forEach((b) => (b.onclick = async () => { if (confirm("Remove this service from the website? If it was ever booked it's hidden instead, so history stays.")) { await ZenAPI("DELETE", "/api/admin/services/" + b.dataset.remove); await refreshCities(); loadServices(); } }));
+  $$("#services-table [data-edit]").forEach((b) => (b.onclick = () => openService(rows.find((s) => s.id === b.dataset.edit))));
+}
+function openService(s) {
+  const cityKeys = isOwner() ? Object.keys(CITY_NAME) : [A.role]; const cur = s?.currency || CITIES[cityKeys[0]]?.currency || "eur";
+  const d = $("#dlg-svc"); $("#sv-title").textContent = s ? "Edit service" : "Add a service";
+  $("#sv-city").innerHTML = cityKeys.map((k) => `<option value="${k}" ${s?.city === k ? "selected" : ""}>${CITY_NAME[k]}</option>`).join(""); $("#sv-city").disabled = Boolean(s); $("#sv-city-wrap").hidden = !isOwner() && !s;
+  $("#sv-name").value = s?.name || ""; $("#sv-min").value = s?.minutes || 60; $("#sv-amount").value = s ? (s.amount / 100).toFixed(cur === "egp" ? 0 : 2) : ""; $("#sv-desc").value = s?.description || ""; $("#sv-active").checked = s ? s.active === 1 : true;
+  $("#sv-cur").textContent = (s ? s.currency : CITIES[$("#sv-city").value].currency).toUpperCase(); $("#sv-err").hidden = true; d.dataset.id = s?.id || ""; d.showModal();
+}
+$("#add-service").addEventListener("click", () => openService(null));
+$("#sv-city").addEventListener("change", () => { $("#sv-cur").textContent = CITIES[$("#sv-city").value].currency.toUpperCase(); });
+$("#sv-cancel").addEventListener("click", () => $("#dlg-svc").close());
+$("#svc-form").addEventListener("submit", async (e) => { e.preventDefault(); const d = $("#dlg-svc"); const err = $("#sv-err"); err.hidden = true;
+  const body = { city: $("#sv-city").value, name: $("#sv-name").value.trim(), minutes: Number($("#sv-min").value), amount: Math.round(Number($("#sv-amount").value) * 100), description: $("#sv-desc").value.trim(), active: $("#sv-active").checked };
+  try { if (d.dataset.id) await ZenAPI("PATCH", "/api/admin/services/" + d.dataset.id, body); else await ZenAPI("POST", "/api/admin/services", body); d.close(); await refreshCities(); loadServices(); }
+  catch (ex) { err.textContent = ex.message; err.hidden = false; } });
+
 /* ---------- tabs, login ---------- */
-$$(".tabs button").forEach((b) => b.addEventListener("click", () => { $$(".tabs button").forEach((x) => x.setAttribute("aria-selected", x === b)); ["overview", "bookings", "clients", "calendar", "team", "offers", "review", "settings"].forEach((t) => ($("#tab-" + t).hidden = t !== b.dataset.tab)); closeDrawer(); ({ overview: loadOverview, bookings: loadBookings, clients: loadClients, calendar: loadCalendar, team: loadTeamTab, offers: loadOffers, review: loadReview, settings: loadSettings })[b.dataset.tab](); }));
+$$(".tabs button").forEach((b) => b.addEventListener("click", () => { $$(".tabs button").forEach((x) => x.setAttribute("aria-selected", x === b)); ["overview", "bookings", "clients", "services", "calendar", "team", "offers", "review", "settings"].forEach((t) => ($("#tab-" + t).hidden = t !== b.dataset.tab)); closeDrawer(); ({ overview: loadOverview, bookings: loadBookings, clients: loadClients, services: loadServices, calendar: loadCalendar, team: loadTeamTab, offers: loadOffers, review: loadReview, settings: loadSettings })[b.dataset.tab](); }));
 $("#login-form").addEventListener("submit", async (e) => { e.preventDefault(); const err = $("#login-err"); err.hidden = true; $("#login-btn").disabled = true; try { await ZenAPI("POST", "/api/admin/login", { email: $("#a-email").value.trim(), password: $("#a-pass").value }); start(await ZenAPI("GET", "/api/admin/me")); } catch (ex) { err.textContent = ex.message; err.hidden = false; } finally { $("#login-btn").disabled = false; } });
 $$("#demo-login [data-role]").forEach((b) => b.addEventListener("click", async () => { await ZenAPI("POST", "/api/admin/demo-login", { role: b.dataset.role }); start(await ZenAPI("GET", "/api/admin/me")); }));
 $("#signout").addEventListener("click", async (e) => { e.preventDefault(); await ZenAPI("POST", "/api/admin/logout").catch(() => {}); location.reload(); });

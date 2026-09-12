@@ -92,6 +92,9 @@ CREATE TABLE IF NOT EXISTS admins (
   role       TEXT NOT NULL,                -- all | cairo | dahab | florence
   pass_hash  TEXT NOT NULL,
   salt       TEXT NOT NULL,
+  photo      TEXT,                          -- small data: URL, like users.photo
+  phone      TEXT,
+  notify     INTEGER DEFAULT 1,             -- email me about new bookings in my city (owner: all cities)
   created_at TEXT DEFAULT (datetime('now')),
   last_login TEXT
 );
@@ -128,3 +131,21 @@ INSERT OR IGNORE INTO settings VALUES ('package_pct', '15');
 INSERT OR IGNORE INTO settings VALUES ('review_cairo', '');
 INSERT OR IGNORE INTO settings VALUES ('review_dahab', '');
 INSERT OR IGNORE INTO settings VALUES ('review_florence', '');
+-- Services and prices, editable from the admin (seeded from the original catalog; src/catalog.js is the fallback)
+CREATE TABLE IF NOT EXISTS services (id TEXT PRIMARY KEY, city TEXT NOT NULL, name TEXT NOT NULL, minutes INTEGER NOT NULL DEFAULT 60, amount INTEGER NOT NULL, currency TEXT NOT NULL, description TEXT, active INTEGER DEFAULT 1, sort INTEGER DEFAULT 0, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT);
+INSERT OR IGNORE INTO services (id, city, name, minutes, amount, currency, description, sort) VALUES ('cai-man', 'cairo', 'Manual therapy', 60, 100000, 'egp', 'Deep tissue and sports massage, hands only.', 0);
+INSERT OR IGNORE INTO services (id, city, name, minutes, amount, currency, description, sort) VALUES ('cai-dry', 'cairo', 'Dry cupping', 45, 90000, 'egp', 'Cups placed and left still. The classic session.', 1);
+INSERT OR IGNORE INTO services (id, city, name, minutes, amount, currency, description, sort) VALUES ('cai-slide', 'cairo', 'Sliding cupping', 60, 120000, 'egp', 'Oiled skin, gliding cups. Massage with the lift built in.', 2);
+INSERT OR IGNORE INTO services (id, city, name, minutes, amount, currency, description, sort) VALUES ('cai-fire', 'cairo', 'Fire cupping', 45, 100000, 'egp', 'Glass cups, a flash of flame, deeper warmth.', 3);
+INSERT OR IGNORE INTO services (id, city, name, minutes, amount, currency, description, sort) VALUES ('cai-hij', 'cairo', 'Hijama', 60, 110000, 'egp', 'Wet cupping with sterile single-use equipment.', 4);
+INSERT OR IGNORE INTO services (id, city, name, minutes, amount, currency, description, sort) VALUES ('cai-face', 'cairo', 'Facial cupping', 30, 70000, 'egp', 'Light, gliding, no marks.', 5);
+INSERT OR IGNORE INTO services (id, city, name, minutes, amount, currency, description, sort) VALUES ('dah-man', 'dahab', 'Manual therapy', 60, 100000, 'egp', 'Deep tissue and sports massage, hands only.', 0);
+INSERT OR IGNORE INTO services (id, city, name, minutes, amount, currency, description, sort) VALUES ('dah-dry', 'dahab', 'Dry cupping', 45, 90000, 'egp', 'Cups placed and left still. The classic session.', 1);
+INSERT OR IGNORE INTO services (id, city, name, minutes, amount, currency, description, sort) VALUES ('dah-slide', 'dahab', 'Sliding cupping', 60, 120000, 'egp', 'Oiled skin, gliding cups. Good after a day of diving or climbing.', 2);
+INSERT OR IGNORE INTO services (id, city, name, minutes, amount, currency, description, sort) VALUES ('dah-fire', 'dahab', 'Fire cupping', 45, 100000, 'egp', 'Glass cups, a flash of flame, deeper warmth.', 3);
+INSERT OR IGNORE INTO services (id, city, name, minutes, amount, currency, description, sort) VALUES ('dah-face', 'dahab', 'Facial cupping', 30, 70000, 'egp', 'Light, gliding, no marks.', 4);
+INSERT OR IGNORE INTO services (id, city, name, minutes, amount, currency, description, sort) VALUES ('flo-man', 'florence', 'Manual therapy', 60, 6000, 'eur', 'Deep tissue and sports massage, hands only.', 0);
+INSERT OR IGNORE INTO services (id, city, name, minutes, amount, currency, description, sort) VALUES ('flo-dry', 'florence', 'Dry cupping', 45, 5500, 'eur', 'Cups placed and left still. The classic session.', 1);
+INSERT OR IGNORE INTO services (id, city, name, minutes, amount, currency, description, sort) VALUES ('flo-slide', 'florence', 'Sliding cupping', 60, 7000, 'eur', 'Oiled skin, gliding cups. Massage with the lift built in.', 2);
+INSERT OR IGNORE INTO services (id, city, name, minutes, amount, currency, description, sort) VALUES ('flo-fire', 'florence', 'Fire cupping', 45, 6500, 'eur', 'Glass cups, a flash of flame, deeper warmth.', 3);
+INSERT OR IGNORE INTO services (id, city, name, minutes, amount, currency, description, sort) VALUES ('flo-face', 'florence', 'Facial cupping', 30, 4500, 'eur', 'Light, gliding, no marks.', 4);
