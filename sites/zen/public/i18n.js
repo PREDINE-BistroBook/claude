@@ -5,6 +5,12 @@
 window.ZenI18n = (function () {
   const LANGS = { en: "English", it: "Italiano", ar: "العربية" };
   const IT = {
+    // pages split (2026-09-12)
+    "Booking": "Prenotazione", "Gift": "Regalo", "Rewards": "Premi", "Guide": "Guida", "Where next": "E adesso", "Everything else lives on its own page.": "Tutto il resto ha la sua pagina.",
+    "Pick a city, a session and a time. Pay by card, or at the session if a therapist needs to look first.": "Scegli città, seduta e orario. Paghi con carta, o alla seduta se un terapista deve prima dare un'occhiata.",
+    "A session for someone else, delivered by email as a code. Valid in one city, no expiry.": "Una seduta per qualcun altro, consegnata via email come codice. Valida in una città, senza scadenza.",
+    "Free sessions, invite discounts, a birthday treat. Your account keeps the tally.": "Sedute gratis, sconti per gli inviti, un regalo di compleanno. Il tuo account tiene il conto.",
+    "What to do before a session and after it, in plain words.": "Cosa fare prima di una seduta e dopo, in parole semplici.", "Book": "Prenota", "Give": "Regala", "See rewards": "Vedi i premi", "Read": "Leggi",
     // method pages (method.html)
     "How it works": "Come funziona", "All methods": "Tutti i metodi", "← All methods": "← Tutti i metodi", "For · {who}": "Per · {who}", "Who it's for": "Per chi è", "Before": "Prima", "After": "Dopo", "When to skip it and tell us": "Quando saltarla e dircelo",
     "Book this session": "Prenota questa seduta", "{method} in Cairo, Dahab or Florence.": "{method} al Cairo, a Dahab o a Firenze.", "Pick your city. The session is preselected in the booking form; prices are in the local currency.": "Scegli la città. La seduta è già selezionata nel modulo di prenotazione; i prezzi sono nella valuta locale.",
@@ -337,6 +343,12 @@ window.ZenI18n = (function () {
     "January": "gennaio", "February": "febbraio", "March": "marzo", "April": "aprile", "May": "maggio", "June": "giugno", "July": "luglio", "August": "agosto", "September": "settembre", "October": "ottobre", "November": "novembre", "December": "dicembre",
   };
   const AR = {
+    // pages split
+    "Booking": "الحجز", "Gift": "هدية", "Rewards": "المكافآت", "Guide": "الدليل", "Where next": "إلى أين الآن", "Everything else lives on its own page.": "كل شيء آخر له صفحته الخاصة.",
+    "Pick a city, a session and a time. Pay by card, or at the session if a therapist needs to look first.": "اختر مدينة وجلسة ووقتًا. ادفع بالبطاقة، أو في الجلسة إن احتاج المعالج أن يطّلع أولًا.",
+    "A session for someone else, delivered by email as a code. Valid in one city, no expiry.": "جلسة لشخص آخر، تصل بالبريد ككود. صالحة في مدينة واحدة بلا انتهاء.",
+    "Free sessions, invite discounts, a birthday treat. Your account keeps the tally.": "جلسات مجانية، خصومات الدعوة، هدية عيد ميلاد. حسابك يحفظ العدّ.",
+    "What to do before a session and after it, in plain words.": "ماذا تفعل قبل الجلسة وبعدها، بكلمات بسيطة.", "Book": "احجز", "Give": "أهدِ", "See rewards": "شاهد المكافآت", "Read": "اقرأ",
     // method pages
     "How it works": "كيف يعمل", "All methods": "كل الأساليب", "← All methods": "← كل الأساليب", "For · {who}": "لمن · {who}", "Who it's for": "لمن هذا", "Before": "قبل", "After": "بعد", "When to skip it and tell us": "متى تتخطاه وتخبرنا",
     "Book this session": "احجز هذه الجلسة", "{method} in Cairo, Dahab or Florence.": "{method} في القاهرة أو دهب أو فلورنسا.", "Pick your city. The session is preselected in the booking form; prices are in the local currency.": "اختر مدينتك. الجلسة محددة مسبقًا في نموذج الحجز؛ الأسعار بالعملة المحلية.",

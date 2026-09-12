@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<title>Zen Recovery · Gift a session</title>
+<meta name="description" content="Give someone a Zen Recovery session in Cairo, Dahab or Florence. Pay now, they get a code by email.">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira:ital,wght@0,300;0,400;1,800&family=Michroma&family=Figtree:wght@400;500;600&family=DM+Mono:wght@400;500&family=Cairo:wght@300;400;600;800&display=swap">
+<meta name="theme-color" content="#1B1E1D">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="img/icon-192.png">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+
+<div class="preview" id="preview">
+  Preview build — photos, prices and addresses are placeholders until Zen confirms them. Payments switch on once a Stripe account is connected.
+</div>
+
+<nav class="nav" id="nav" aria-label="Main">
+  <a class="brand no-i18n" href="index.html" aria-label="Zen Recovery, home"><span class="wm"><b>ZEN</b><small>RECOVERY</small></span></a>
+  <div class="nav-links">
+    <a href="index.html#how" class="hide-sm">How it works</a>
+    <a href="index.html#methods" class="hide-sm">Methods</a>
+    <a href="booking.html" class="hide-sm">Booking</a>
+    <a href="giftcard.html" class="hide-sm" aria-current="page">Gift</a>
+    <a href="rewards.html" class="hide-sm" >Rewards</a>
+    <span id="lang-slot"></span>
+    <a href="account.html" id="nav-account" class="signin"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg><span>Sign in</span></a>
+    <a href="booking.html" class="btn small">Book a session</a>
+  </div>
+</nav>
+
+<main id="top">
+
+<!-- ================= GIFT ================= -->
+<section class="gift" id="gift" aria-labelledby="gift-title">
+  <div class="gift-shell">
+    <div class="gift-intro reveal">
+      <p class="eyebrow">Gift a session</p>
+      <h2 id="gift-title">Give someone an hour of quiet.</h2>
+      <p>Pick a city and a session. You pay now; they get a code by email and book whenever they like. Valid in that city, no expiry.</p>
+      <p class="fine">Prefer to hand it over in person? Leave their email empty and we send the code to you.</p>
+    </div>
+    <form class="booking gift-form reveal" id="gift-form" novalidate>
+      <div class="two">
+        <div class="field"><label for="g-city">City</label><select id="g-city"><option value="cairo">Cairo</option><option value="dahab">Dahab</option><option value="florence">Florence</option></select></div>
+        <div class="field"><label for="g-service">Session</label><select id="g-service"></select></div>
+      </div>
+      <div class="two">
+        <div class="field"><label for="g-buyer">Your name</label><input id="g-buyer" autocomplete="name" required></div>
+        <div class="field"><label for="g-buyer-email">Your email</label><input id="g-buyer-email" type="email" autocomplete="email" required></div>
+      </div>
+      <div class="two">
+        <div class="field"><label for="g-to">Their name</label><input id="g-to" required></div>
+        <div class="field"><label for="g-to-email">Their email <span style="color:var(--ink-mute);font-weight:400">(optional)</span></label><input id="g-to-email" type="email"></div>
+      </div>
+      <div class="field"><label for="g-msg">A message <span style="color:var(--ink-mute);font-weight:400">(optional)</span></label><textarea id="g-msg" placeholder="Happy birthday. Go lie down."></textarea></div>
+      <div class="book-actions">
+        <p class="err" id="g-err" hidden></p>
+        <button class="btn" type="submit" id="g-pay">Pay and send</button>
+        <p class="fine">Secure card payment by Stripe. The code arrives by email within a minute of paying.</p>
+      </div>
+    </form>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="foot-grid">
+    <div>
+      <span class="wm lg"><b>ZEN</b><small>RECOVERY</small></span>
+      <p>Manual techniques, cupping, muscle recovery. Cairo, Dahab and Florence. Recovery = growth.</p>
+    </div>
+    <div>
+      <p class="eyebrow">Find us</p>
+      <ul>
+        <li><a href="https://instagram.com/zen_recovery10" target="_blank" rel="noopener">Instagram · @zen_recovery10</a></li>
+        <li><a href="https://instagram.com/recoverywithshaarawy" target="_blank" rel="noopener">Instagram · @recoverywithshaarawy (Cairo & Dahab)</a></li>
+        <li><a href="https://wa.me/201145638166" target="_blank" rel="noopener">WhatsApp · Cairo & Dahab</a></li>
+        <li><a href="booking.html">Cities</a></li>
+      </ul>
+    </div>
+    <div>
+      <p class="eyebrow">Sessions</p>
+      <ul>
+        <li><a href="index.html#how">How cupping works</a></li>
+        <li><a href="index.html#methods">Methods</a></li>
+        <li><a href="guide.html">Before and after</a></li>
+        <li><a href="rewards.html">Rewards</a></li>
+        <li><a href="giftcard.html">Gift a session</a></li>
+        <li><a href="account.html">My account</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot-bottom">
+    <span>© <span id="year"></span> Zen Recovery</span>
+    <span>Cupping is a complementary therapy and not a substitute for medical care. <a href="admin.html" style="color:inherit;opacity:.6">Team sign-in</a></span>
+  </div>
+</footer>
+
+<dialog id="dlg">
+  <div class="inner">
+    <h3 id="dlg-title">Almost there</h3>
+    <p id="dlg-body"></p>
+    <div class="row"><button class="btn small" id="dlg-close" type="button">Got it</button></div>
+  </div>
+</dialog>
+
+<script src="i18n.js"></script>
+<script src="guide.js"></script>
+<script src="methods.js"></script>
+<script src="site.js"></script>
+<script src="gift.js"></script>
+</body>
+</html>

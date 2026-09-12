@@ -172,7 +172,7 @@ async function googleStart(env, url) {
   return new Response(null, { status: 302, headers: { location: `https://accounts.google.com/o/oauth2/v2/auth?${q}`, "set-cookie": setCookie(GOOGLE_COOKIE, cookie, 600) } });
 }
 async function googleCallback(req, env, url) {
-  const fail = (why) => { console.error("google sign-in failed:", why); return new Response(null, { status: 302, headers: { location: `${env.SITE_URL}/account.html?error=google`, "set-cookie": clearCookie(GOOGLE_COOKIE) } }); };
+  const fail = (why) => { console.error("google sign-in failed:", why); return new Response(null, { status: 302, headers: { location: `${env.SITE_URL}/account?error=google`, "set-cookie": clearCookie(GOOGLE_COOKIE) } }); };
   const st = await verifyPayload(env.SESSION_SECRET, getCookie(req, GOOGLE_COOKIE));
   const code = url.searchParams.get("code");
   if (!st || !code || url.searchParams.get("state") !== st.state) return fail("state mismatch");
@@ -186,7 +186,7 @@ async function googleCallback(req, env, url) {
   let user = await env.DB.prepare("SELECT * FROM users WHERE google_sub = ? OR email = ?").bind(claims.sub, email).first();
   if (!user) { user = await createUser(env, { email, name: clean(claims.name, 80) || email.split("@")[0], ref: st.ref, lang: st.lang, google_sub: claims.sub }); await welcomeEmail(env, user); }
   else if (!user.google_sub) await env.DB.prepare("UPDATE users SET google_sub = ? WHERE id = ?").bind(claims.sub, user.id).run();
-  const headers = new Headers({ location: `${env.SITE_URL}/account.html` });
+  const headers = new Headers({ location: `${env.SITE_URL}/account` });
   headers.append("set-cookie", await sessionCookieFor(env, user.id)); headers.append("set-cookie", clearCookie(GOOGLE_COOKIE));
   return new Response(null, { status: 302, headers });
 }
@@ -223,9 +223,9 @@ async function bookingFeedback(req, env, id) {
 async function verifyLink(req, env, url) {
   const t = clean(url.searchParams.get("t"), 64);
   const row = await env.DB.prepare("SELECT * FROM login_tokens WHERE token = ? AND used = 0 AND expires_at > ?").bind(t, Math.floor(Date.now() / 1000)).first();
-  if (!row) return Response.redirect(`${env.SITE_URL}/account.html?expired=1`, 302);
+  if (!row) return Response.redirect(`${env.SITE_URL}/account?expired=1`, 302);
   await env.DB.prepare("UPDATE login_tokens SET used = 1 WHERE token = ?").bind(t).run();
-  return new Response(null, { status: 302, headers: { location: `${env.SITE_URL}/account.html`, "set-cookie": await sessionCookieFor(env, row.user_id) } });
+  return new Response(null, { status: 302, headers: { location: `${env.SITE_URL}/account`, "set-cookie": await sessionCookieFor(env, row.user_id) } });
 }
 
 async function me(req, env) {
@@ -245,7 +245,7 @@ async function userBundle(env, u) {
   const { pass_hash, ...user } = u;
   user.intake = parseIntake(user.intake);
   user.flags = healthFlags(u.intake);
-  return { user, credits: credits.results, packages: packages.results, stats: { done: stats.done || 0, upcoming: stats.upcoming || 0 }, settings: s, referrer: referrer?.name || null, invited: invited.results, share_url: `${env.SITE_URL}/account.html?ref=${u.referral_code}` };
+  return { user, credits: credits.results, packages: packages.results, stats: { done: stats.done || 0, upcoming: stats.upcoming || 0 }, settings: s, referrer: referrer?.name || null, invited: invited.results, share_url: `${env.SITE_URL}/account?ref=${u.referral_code}` };
 }
 
 async function updateMe(req, env) {
@@ -340,7 +340,7 @@ async function checkout(req, env) {
   let session;
   try {
     session = await stripeCheckout(env, { amount, currency: city.currency, name: svc.name + label, description: `${date} · ${slotLabel(slot)}${avail.mode === "slots" ? "" : " · Zen confirms the exact hour on WhatsApp"}`, email,
-      success: `${env.SITE_URL}/success.html?s={CHECKOUT_SESSION_ID}`, cancel: `${env.SITE_URL}/#book`, metadata: { booking_id: id, city: city.name } });
+      success: `${env.SITE_URL}/success.html?s={CHECKOUT_SESSION_ID}`, cancel: `${env.SITE_URL}/booking`, metadata: { booking_id: id, city: city.name } });
   } catch (e) { return json({ error: e.message }, 502); }
   await insertBooking(env, { ...base, status: "pending", stripe_session: session.id });
   if (credit) await env.DB.prepare("UPDATE credits SET status = 'reserved', booking_id = ? WHERE id = ?").bind(id, credit.id).run();
@@ -408,7 +408,7 @@ async function afterPaid(env, bk) {
       subject: `New booking · ${city.name} · ${bk.service_name} · ${bk.date} ${slotLabel(bk.slot)}`,
       text: [`New booking through the website.`, ``, `City:     ${city.name}`, `Session:  ${bk.service_name}`, `Day:      ${bk.date}`, `Time:     ${slotLabel(bk.slot)}`, th ? `Therapist: ${th}` : null, ``,
         `Client:   ${bk.name}`, `WhatsApp: ${bk.phone}`, `Email:    ${bk.email}`, `Note:     ${bk.note || "—"}`, bk.partner_code ? `Partner:  ${bk.partner_code}` : null, ``, `Paid:     ${paidLine(bk)}`, ``,
-        exact ? `The time is fixed. Mark it "Confirmed" in the admin once you've said hello on WhatsApp: ${env.SITE_URL}/admin.html` : `Confirm the exact hour with the client on WhatsApp, then mark it "Confirmed" in the admin: ${env.SITE_URL}/admin.html`].filter((l) => l !== null).join("\n"),
+        exact ? `The time is fixed. Mark it "Confirmed" in the admin once you've said hello on WhatsApp: ${env.SITE_URL}/admin` : `Confirm the exact hour with the client on WhatsApp, then mark it "Confirmed" in the admin: ${env.SITE_URL}/admin`].filter((l) => l !== null).join("\n"),
     }),
     sendEmail(env, {
       to: bk.email,
@@ -416,14 +416,14 @@ async function afterPaid(env, bk) {
       text: [`Hi ${bk.name},`, ``, `Your session is reserved: ${bk.service_name}, ${bk.date}, ${slotLabel(bk.slot)}${th ? ` with ${th}` : ""}. ${paidLine(bk)}.`, ``,
         exact ? `Zen will message you on WhatsApp (${bk.phone}) with the address and anything to bring.` : `Zen will message you on WhatsApp (${bk.phone}) to confirm the exact hour.`, ``,
         `Before: eat something light, drink water. After: keep warm, no cold showers or swimming for about six hours.`, ``,
-        `Your sessions, rewards and invite link: ${env.SITE_URL}/account.html`, ``, `See you soon,`, `Zen Recovery`].join("\n"),
+        `Your sessions, rewards and invite link: ${env.SITE_URL}/account`, ``, `See you soon,`, `Zen Recovery`].join("\n"),
     }),
   ]);
 }
 async function afterReview(env, bk) {
   const city = CITIES[bk.city];
   await Promise.all([
-    sendEmail(env, { to: await notifyList(env, bk.city), subject: `Needs a therapist's OK · ${city.name} · ${bk.name} · ${bk.date}`, text: [`${bk.name} booked ${bk.service_name} for ${bk.date} ${slotLabel(bk.slot)} but ticked a health red flag (pregnancy, blood thinners, bleeding/heart condition, recent surgery…).`, ``, `Nothing was charged. Read their answers and approve or cancel in the admin → Needs review: ${env.SITE_URL}/admin.html`, ``, `WhatsApp: ${bk.phone} · Email: ${bk.email}`, `Note: ${bk.note || "—"}`].join("\n") }),
+    sendEmail(env, { to: await notifyList(env, bk.city), subject: `Needs a therapist's OK · ${city.name} · ${bk.name} · ${bk.date}`, text: [`${bk.name} booked ${bk.service_name} for ${bk.date} ${slotLabel(bk.slot)} but ticked a health red flag (pregnancy, blood thinners, bleeding/heart condition, recent surgery…).`, ``, `Nothing was charged. Read their answers and approve or cancel in the admin → Needs review: ${env.SITE_URL}/admin`, ``, `WhatsApp: ${bk.phone} · Email: ${bk.email}`, `Note: ${bk.note || "—"}`].join("\n") }),
     sendEmail(env, { to: bk.email, subject: `Zen Recovery — one quick check before ${bk.date}`, text: [`Hi ${bk.name},`, ``, `Thanks for booking ${bk.service_name} in ${city.name} on ${bk.date} (${slotLabel(bk.slot)}).`, ``, `Because of what you told us about your health, a therapist looks at your answers first — that's normal and usually quick. Nothing has been charged. You'll get a confirmation (and a WhatsApp) once it's approved, and you pay at the session.`, ``, `Zen Recovery`].join("\n") }),
   ]);
 }
@@ -438,7 +438,7 @@ async function maybeRewardReferrer(env, userId) {
   const s = await settings(env);
   await env.DB.prepare("INSERT INTO credits (id, user_id, kind, pct, reason) VALUES (?,?,?,?,?)").bind(randomId(), u.referred_by, "referral", s.referral_pct, `ref:${userId}`).run();
   const ref = await env.DB.prepare("SELECT email, name FROM users WHERE id = ?").bind(u.referred_by).first();
-  await sendEmail(env, { to: ref.email, subject: `${u.name} booked with Zen — your ${s.referral_pct}% is ready`, text: [`Hi ${ref.name},`, ``, `${u.name} just booked their first session with your invite. You've got ${s.referral_pct}% off your next session.`, ``, `Use it when you book: ${env.SITE_URL}/#places`, ``, `Zen Recovery`].join("\n") });
+  await sendEmail(env, { to: ref.email, subject: `${u.name} booked with Zen — your ${s.referral_pct}% is ready`, text: [`Hi ${ref.name},`, ``, `${u.name} just booked their first session with your invite. You've got ${s.referral_pct}% off your next session.`, ``, `Use it when you book: ${env.SITE_URL}/booking`, ``, `Zen Recovery`].join("\n") });
 }
 
 async function maybeRewardLoyalty(env, userId) {
@@ -451,7 +451,7 @@ async function maybeRewardLoyalty(env, userId) {
   if (already) return;
   await env.DB.prepare("INSERT INTO credits (id, user_id, kind, pct, reason) VALUES (?,?,?,?,?)").bind(randomId(), userId, "loyalty", 100, reason).run();
   const u = await env.DB.prepare("SELECT email, name FROM users WHERE id = ?").bind(userId).first();
-  await sendEmail(env, { to: u.email, subject: "Your next Zen session is on us", text: [`Hi ${u.name},`, ``, `That was session number ${done.n}. The next one is free — pick a day whenever you like: ${env.SITE_URL}/#places`, ``, `Zen Recovery`].join("\n") });
+  await sendEmail(env, { to: u.email, subject: "Your next Zen session is on us", text: [`Hi ${u.name},`, ``, `That was session number ${done.n}. The next one is free — pick a day whenever you like: ${env.SITE_URL}/booking`, ``, `Zen Recovery`].join("\n") });
 }
 
 // ---------- admin ----------

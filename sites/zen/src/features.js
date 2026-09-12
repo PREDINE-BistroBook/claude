@@ -60,7 +60,7 @@ async function packageCheckout(req, env) {
   if (!isLive(env)) return json({ preview: true, error: "Payments are not switched on yet." }, 503);
   const id = randomId();
   const { url, id: sid } = await stripeCheckout(env, { amount: pk.amount, currency: pk.currency, name: `${pk.name} · ${pk.sessions} sessions · ${CITIES[pk.city].name}`, description: `Valid ${pk.months_valid} months from purchase`, email: u.email,
-    success: `${env.SITE_URL}/account.html?package=1#packages`, cancel: `${env.SITE_URL}/account.html#packages`, metadata: { kind: "package", package_row: id } });
+    success: `${env.SITE_URL}/account?package=1#packages`, cancel: `${env.SITE_URL}/account#packages`, metadata: { kind: "package", package_row: id } });
   await env.DB.prepare("INSERT INTO client_packages (id, user_id, package_id, name, city, sessions, remaining, amount, currency, platform_fee, status, stripe_session) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")
     .bind(id, u.id, pk.id, pk.name, pk.city, pk.sessions, pk.sessions, pk.amount, pk.currency, feeOn(pk.amount), "pending", sid).run();
   return json({ url });
@@ -73,7 +73,7 @@ export async function packagePaid(env, rowId, paymentIntent) {
   const exp = new Date(); exp.setUTCMonth(exp.getUTCMonth() + (pk?.months_valid || 6));
   await env.DB.prepare("UPDATE client_packages SET status = 'paid', paid_at = ?, expires_at = ? WHERE id = ?").bind(now(), exp.toISOString().slice(0, 10), rowId).run();
   const u = await env.DB.prepare("SELECT email, name FROM users WHERE id = ?").bind(cp.user_id).first();
-  await sendEmail(env, { to: u.email, subject: `Your ${cp.name} is ready — ${cp.sessions} sessions in ${CITIES[cp.city].name}`, text: [`Hi ${u.name.split(" ")[0]},`, ``, `${cp.sessions} sessions are waiting in your account, valid until ${exp.toISOString().slice(0, 10)}. When you book, pick "Use my package" and there's nothing to pay.`, ``, `${env.SITE_URL}/?city=${cp.city}#book`, ``, `Zen Recovery`].join("\n") });
+  await sendEmail(env, { to: u.email, subject: `Your ${cp.name} is ready — ${cp.sessions} sessions in ${CITIES[cp.city].name}`, text: [`Hi ${u.name.split(" ")[0]},`, ``, `${cp.sessions} sessions are waiting in your account, valid until ${exp.toISOString().slice(0, 10)}. When you book, pick "Use my package" and there's nothing to pay.`, ``, `${env.SITE_URL}/booking?city=${cp.city}`, ``, `Zen Recovery`].join("\n") });
   await sendEmail(env, { to: await notifyList(env, cp.city), subject: `Package sold · ${CITIES[cp.city].name} · ${cp.name} · ${fmt(cp.amount, cp.currency)}`, text: `${u.name} (${u.email}) bought ${cp.name} (${cp.sessions} sessions) in ${CITIES[cp.city].name} for ${fmt(cp.amount, cp.currency)}.` });
 }
 async function myPackages(req, env) {
@@ -92,7 +92,7 @@ async function giftCheckout(req, env) {
   if (!isLive(env)) return json({ preview: true, error: "Payments are not switched on yet." }, 503);
   const id = randomId(), code = "GIFT-" + referralCode();
   const { url, id: sid } = await stripeCheckout(env, { amount: svc.amount, currency: city.currency, name: `Gift: ${svc.name}`, description: `For ${recipient_name}. Sent by email as a code after payment.`, email: buyer_email,
-    success: `${env.SITE_URL}/success.html?gift=1`, cancel: `${env.SITE_URL}/#gift`, metadata: { kind: "gift", gift_id: id } });
+    success: `${env.SITE_URL}/success.html?gift=1`, cancel: `${env.SITE_URL}/giftcard`, metadata: { kind: "gift", gift_id: id } });
   await env.DB.prepare("INSERT INTO gifts (id, code, city, service_id, service_name, amount, currency, platform_fee, buyer_name, buyer_email, recipient_name, recipient_email, message, status, stripe_session) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
     .bind(id, code, b.city, svc.id, svc.name, svc.amount, city.currency, feeOn(svc.amount), buyer_name, buyer_email, recipient_name, recipient_email || null, message, "pending", sid).run();
   return json({ url });
@@ -101,7 +101,7 @@ export async function giftPaid(env, giftId) {
   const g = await env.DB.prepare("SELECT * FROM gifts WHERE id = ?").bind(giftId).first();
   if (!g || g.status !== "pending") return;
   await env.DB.prepare("UPDATE gifts SET status = 'paid', paid_at = ? WHERE id = ?").bind(now(), giftId).run();
-  const cityName = CITIES[g.city].name, link = `${env.SITE_URL}/?city=${g.city}&gift=${g.code}#book`;
+  const cityName = CITIES[g.city].name, link = `${env.SITE_URL}/booking?city=${g.city}&gift=${g.code}`;
   const lines = [`${g.buyer_name} has given you a ${g.service_name.split(" · ")[0]} session with Zen Recovery in ${cityName}.`, ``, g.message ? `"${g.message}"` : null, g.message ? `` : null, `Your gift code: ${g.code}`, ``, `Book your session here (the code fills itself in): ${link}`, ``, `Zen Recovery`].filter((l) => l !== null);
   await sendEmail(env, { to: g.buyer_email, subject: `Your gift for ${g.recipient_name} — code ${g.code}`, text: [`Hi ${g.buyer_name.split(" ")[0]},`, ``, `Thank you. The gift is paid: ${g.service_name} in ${cityName}.`, ``, `Code: ${g.code}`, `Booking link: ${link}`, ``, g.recipient_email ? `We've emailed ${g.recipient_name} too.` : `Forward the code or the link to ${g.recipient_name}.`, ``, `Zen Recovery`].join("\n") });
   if (g.recipient_email) await sendEmail(env, { to: g.recipient_email, subject: `A gift from ${g.buyer_name}: a Zen Recovery session`, text: lines.join("\n") });
@@ -193,7 +193,7 @@ async function appleStart(env, url) {
   return new Response(null, { status: 302, headers: { location: `https://appleid.apple.com/auth/authorize?${q}`, "set-cookie": `${APPLE_COOKIE}=${encodeURIComponent(cookie)}; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=600` } });
 }
 async function appleCallback(req, env) {
-  const fail = (why) => { console.error("apple sign-in failed:", why); return new Response(null, { status: 302, headers: { location: `${env.SITE_URL}/account.html?error=apple`, "set-cookie": clearCookie(APPLE_COOKIE) } }); };
+  const fail = (why) => { console.error("apple sign-in failed:", why); return new Response(null, { status: 302, headers: { location: `${env.SITE_URL}/account?error=apple`, "set-cookie": clearCookie(APPLE_COOKIE) } }); };
   if (!appleReady(env)) return fail("not configured");
   const fd = await req.formData().catch(() => null);
   const st = await verifyPayload(env.SESSION_SECRET, getCookie(req, APPLE_COOKIE));
@@ -211,7 +211,7 @@ async function appleCallback(req, env) {
   let user = await env.DB.prepare("SELECT * FROM users WHERE apple_sub = ? OR email = ?").bind(claims.sub, email).first();
   if (!user) { user = await createUser(env, { email, name: name || email.split("@")[0], ref: st.ref, lang: st.lang, apple_sub: claims.sub }); await welcomeEmail(env, user); }
   else if (!user.apple_sub) await env.DB.prepare("UPDATE users SET apple_sub = ? WHERE id = ?").bind(claims.sub, user.id).run();
-  const headers = new Headers({ location: `${env.SITE_URL}/account.html` });
+  const headers = new Headers({ location: `${env.SITE_URL}/account` });
   headers.append("set-cookie", await sessionCookieFor(env, user.id)); headers.append("set-cookie", clearCookie(APPLE_COOKIE));
   return new Response(null, { status: 302, headers });
 }
@@ -411,7 +411,7 @@ async function approveClient(env, admin, id) {
   const city = admin.role === "all" ? null : admin.role;
   await env.DB.prepare("UPDATE users SET approved = 1 WHERE id = ?").bind(id).run();
   const r = await env.DB.prepare("UPDATE bookings SET status = 'confirmed' WHERE user_id = ? AND status = 'review'" + (city ? " AND city = ?" : "")).bind(id, ...(city ? [city] : [])).run();
-  await sendEmail(env, { to: u.email, subject: "Zen Recovery — you're cleared to book", text: [`Hi ${u.name.split(" ")[0]},`, ``, `A therapist looked at what you told us about your health and you're good to go.`, r.meta.changes ? `Your pending session is now confirmed — Zen will message you on WhatsApp about the exact hour, and you pay at the session.` : `You can now book online like anyone else.`, ``, `${env.SITE_URL}/account.html`, ``, `Zen Recovery`].join("\n") });
+  await sendEmail(env, { to: u.email, subject: "Zen Recovery — you're cleared to book", text: [`Hi ${u.name.split(" ")[0]},`, ``, `A therapist looked at what you told us about your health and you're good to go.`, r.meta.changes ? `Your pending session is now confirmed — Zen will message you on WhatsApp about the exact hour, and you pay at the session.` : `You can now book online like anyone else.`, ``, `${env.SITE_URL}/account`, ``, `Zen Recovery`].join("\n") });
   return json({ ok: true, confirmed: r.meta.changes });
 }
 

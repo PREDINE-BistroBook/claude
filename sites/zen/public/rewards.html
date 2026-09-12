@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<title>Zen Recovery · Rewards</title>
+<meta name="description" content="Free sessions, invite discounts and a birthday treat at Zen Recovery.">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira:ital,wght@0,300;0,400;1,800&family=Michroma&family=Figtree:wght@400;500;600&family=DM+Mono:wght@400;500&family=Cairo:wght@300;400;600;800&display=swap">
+<meta name="theme-color" content="#1B1E1D">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="img/icon-192.png">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+
+<div class="preview" id="preview">
+  Preview build — photos, prices and addresses are placeholders until Zen confirms them. Payments switch on once a Stripe account is connected.
+</div>
+
+<nav class="nav" id="nav" aria-label="Main">
+  <a class="brand no-i18n" href="index.html" aria-label="Zen Recovery, home"><span class="wm"><b>ZEN</b><small>RECOVERY</small></span></a>
+  <div class="nav-links">
+    <a href="index.html#how" class="hide-sm">How it works</a>
+    <a href="index.html#methods" class="hide-sm">Methods</a>
+    <a href="booking.html" class="hide-sm">Booking</a>
+    <a href="giftcard.html" class="hide-sm" >Gift</a>
+    <a href="rewards.html" class="hide-sm" aria-current="page">Rewards</a>
+    <span id="lang-slot"></span>
+    <a href="account.html" id="nav-account" class="signin"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg><span>Sign in</span></a>
+    <a href="booking.html" class="btn small">Book a session</a>
+  </div>
+</nav>
+
+<main id="top">
+
+<!-- ================= REWARDS ================= -->
+<section class="rewards" id="rewards" aria-labelledby="rewards-title">
+  <div class="rewards-head reveal">
+    <p class="eyebrow">Come back. Bring someone.</p>
+    <h2 id="rewards-title">Recovery is a habit. We reward the habit.</h2>
+  </div>
+  <div class="reward-cards">
+    <div class="reward-card reveal">
+      <div class="reward-num no-i18n"><span id="rw-every">10</span><small id="rw-suffix">th</small></div>
+      <h3 id="rw-loyalty-title">Every 10th session is free.</h3>
+      <p>Sessions in any city count. Your account keeps the tally, and the free one appears by itself when you get there.</p>
+    </div>
+    <div class="reward-card reveal">
+      <div class="reward-num no-i18n"><span id="rw-pct">40</span><small>%</small></div>
+      <h3 id="rw-invite-title">Invite a friend: 40% off, for both of you.</h3>
+      <p>Share your link. Your friend gets the discount on their first session. You get yours the moment they book.</p>
+    </div>
+    <div class="reward-card reveal small">
+      <div class="reward-num no-i18n"><span id="rw-bday">50</span><small>%</small></div>
+      <h3 id="rw-bday-title">Your birthday: 50% off one session.</h3>
+      <p>Add your birthday to your profile. The discount appears by itself 10 days before the day and lasts until 5 days after it, once a year.</p>
+    </div>
+  </div>
+  <div class="reward-cta reveal">
+    <a class="btn" href="account.html">Create your free account</a>
+    <span class="fine">No password. We email you a sign-in link.</span>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="foot-grid">
+    <div>
+      <span class="wm lg"><b>ZEN</b><small>RECOVERY</small></span>
+      <p>Manual techniques, cupping, muscle recovery. Cairo, Dahab and Florence. Recovery = growth.</p>
+    </div>
+    <div>
+      <p class="eyebrow">Find us</p>
+      <ul>
+        <li><a href="https://instagram.com/zen_recovery10" target="_blank" rel="noopener">Instagram · @zen_recovery10</a></li>
+        <li><a href="https://instagram.com/recoverywithshaarawy" target="_blank" rel="noopener">Instagram · @recoverywithshaarawy (Cairo & Dahab)</a></li>
+        <li><a href="https://wa.me/201145638166" target="_blank" rel="noopener">WhatsApp · Cairo & Dahab</a></li>
+        <li><a href="booking.html">Cities</a></li>
+      </ul>
+    </div>
+    <div>
+      <p class="eyebrow">Sessions</p>
+      <ul>
+        <li><a href="index.html#how">How cupping works</a></li>
+        <li><a href="index.html#methods">Methods</a></li>
+        <li><a href="guide.html">Before and after</a></li>
+        <li><a href="rewards.html">Rewards</a></li>
+        <li><a href="giftcard.html">Gift a session</a></li>
+        <li><a href="account.html">My account</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot-bottom">
+    <span>© <span id="year"></span> Zen Recovery</span>
+    <span>Cupping is a complementary therapy and not a substitute for medical care. <a href="admin.html" style="color:inherit;opacity:.6">Team sign-in</a></span>
+  </div>
+</footer>
+
+<dialog id="dlg">
+  <div class="inner">
+    <h3 id="dlg-title">Almost there</h3>
+    <p id="dlg-body"></p>
+    <div class="row"><button class="btn small" id="dlg-close" type="button">Got it</button></div>
+  </div>
+</dialog>
+
+<script src="i18n.js"></script>
+<script src="guide.js"></script>
+<script src="methods.js"></script>
+<script src="site.js"></script>
+</body>
+</html>
