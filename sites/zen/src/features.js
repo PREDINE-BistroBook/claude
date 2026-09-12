@@ -4,7 +4,7 @@
 // checked the admin cookie). Everything money-related goes through stripeCheckout() in lib.js (2% platform fee).
 import { CITIES } from "./catalog.js";
 import { randomId, referralCode, signPayload, verifyPayload, getCookie, clearCookie, hashPassword } from "./auth.js";
-import { CITY_KEYS, json, clean, normEmail, isDate, isTime, fmt, now, today, addDays, feeOn, body, isLive, currentUser, scope, sendEmail, stripeCheckout, slotsFor, healthFlags, parseIntake, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, isOwner, therapistOf, visibleWhere } from "./lib.js";
+import { CITY_KEYS, json, clean, normEmail, isDate, isTime, fmt, now, today, addDays, feeOn, body, isLive, currentUser, scope, sendEmail, stripeCheckout, slotsFor, healthFlags, parseIntake, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, isOwner, therapistOf, visibleWhere, isPartner, isEmployee, managesCity } from "./lib.js";
 
 const b64u = (s) => btoa(typeof s === "string" ? unescape(encodeURIComponent(s)) : String.fromCharCode(...new Uint8Array(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const cityOf = (k) => (CITY_KEYS.includes(k) ? k : null);
@@ -282,7 +282,7 @@ async function saveService(req, env, admin, id) {
   const b = await body(req);
   const cur = id ? await env.DB.prepare("SELECT * FROM services WHERE id = ?").bind(id).first() : null;
   if (id && !cur) return json({ error: "Not found" }, 404);
-  if (cur && !isOwner(admin) && cur.city !== admin.role) return json({ error: "Not your city." }, 403);
+  if (!isOwner(admin)) return json({ error: "Only the owner changes services and prices." }, 403);
   const city = cur ? cur.city : cityFor(admin, b.city);
   const name = clean(b.name, 60) || cur?.name;
   const minutes = Number.isInteger(b.minutes) && b.minutes >= 10 && b.minutes <= 240 ? b.minutes : cur?.minutes || 60;
@@ -305,7 +305,7 @@ async function saveService(req, env, admin, id) {
 async function deleteService(env, admin, id) {
   const cur = await env.DB.prepare("SELECT * FROM services WHERE id = ?").bind(id).first();
   if (!cur) return json({ error: "Not found" }, 404);
-  if (!isOwner(admin) && cur.city !== admin.role) return json({ error: "Not your city." }, 403);
+  if (!isOwner(admin)) return json({ error: "Only the owner changes services and prices." }, 403);
   const used = (await env.DB.prepare("SELECT COUNT(*) n FROM bookings WHERE service_id = ?").bind(id).first()).n;
   if (used) { await env.DB.prepare("UPDATE services SET active = 0, updated_at = ? WHERE id = ?").bind(now(), id).run(); return json({ ok: true, hidden: true }); }
   await env.DB.prepare("DELETE FROM services WHERE id = ?").bind(id).run();
@@ -323,7 +323,7 @@ async function deleteRows(req, env, admin, table) {
   if (!ids.length) return json({ error: "Nothing to remove." }, 400);
   const marks = ids.map(() => "?").join(",");
   const rows = (await env.DB.prepare(`SELECT id, city, therapist_id FROM ${table} WHERE id IN (${marks})`).bind(...ids).all()).results;
-  const me = isOwner(admin) ? null : await therapistOf(env, admin);
+  const me = isEmployee(admin) ? await therapistOf(env, admin) : null;
   const mine = rows.filter((r) => isOwner(admin) || ((!r.city || r.city === admin.role) && (!me || r.therapist_id === me.id))).map((r) => r.id);
   if (mine.length) await env.DB.prepare(`DELETE FROM ${table} WHERE id IN (${mine.map(() => "?").join(",")})`).bind(...mine).run();
   return json({ ok: true, removed: mine.length });
@@ -332,7 +332,8 @@ async function deleteRow(env, admin, table, id) {
   const row = await env.DB.prepare(`SELECT * FROM ${table} WHERE id = ?`).bind(id).first();
   if (!row) return json({ error: "Not found" }, 404);
   if (!isOwner(admin) && row.city && row.city !== admin.role) return json({ error: "Not your city." }, 403);
-  if (["availability", "blocked"].includes(table) && !isOwner(admin)) { const me = await therapistOf(env, admin); if (me && row.therapist_id !== me.id) return json({ error: "Only your own hours and days off. The room's are the owner's." }, 403); }
+  if (table === "therapists" && isEmployee(admin)) return json({ error: "Only the owner or your city's partner removes a team member." }, 403);
+  if (["availability", "blocked"].includes(table) && isEmployee(admin)) { const me = await therapistOf(env, admin); if (me && row.therapist_id !== me.id) return json({ error: "Only your own hours and days off. The room's are the owner's." }, 403); }
   await env.DB.prepare(`DELETE FROM ${table} WHERE id = ?`).bind(id).run();
   return json({ ok: true });
 }
@@ -344,7 +345,7 @@ async function addAvailability(req, env, admin) {
   const days = Array.isArray(b.weekdays) ? b.weekdays.filter((d) => Number.isInteger(d) && d >= 0 && d <= 6) : Number.isInteger(b.weekday) ? [b.weekday] : [];
   const start = clean(b.start, 5), end = clean(b.end, 5), mins = [30, 45, 60, 90].includes(b.slot_minutes) ? b.slot_minutes : 60;
   if (!city || !days.length || !isTime(start) || !isTime(end) || start >= end) return json({ error: "City, at least one weekday, and a start time before the end time." }, 400);
-  const mine = isOwner(admin) ? null : await therapistOf(env, admin);   // a therapist's account sets its own hours only
+  const mine = isEmployee(admin) ? await therapistOf(env, admin) : null;   // an employee sets their own hours only; owner and partner set anyone's in the city
   const th = mine ? mine.id : clean(b.therapist_id, 40) || null;
   if (th && !(await env.DB.prepare("SELECT 1 FROM therapists WHERE id = ? AND city = ?").bind(th, city).first())) return json({ error: "That therapist isn't in this city." }, 400);
   await env.DB.batch(days.map((d) => env.DB.prepare("INSERT INTO availability (id, city, therapist_id, weekday, start, end, slot_minutes) VALUES (?,?,?,?,?,?,?)").bind(randomId(), city, th, d, start, end, mins)));
@@ -355,7 +356,7 @@ async function addBlocked(req, env, admin) {
   const city = cityFor(admin, b.city), from = clean(b.date, 10), to = clean(b.to, 10) || from;
   if (!city || !isDate(from) || !isDate(to) || to < from) return json({ error: "City and a day (or a range)." }, 400);
   const start = isTime(b.start) ? b.start : null, end = isTime(b.end) ? b.end : null;
-  const mine = isOwner(admin) ? null : await therapistOf(env, admin);   // a therapist's account blocks its own days only
+  const mine = isEmployee(admin) ? await therapistOf(env, admin) : null;   // an employee blocks their own days only
   if (mine && mine.city !== city) return json({ error: "Your profile is in another city." }, 400);
   const th = mine ? mine.id : clean(b.therapist_id, 40) || null;
   const stmts = []; let d = from, n = 0;
@@ -393,6 +394,7 @@ async function saveTherapist(req, env, admin, id) {
   const cur = id ? await env.DB.prepare("SELECT * FROM therapists WHERE id = ?").bind(id).first() : null;
   if (id && !cur) return json({ error: "Not found" }, 404);
   if (cur && !isOwner(admin) && cur.city !== admin.role) return json({ error: "Not your city." }, 403);
+  if (isEmployee(admin)) { if (!cur || cur.admin_id !== admin.id) return json({ error: "You can edit your own profile only. The owner or your city's partner edits the rest." }, 403); delete b.active; delete b.sort; }
   const city = cur ? cur.city : cityFor(admin, b.city), name = clean(b.name, 80) || cur?.name;
   if (!city || !name) return json({ error: "City and name." }, 400);
   const photo = b.photo === undefined ? cur?.photo || null : b.photo === null ? null : validPhoto(b.photo) || cur?.photo || null;

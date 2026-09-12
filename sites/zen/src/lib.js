@@ -42,10 +42,10 @@ export async function notifyList(env, city, therapistId) {
 export async function therapistOf(env, admin) { return env.DB.prepare("SELECT id, name, city FROM therapists WHERE admin_id = ?").bind(admin.id).first(); }
 // Which bookings a signed-in admin may see: the owner everything; anyone else only the ones assigned to them or not assigned to anyone yet.
 export function visibleWhere(admin, th, col = "therapist_id") {
-  if (isOwner(admin)) return { sql: "", args: [] };
+  if (managesCity(admin)) return { sql: "", args: [] };
   return th ? { sql: ` AND (${col} IS NULL OR ${col} = ?)`, args: [th.id] } : { sql: ` AND ${col} IS NULL`, args: [] };
 }
-export const canSeeBooking = (admin, th, bk) => isOwner(admin) || bk.therapist_id === null || bk.therapist_id === undefined || (th && bk.therapist_id === th.id);
+export const canSeeBooking = (admin, th, bk) => managesCity(admin) || bk.therapist_id === null || bk.therapist_id === undefined || (th && bk.therapist_id === th.id);
 // Photos are stored as data URLs. Only a clean base64 image is accepted, so nothing can break out of an <img src="…"> in the admin.
 export function validPhoto(v, max = 160000) { return typeof v === "string" && v.length < max && /^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/]+=*$/.test(v) ? v : null; }
 // "Now" in a city's own time zone: the local date and minutes since midnight (slots for today, "that day has passed").
@@ -104,6 +104,11 @@ export async function sessionCookieFor(env, userId) {
 export const isPlatform = (a) => a.role === "platform";
 export const isOwner = (a) => a.role === "all";
 export const seesAll = (a) => a.role === "all" || a.role === "platform";
+// Levels (2026-09-12, Ash): owner (role "all") runs everything; a partner runs one city (all its bookings, team, hours, assignments);
+// an employee is one therapist (own bookings + unassigned, own schedule, own profile). Nobody but the owner sees the levels.
+export const isPartner = (a) => a.level === "partner" && a.role !== "all" && a.role !== "platform";
+export const isEmployee = (a) => !isOwner(a) && !isPlatform(a) && !isPartner(a);
+export const managesCity = (a) => isOwner(a) || isPartner(a);
 // The one place city access is decided for admins. Returns the city an admin may see (null = all).
 export function scope(admin, requested) { if (!seesAll(admin)) return admin.role; return CITY_KEYS.includes(requested) ? requested : null; }
 

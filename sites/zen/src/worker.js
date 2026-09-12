@@ -30,7 +30,7 @@
 
 import { CITIES, SLOTS } from "./catalog.js";
 import { randomId, signPayload, verifyPayload, getCookie, setCookie, clearCookie, hashPassword, verifyPassword } from "./auth.js";
-import { CITY_KEYS, USER_COOKIE, ADMIN_COOKIE, json, clean, normEmail, isDate, isTime, fmt, now, today, feeOn, body, isLive, parseIntake, healthFlags, settings, currentUser, currentAdmin, scope, sendEmail, sendSms, stripeCheckout, slotsFor, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, maybeRewardLoyalty, isPlatform, isOwner, seesAll, therapistOf, visibleWhere, canSeeBooking } from "./lib.js";
+import { CITY_KEYS, USER_COOKIE, ADMIN_COOKIE, json, clean, normEmail, isDate, isTime, fmt, now, today, feeOn, body, isLive, parseIntake, healthFlags, settings, currentUser, currentAdmin, scope, sendEmail, sendSms, stripeCheckout, slotsFor, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, maybeRewardLoyalty, isPlatform, isOwner, seesAll, therapistOf, visibleWhere, canSeeBooking, isPartner, isEmployee, managesCity } from "./lib.js";
 import { featureRoute, adminFeatureRoute, giftPaid, packagePaid, authFlags } from "./features.js";
 import { runCron } from "./cron.js";
 
@@ -102,7 +102,8 @@ async function route(req, env, url, ctx) {
 }
 
 // ---------- small helpers ----------
-const pub = (a) => ({ id: a.id, email: a.email, username: a.username || null, name: a.name, role: a.role, photo: a.photo || null, phone: a.phone || "", notify: a.notify ?? 1 });
+const pub = (a) => ({ id: a.id, email: a.email, username: a.username || null, name: a.name, role: a.role, level: a.role === "all" ? "owner" : a.role === "platform" ? null : a.level === "partner" ? "partner" : "employee", photo: a.photo || null, phone: a.phone || "", notify: a.notify ?? 1 });
+const levelFor = (role, wanted, current) => (role === "all" ? "owner" : role === "platform" ? null : ["partner", "employee"].includes(wanted) ? wanted : current === "partner" ? "partner" : "employee");
 // A username: 3–24 of a-z 0-9 . _ - (lowercased). Returns null to clear, false when invalid.
 const validUsername = (v) => { if (v === null || v === "") return null; const u = String(v).trim().toLowerCase(); return /^[a-z0-9._-]{3,24}$/.test(u) && !u.includes("@") ? u : false; };
 const validEmail = (v) => { const e = normEmail(v); return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) ? e : false; };
@@ -563,7 +564,9 @@ async function adminUpdateBooking(req, env, admin, id) {
   const mine = isOwner(admin) ? null : await therapistOf(env, admin);
   if (!canSeeBooking(admin, mine, bk)) return json({ error: "Not found" }, 404);
   // Only the owner assigns a booking to someone. A city account may take an unassigned one for itself (see acceptBooking) and nothing else.
-  if (b.therapist_id !== undefined && !isOwner(admin)) { const want = clean(b.therapist_id, 40) || null; const same = want === bk.therapist_id, accept = bk.therapist_id === null && mine && want === mine.id; if (!same && !accept) return json({ error: "Only the owner can assign a booking to someone else." }, 403); }
+  if (b.therapist_id !== undefined && !isOwner(admin)) { const want = clean(b.therapist_id, 40) || null;
+    if (isPartner(admin)) { if (want && !(await env.DB.prepare("SELECT 1 FROM therapists WHERE id = ? AND city = ?").bind(want, bk.city).first())) return json({ error: "That therapist isn't in your city." }, 400); }
+    else { const same = want === bk.therapist_id, accept = bk.therapist_id === null && mine && want === mine.id; if (!same && !accept) return json({ error: "Only the owner or your city's partner can assign a booking to someone else." }, 403); } }
   const status = ["paid", "confirmed", "done", "cancelled", "no_show"].includes(b.status) ? b.status : null;
   const slot = b.slot !== undefined ? clean(b.slot, 20) : bk.slot;
   const note = b.note !== undefined ? clean(b.note, 500) : bk.note;
@@ -599,9 +602,9 @@ async function adminClients(env, admin, url) {
       COUNT(b.id) sessions, SUM(b.status='done') done, MAX(b.date) last_visit,
       (SELECT COUNT(*) FROM credits c WHERE c.user_id = u.id AND c.status = 'available') credits,
       (SELECT SUM(remaining) FROM client_packages cp WHERE cp.user_id = u.id AND cp.status = 'paid') package_left
-    FROM users u LEFT JOIN bookings b ON b.user_id = u.id AND b.status IN ('paid','confirmed','done')${w.sql}
+    FROM users u LEFT JOIN bookings b ON b.user_id = u.id AND b.status IN ('paid','confirmed','done')${w.sql}${isEmployee(admin) ? " AND (b.therapist_id IS NULL OR b.therapist_id = ?)" : ""}
     WHERE 1=1`;
-  const args = [...w.args];
+  const args = [...w.args]; if (isEmployee(admin)) args.push((await therapistOf(env, admin))?.id || "");
   // a city admin sees everyone who chose that room (questionnaire / profile) or has booked there, even before a first session
   if (city) sql += " AND (u.nearest_city = ? OR u.city = ? OR EXISTS (SELECT 1 FROM bookings x WHERE x.user_id = u.id AND x.city = ?))", args.push(city, city, city);
   if (qs) sql += " AND (u.name LIKE ? OR u.email LIKE ? OR u.phone LIKE ?)", args.push(`%${qs}%`, `%${qs}%`, `%${qs}%`);
@@ -653,7 +656,7 @@ async function adminSaveSettings(req, env, admin) {
 }
 async function adminList(env, admin) {
   if (!isOwner(admin)) return json({ error: "Only the owner can see this." }, 403);
-  const r = await env.DB.prepare("SELECT a.id, a.email, a.username, a.name, a.role, a.photo, a.phone, a.notify, a.created_at, a.last_login, t.id therapist_id, t.name therapist_name, t.city therapist_city FROM admins a LEFT JOIN therapists t ON t.admin_id = a.id ORDER BY a.created_at").all();
+  const r = await env.DB.prepare("SELECT a.id, a.email, a.username, a.name, a.role, a.level, a.photo, a.phone, a.notify, a.created_at, a.last_login, t.id therapist_id, t.name therapist_name, t.city therapist_city FROM admins a LEFT JOIN therapists t ON t.admin_id = a.id ORDER BY a.created_at").all();
   return json({ admins: r.results });
 }
 async function adminCreate(req, env, admin) {
@@ -663,8 +666,8 @@ async function adminCreate(req, env, admin) {
   if (!email || !name || !role || password.length < 10) return json({ error: "Name, email or username, role and a password of at least 10 characters." }, 400);
   const username = b.username === undefined ? null : validUsername(b.username); if (username === false) return json({ error: "A username is 3 to 24 letters, digits, dots, dashes or underscores." }, 400);
   const taken0 = await signinTaken(env, [email, username], null); if (taken0) return json({ error: `"${taken0}" is already another account's sign-in.` }, 409);
-  const { hash, salt } = await hashPassword(password), id = randomId();
-  try { await env.DB.prepare("INSERT INTO admins (id, email, name, role, pass_hash, salt, username) VALUES (?,?,?,?,?,?,?)").bind(id, email, name, role, hash, salt, username).run(); }
+  const { hash, salt } = await hashPassword(password), id = randomId(), level = levelFor(role, b.level, null);
+  try { await env.DB.prepare("INSERT INTO admins (id, email, name, role, pass_hash, salt, username, level) VALUES (?,?,?,?,?,?,?,?)").bind(id, email, name, role, hash, salt, username, level).run(); }
   catch { return json({ error: "That email or username already has admin access." }, 409); }
   return json({ ok: true, id });
 }
@@ -701,7 +704,8 @@ async function adminEdit(req, env, admin, id) {
   let hash = a.pass_hash, salt = a.salt;
   if (b.password !== undefined) { if (String(b.password).length < 10) return json({ error: "Use at least 10 characters." }, 400); ({ hash, salt } = await hashPassword(String(b.password))); }
   let username = a.username || null; if (b.username !== undefined) { username = validUsername(b.username); if (username === false) return json({ error: "A username is 3 to 24 letters, digits, dots, dashes or underscores." }, 400); const t2 = await signinTaken(env, [username], id); if (t2) return json({ error: `"${t2}" is already another account's sign-in.` }, 409); }
-  try { await env.DB.prepare("UPDATE admins SET name = ?, role = ?, pass_hash = ?, salt = ?, username = ? WHERE id = ?").bind(clean(b.name, 80) || a.name, role, hash, salt, username, id).run(); }
+  const level = levelFor(role, b.level, a.level);
+  try { await env.DB.prepare("UPDATE admins SET name = ?, role = ?, pass_hash = ?, salt = ?, username = ?, level = ? WHERE id = ?").bind(clean(b.name, 80) || a.name, role, hash, salt, username, level, id).run(); }
   catch { return json({ error: "That username is already used by another account." }, 409); }
   // an account narrowed to one city can't stay linked to a therapist profile in another
   if (role !== "all") await env.DB.prepare("UPDATE therapists SET admin_id = NULL WHERE admin_id = ? AND city != ?").bind(id, role).run();
