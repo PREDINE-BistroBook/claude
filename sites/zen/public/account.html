@@ -129,7 +129,7 @@
   <a class="wm no-i18n" href="index.html"><b>ZEN</b><small>RECOVERY</small></a>
   <nav>
     <span id="lang-slot"></span>
-    <a href="index.html#places">Book a session</a>
+    <a href="booking.html">Book a session</a>
     <a href="#" id="signout" hidden>Sign out</a>
   </nav>
 </header>
@@ -287,7 +287,7 @@
     </div>
 
     <div id="tab-sessions" hidden>
-      <div class="section-head"><h2>Upcoming</h2><a class="btn small" id="book-link" href="index.html#places">Book a session</a></div>
+      <div class="section-head"><h2>Upcoming</h2><a class="btn small" id="book-link" href="booking.html">Book a session</a></div>
       <div class="sessions" id="upcoming"></div>
       <div class="sessions" id="waitlist" style="margin-top:10px"></div>
       <div class="section-head"><h2>Past sessions</h2><span class="tiny" id="past-count"></span></div>
@@ -509,16 +509,16 @@ function show(data) {
   const room = u.nearest_city || u.city;
   $("#home-city").textContent = room ? t("Your room: {city}", { city: cityName(room) }) : t("No room chosen yet"); $("#home-city").className = "badge" + (room ? " city-" + room : "");
   $("#since").textContent = t("With Zen since {date}", { date: new Date(u.created_at.replace(" ", "T")).toLocaleDateString(LOCALE(), { month: "long", year: "numeric" }) });
-  $("#book-link").href = room ? `index.html?city=${room}#book` : "index.html#places";
+  $("#book-link").href = room ? `booking.html?city=${room}` : "booking.html";
   const rc = $("#rec-card"); rc.hidden = !room;
-  if (room) rc.innerHTML = `<div style="flex:1"><span class="eyebrow" style="color:var(--mark-soft)">${t("Nearest room")}${u.city_text ? " · " + t("you're in {place}", { place: esc(u.city_text) }) : ""}</span><b>${cityName(room)}</b><p>${t(i.experience === "first" ? "First time? Read \"Your guide\" before you come. It takes three minutes and makes the session better." : "Book when you like; we confirm the hour on WhatsApp.")}</p></div><a class="btn small accent" href="index.html?city=${room}#book">${t("Book in {city}", { city: cityName(room) })}</a>`;
+  if (room) rc.innerHTML = `<div style="flex:1"><span class="eyebrow" style="color:var(--mark-soft)">${t("Nearest room")}${u.city_text ? " · " + t("you're in {place}", { place: esc(u.city_text) }) : ""}</span><b>${cityName(room)}</b><p>${t(i.experience === "first" ? "First time? Read \"Your guide\" before you come. It takes three minutes and makes the session better." : "Book when you like; we confirm the hour on WhatsApp.")}</p></div><a class="btn small accent" href="booking.html?city=${room}">${t("Book in {city}", { city: cityName(room) })}</a>`;
   const every = data.settings.loyalty_every, done = data.stats.done, into = done % every, left = every - into;
   Object.assign(G.SETTINGS, { loyalty_every: every, referral_pct: data.settings.referral_pct });
   $("#loyalty-title").textContent = t("Every {nth} session is free", { nth: I.ordinal(every) });
   $("#ring").style.setProperty("--p", (into / every) * 100); $("#ring-n").textContent = `${into}/${every}`;
   $("#loyalty-text").textContent = done === 0 ? t("Your first session starts the count. After {every} you get one on us.", { every }) : left === every ? t("You just earned a free session. It's waiting below.") : t("{done} sessions so far. {left} more and the next one is on us.", { done, left });
   const cr = data.credits.filter((c) => c.status === "available");
-  $("#credits").innerHTML = cr.length ? cr.map((c) => `<div class="reward"><b>${c.pct === 100 ? t("Free session") : t("{pct}% off", { pct: c.pct })}</b><span class="muted" style="flex:1;font-size:.9rem">${esc(c.reason)}${c.expires_at ? ` · ${t("until {date}", { date: fmtDate(c.expires_at) })}` : ""}</span><a class="btn small" href="index.html${room ? "?city=" + room : ""}#book">${t("Use it")}</a></div>`).join("") : `<p class="tiny">${t("No rewards waiting right now.")}</p>`;
+  $("#credits").innerHTML = cr.length ? cr.map((c) => `<div class="reward"><b>${c.pct === 100 ? t("Free session") : t("{pct}% off", { pct: c.pct })}</b><span class="muted" style="flex:1;font-size:.9rem">${esc(c.reason)}${c.expires_at ? ` · ${t("until {date}", { date: fmtDate(c.expires_at) })}` : ""}</span><a class="btn small" href="booking.html${room ? "?city=" + room : ""}">${t("Use it")}</a></div>`).join("") : `<p class="tiny">${t("No rewards waiting right now.")}</p>`;
   $("#invite-title").textContent = t("{pct}% off, for both of you", { pct: data.settings.referral_pct });
   $("#ref-code").textContent = u.referral_code; $("#share-url").textContent = data.share_url;
   $("#share-wa").href = "https://wa.me/?text=" + encodeURIComponent(t("Try Zen Recovery with me — cupping and recovery in Cairo, Dahab and Florence. We both get {pct}% off with this link: {url}", { pct: data.settings.referral_pct, url: data.share_url }));
@@ -545,7 +545,7 @@ async function loadPackages() {
   let mine = [], shop = [];
   try { mine = (await ZenAPI("GET", "/api/me/packages")).packages || []; } catch {}
   try { shop = (await ZenAPI("GET", "/api/packages" + (room ? "?city=" + room : ""))).packages || []; } catch {}
-  $("#my-packs").innerHTML = mine.length ? mine.map((p) => `<div class="pack"><span class="eyebrow">${cityName(p.city)}</span><b>${esc(p.name)}</b><span class="n">${p.remaining}<small class="per"> / ${p.sessions} ${t("left")}</small></span><div class="bar"><i style="width:${(p.remaining / p.sessions) * 100}%"></i></div><span class="per">${p.expires_at ? t("Valid until {date}", { date: fmtDate(p.expires_at) }) : ""}${p.usable ? "" : " · " + t("used up or expired")}</span>${p.usable ? `<a class="btn small" href="index.html?city=${p.city}#book">${t("Book with this pack")}</a>` : ""}</div>`).join("") : `<div class="empty">${t("No packs yet. Buy one below and save on every session.")}</div>`;
+  $("#my-packs").innerHTML = mine.length ? mine.map((p) => `<div class="pack"><span class="eyebrow">${cityName(p.city)}</span><b>${esc(p.name)}</b><span class="n">${p.remaining}<small class="per"> / ${p.sessions} ${t("left")}</small></span><div class="bar"><i style="width:${(p.remaining / p.sessions) * 100}%"></i></div><span class="per">${p.expires_at ? t("Valid until {date}", { date: fmtDate(p.expires_at) }) : ""}${p.usable ? "" : " · " + t("used up or expired")}</span>${p.usable ? `<a class="btn small" href="booking.html?city=${p.city}">${t("Book with this pack")}</a>` : ""}</div>`).join("") : `<div class="empty">${t("No packs yet. Buy one below and save on every session.")}</div>`;
   $("#packs-note").textContent = room ? t("Packs for {city}. Several sessions at once, less per session, valid for months.", { city: cityName(room) }) : t("Several sessions at once, less per session, valid for months.");
   $("#packs-shop").innerHTML = shop.length ? shop.map((p) => `<div class="pack"><span class="eyebrow">${cityName(p.city)}</span><b>${esc(p.name)}</b><span class="n">${p.sessions} <small class="per">${t("sessions")}</small></span><span class="num">${money(p.amount, p.currency)}</span><span class="per">${t("about {per} per session · valid {months} months", { per: money(p.per_session, p.currency), months: p.months_valid })}</span><button class="btn small" type="button" data-buy="${p.id}">${t("Buy")}</button></div>`).join("") : `<div class="empty">${t("No packs on offer in your room yet.")}</div>`;
   $$("#packs-shop [data-buy]").forEach((b) => b.addEventListener("click", async () => {

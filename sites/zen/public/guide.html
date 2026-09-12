@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<title>Zen Recovery · Before and after</title>
+<meta name="description" content="What to do before and after a cupping session at Zen Recovery.">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira:ital,wght@0,300;0,400;1,800&family=Michroma&family=Figtree:wght@400;500;600&family=DM+Mono:wght@400;500&family=Cairo:wght@300;400;600;800&display=swap">
+<meta name="theme-color" content="#1B1E1D">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="img/icon-192.png">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+
+<div class="preview" id="preview">
+  Preview build — photos, prices and addresses are placeholders until Zen confirms them. Payments switch on once a Stripe account is connected.
+</div>
+
+<nav class="nav" id="nav" aria-label="Main">
+  <a class="brand no-i18n" href="index.html" aria-label="Zen Recovery, home"><span class="wm"><b>ZEN</b><small>RECOVERY</small></span></a>
+  <div class="nav-links">
+    <a href="index.html#how" class="hide-sm">How it works</a>
+    <a href="index.html#methods" class="hide-sm">Methods</a>
+    <a href="booking.html" class="hide-sm">Booking</a>
+    <a href="giftcard.html" class="hide-sm" >Gift</a>
+    <a href="rewards.html" class="hide-sm" >Rewards</a>
+    <span id="lang-slot"></span>
+    <a href="account.html" id="nav-account" class="signin"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg><span>Sign in</span></a>
+    <a href="booking.html" class="btn small">Book a session</a>
+  </div>
+</nav>
+
+<main id="top">
+
+<!-- ================= GOOD TO KNOW ================= -->
+<section class="know" id="know" aria-labelledby="know-title">
+  <div class="know-grid">
+    <div class="reveal">
+      <p class="eyebrow">Good to know</p>
+      <h2 id="know-title">Small things that make a session better.</h2>
+      <p class="intro">People come to us for muscle tension, recovery after training, and the simple relief of an hour where nothing is asked of them. Cupping sits comfortably alongside physiotherapy and massage. It doesn't replace a doctor.</p>
+      <div class="caution">
+        Talk to your doctor first if you're pregnant, take blood thinners, have a skin condition where the cups would go, or have a heart or blood-clotting condition. If you're unsure, message us and we'll tell you honestly whether cupping is a good idea for you.
+      </div>
+    </div>
+    <dl class="reveal">
+      <div class="row"><dt>Before</dt><dd>Eat something light a couple of hours before. Drink water. Skip a heavy workout that day.</dd></div>
+      <div class="row"><dt>Wear</dt><dd>Anything easy to move out of the way. For a back session you'll be face down with a towel; for legs, shorts are enough.</dd></div>
+      <div class="row"><dt>Feels like</dt><dd>A firm pull, then warmth. It shouldn't hurt. If it does, say so and the cup comes off.</dd></div>
+      <div class="row"><dt>After</dt><dd>Keep warm and drink more water than usual. No cold showers, saunas or swimming for about six hours. Some people feel tired that evening; sleep well.</dd></div>
+      <div class="row"><dt>Marks</dt><dd>Three to ten days. Fine to show, easy to cover. Photos in daylight are entirely optional.</dd></div>
+      <div class="row"><dt>How often</dt><dd>Once every one to two weeks while something is bothering you, then whenever your body asks.</dd></div>
+    </dl>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="foot-grid">
+    <div>
+      <span class="wm lg"><b>ZEN</b><small>RECOVERY</small></span>
+      <p>Manual techniques, cupping, muscle recovery. Cairo, Dahab and Florence. Recovery = growth.</p>
+    </div>
+    <div>
+      <p class="eyebrow">Find us</p>
+      <ul>
+        <li><a href="https://instagram.com/zen_recovery10" target="_blank" rel="noopener">Instagram · @zen_recovery10</a></li>
+        <li><a href="https://instagram.com/recoverywithshaarawy" target="_blank" rel="noopener">Instagram · @recoverywithshaarawy (Cairo & Dahab)</a></li>
+        <li><a href="https://wa.me/201145638166" target="_blank" rel="noopener">WhatsApp · Cairo & Dahab</a></li>
+        <li><a href="booking.html">Cities</a></li>
+      </ul>
+    </div>
+    <div>
+      <p class="eyebrow">Sessions</p>
+      <ul>
+        <li><a href="index.html#how">How cupping works</a></li>
+        <li><a href="index.html#methods">Methods</a></li>
+        <li><a href="guide.html">Before and after</a></li>
+        <li><a href="rewards.html">Rewards</a></li>
+        <li><a href="giftcard.html">Gift a session</a></li>
+        <li><a href="account.html">My account</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot-bottom">
+    <span>© <span id="year"></span> Zen Recovery</span>
+    <span>Cupping is a complementary therapy and not a substitute for medical care. <a href="admin.html" style="color:inherit;opacity:.6">Team sign-in</a></span>
+  </div>
+</footer>
+
+<dialog id="dlg">
+  <div class="inner">
+    <h3 id="dlg-title">Almost there</h3>
+    <p id="dlg-body"></p>
+    <div class="row"><button class="btn small" id="dlg-close" type="button">Got it</button></div>
+  </div>
+</dialog>
+
+<script src="i18n.js"></script>
+<script src="guide.js"></script>
+<script src="methods.js"></script>
+<script src="site.js"></script>
+</body>
+</html>

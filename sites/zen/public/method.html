@@ -73,7 +73,7 @@
     <a href="index.html#methods" class="hide-sm">Methods</a>
     <span id="lang-slot"></span>
     <a href="account.html" id="nav-account">Sign in</a>
-    <a href="index.html#places" class="btn small">Book a session</a>
+    <a href="booking.html" class="btn small">Book a session</a>
   </nav>
 </header>
 
@@ -141,7 +141,7 @@ function render() {
   $("#a-after").innerHTML = [...G.ADVICE.after.general.slice(0, 3), ...(G.ADVICE.after[m.key] || []).slice(0, 3)].map((x) => `<li>${esc(t(x))}</li>`).join("");
   $("#a-skip").innerHTML = G.ADVICE.skip.slice(0, 4).map((x) => `<li>${esc(t(x))}</li>`).join("");
   $("#b-title").textContent = t("{method} in Cairo, Dahab or Florence.", { method: t(m.title) });
-  $("#b-cities").innerHTML = Object.entries(CITY).map(([k, n]) => `<a href="index.html?city=${k}&svc=${id}#book"><i style="background:var(--${k})"></i>${t("Book in {city}", { city: t(n) })}</a>`).join("");
+  $("#b-cities").innerHTML = Object.entries(CITY).map(([k, n]) => `<a href="booking.html?city=${k}&svc=${id}"><i style="background:var(--${k})"></i>${t("Book in {city}", { city: t(n) })}</a>`).join("");
   $("#others").innerHTML = M.ORDER.map((k) => `<a href="method.html?m=${k}" ${k === id ? 'aria-current="page"' : ""}><b>${esc(t(M.METHODS[k].title))}</b><span>${esc(t(M.METHODS[k].tagline))}</span></a>`).join("");
   I.apply();
 }
