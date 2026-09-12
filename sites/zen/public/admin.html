@@ -13,7 +13,7 @@
   .login{max-width:420px;margin:8vh auto 0;display:grid;gap:18px}
   .login .card{display:grid;gap:14px}
   .scope{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0 4px}
-  .charts{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+  .charts{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;align-items:start}
   @media (max-width:860px){.charts{grid-template-columns:1fr}}
   .chart-card h3{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
   .chart-card h3 span{font-family:var(--body);font-size:.8rem;color:var(--ink-mute);font-weight:400}
@@ -183,6 +183,7 @@
         <div class="field" style="flex:1"><label for="f-q">Search</label><input id="f-q" placeholder="name, email, phone"></div>
       </div>
       <div class="table-wrap"><table id="bookings-table"><thead><tr><th>Day</th><th>Client</th><th>City</th><th>Session</th><th>Paid</th><th>Status</th><th></th></tr></thead><tbody></tbody></table></div>
+      <div class="list-foot" id="bookings-foot" hidden></div>
     </div>
 
     <!-- clients -->
@@ -560,6 +561,7 @@ const managesCity = () => isOwner() || isPartner();
 const canEditTh = (t) => isOwner() || (isPartner() && t.city === A.role) || (isEmployee() && T && t.id === T.id);
 const OPS_TABS = ["bookings", "clients", "services", "calendar", "team", "offers", "review"];
 
+const topH = () => document.documentElement.style.setProperty("--top-h", ($(".top")?.offsetHeight || 57) + "px"); topH(); addEventListener("resize", topH);
 async function boot() {
   try { const r = await ZenAPI("GET", "/api/admin/me"); start(r); }
   catch { $("#login-view").hidden = false; }
@@ -676,20 +678,29 @@ async function loadBookings() {
   const q = new URLSearchParams({ city: isOwner() ? $("#f-city").value : "", status: $("#f-status").value, from: $("#f-from").value, to: $("#f-to").value, q: $("#f-q").value.trim() });
   let { bookings } = await ZenAPI("GET", "/api/admin/bookings?" + q);
   if (T && $("#f-mine").value === "me") bookings = bookings.filter((b) => b.therapist_id === T.id); if ($("#f-mine").value === "open") bookings = bookings.filter((b) => !b.therapist_id);
+  BOOK_ROWS = bookings; if (!keepPage) bookPage = 1; keepPage = false; renderBookingRows();
+}
+// The list is paged (30 at a time) so a long history never becomes one endless scroll.
+let BOOK_ROWS = [], bookPage = 1, keepPage = false; const PAGE = 30;
+function renderBookingRows() {
+  const bookings = BOOK_ROWS, shown = bookings.slice(0, PAGE * bookPage);
   const tb = $("#bookings-table tbody");
-  tb.innerHTML = bookings.length ? bookings.map((b) => `<tr class="click" data-id="${b.id}">
+  tb.innerHTML = bookings.length ? shown.map((b) => `<tr class="click" data-id="${b.id}">
       <td class="num">${fmtDate(b.date)}<div class="tiny">${SLOT[b.slot] || b.slot}</div></td>
       <td>${esc(b.name)}${b.flags?.length ? ` <span class="flag" title="${b.flags.map((f) => G.label("health", f)).join(", ")}">health</span>` : ""}${b.experience === "first" ? ` <span class="chip" style="font-size:.7rem;padding:2px 7px">first time</span>` : ""}<div class="tiny">${esc(b.phone || b.email || "")}</div></td>
       <td><i class="dot ${b.city}"></i>${CITY_NAME[b.city]}</td>
-      <td>${esc(b.service_name.split(" · ")[0])}${b.therapist ? `<div class="tiny">with ${esc(b.therapist)}</div>` : `<div class="tiny" style="color:var(--mark)">unassigned${T && !isOwner() ? " · open to accept" : ""}</div>`}${b.discount_kind ? `<div class="tiny">${DISC[b.discount_kind] || b.discount_kind}${b.partner_code ? " " + esc(b.partner_code) : ""}</div>` : ""}${b.source === "manual" ? `<div class="tiny">added by hand</div>` : ""}</td>
+      <td>${esc(b.service_name.split(" · ")[0])}${b.therapist ? `<div class="tiny">with ${esc(b.therapist)}</div>` : `<div class="tiny" ${["paid", "confirmed", "review"].includes(b.status) ? 'style="color:var(--mark)"' : ""}>unassigned${T && isEmployee() && ["paid", "confirmed", "review"].includes(b.status) ? " · open to accept" : ""}</div>`}${b.discount_kind ? `<div class="tiny">${DISC[b.discount_kind] || b.discount_kind}${b.partner_code ? " " + esc(b.partner_code) : ""}</div>` : ""}${b.source === "manual" ? `<div class="tiny">added by hand</div>` : ""}</td>
       <td class="num">${b.status === "review" ? "at session" : b.amount === 0 ? "Free" : money(b.amount, b.currency)}${b.platform_fee != null && b.platform_fee > 0 ? `<div class="tiny">fee ${money(b.platform_fee, b.currency)}</div>` : ""}</td>
       <td><span class="status ${b.status}">${STATUS[b.status]}</span></td>
       <td><div class="actions">${actionsFor(b)}</div></td></tr>`).join("") : `<tr><td colspan="7" class="empty">No bookings match.</td></tr>`;
   tb.querySelectorAll("button[data-act]").forEach((btn) => btn.addEventListener("click", async (e) => { e.stopPropagation(); await setStatus(btn.closest("tr").dataset.id, btn.dataset.act); }));
   tb.querySelectorAll("tr.click").forEach((tr) => tr.addEventListener("click", () => openBooking(bookings.find((b) => b.id === tr.dataset.id))));
+  const foot = $("#bookings-foot"); foot.hidden = !bookings.length;
+  foot.innerHTML = `<span>Showing ${shown.length} of ${bookings.length}${bookings.length === 300 ? " (the latest 300)" : ""}</span>${shown.length < bookings.length ? `<button class="btn small ghost" id="bookings-more">Show ${Math.min(PAGE, bookings.length - shown.length)} more</button>` : ""}`;
+  const more = $("#bookings-more"); if (more) more.onclick = () => { bookPage++; renderBookingRows(); };
 }
 const actionsFor = (b) => ({ review: [["confirmed", "Approve"], ["cancelled", "Cancel"]], paid: [["confirmed", "Confirm"], ["cancelled", "Cancel"]], confirmed: [["done", "Done"], ["no_show", "Missed"], ["cancelled", "Cancel"]], done: [], cancelled: [["confirmed", "Restore"]], no_show: [["done", "Done after all"]] }[b.status] || []).map(([s, l]) => `<button class="btn ghost" data-act="${s}">${l}</button>`).join("");
-async function setStatus(id, status) { await ZenAPI("PATCH", "/api/admin/bookings/" + id, { status }); loadBookings(); refreshReviewCount(); }
+async function setStatus(id, status) { await ZenAPI("PATCH", "/api/admin/bookings/" + id, { status }); keepPage = true; loadBookings(); refreshReviewCount(); }
 function openBooking(b) {
   const d = $("#drawer");
   d.innerHTML = `<button class="btn small ghost close" id="dr-close">Close</button><p class="eyebrow">Booking</p><h2>${esc(b.name)}</h2><span class="status ${b.status}">${STATUS[b.status]}</span>
