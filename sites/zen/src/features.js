@@ -322,15 +322,17 @@ async function deleteRows(req, env, admin, table) {
   const ids = [...new Set((Array.isArray(b.ids) ? b.ids : []).map((x) => clean(x, 40)).filter(Boolean))].slice(0, 200);
   if (!ids.length) return json({ error: "Nothing to remove." }, 400);
   const marks = ids.map(() => "?").join(",");
-  const rows = (await env.DB.prepare(`SELECT id, city FROM ${table} WHERE id IN (${marks})`).bind(...ids).all()).results;
-  const mine = rows.filter((r) => isOwner(admin) || !r.city || r.city === admin.role).map((r) => r.id);
+  const rows = (await env.DB.prepare(`SELECT id, city, therapist_id FROM ${table} WHERE id IN (${marks})`).bind(...ids).all()).results;
+  const me = isOwner(admin) ? null : await therapistOf(env, admin);
+  const mine = rows.filter((r) => isOwner(admin) || ((!r.city || r.city === admin.role) && (!me || r.therapist_id === me.id))).map((r) => r.id);
   if (mine.length) await env.DB.prepare(`DELETE FROM ${table} WHERE id IN (${mine.map(() => "?").join(",")})`).bind(...mine).run();
   return json({ ok: true, removed: mine.length });
 }
 async function deleteRow(env, admin, table, id) {
-  const row = await env.DB.prepare(`SELECT city FROM ${table} WHERE id = ?`).bind(id).first();
+  const row = await env.DB.prepare(`SELECT * FROM ${table} WHERE id = ?`).bind(id).first();
   if (!row) return json({ error: "Not found" }, 404);
   if (!isOwner(admin) && row.city && row.city !== admin.role) return json({ error: "Not your city." }, 403);
+  if (["availability", "blocked"].includes(table) && !isOwner(admin)) { const me = await therapistOf(env, admin); if (me && row.therapist_id !== me.id) return json({ error: "Only your own hours and days off. The room's are the owner's." }, 403); }
   await env.DB.prepare(`DELETE FROM ${table} WHERE id = ?`).bind(id).run();
   return json({ ok: true });
 }
@@ -342,7 +344,8 @@ async function addAvailability(req, env, admin) {
   const days = Array.isArray(b.weekdays) ? b.weekdays.filter((d) => Number.isInteger(d) && d >= 0 && d <= 6) : Number.isInteger(b.weekday) ? [b.weekday] : [];
   const start = clean(b.start, 5), end = clean(b.end, 5), mins = [30, 45, 60, 90].includes(b.slot_minutes) ? b.slot_minutes : 60;
   if (!city || !days.length || !isTime(start) || !isTime(end) || start >= end) return json({ error: "City, at least one weekday, and a start time before the end time." }, 400);
-  const th = clean(b.therapist_id, 40) || null;
+  const mine = isOwner(admin) ? null : await therapistOf(env, admin);   // a therapist's account sets its own hours only
+  const th = mine ? mine.id : clean(b.therapist_id, 40) || null;
   if (th && !(await env.DB.prepare("SELECT 1 FROM therapists WHERE id = ? AND city = ?").bind(th, city).first())) return json({ error: "That therapist isn't in this city." }, 400);
   await env.DB.batch(days.map((d) => env.DB.prepare("INSERT INTO availability (id, city, therapist_id, weekday, start, end, slot_minutes) VALUES (?,?,?,?,?,?,?)").bind(randomId(), city, th, d, start, end, mins)));
   return json({ ok: true });
@@ -352,8 +355,11 @@ async function addBlocked(req, env, admin) {
   const city = cityFor(admin, b.city), from = clean(b.date, 10), to = clean(b.to, 10) || from;
   if (!city || !isDate(from) || !isDate(to) || to < from) return json({ error: "City and a day (or a range)." }, 400);
   const start = isTime(b.start) ? b.start : null, end = isTime(b.end) ? b.end : null;
+  const mine = isOwner(admin) ? null : await therapistOf(env, admin);   // a therapist's account blocks its own days only
+  if (mine && mine.city !== city) return json({ error: "Your profile is in another city." }, 400);
+  const th = mine ? mine.id : clean(b.therapist_id, 40) || null;
   const stmts = []; let d = from, n = 0;
-  while (d <= to && n++ < 60) { stmts.push(env.DB.prepare("INSERT INTO blocked (id, city, therapist_id, date, start, end, reason) VALUES (?,?,?,?,?,?,?)").bind(randomId(), city, clean(b.therapist_id, 40) || null, d, start, end, clean(b.reason, 100))); d = addDays(d, 1); }
+  while (d <= to && n++ < 60) { stmts.push(env.DB.prepare("INSERT INTO blocked (id, city, therapist_id, date, start, end, reason) VALUES (?,?,?,?,?,?,?)").bind(randomId(), city, th, d, start, end, clean(b.reason, 100))); d = addDays(d, 1); }
   await env.DB.batch(stmts);
   return json({ ok: true, days: stmts.length });
 }

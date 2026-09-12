@@ -101,7 +101,10 @@ async function route(req, env, url, ctx) {
 }
 
 // ---------- small helpers ----------
-const pub = (a) => ({ id: a.id, email: a.email, name: a.name, role: a.role, photo: a.photo || null, phone: a.phone || "", notify: a.notify ?? 1 });
+const pub = (a) => ({ id: a.id, email: a.email, username: a.username || null, name: a.name, role: a.role, photo: a.photo || null, phone: a.phone || "", notify: a.notify ?? 1 });
+// A username: 3–24 of a-z 0-9 . _ - (lowercased). Returns null to clear, false when invalid.
+const validUsername = (v) => { if (v === null || v === "") return null; const u = String(v).trim().toLowerCase(); return /^[a-z0-9._-]{3,24}$/.test(u) && !u.includes("@") ? u : false; };
+const validEmail = (v) => { const e = normEmail(v); return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) ? e : false; };
 async function cityMeta(env) { const c = await catalog(env); return Object.fromEntries(CITY_KEYS.map((k) => [k, { name: c[k].name, currency: c[k].currency, services: Object.values(c[k].services).map(({ photo, ...s }) => ({ ...s, has_photo: Boolean(photo) })) }])); }
 // What the website reads on load: services and prices per city (from the admin), address/team/WhatsApp/Maps per city (settings)
 async function publicCatalog(env) {
@@ -449,7 +452,7 @@ const cityWhere = (city, col = "city") => (city ? { sql: ` AND ${col} = ?`, args
 async function adminLogin(req, env) {
   const b = await body(req);
   const email = normEmail(b.email), password = String(b.password || "");
-  let a = await env.DB.prepare("SELECT * FROM admins WHERE email = ?").bind(email).first();
+  let a = await env.DB.prepare("SELECT * FROM admins WHERE email = ? OR username = ?").bind(email, email).first();
   if (!a) { // first owner: bootstrap from secrets while the table is empty
     const count = await env.DB.prepare("SELECT COUNT(*) n FROM admins").first();
     if (count.n === 0 && env.ADMIN_BOOTSTRAP_EMAIL && email === normEmail(env.ADMIN_BOOTSTRAP_EMAIL) && password && password === env.ADMIN_BOOTSTRAP_PASSWORD) {
@@ -647,7 +650,7 @@ async function adminSaveSettings(req, env, admin) {
 }
 async function adminList(env, admin) {
   if (!isOwner(admin)) return json({ error: "Only the owner can see this." }, 403);
-  const r = await env.DB.prepare("SELECT a.id, a.email, a.name, a.role, a.photo, a.phone, a.notify, a.created_at, a.last_login, t.id therapist_id, t.name therapist_name, t.city therapist_city FROM admins a LEFT JOIN therapists t ON t.admin_id = a.id ORDER BY a.created_at").all();
+  const r = await env.DB.prepare("SELECT a.id, a.email, a.username, a.name, a.role, a.photo, a.phone, a.notify, a.created_at, a.last_login, t.id therapist_id, t.name therapist_name, t.city therapist_city FROM admins a LEFT JOIN therapists t ON t.admin_id = a.id ORDER BY a.created_at").all();
   return json({ admins: r.results });
 }
 async function adminCreate(req, env, admin) {
@@ -655,9 +658,10 @@ async function adminCreate(req, env, admin) {
   const b = await body(req);
   const email = normEmail(b.email), name = clean(b.name, 80), role = ["all", ...CITY_KEYS].includes(b.role) ? b.role : null, password = String(b.password || "");
   if (!email || !name || !role || password.length < 10) return json({ error: "Name, email or username, role and a password of at least 10 characters." }, 400);
+  const username = b.username === undefined ? null : validUsername(b.username); if (username === false) return json({ error: "A username is 3 to 24 letters, digits, dots, dashes or underscores." }, 400);
   const { hash, salt } = await hashPassword(password);
-  try { await env.DB.prepare("INSERT INTO admins (id, email, name, role, pass_hash, salt) VALUES (?,?,?,?,?,?)").bind(randomId(), email, name, role, hash, salt).run(); }
-  catch { return json({ error: "That email already has admin access." }, 409); }
+  try { await env.DB.prepare("INSERT INTO admins (id, email, name, role, pass_hash, salt, username) VALUES (?,?,?,?,?,?,?)").bind(randomId(), email, name, role, hash, salt, username).run(); }
+  catch { return json({ error: "That email or username already has admin access." }, 409); }
   return json({ ok: true });
 }
 async function adminDelete(env, admin, id) {
@@ -672,7 +676,12 @@ async function adminDelete(env, admin, id) {
 async function adminProfile(req, env, admin) {
   const b = await body(req);
   const photo = b.photo === undefined ? admin.photo : b.photo === null ? null : validPhoto(b.photo) || admin.photo;
-  await env.DB.prepare("UPDATE admins SET name = ?, phone = ?, photo = ?, notify = ? WHERE id = ?").bind(clean(b.name, 80) || admin.name, b.phone === undefined ? admin.phone : clean(b.phone, 40), photo, b.notify === undefined ? admin.notify ?? 1 : b.notify ? 1 : 0, admin.id).run();
+  let username = admin.username || null, email = admin.email;
+  if (b.username !== undefined) { username = validUsername(b.username); if (username === false) return json({ error: "A username is 3 to 24 letters, digits, dots, dashes or underscores." }, 400); }
+  if (b.email !== undefined && b.email !== null && String(b.email).trim() !== "" && normEmail(b.email) !== admin.email) { email = validEmail(b.email); if (!email) return json({ error: "That doesn't look like an email address." }, 400); }
+  if (!email.includes("@") && !username) return json({ error: "Keep a username until you've added an email." }, 400);
+  try { await env.DB.prepare("UPDATE admins SET name = ?, phone = ?, photo = ?, notify = ?, username = ?, email = ? WHERE id = ?").bind(clean(b.name, 80) || admin.name, b.phone === undefined ? admin.phone : clean(b.phone, 40), photo, b.notify === undefined ? admin.notify ?? 1 : b.notify ? 1 : 0, username, email, admin.id).run(); }
+  catch { return json({ error: "That username or email is already used by another account." }, 409); }
   return json({ admin: pub(await env.DB.prepare("SELECT * FROM admins WHERE id = ?").bind(admin.id).first()) });
 }
 // Owner: change another admin's name, role or reset their password
@@ -686,7 +695,9 @@ async function adminEdit(req, env, admin, id) {
   if (id === admin.id && role !== "all") return json({ error: "You can't remove your own owner access." }, 400);
   let hash = a.pass_hash, salt = a.salt;
   if (b.password !== undefined) { if (String(b.password).length < 10) return json({ error: "Use at least 10 characters." }, 400); ({ hash, salt } = await hashPassword(String(b.password))); }
-  await env.DB.prepare("UPDATE admins SET name = ?, role = ?, pass_hash = ?, salt = ? WHERE id = ?").bind(clean(b.name, 80) || a.name, role, hash, salt, id).run();
+  let username = a.username || null; if (b.username !== undefined) { username = validUsername(b.username); if (username === false) return json({ error: "A username is 3 to 24 letters, digits, dots, dashes or underscores." }, 400); }
+  try { await env.DB.prepare("UPDATE admins SET name = ?, role = ?, pass_hash = ?, salt = ?, username = ? WHERE id = ?").bind(clean(b.name, 80) || a.name, role, hash, salt, username, id).run(); }
+  catch { return json({ error: "That username is already used by another account." }, 409); }
   // an account narrowed to one city can't stay linked to a therapist profile in another
   if (role !== "all") await env.DB.prepare("UPDATE therapists SET admin_id = NULL WHERE admin_id = ? AND city != ?").bind(id, role).run();
   return json({ ok: true });

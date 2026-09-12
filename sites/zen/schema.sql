@@ -97,8 +97,10 @@ CREATE TABLE IF NOT EXISTS admins (
   phone      TEXT,
   notify     INTEGER DEFAULT 1,             -- email me about new bookings in my city (owner: all cities)
   created_at TEXT DEFAULT (datetime('now')),
-  last_login TEXT
+  last_login TEXT,
+  username   TEXT                           -- optional second sign-in (2026-09-12); unique when set
 );
+CREATE UNIQUE INDEX IF NOT EXISTS admins_username ON admins(username) WHERE username IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
 INSERT OR IGNORE INTO settings VALUES ('loyalty_every', '10');   -- every Nth completed session is free
