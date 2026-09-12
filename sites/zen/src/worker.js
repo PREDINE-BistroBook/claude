@@ -555,7 +555,8 @@ async function adminClients(env, admin, url) {
     FROM users u LEFT JOIN bookings b ON b.user_id = u.id AND b.status IN ('paid','confirmed','done')${w.sql}
     WHERE 1=1`;
   const args = [...w.args];
-  if (city) sql += " AND EXISTS (SELECT 1 FROM bookings x WHERE x.user_id = u.id AND x.city = ?)", args.push(city);
+  // a city admin sees everyone who chose that room (questionnaire / profile) or has booked there, even before a first session
+  if (city) sql += " AND (u.nearest_city = ? OR u.city = ? OR EXISTS (SELECT 1 FROM bookings x WHERE x.user_id = u.id AND x.city = ?))", args.push(city, city, city);
   if (qs) sql += " AND (u.name LIKE ? OR u.email LIKE ? OR u.phone LIKE ?)", args.push(`%${qs}%`, `%${qs}%`, `%${qs}%`);
   sql += " GROUP BY u.id ORDER BY last_visit DESC NULLS LAST, u.created_at DESC LIMIT 300";
   const r = await env.DB.prepare(sql).bind(...args).all();
