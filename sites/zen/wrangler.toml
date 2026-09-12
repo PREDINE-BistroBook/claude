@@ -29,5 +29,5 @@ database_id = "35c5461a-9065-4552-a6bf-bac39d1ec8f8"   # created 2026-09-12 (WEU
 SITE_URL = "https://zenrecovery.club"
 ZEN_STRIPE_ACCOUNT = ""          # acct_... of Zen's connected account. Empty = preview mode (no card payments).
 ZEN_NOTIFY_EMAIL = ""            # where Zen receives bookings
-FROM_EMAIL = "Zen Recovery <booking@zenrecovery.club>"   # domain added to Resend 2026-09-12; verify DNS records before first send
+FROM_EMAIL = "Zen Recovery <booking@amicomioflorence.com>"   # TEMPORARY: verified domain. Switch to booking@zenrecovery.club once Resend shows it verified.
 DEV_MAGIC_LINK = "0"             # "1" only on a local dev run: returns the sign-in link in the API response instead of relying on email

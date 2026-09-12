@@ -2,7 +2,7 @@
 
 A Locali & Ordinazioni build for Ash's friend's team, **Zen Recovery** (Instagram `@zen_recovery10`; brand: italic ZEN, wide-set RECOVERY in electric blue, on black or off-white). Cairo and Dahab are run by Shaarawy (`@recoverywithshaarawy`, bio phone 01145638166, used as the Egypt WhatsApp on the site).. One page: a scroll-driven explanation of what cupping does, then "which city are you in?", then a booking form that takes card payment. **Every booking pays a 2% platform fee to us automatically**, inside Stripe, with no invoicing.
 
-Status (2026-09-12): **ready to deploy to zenrecovery.club** — see Deploy. Prices, addresses and team lines are still placeholders. Photos are real (from Zen's Instagram, supplied by Ash) but which photo belongs to which city is a guess — see `public/img/README.md`. Payments are off until Zen's Stripe account is connected (see below).
+Status (2026-09-12, 14:05 UTC): **LIVE at https://zenrecovery.club** (Worker `zen-recovery`, custom domains zenrecovery.club + www, D1 `zen-recovery`, secrets set, Resend DNS records in place). Deploys run from GitHub Actions on every merge to the default branch touching `sites/zen/`. Prices, addresses and team lines are still placeholders. Photos are real (from Zen's Instagram, supplied by Ash) but which photo belongs to which city is a guess — see `public/img/README.md`. Payments are off until Zen's Stripe account is connected (see below).
 
 ```
 sites/zen/

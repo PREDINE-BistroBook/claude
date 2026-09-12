@@ -38,11 +38,11 @@ export function setCookie(name, value, maxAge) {
 }
 export const clearCookie = (name) => `${name}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
 
-// ----- passwords (PBKDF2-SHA256, 120k iterations) -----
+// ----- passwords (PBKDF2-SHA256, 100k iterations (the Workers runtime rejects more)) -----
 export async function hashPassword(password, saltHex) {
   const salt = saltHex ? unb64u(saltHex) : crypto.getRandomValues(new Uint8Array(16));
   const key = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveBits"]);
-  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations: 120000 }, key, 256);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations: 100000 }, key, 256);
   return { hash: b64u(bits), salt: b64u(salt) };
 }
 export async function verifyPassword(password, hash, salt) {
