@@ -407,7 +407,7 @@ async function saveTherapist(req, env, admin, id) {
   const vals = [name, keep("bio", 400), photo, keep("languages", 60), b.active === undefined ? cur?.active ?? 1 : b.active ? 1 : 0, Number.isInteger(b.sort) ? b.sort : cur?.sort || 0, link.admin_id, keep("area", 80), keep("address", 200), maps, keep("title", 80), keepML("story", 2000), keepML("certs", 1200), /^[A-Za-z0-9._]*$/.test(insta) ? insta : ""];
   if (cur) await env.DB.prepare("UPDATE therapists SET name = ?, bio = ?, photo = ?, languages = ?, active = ?, sort = ?, admin_id = ?, area = ?, address = ?, maps_url = ?, title = ?, story = ?, certs = ?, instagram = ? WHERE id = ?").bind(...vals, id).run();
   else await env.DB.prepare("INSERT INTO therapists (id, city, name, bio, photo, languages, active, sort, admin_id, area, address, maps_url, title, story, certs, instagram) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(tid, city, ...vals).run();
-  return json({ ok: true, id: tid, created: link.created || null });
+  return json({ ok: true, id: tid, created: link.created || null, admin_id: link.admin_id || null });
 }
 async function savePackage(req, env, id) {
   const b = await body(req);
