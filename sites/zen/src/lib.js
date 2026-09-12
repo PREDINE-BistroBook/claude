@@ -89,10 +89,21 @@ export async function sessionCookieFor(env, userId) {
 // The one place city access is decided for admins. Returns the city an admin may see (null = all).
 export function scope(admin, requested) { if (admin.role !== "all") return admin.role; return CITY_KEYS.includes(requested) ? requested : null; }
 
+// Every email goes out as plain text plus a simple HTML version with the logo on top (same words, links clickable).
+const escHtml = (v) => String(v).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+export function emailHtml(env, text) {
+  const body = text.split("\n").map((l) => escHtml(l).replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" style="color:#2F7BEA">$1</a>') || "&nbsp;").join("<br>");
+  return `<!doctype html><html><body style="margin:0;background:#EDEEEA;padding:24px 12px;font-family:Figtree,Segoe UI,Helvetica,Arial,sans-serif;color:#1B1E1D">
+<div style="max-width:560px;margin:0 auto;background:#F7F7F5;border:1px solid #d9dbd6;border-radius:18px;overflow:hidden">
+<div style="background:#000;padding:22px;text-align:center"><a href="${env.SITE_URL}"><img src="${env.SITE_URL}/img/logo-email.png" alt="Zen Recovery" width="120" height="120" style="display:inline-block;border:0"></a></div>
+<div style="padding:24px 26px;font-size:16px;line-height:1.55">${body}</div>
+<div style="padding:14px 26px 22px;font-size:12px;color:#8B928F;border-top:1px solid #e3e5e0">Zen Recovery · Cairo · Dahab · Florence · <a href="${env.SITE_URL}" style="color:#8B928F">zenrecovery.club</a></div>
+</div></body></html>`;
+}
 export async function sendEmail(env, { to, subject, text }) {
   const list = [...new Set((Array.isArray(to) ? to : [to]).filter(Boolean))];
   if (!env.RESEND_API_KEY || !list.length) return false;
-  const r = await fetch("https://api.resend.com/emails", { method: "POST", headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" }, body: JSON.stringify({ from: env.FROM_EMAIL, to: list, subject, text }) });
+  const r = await fetch("https://api.resend.com/emails", { method: "POST", headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" }, body: JSON.stringify({ from: env.FROM_EMAIL, to: list, subject, text, html: emailHtml(env, text) }) });
   if (!r.ok) console.error("resend error", await r.text());
   return r.ok;
 }
