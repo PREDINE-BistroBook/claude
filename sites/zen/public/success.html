@@ -18,6 +18,7 @@
   .prep h2{font-family:"Saira",sans-serif;font-weight:400;font-size:1.2rem;margin:0 0 8px}
   .prep ul{margin:0;padding-left:18px;display:grid;gap:6px;font-size:.92rem}
   .prep .small{font-size:.82rem;margin-top:10px} .prep a.plain{display:inline;margin:0;padding:0;background:none;color:#2F7BEA;font-weight:500}
+  [lang="ar"] body,[lang="ar"] h1,[lang="ar"] h2{font-family:"Cairo",system-ui,sans-serif}
   @media (prefers-reduced-motion:reduce){.core{animation:none}}
 </style>
 </head>
@@ -30,8 +31,9 @@
   <div class="prep"><h2>Before you come</h2><ul id="prep"></ul><p class="small">The full guide, before and after, is in <a class="plain" href="/account.html#guide">your account</a>.</p></div>
   <a href="/account.html">Open my account</a>
 </main>
+<script src="/i18n.js"></script>
 <script src="/guide.js"></script>
 <script>document.getElementById("prep").innerHTML = ZenGuide.ADVICE.before.general.slice(0, 5).map((t) => "<li>" + t + "</li>").join("");</script>
-<script>if (new URLSearchParams(location.search).get("free")) document.getElementById("msg").textContent = "Your free session is reserved and a confirmation is on its way to your inbox. Zen will message you on WhatsApp to agree the exact hour.";</script>
+<script>if (new URLSearchParams(location.search).get("free")) document.getElementById("msg").textContent = "Your free session is reserved and a confirmation is on its way to your inbox. Zen will message you on WhatsApp to agree the exact hour."; ZenI18n.apply();</script>
 </body>
 </html>

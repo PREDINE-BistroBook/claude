@@ -10,7 +10,8 @@ sites/zen/
   public/account.html   client area: rewards + invite link, session history, profile with photo
   public/admin.html     team area: overview + statistics, bookings, clients, settings, admins (role-scoped)
   public/app.css        shared styles for the two areas
-  public/guide.js       questionnaire options, nearest-room logic, body map, before/after advice (shared by all pages)
+  public/i18n.js        English / Italian / Arabic dictionary + the apply() that translates the page
+  public/guide.js       questionnaire options, nearest-room logic, body map, before/after advice, exercises (shared by all pages)
   public/demo.js        API client; answers from sample data when no API is present (preview builds)
   migrations/           schema changes applied to the live database after the first deploy
   public/success.html   "Reserved" page Stripe sends the client back to
@@ -39,6 +40,12 @@ sites/zen/
 - First owner: set `ADMIN_BOOTSTRAP_EMAIL` and `ADMIN_BOOTSTRAP_PASSWORD` as secrets, sign in once with them, then add the real admins from Settings. The bootstrap only works while the admins table is empty.
 
 **Questionnaire + guide (added 2026-09-12, evening).** On first sign-in a client answers seven short steps: where they live (→ nearest room recommended: Sinai/Red Sea → Dahab, rest of Egypt → Cairo, Italy → Florence, elsewhere → they pick), why they're coming, where it hurts (tap-able body map), activity and experience, health conditions (seven of them are *flags*: pregnancy, blood thinners, bleeding disorders, heart, diabetes, skin, recent surgery), contact preference. Stored in `users.intake` (JSON) + `country`, `city_text`, `nearest_city`. The account then shows a "Your guide" tab (before / after / day after / how often / when to skip, per session type, content in `public/guide.js`), the next session's before-list on the Sessions tab, and the after-list for 48 h after a completed session. The homepage preselects their room (`?city=`) and shows a short before-list under the booking form; the success page shows the checklist. In the admin, every booking and client shows the answers, a read-only body map, and a red **health** flag that must be read before the session. Help boxes on every admin tab explain what the numbers and buttons mean.
+
+**Languages (added 2026-09-12, night).** The public site, the client area and the success page are in English, Italian and Arabic; Arabic flips the layout to right-to-left and uses the "Cairo" typeface. The switcher sits in the nav; the choice is remembered in the browser, saved on the account (`users.lang`), and `?lang=it` in a link forces it. All strings live in `public/i18n.js` (the English text is the key; add a translation and it applies everywhere, including the guide and the questionnaire). The admin stays in English.
+
+**Sign-in with Google.** Server-side OAuth (`/api/auth/google` → Google → `/api/auth/google/callback`). Needs a Google Cloud OAuth "Web application" client: authorised origin `https://zenrecovery.club`, redirect URI `https://zenrecovery.club/api/auth/google/callback`; put the client id in `wrangler.toml` (`GOOGLE_CLIENT_ID`) and the secret in the GitHub secret `GOOGLE_CLIENT_SECRET`. Until both are set the button is hidden and email links are the only way in. Accounts are matched by email, so a client who first used the email link can later use Google.
+
+**More on the client side.** Login bar in the site nav (avatar + first name when signed in, "Sign in" otherwise). Session cards: add to calendar (.ics), "message the room" to reschedule (WhatsApp with a prefilled text; Instagram DM for Florence until it has a number), a 1–5 rating with a word for the therapist once a session is done, and the therapist's note back to the client (written from the admin booking drawer). New **Progress** tab: weekly check-in (pain 0–10, energy, sleep, note), a line of pain over time with session days marked, and simple exercises matched to the focus areas from the questionnaire. Installable as a home-screen app (`manifest.webmanifest`).
 
 **Statistics** (Overview tab): sessions this month with change vs last month, revenue per currency (EUR and EGP are never summed), clients and new clients, upcoming, sessions per month for 12 months, revenue per month per currency, sessions by type, sessions by city (owner, all-cities view), today's list, rewards issued/used. Every chart has a hover tooltip and a table view.
 
@@ -98,6 +105,7 @@ One-time, Ash, in GitHub → repo → Settings → Secrets and variables → Act
 | `RESEND_API_KEY` | Resend → API keys → Create → "zen-recovery", Sending access |
 | `ADMIN_BOOTSTRAP_PASSWORD` | the first owner password (email is fetta.amore.business@gmail.com); change it in the admin after first login |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | later, when Stripe Connect is set up |
+| `GOOGLE_CLIENT_SECRET` | optional, with `GOOGLE_CLIENT_ID` in `wrangler.toml`, for "Continue with Google" |
 
 Then Actions → "Deploy Zen Recovery" → Run workflow (or ask a Claude session to trigger it; it can). The workflow: applies the schema, deploys, sets the Worker secrets, generates `SESSION_SECRET` once, and — as soon as zenrecovery.club is a zone in the Cloudflare account — attaches the custom domain and adds the four Resend DNS records itself. Before the zone exists it deploys to `zen-recovery.fetta-amore-business.workers.dev` and says so. Pushes to the repo's default branch touching `sites/zen/` redeploy automatically. GitHub only registers the workflow once the file is on the default branch, so the Zen branch has to be merged before the first run.
 
@@ -137,6 +145,8 @@ Keep the domain in Ash's GoDaddy/Cloudflare accounts, not Zen's: it's the one pi
 
 ## Ideas for later (not built — Ash decides)
 
+Built on 2026-09-12 from this list: login bar, Google sign-in, three languages, session rating + therapist note, weekly check-ins with a progress chart, add-to-calendar, reschedule via WhatsApp, exercises per focus area, installable app. Still open, roughly in the order I'd do them:
+
 1. **Live availability.** Today the client picks a day and a window and Zen confirms by WhatsApp. A real slot table per therapist (open hours per city, session length, buffers) would let clients pick an exact time and would stop double-bookings. Medium effort; the schema already has a slot column.
 2. **WhatsApp reminders** the day before (and "how was it?" the day after) via the WhatsApp Business API or Twilio. Missed sessions are the biggest silent cost for a one-person room.
 3. **Gift sessions.** A "buy a session for someone" flow: same checkout, produces a code. Recovery is an easy gift, and it brings in a new client every time.
@@ -151,3 +161,19 @@ Keep the domain in Ash's GoDaddy/Cloudflare accounts, not Zen's: it's the one pi
 12. **Instagram link-in-bio page** at `/ig` with the three cities and "book now", so the profile link goes straight to booking.
 13. **Corporate / gym partnerships**: a code per gym (Gold's Gym in the photos) giving members a fixed discount, with a per-gym report in the admin. Same mechanism as the invite codes.
 14. **Head Chef digest line** for Zen: once live, the daily rundown can include "Zen: N bookings, X platform fee" from the admin stats endpoint, so Ash never has to open the admin to know how the 2% is doing.
+15. **Apple sign-in** next to Google, mainly for iPhone users in Italy. Same server-side flow, one more client id.
+16. **Session reminders by WhatsApp** (24 h before, and a "how do you feel?" nudge 2 days after) through the WhatsApp Business API. Biggest remaining lever against no-shows; needs Meta business verification.
+17. **Live time slots** per therapist instead of morning/afternoon/evening, with the admin blocking off days. Removes the confirmation step on WhatsApp.
+18. **Packages and memberships** (5 sessions up front, monthly plan) with the 2% taken once per package.
+19. **Gift a session** with a code the recipient redeems in the booking form.
+20. **Birthday reward**: automatic 20% credit in the client's birthday month (needs a scheduled Worker; birthdays are already stored).
+21. **Before/after photos** in the client profile, uploaded by the therapist with consent (R2 storage).
+22. **Waitlist**: "tell me if a slot opens on Friday" once live slots exist.
+23. **Referral leaderboard** per city in the admin, and a small monthly prize for the top inviter.
+24. **Gym partner codes** (Gold's Gym first) with a fixed member discount and a per-gym report.
+25. **Export my data** for the client (PDF of sessions, check-ins and notes) to hand to a physio or doctor.
+26. **Therapist profiles** on the site (photo, bio, languages spoken) and "book with the same therapist".
+27. **SMS fallback** for sign-in links in Egypt, where email is checked less often than WhatsApp.
+28. **Reviews to Google Maps**: after a 5-star rating in the app, one tap to paste it as a public review.
+29. **Health-flag rules**: block online booking for flagged conditions until the therapist has approved the client once (today it's only a warning in the admin).
+30. **Head Chef line**: daily digest of Zen bookings, ratings and the 2% fee from the stats endpoint.
