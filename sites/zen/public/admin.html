@@ -51,6 +51,18 @@
   .team-card.off{opacity:.65} .team-card .actions{flex:none}
   .photo-pick{display:flex;gap:16px;align-items:center} .photo-pick .avatar.lg{cursor:pointer;position:relative;overflow:hidden} .photo-pick .avatar.lg::after{content:"Change";position:absolute;inset:auto 0 0 0;padding:4px 0;text-align:center;font:500 .66rem var(--body);background:rgba(0,0,0,.45);color:#fff;letter-spacing:.04em;text-transform:uppercase} .photo-pick input[type=file]{display:none}
   #dlg-ask .inner{gap:10px} #dlg-ask p{margin:0;color:var(--ink-soft);font-size:.95rem}
+  /* calendar: month grid per city */
+  .cal-top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 0 10px}
+  .cal-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.78rem;color:var(--ink-soft);margin-bottom:8px} .cal-legend span{display:inline-flex;align-items:center;gap:6px} .lg{width:12px;height:12px;border-radius:4px;display:inline-block;border:1px solid var(--line)} .lg.book{background:var(--mark)} .lg.off{background:color-mix(in srgb,var(--bad) 22%,var(--ground))} .lg.closed{background:var(--ground-2)} .lg.review{background:#F2C14E}
+  .cal-head{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin-bottom:4px} .cal-head span{font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);padding:0 6px}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin-bottom:16px}
+  .cal-cell{min-height:92px;border:1px solid var(--line);border-radius:10px;background:var(--ground);padding:6px;display:flex;flex-direction:column;gap:4px;cursor:pointer;text-align:left;font:inherit;color:inherit;min-width:0;transition:border-color .15s} .cal-cell:hover{border-color:var(--mark)} .cal-cell[aria-selected="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+  .cal-cell.other{opacity:.45} .cal-cell.closed{background:var(--ground-2)} .cal-cell.off{background:color-mix(in srgb,var(--bad) 10%,var(--ground))} .cal-cell.past .n{color:var(--ink-mute)}
+  .cal-cell .n{font-family:var(--mono);font-size:.8rem;display:flex;justify-content:space-between;align-items:center} .cal-cell.today .n b{background:var(--ink);color:var(--ground);border-radius:999px;padding:1px 7px}
+  .cal-cell .cnt{display:inline-flex;align-items:center;gap:0;font-size:.74rem;padding:2px 7px;border-radius:999px;background:var(--mark);color:#fff;width:max-content;max-width:100%} .cal-cell .cnt.rev{background:#F2C14E;color:#3b2f00} .cal-cell .cnt b{font-weight:600}
+  .cal-cell .ln{font-size:.72rem;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .cal-cell .offl{font-size:.72rem;color:#7A1F17;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #cal-day .today .item{cursor:pointer} #cal-day .today .item:hover{border-color:var(--mark)}
+  @media (max-width:700px){.cal-cell{min-height:58px;padding:4px} .cal-cell .ln,.cal-cell .offl,.cal-cell .cnt .w{display:none} .cal-cell .cnt{padding:1px 7px;font-size:.72rem;border-radius:999px} .cal-head span{padding:0 2px;font-size:.62rem} #cal-day .cols-2{grid-template-columns:1fr}}
   /* calendar: one week strip per room / therapist, days off as ranges */
   .hgroup{border:1px solid var(--line);border-radius:14px;padding:12px 14px;background:var(--ground-3)}
   .hgroup-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px} .hgroup-head b{font-weight:500;display:flex;align-items:center;gap:8px} .hgroup-head .sum{font-size:.82rem;color:var(--ink-soft);flex:1;min-width:0}
@@ -202,13 +214,28 @@
 
     <!-- calendar: opening hours, days off, waitlist -->
     <div id="tab-calendar" hidden>
-      <div class="section-head"><h2>Calendar</h2></div>
+      <div class="section-head"><h2>Calendar</h2><div class="pills" id="cal-cities"></div></div>
+      <div class="subtabs"><button class="pill" data-calsub="month" aria-pressed="true">Month</button><button class="pill" data-calsub="rules" aria-pressed="false">Opening hours &amp; days off</button></div>
+      <div id="cal-month">
+        <div class="cal-top"><div class="row" style="gap:6px"><button class="btn small ghost" id="cal-prev" aria-label="Previous month">‹</button><b id="cal-title" style="font-family:var(--display);font-size:1.15rem;font-weight:400;min-width:150px;text-align:center"></b><button class="btn small ghost" id="cal-next" aria-label="Next month">›</button><button class="btn small ghost" id="cal-today">Today</button></div><div class="pills" id="cal-th"></div></div>
+        <div class="cal-legend"><span><i class="lg book"></i>sessions</span><span><i class="lg off"></i>day off</span><span><i class="lg closed"></i>closed</span><span><i class="lg review"></i>needs review</span></div>
+        <div class="cal-head" id="cal-head"></div>
+        <div class="cal-grid" id="cal-grid" role="grid"></div>
+        <div class="card" id="cal-day" hidden>
+          <div class="section-head" style="margin:0 0 10px"><h3 id="cd-title"></h3><div class="actions"><button class="btn small" id="cd-add">Add booking</button><button class="btn small ghost" id="cd-block-day">Block whole day</button><button class="btn small ghost" id="cd-block-hours">Block hours</button></div></div>
+          <div class="grid cols-2" style="gap:14px">
+            <div><p class="eyebrow">Sessions</p><div class="today" id="cd-bookings"></div></div>
+            <div><p class="eyebrow">Free times</p><div class="slot-chips" id="cd-slots"></div><p class="eyebrow" style="margin-top:14px">Days off</p><div class="grid" id="cd-off" style="gap:6px"></div></div>
+          </div>
+        </div>
+      </div>
+      <div id="cal-rules" hidden>
       <details class="help" id="cal-help"><summary>How live time slots work</summary>
         <ul>
           <li>Until you add opening hours for a city, clients pick a rough window (morning / afternoon / evening) and you agree the hour on WhatsApp. That's fine to start with.</li>
-          <li>Add <b>opening hours</b> below (for example Mon–Sat 10:00–18:00, one-hour slots) and the website shows exact free times instead. A time disappears the moment someone books it, so no double bookings.</li>
+          <li>Add <b>opening hours</b> (for example Mon–Sat 10:00–18:00, one-hour slots) and the website shows exact free times instead. A time disappears the moment someone books it, so no double bookings.</li>
           <li>Hours can be for the whole room or for one therapist. If you add therapists in the Team tab, clients can choose who they see.</li>
-          <li>Holiday, a dentist appointment, an afternoon off: add it under <b>Days off</b>. A whole day, or just a few hours.</li>
+          <li>Holiday, a dentist appointment, an afternoon off: add it under <b>Days off</b>, or click a day in the Month view. A whole day, or just a few hours.</li>
           <li><b>Waiting list</b>: clients who wanted a full day get an email by themselves if a time opens up there.</li>
         </ul>
       </details>
@@ -233,6 +260,7 @@
           <h3>Waiting list</h3>
           <div class="table-wrap"><table id="wait-table"><thead><tr><th>Client</th><th>City</th><th>Day</th><th>Prefers</th><th>Told</th></tr></thead><tbody></tbody></table></div>
         </div>
+      </div>
       </div>
     </div>
 
@@ -435,6 +463,11 @@
     <div class="row"><div class="field" style="flex:1" id="th-city-wrap"><label for="th-city">City</label><select id="th-city"></select></div><div class="field" style="flex:2"><label for="th-name">Name <span class="tiny">(as clients see it)</span></label><input id="th-name" required placeholder="Hesham"></div></div>
     <div class="field"><label for="th-bio">About them <span class="tiny">(one or two lines, shown to clients)</span></label><textarea id="th-bio" rows="2" placeholder="Sports massage and cupping, 8 years. Trained in Cairo."></textarea></div>
     <div class="row"><div class="field" style="flex:2"><label for="th-langs">Languages</label><input id="th-langs" placeholder="Arabic, English"></div><div class="field" style="flex:1"><label for="th-sort">Order on the site <span class="tiny">(1 = first)</span></label><input id="th-sort" type="number" min="1" max="99" value="1"></div></div>
+    <div class="grid" style="gap:8px;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--ground-3)">
+      <div><b style="font-size:.92rem">Where they work</b><div class="tiny">Cairo is big: clients see the neighbourhood next to the name when they choose a therapist, and the one nearest to where they live comes first. The street address goes in the confirmation email only.</div></div>
+      <div class="row"><div class="field" style="flex:1"><label for="th-area">Neighbourhood <span class="tiny">(shown to clients)</span></label><input id="th-area" placeholder="Maadi, Zamalek"></div><div class="field" style="flex:2"><label for="th-address">Street address <span class="tiny">(confirmation email)</span></label><input id="th-address" placeholder="Road 9, Maadi"></div></div>
+      <div class="field"><label for="th-maps">Google Maps link <span class="tiny">(optional)</span></label><input id="th-maps" type="url" placeholder="https://maps.app.goo.gl/…"></div>
+    </div>
     <label class="row" style="gap:8px;font-size:.92rem"><input type="checkbox" id="th-active" checked> Shown on the website and bookable</label>
     <div class="grid" id="th-account" style="gap:8px;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--ground-3)">
       <div><b style="font-size:.92rem">Sign-in account</b><div class="tiny">The account this person uses to open the admin and see their own sessions. One account per person.</div></div>
@@ -678,7 +711,7 @@ $("#add-cancel").addEventListener("click", () => $("#dlg-add").close());
 $("#add-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const amt = $("#ad-amount").value;
-  try { await ZenAPI("POST", "/api/admin/bookings", { city: $("#ad-city").value, service: $("#ad-service").value, name: $("#ad-name").value.trim(), email: $("#ad-email").value.trim(), phone: $("#ad-phone").value.trim(), date: $("#ad-date").value, slot: $("#ad-slot").value.trim(), therapist_id: $("#ad-th").value || undefined, status: $("#ad-status").value, amount: amt === "" ? undefined : Math.round(Number(amt) * 100) }); $("#dlg-add").close(); $("#add-form").reset(); loadBookings(); }
+  try { await ZenAPI("POST", "/api/admin/bookings", { city: $("#ad-city").value, service: $("#ad-service").value, name: $("#ad-name").value.trim(), email: $("#ad-email").value.trim(), phone: $("#ad-phone").value.trim(), date: $("#ad-date").value, slot: $("#ad-slot").value.trim(), therapist_id: $("#ad-th").value || undefined, status: $("#ad-status").value, amount: amt === "" ? undefined : Math.round(Number(amt) * 100) }); $("#dlg-add").close(); $("#add-form").reset(); loadBookings(); if (!$("#tab-calendar").hidden) loadCalendar(); }
   catch (ex) { $("#add-err").textContent = ex.message; $("#add-err").hidden = false; }
 });
 
@@ -738,15 +771,68 @@ async function openClient(id) {
 function shrink(file, max, q) { return new Promise((res, rej) => { const img = new Image(); img.onload = () => { const r = Math.min(1, max / Math.max(img.width, img.height)); const c = document.createElement("canvas"); c.width = Math.round(img.width * r); c.height = Math.round(img.height * r); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(img.src); res(c.toDataURL("image/jpeg", q)); }; img.onerror = () => rej(new Error("That file isn't an image we can read.")); img.src = URL.createObjectURL(file); }); }
 
 /* ---------- calendar ---------- */
+let calCity = "", calMonth = new Date().toISOString().slice(0, 7), calTh = "", calDay = "", CAL = { bookings: [], blocked: [], avail: [], wait: [] }, calSub = "month";
+const calCities = () => (isOwner() ? Object.keys(CITY_NAME) : [A.role]);
 async function loadCalendar() {
   await loadTeamList();
+  if (!calCities().includes(calCity)) calCity = calCities()[0];
+  $("#cal-cities").innerHTML = calCities().length > 1 ? calCities().map((k) => `<button class="pill" data-calcity="${k}" aria-pressed="${k === calCity}"><i class="dot ${k}"></i>${CITY_NAME[k]}</button>`).join("") : `<span class="badge city-${calCity}">${CITY_NAME[calCity]}</span>`;
+  $$("#cal-cities [data-calcity]").forEach((p) => (p.onclick = () => { calCity = p.dataset.calcity; calTh = ""; calDay = ""; loadCalendar(); }));
   const fill = (id) => { $("#" + id).innerHTML = `<option value="">Whole room</option>` + teamIn(isOwner() ? $("#" + (id === "av-th" ? "av-city" : "bl-city")).value : A.role).map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join(""); };
   fill("av-th"); fill("bl-th"); $("#av-city").onchange = () => fill("av-th"); $("#bl-city").onchange = () => fill("bl-th");
-  const [av, bl, wl] = await Promise.all([ZenAPI("GET", "/api/admin/availability"), ZenAPI("GET", "/api/admin/blocked"), ZenAPI("GET", "/api/admin/waitlist")]);
+  const [y, m] = calMonth.split("-").map(Number); const first = new Date(y, m - 1, 1), start = new Date(first); start.setDate(1 - ((first.getDay() + 6) % 7)); const end = new Date(start); end.setDate(start.getDate() + 41);
+  const [bk, bl, av, wl] = await Promise.all([ZenAPI("GET", `/api/admin/bookings?city=${calCity}&from=${isoDay(start)}&to=${isoDay(end)}`), ZenAPI("GET", "/api/admin/blocked"), ZenAPI("GET", "/api/admin/availability"), ZenAPI("GET", "/api/admin/waitlist")]);
+  CAL = { bookings: bk.bookings.filter((b) => !["cancelled", "no_show"].includes(b.status)), blocked: bl.rows, avail: av.rows, wait: wl.rows };
+  const team = teamIn(calCity); if (calTh && !team.some((t) => t.id === calTh)) calTh = "";
+  $("#cal-th").innerHTML = team.length ? `<button class="pill" data-calth="" aria-pressed="${!calTh}">Everyone</button>` + team.map((t) => `<button class="pill" data-calth="${t.id}" aria-pressed="${t.id === calTh}">${esc(t.name)}</button>`).join("") : "";
+  $$("#cal-th [data-calth]").forEach((p) => (p.onclick = () => { calTh = p.dataset.calth; renderMonth(); if (calDay) renderDay(); }));
+  $("#cal-head").innerHTML = DAY_ORDER.map((d) => `<span>${WD[d]}</span>`).join("");
+  renderMonth(); if (calDay) renderDay(); else $("#cal-day").hidden = true;
   $("#cal-help").open = !av.rows.length && !bl.rows.length;
-  renderHours(av.rows); renderDaysOff(bl.rows);
+  renderHours(av.rows.filter((r) => r.city === calCity)); renderDaysOff(bl.rows.filter((r) => r.city === calCity));
   $("#wait-table tbody").innerHTML = wl.rows.length ? wl.rows.map((r) => `<tr><td>${esc(r.name)}<div class="tiny">${esc(r.phone || r.email)}</div></td><td>${CITY_NAME[r.city]}</td><td class="num">${fmtDate(r.date)}</td><td>${r.slot_pref || "any"}</td><td class="tiny">${r.notified_at ? "yes, " + r.notified_at.slice(0, 10) : "not yet"}</td></tr>`).join("") : `<tr><td colspan="5" class="empty">Nobody waiting.</td></tr>`;
 }
+const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const forTh = (r) => !calTh || !r.therapist_id || r.therapist_id === calTh;          // room-wide rows apply to everyone
+const bkForTh = (b) => !calTh || b.therapist_id === calTh;
+function dayInfo(date) {
+  const wd = new Date(date + "T12:00:00").getDay();
+  const hours = CAL.avail.filter((r) => r.city === calCity && forTh(r)), cityHasHours = CAL.avail.some((r) => r.city === calCity);
+  const closed = cityHasHours && !hours.some((r) => r.weekday === wd);
+  const off = CAL.blocked.filter((r) => r.city === calCity && r.date === date && forTh(r));
+  const allDay = off.some((r) => !r.start);
+  const bookings = CAL.bookings.filter((b) => b.date === date && bkForTh(b)).sort((a, b) => String(a.slot).localeCompare(String(b.slot)));
+  return { closed, off, allDay, bookings, review: bookings.filter((b) => b.status === "review").length };
+}
+function renderMonth() {
+  const [y, m] = calMonth.split("-").map(Number); const first = new Date(y, m - 1, 1), start = new Date(first); start.setDate(1 - ((first.getDay() + 6) % 7));
+  $("#cal-title").textContent = first.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+  const today = isoDay(new Date()); const cells = [];
+  for (let i = 0; i < 42; i++) { const d = new Date(start); d.setDate(start.getDate() + i); const date = isoDay(d); const info = dayInfo(date);
+    const cls = ["cal-cell", d.getMonth() !== m - 1 ? "other" : "", date === today ? "today" : "", date < today ? "past" : "", info.allDay ? "off" : info.closed ? "closed" : ""].filter(Boolean).join(" ");
+    const lines = info.bookings.slice(0, 3).map((b) => `<span class="ln">${esc(String(b.slot).slice(0, 5))} ${esc(b.name.split(" ")[0])}</span>`).join("");
+    cells.push(`<button type="button" class="${cls}" data-date="${date}" aria-selected="${date === calDay}"><span class="n"><b>${d.getDate()}</b>${info.off.length && !info.allDay ? `<span class="offl">off ${esc(info.off[0].start)}–${esc(info.off[0].end || "")}</span>` : ""}</span>${info.bookings.length ? `<span class="cnt ${info.review ? "rev" : ""}"><b>${info.bookings.length}</b><span class="w"> session${info.bookings.length > 1 ? "s" : ""}${info.review ? " · " + info.review + " to check" : ""}</span></span>` : ""}${info.allDay ? `<span class="offl">${esc(info.off.find((r) => !r.start)?.reason || "day off")}</span>` : lines}</button>`); }
+  $("#cal-grid").innerHTML = cells.join("");
+  $$("#cal-grid [data-date]").forEach((c) => (c.onclick = () => { calDay = c.dataset.date; $$("#cal-grid [data-date]").forEach((x) => x.setAttribute("aria-selected", x === c)); renderDay(); }));
+}
+async function renderDay() {
+  const info = dayInfo(calDay), panel = $("#cal-day"); panel.hidden = false;
+  $("#cd-title").textContent = `${new Date(calDay + "T12:00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })} · ${CITY_NAME[calCity]}${calTh ? " · " + thName(calTh) : ""}`;
+  $("#cd-bookings").innerHTML = info.bookings.length ? info.bookings.map((b) => `<div class="item" data-open="${b.id}"><span>${esc(String(b.slot).slice(0, 5))} · <b>${esc(b.name)}</b> · ${esc(b.service_name.split(" · ")[0])}${b.therapist ? ` · ${esc(b.therapist)}` : ""}</span><span class="status ${b.status}">${STATUS[b.status]}</span></div>`).join("") : `<p class="muted">Nothing booked${info.allDay ? " (day off)" : info.closed ? " (closed)" : ""}.</p>`;
+  $$("#cd-bookings [data-open]").forEach((el) => (el.onclick = () => openBooking(CAL.bookings.find((b) => b.id === el.dataset.open))));
+  $("#cd-off").innerHTML = info.off.length ? info.off.map((r) => `<div class="off-row" style="padding:6px 10px"><div><b>${r.start ? esc(r.start) + "–" + esc(r.end || "") : "All day"}</b><span class="tiny">${r.therapist_id ? esc(thName(r.therapist_id)) : "whole room"}${r.reason ? " · " + esc(r.reason) : ""}</span></div><button class="btn small ghost" data-unblock="${r.id}">Remove</button></div>`).join("") : `<p class="tiny">None.</p>`;
+  $$("#cd-off [data-unblock]").forEach((b) => (b.onclick = async () => { await ZenAPI("DELETE", "/api/admin/blocked/" + b.dataset.unblock); loadCalendar(); }));
+  $("#cd-slots").innerHTML = `<span class="tiny">Loading…</span>`;
+  try { const r = await ZenAPI("GET", `/api/admin/slots?city=${calCity}&date=${calDay}${calTh ? "&therapist=" + calTh : ""}`); $("#cd-slots").innerHTML = r.mode === "windows" ? `<span class="tiny">No opening hours for ${CITY_NAME[calCity]} yet: clients pick a window.</span>` : r.slots.length ? r.slots.map((s) => `<span>${s.time}${s.therapists.length > 1 ? ` <small>×${s.therapists.length}</small>` : ""}</span>`).join("") : `<span class="tiny">${info.allDay ? "Day off." : info.closed ? "Closed." : "Fully booked or blocked."}</span>`; } catch { $("#cd-slots").innerHTML = ""; }
+}
+$("#cal-prev").addEventListener("click", () => { const [y, m] = calMonth.split("-").map(Number); calMonth = isoDay(new Date(y, m - 2, 1)).slice(0, 7); calDay = ""; loadCalendar(); });
+$("#cal-next").addEventListener("click", () => { const [y, m] = calMonth.split("-").map(Number); calMonth = isoDay(new Date(y, m, 1)).slice(0, 7); calDay = ""; loadCalendar(); });
+$("#cal-today").addEventListener("click", () => { calMonth = isoDay(new Date()).slice(0, 7); calDay = isoDay(new Date()); loadCalendar(); });
+$$("[data-calsub]").forEach((p) => p.addEventListener("click", () => { calSub = p.dataset.calsub; $$("[data-calsub]").forEach((x) => x.setAttribute("aria-pressed", x === p)); $("#cal-month").hidden = calSub !== "month"; $("#cal-rules").hidden = calSub !== "rules"; }));
+$("#cd-add").addEventListener("click", () => { $("#add-booking").click(); $("#ad-city").value = calCity; fillServices(); $("#ad-date").value = calDay; if (calTh) $("#ad-th").value = calTh; });
+$("#cd-block-hours").addEventListener("click", () => { $("#add-off").click(); $("#bl-city").value = calCity; $("#bl-city").dispatchEvent(new Event("change")); $("#bl-th").value = calTh; $("#bl-from").value = calDay; $("#bl-to").value = ""; $("#bl-start").focus(); });
+$("#cd-block-day").addEventListener("click", async () => { const reason = await ask({ title: `Block ${fmtDate(calDay)} in ${CITY_NAME[calCity]}${calTh ? " for " + thName(calTh) : ""}?`, text: "The whole day disappears from the website. Bookings already made stay: move or cancel them yourself.", ok: "Block the day", danger: true, field: { label: "Reason (only the team sees it)", placeholder: "Holiday, training…" } }); if (reason === null) return;
+  await ZenAPI("POST", "/api/admin/blocked", { city: calCity, therapist_id: calTh || undefined, date: calDay, reason }); loadCalendar(); });
 const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
 const whoLabel = (tid) => (tid ? esc(thName(tid)) || "therapist" : "Whole room");
 // One strip per room / therapist: seven day cells with the hour blocks, a one-line summary, one "remove all".
@@ -796,7 +882,7 @@ async function loadTeamTab() {
   await loadTeamList();
   if (isOwner()) { try { ADMINS = (await ZenAPI("GET", "/api/admin/admins")).admins; } catch { ADMINS = []; } }
   const sorted = [...TEAM].sort((a, b) => a.city.localeCompare(b.city) || (a.sort || 0) - (b.sort || 0) || a.name.localeCompare(b.name));
-  $("#team-list").innerHTML = sorted.length ? sorted.map((t) => `<div class="team-card ${t.active ? "" : "off"}" data-edit="${t.id}" role="button" tabindex="0"><span class="avatar">${t.photo ? `<img src="${t.photo}" alt="">` : initials(t.name)}</span><div class="meta"><b>${esc(t.name)}<span class="badge city-${t.city}">${CITY_NAME[t.city]}</span>${t.active ? "" : `<span class="status cancelled">paused</span>`}</b><span class="bio">${esc(t.bio || "")}</span><span class="tiny">${esc(t.languages || "")}${t.photo ? "" : " · no photo yet"}</span><span class="tiny">${t.admin_id ? (isOwner() ? `signs in as <b>${esc(t.admin_email)}</b>` : "has a sign-in account") : "no sign-in account yet"}${t.id === T?.id ? " · this is you" : ""}</span></div><div class="actions"><button class="btn ghost" data-edit="${t.id}">Edit</button><button class="btn ghost" data-toggle="${t.id}" data-active="${t.active}">${t.active ? "Pause" : "Show"}</button></div></div>`).join("") : `<div class="empty">No therapists yet. Tap "Add a therapist" so clients can see who they'll meet.</div>`;
+  $("#team-list").innerHTML = sorted.length ? sorted.map((t) => `<div class="team-card ${t.active ? "" : "off"}" data-edit="${t.id}" role="button" tabindex="0"><span class="avatar">${t.photo ? `<img src="${t.photo}" alt="">` : initials(t.name)}</span><div class="meta"><b>${esc(t.name)}<span class="badge city-${t.city}">${CITY_NAME[t.city]}</span>${t.active ? "" : `<span class="status cancelled">paused</span>`}</b><span class="bio">${esc(t.bio || "")}</span><span class="tiny">${esc(t.languages || "")}${t.area ? " · " + esc(t.area) : " · no neighbourhood yet"}${t.photo ? "" : " · no photo yet"}</span><span class="tiny">${t.admin_id ? (isOwner() ? `signs in as <b>${esc(t.admin_email)}</b>` : "has a sign-in account") : "no sign-in account yet"}${t.id === T?.id ? " · this is you" : ""}</span></div><div class="actions"><button class="btn ghost" data-edit="${t.id}">Edit</button><button class="btn ghost" data-toggle="${t.id}" data-active="${t.active}">${t.active ? "Pause" : "Show"}</button></div></div>`).join("") : `<div class="empty">No therapists yet. Tap "Add a therapist" so clients can see who they'll meet.</div>`;
   $$("#team-list [data-toggle]").forEach((b) => (b.onclick = async (e) => { e.stopPropagation(); await ZenAPI("PATCH", "/api/admin/therapists/" + b.dataset.toggle, { active: b.dataset.active !== "1" }); loadTeamTab(); }));
   $$("#team-list [data-edit]").forEach((el) => { const open = (e) => { e.stopPropagation(); openTherapist(TEAM.find((x) => x.id === el.dataset.edit)); }; el.onclick = open; if (el.tagName === "DIV") el.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(e); } }; });
 }
@@ -807,6 +893,7 @@ function openTherapist(t) {
   $("#th-title").textContent = t ? "Edit " + t.name : "Add a therapist";
   $("#th-city").innerHTML = cityKeys.map((k) => `<option value="${k}" ${t?.city === k ? "selected" : ""}>${CITY_NAME[k]}</option>`).join(""); $("#th-city").disabled = Boolean(t); $("#th-city-wrap").hidden = !isOwner() && !t;
   $("#th-name").value = t?.name || ""; $("#th-bio").value = t?.bio || ""; $("#th-langs").value = t?.languages || ""; $("#th-sort").value = t ? (t.sort || 0) + 1 : TEAM.filter((x) => x.city === cityKeys[0]).length + 1; $("#th-active").checked = t ? t.active === 1 : true;
+  $("#th-area").value = t?.area || ""; $("#th-address").value = t?.address || ""; $("#th-maps").value = t?.maps_url || "";
   $("#th-remove").hidden = !t; $("#th-err").hidden = true; d.dataset.id = t?.id || ""; thPhoto = undefined; $("#th-photo").value = ""; renderThPreview(t); fillAccount(t); d.showModal();
 }
 // Sign-in account picker: existing admins who can see this city, or a new account created with the profile. Owner only.
@@ -829,7 +916,7 @@ $("#th-cancel").addEventListener("click", () => $("#dlg-th").close());
 $("#th-remove").addEventListener("click", async () => { const id = $("#dlg-th").dataset.id; const t = TEAM.find((x) => x.id === id); if (!(await ask({ title: `Remove ${t?.name || "this therapist"} from the team?`, text: "They disappear from the booking page. Past bookings keep their name. To hide someone for a while, use Pause instead.", ok: "Remove", danger: true }))) return;
   try { await ZenAPI("DELETE", "/api/admin/therapists/" + id); $("#dlg-th").close(); loadTeamTab(); } catch (ex) { $("#th-err").textContent = ex.message; $("#th-err").hidden = false; } });
 $("#th-form").addEventListener("submit", async (e) => { e.preventDefault(); const d = $("#dlg-th"), err = $("#th-err"); err.hidden = true; $("#th-save").disabled = true;
-  const body = { city: $("#th-city").value, name: $("#th-name").value.trim(), bio: $("#th-bio").value.trim(), languages: $("#th-langs").value.trim(), sort: Math.max(0, (Number($("#th-sort").value) || 1) - 1), active: $("#th-active").checked }; if (thPhoto !== undefined) body.photo = thPhoto;
+  const body = { city: $("#th-city").value, name: $("#th-name").value.trim(), bio: $("#th-bio").value.trim(), languages: $("#th-langs").value.trim(), sort: Math.max(0, (Number($("#th-sort").value) || 1) - 1), active: $("#th-active").checked, area: $("#th-area").value.trim(), address: $("#th-address").value.trim(), maps_url: $("#th-maps").value.trim() }; if (thPhoto !== undefined) body.photo = thPhoto;
   if (isOwner()) { const v = $("#th-admin").value; if (v === "new") body.new_account = { email: $("#th-new-email").value.trim(), password: $("#th-new-pass").value }; else body.admin_id = v || null; }
   try { if (!body.name) throw new Error("Give them a name."); const r = d.dataset.id ? await ZenAPI("PATCH", "/api/admin/therapists/" + d.dataset.id, body) : await ZenAPI("POST", "/api/admin/therapists", body); d.close(); loadTeamTab();
     if (r.created) await ask({ title: `Sign-in created for ${body.name}`, text: `They sign in at ${location.origin}/admin with "${r.created}" and the password you just typed. Tell it to them in person. They see ${CITY_NAME[body.city]} only, and Bookings opens on their own sessions.`, ok: "Got it" }); }

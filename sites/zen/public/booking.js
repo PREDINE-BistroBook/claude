@@ -71,11 +71,14 @@ async function loadTeam() {
   const k = city;
   if (!TEAM[k]) { try { const r = await fetch("/api/team?city=" + k); TEAM[k] = (r.headers.get("content-type") || "").includes("json") ? (await r.json()).therapists || [] : []; } catch { TEAM[k] = []; } }
   if (k !== city) return;
-  const list = TEAM[k], box = $("#place-therapists");
+  // "near you": the client told us where they live (profile); a therapist whose area mentions it goes first
+  const mine = (ME?.user?.city_text || "").trim().toLowerCase();
+  const near = th => Boolean(mine && th.area && (th.area.toLowerCase().includes(mine) || mine.includes(th.area.toLowerCase().split(/[,·/]/)[0].trim())));
+  const list = TEAM[k].slice().sort((a, b) => Number(near(b)) - Number(near(a))), box = $("#place-therapists");
   box.hidden = !list.length;
-  box.innerHTML = list.map(th => `<div class="therapist"><span class="ph">${th.photo ? `<img src="${esc(th.photo)}" alt="">` : esc(th.name.slice(0, 1))}</span><div><b>${esc(th.name)}</b><span>${esc([th.bio, th.languages ? t("Speaks {langs}", { langs: th.languages }) : ""].filter(Boolean).join(" · "))}</span></div></div>`).join("");
+  box.innerHTML = list.map(th => `<div class="therapist${near(th) ? " near" : ""}"><span class="ph">${th.photo ? `<img src="${esc(th.photo)}" alt="">` : esc(th.name.slice(0, 1))}</span><div><b>${esc(th.name)}${near(th) ? ` <em class="near-tag">${t("near you")}</em>` : ""}</b><span>${esc([th.bio, th.languages ? t("Speaks {langs}", { langs: th.languages }) : ""].filter(Boolean).join(" · "))}</span>${th.area ? `<span class="where">${t("Works in {area}", { area: esc(th.area) })}${th.maps_url ? ` · <a href="${esc(th.maps_url)}" target="_blank" rel="noopener">${t("Map")}</a>` : ""}</span>` : ""}</div></div>`).join("");
   const sel = $("#therapist"); const keep = sel.value;
-  sel.innerHTML = `<option value="">${t("Anyone available")}</option>` + list.map(th => `<option value="${esc(th.id)}">${esc(th.name)}</option>`).join("");
+  sel.innerHTML = `<option value="">${t("Anyone available")}</option>` + list.map(th => `<option value="${esc(th.id)}">${esc(th.name)}${th.area ? ` · ${esc(th.area)}` : ""}${near(th) ? ` · ${t("near you")}` : ""}</option>`).join("");
   if ([...sel.options].some(o => o.value === keep)) sel.value = keep; else if (ME?.user?.preferred_therapist && list.some(th => th.id === ME.user.preferred_therapist)) sel.value = ME.user.preferred_therapist;
   $("#therapist-wrap").hidden = list.length < 2 || SLOTMODE !== "slots";
 }

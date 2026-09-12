@@ -403,11 +403,19 @@ async function webhook(req, env) {
 
 const paidLine = (bk) => bk.amount === 0 ? (bk.discount_kind === "package" ? "Package session (no charge)" : bk.discount_kind === "gift" ? "Gift voucher (no charge)" : "Free session (reward)") : `${fmt(bk.amount, bk.currency)}${bk.discount_kind ? ` (${bk.discount_kind} applied, list ${fmt(bk.list_amount, bk.currency)})` : ""}`;
 async function therapistName(env, id) { if (!id) return null; const t = await env.DB.prepare("SELECT name FROM therapists WHERE id = ?").bind(id).first(); return t?.name || null; }
+// Where the session happens: the therapist's own place if set (Cairo therapists work in different neighbourhoods), else the city's address.
+async function whereLine(env, bk) {
+  const t = bk.therapist_id ? await env.DB.prepare("SELECT area, address, maps_url FROM therapists WHERE id = ?").bind(bk.therapist_id).first() : null;
+  const st = await settings(env);
+  const place = [t?.area, t?.address].filter(Boolean).join(" · ") || (st.address?.[bk.city] || "").replace(/\n+/g, ", ");
+  const maps = t?.maps_url || st.gmaps?.[bk.city] || "";
+  return place ? `Where:    ${place}${maps ? ` (${maps})` : ""}` : null;
+}
 
 // After a booking is paid (card, free reward, or manual): referral reward for the inviter, emails to Zen and the client.
 async function afterPaid(env, bk) {
   if (bk.user_id) await maybeRewardReferrer(env, bk.user_id);
-  const city = CITIES[bk.city], exact = isTime(bk.slot), th = await therapistName(env, bk.therapist_id);
+  const city = CITIES[bk.city], exact = isTime(bk.slot), th = await therapistName(env, bk.therapist_id), where = await whereLine(env, bk);
   await Promise.all([
     sendEmail(env, {
       to: await notifyList(env, bk.city),
@@ -419,10 +427,10 @@ async function afterPaid(env, bk) {
     sendEmail(env, {
       to: bk.email,
       subject: `Your Zen Recovery session in ${city.name} — ${bk.date}`,
-      text: [`Hi ${bk.name},`, ``, `Your session is reserved: ${bk.service_name}, ${bk.date}, ${slotLabel(bk.slot)}${th ? ` with ${th}` : ""}. ${paidLine(bk)}.`, ``,
-        exact ? `Zen will message you on WhatsApp (${bk.phone}) with the address and anything to bring.` : `Zen will message you on WhatsApp (${bk.phone}) to confirm the exact hour.`, ``,
+      text: [`Hi ${bk.name},`, ``, `Your session is reserved: ${bk.service_name}, ${bk.date}, ${slotLabel(bk.slot)}${th ? ` with ${th}` : ""}. ${paidLine(bk)}.`, ``, where, where ? `` : null,
+        exact ? `Zen will message you on WhatsApp (${bk.phone}) ${where ? "before the session with anything to bring" : "with the address and anything to bring"}.` : `Zen will message you on WhatsApp (${bk.phone}) to confirm the exact hour.`, ``,
         `Before: eat something light, drink water. After: keep warm, no cold showers or swimming for about six hours.`, ``,
-        `Your sessions, rewards and invite link: ${env.SITE_URL}/account`, ``, `See you soon,`, `Zen Recovery`].join("\n"),
+        `Your sessions, rewards and invite link: ${env.SITE_URL}/account`, ``, `See you soon,`, `Zen Recovery`].filter((l) => l !== null).join("\n"),
     }),
   ]);
 }
