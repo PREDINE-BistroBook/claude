@@ -55,7 +55,7 @@ Zen's side:
 - [ ] Florence WhatsApp number + the Florence therapist's name (Egypt uses Shaarawy's public number).
 - [ ] Confirm addresses / meeting points, opening hours per room, team lines.
 - [ ] Send photos (three portrait shots) + Instagram handle + WhatsApp number.
-- [ ] Domain: buy `zen…` or point a subdomain. Until then the workers.dev URL works.
+- [ ] Domain: **zenrecovery.com** (Ash, 2026-09-12: buying it). See "Domain" below.
 
 Deploy:
 ```bash
@@ -69,6 +69,17 @@ npx wrangler deploy
 Then set `PREVIEW = false` in `public/index.html` to drop the banner, and redeploy.
 
 Test before real money: create Zen's connected account in **test mode** first, deploy with test keys, book with card `4242 4242 4242 4242`, and check that Connect → Collected fees shows 2% of the amount.
+
+## Domain: zenrecovery.com
+
+Workers custom domains need the zone in the same Cloudflare account as the Worker, so:
+
+1. **Buy on Cloudflare Registrar** (Dashboard → Domain Registration → Register) — lands in the account already, wholesale price, done. Or, if bought on GoDaddy: Cloudflare Dashboard → Add a site → `zenrecovery.com` (Free plan) → copy the two nameservers → GoDaddy → Domain → Nameservers → Change → paste. Propagates in minutes to a few hours.
+2. Uncomment the `routes` block in `wrangler.toml`, set `SITE_URL = "https://zenrecovery.com"`, run `npx wrangler deploy`. Cloudflare creates the DNS records and the TLS certificate itself. Add a redirect rule from `www` to the apex if wanted (Rules → Redirect Rules, or leave both routes serving the site).
+3. **Email from the same domain**: Resend → Domains → Add `zenrecovery.com` → it lists DKIM/SPF (and MX for receiving) records → add them in Cloudflare DNS → Verify. Then `FROM_EMAIL = "Zen Recovery <booking@zenrecovery.com>"`. Until then booking emails go out from `booking@amicomioflorence.com`, which works but shows the Tours brand.
+4. Update the Stripe Connect webhook URL and the Instagram bio link to the new domain.
+
+Keep the domain in Ash's Cloudflare account, not Zen's: it's the one piece of the deal that keeps the site (and the 2%) under Locali & Ordinazioni's control.
 
 ## Things to know about the build
 

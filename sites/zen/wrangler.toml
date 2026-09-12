@@ -8,8 +8,14 @@ not_found_handling = "single-page-application"
 
 # Non-secret configuration. Secrets (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, RESEND_API_KEY)
 # are set with `wrangler secret put <NAME>` and never committed.
+# Custom domain — uncomment once zenrecovery.com is in this Cloudflare account (see README "Domain").
+# routes = [
+#   { pattern = "zenrecovery.com", custom_domain = true },
+#   { pattern = "www.zenrecovery.com", custom_domain = true },
+# ]
+
 [vars]
-SITE_URL = "https://zen-cupping.fetta-amore-business.workers.dev"
+SITE_URL = "https://zen-cupping.fetta-amore-business.workers.dev"   # -> "https://zenrecovery.com" once the domain is live
 ZEN_STRIPE_ACCOUNT = ""          # acct_... of Zen's connected account. Empty = preview mode (no payments).
 ZEN_NOTIFY_EMAIL = ""            # where Zen receives bookings
-FROM_EMAIL = "Zen Recovery <booking@amicomioflorence.com>"   # must be a verified Resend sender — see README
+FROM_EMAIL = "Zen Recovery <booking@amicomioflorence.com>"   # -> "Zen Recovery <booking@zenrecovery.com>" once the domain is verified in Resend
