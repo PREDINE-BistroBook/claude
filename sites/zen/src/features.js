@@ -52,7 +52,7 @@ async function servicePhoto(env, id) {
 }
 async function team(env, url) {
   const city = cityOf(url.searchParams.get("city"));
-  const r = await env.DB.prepare("SELECT id, city, name, bio, photo, languages, area, maps_url FROM therapists WHERE active = 1" + (city ? " AND city = ?" : "") + " ORDER BY city, sort, name").bind(...(city ? [city] : [])).all();
+  const r = await env.DB.prepare("SELECT id, city, name, bio, photo, languages, area, maps_url, title, story, certs, instagram FROM therapists WHERE active = 1" + (city ? " AND city = ?" : "") + " ORDER BY city, sort, name").bind(...(city ? [city] : [])).all();
   return json({ therapists: r.results });
 }
 async function packages(env, url) {
@@ -395,10 +395,12 @@ async function saveTherapist(req, env, admin, id) {
   const tid = id || randomId();
   if (link.admin_id) await env.DB.prepare("UPDATE therapists SET admin_id = NULL WHERE admin_id = ? AND id != ?").bind(link.admin_id, tid).run();
   const keep = (k, max) => (b[k] === undefined ? cur?.[k] || "" : clean(b[k], max));
+  const keepML = (k, max) => (b[k] === undefined ? cur?.[k] || "" : String(b[k] ?? "").replace(/\r/g, "").replace(/[\u0000-\u0009\u000b-\u001f]/g, " ").replace(/\n{3,}/g, "\n\n").trim().slice(0, max)); // story and certificates keep their line breaks
   const maps = b.maps_url === undefined ? cur?.maps_url || "" : /^https:\/\/[^\s"<>]{6,300}$/.test(String(b.maps_url || "").trim()) ? String(b.maps_url).trim() : "";
-  const vals = [name, keep("bio", 400), photo, keep("languages", 60), b.active === undefined ? cur?.active ?? 1 : b.active ? 1 : 0, Number.isInteger(b.sort) ? b.sort : cur?.sort || 0, link.admin_id, keep("area", 80), keep("address", 200), maps];
-  if (cur) await env.DB.prepare("UPDATE therapists SET name = ?, bio = ?, photo = ?, languages = ?, active = ?, sort = ?, admin_id = ?, area = ?, address = ?, maps_url = ? WHERE id = ?").bind(...vals, id).run();
-  else await env.DB.prepare("INSERT INTO therapists (id, city, name, bio, photo, languages, active, sort, admin_id, area, address, maps_url) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)").bind(tid, city, ...vals).run();
+  const insta = (b.instagram === undefined ? cur?.instagram || "" : String(b.instagram || "")).trim().replace(/^@|^https?:\/\/(www\.)?instagram\.com\//i, "").replace(/\/.*$/, "").slice(0, 40);
+  const vals = [name, keep("bio", 400), photo, keep("languages", 60), b.active === undefined ? cur?.active ?? 1 : b.active ? 1 : 0, Number.isInteger(b.sort) ? b.sort : cur?.sort || 0, link.admin_id, keep("area", 80), keep("address", 200), maps, keep("title", 80), keepML("story", 2000), keepML("certs", 1200), /^[A-Za-z0-9._]*$/.test(insta) ? insta : ""];
+  if (cur) await env.DB.prepare("UPDATE therapists SET name = ?, bio = ?, photo = ?, languages = ?, active = ?, sort = ?, admin_id = ?, area = ?, address = ?, maps_url = ?, title = ?, story = ?, certs = ?, instagram = ? WHERE id = ?").bind(...vals, id).run();
+  else await env.DB.prepare("INSERT INTO therapists (id, city, name, bio, photo, languages, active, sort, admin_id, area, address, maps_url, title, story, certs, instagram) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(tid, city, ...vals).run();
   return json({ ok: true, id: tid, created: link.created || null });
 }
 async function savePackage(req, env, id) {

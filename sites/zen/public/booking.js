@@ -79,7 +79,9 @@ async function loadTeam() {
   box.innerHTML = list.map(th => `<div class="therapist${near(th) ? " near" : ""}"><span class="ph">${th.photo ? `<img src="${esc(th.photo)}" alt="">` : esc(th.name.slice(0, 1))}</span><div><b>${esc(th.name)}${near(th) ? ` <em class="near-tag">${t("near you")}</em>` : ""}</b><span>${esc([th.bio, th.languages ? t("Speaks {langs}", { langs: th.languages }) : ""].filter(Boolean).join(" · "))}</span>${th.area ? `<span class="where">${t("Works in {area}", { area: esc(th.area) })}${th.maps_url ? ` · <a href="${esc(th.maps_url)}" target="_blank" rel="noopener">${t("Map")}</a>` : ""}</span>` : ""}</div></div>`).join("");
   const sel = $("#therapist"); const keep = sel.value;
   sel.innerHTML = `<option value="">${t("Anyone available")}</option>` + list.map(th => `<option value="${esc(th.id)}">${esc(th.name)}${th.area ? ` · ${esc(th.area)}` : ""}${near(th) ? ` · ${t("near you")}` : ""}</option>`).join("");
-  if ([...sel.options].some(o => o.value === keep)) sel.value = keep; else if (ME?.user?.preferred_therapist && list.some(th => th.id === ME.user.preferred_therapist)) sel.value = ME.user.preferred_therapist;
+  const want = new URLSearchParams(location.search).get("therapist"); // "Book with Mazen" from the team page
+  if (want && !keep && list.some(th => th.id === want)) sel.value = want;
+  else if ([...sel.options].some(o => o.value === keep)) sel.value = keep; else if (ME?.user?.preferred_therapist && list.some(th => th.id === ME.user.preferred_therapist)) sel.value = ME.user.preferred_therapist;
   $("#therapist-wrap").hidden = list.length < 2 || SLOTMODE !== "slots";
 }
 /* ---------- live time slots (when the admin has set opening hours for the city) ---------- */
