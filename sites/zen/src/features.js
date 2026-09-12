@@ -241,6 +241,8 @@ export async function adminFeatureRoute(req, env, url, admin) {
   if ((mm = p.match(/^\/api\/admin\/availability\/([a-z0-9]+)$/)) && m === "DELETE") return deleteRow(env, admin, "availability", mm[1]);
   if (p === "/api/admin/blocked" && m === "GET") return listRows(env, admin, url, "blocked", "ORDER BY date, start", "AND date >= date('now','-7 days')");
   if (p === "/api/admin/blocked" && m === "POST") return addBlocked(req, env, admin);
+  if (p === "/api/admin/blocked/remove" && m === "POST") return deleteRows(req, env, admin, "blocked");
+  if (p === "/api/admin/availability/remove" && m === "POST") return deleteRows(req, env, admin, "availability");
   if ((mm = p.match(/^\/api\/admin\/blocked\/([a-z0-9]+)$/)) && m === "DELETE") return deleteRow(env, admin, "blocked", mm[1]);
   if (p === "/api/admin/therapists" && m === "GET") return listTherapists(env, admin, url);
   if (p === "/api/admin/therapists" && m === "POST") return saveTherapist(req, env, admin, null);
@@ -313,6 +315,17 @@ async function listRows(env, admin, url, table, order, extra = "") {
   const city = cityFilter(admin, url);
   const r = await env.DB.prepare(`SELECT * FROM ${table} WHERE 1=1 ${extra}` + (city ? " AND city = ?" : "") + " " + order).bind(...(city ? [city] : [])).all();
   return json({ rows: r.results, city });
+}
+// Remove several rows at once (a whole holiday range, all hours of one room): each row must be in the admin's city.
+async function deleteRows(req, env, admin, table) {
+  const b = await body(req);
+  const ids = [...new Set((Array.isArray(b.ids) ? b.ids : []).map((x) => clean(x, 40)).filter(Boolean))].slice(0, 200);
+  if (!ids.length) return json({ error: "Nothing to remove." }, 400);
+  const marks = ids.map(() => "?").join(",");
+  const rows = (await env.DB.prepare(`SELECT id, city FROM ${table} WHERE id IN (${marks})`).bind(...ids).all()).results;
+  const mine = rows.filter((r) => isOwner(admin) || !r.city || r.city === admin.role).map((r) => r.id);
+  if (mine.length) await env.DB.prepare(`DELETE FROM ${table} WHERE id IN (${mine.map(() => "?").join(",")})`).bind(...mine).run();
+  return json({ ok: true, removed: mine.length });
 }
 async function deleteRow(env, admin, table, id) {
   const row = await env.DB.prepare(`SELECT city FROM ${table} WHERE id = ?`).bind(id).first();
