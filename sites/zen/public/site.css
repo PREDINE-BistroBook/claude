@@ -404,3 +404,9 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
 .page-head h1{font-family:var(--display); font-weight:300; font-size:clamp(2rem, 4.5vw, 3.4rem); line-height:1.02}
 .page-head p{color:var(--ink-soft); max-width:36rem}
 .nav-links a[aria-current="page"]{color:var(--ink); font-weight:500}
+
+/* logo (image supplied by Zen, 2026-09-12) */
+.logo{display:block; height:40px; width:auto; object-fit:contain}
+.brand{display:inline-flex; align-items:center}
+.logo.lg{height:72px}
+@media (max-width:640px){ .logo{height:32px} }
