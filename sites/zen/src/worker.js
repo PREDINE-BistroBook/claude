@@ -91,6 +91,7 @@ async function route(req, env, url, ctx) {
     if (p === "/api/admin/settings" && m === "PUT") return adminSaveSettings(req, env, admin);
     if (p === "/api/admin/admins" && m === "GET") return adminList(env, admin);
     if (p === "/api/admin/admins" && m === "POST") return adminCreate(req, env, admin);
+    const inv = p.match(/^\/api\/admin\/admins\/([a-z0-9]+)\/invite$/); if (inv && m === "POST") return adminInvite(env, admin, inv[1]);
     mm = p.match(/^\/api\/admin\/admins\/([a-z0-9]+)$/);
     if (mm && m === "DELETE") return adminDelete(env, admin, mm[1]);
     if (mm && m === "PATCH") return adminEdit(req, env, admin, mm[1]);
@@ -662,10 +663,10 @@ async function adminCreate(req, env, admin) {
   if (!email || !name || !role || password.length < 10) return json({ error: "Name, email or username, role and a password of at least 10 characters." }, 400);
   const username = b.username === undefined ? null : validUsername(b.username); if (username === false) return json({ error: "A username is 3 to 24 letters, digits, dots, dashes or underscores." }, 400);
   const taken0 = await signinTaken(env, [email, username], null); if (taken0) return json({ error: `"${taken0}" is already another account's sign-in.` }, 409);
-  const { hash, salt } = await hashPassword(password);
-  try { await env.DB.prepare("INSERT INTO admins (id, email, name, role, pass_hash, salt, username) VALUES (?,?,?,?,?,?,?)").bind(randomId(), email, name, role, hash, salt, username).run(); }
+  const { hash, salt } = await hashPassword(password), id = randomId();
+  try { await env.DB.prepare("INSERT INTO admins (id, email, name, role, pass_hash, salt, username) VALUES (?,?,?,?,?,?,?)").bind(id, email, name, role, hash, salt, username).run(); }
   catch { return json({ error: "That email or username already has admin access." }, 409); }
-  return json({ ok: true });
+  return json({ ok: true, id });
 }
 async function adminDelete(env, admin, id) {
   if (!isOwner(admin)) return json({ error: "Only the owner can remove admins." }, 403);
@@ -705,6 +706,22 @@ async function adminEdit(req, env, admin, id) {
   // an account narrowed to one city can't stay linked to a therapist profile in another
   if (role !== "all") await env.DB.prepare("UPDATE therapists SET admin_id = NULL WHERE admin_id = ? AND city != ?").bind(id, role).run();
   return json({ ok: true });
+}
+// A temporary password nobody has to type by hand: three short words and two digits, e.g. "calm-cup-river-47". Easy to read out, hard to guess.
+const WORDS = ["calm", "cup", "river", "sand", "palm", "wave", "stone", "reef", "dune", "salt", "moon", "olive", "fig", "lemon", "coral", "pearl", "sage", "mint", "cedar", "amber", "north", "delta", "nile", "arno", "sinai", "zayed", "maadi", "dahab"];
+function tempPassword() { const a = new Uint32Array(4); crypto.getRandomValues(a); return `${WORDS[a[0] % WORDS.length]}-${WORDS[a[1] % WORDS.length]}-${WORDS[a[2] % WORDS.length]}-${10 + (a[3] % 90)}`; }
+// Owner: give an account a fresh temporary password and deliver it. With a real email the password goes to the person by email and is
+// never shown; for a username-only account it comes back once so the owner can pass it on in person.
+async function adminInvite(env, admin, id) {
+  if (!isOwner(admin)) return json({ error: "Only the owner can send sign-ins." }, 403);
+  const a = await env.DB.prepare("SELECT * FROM admins WHERE id = ?").bind(id).first();
+  if (!a || a.role === "platform") return json({ error: "Not found" }, 404);
+  const password = tempPassword(), { hash, salt } = await hashPassword(password);
+  await env.DB.prepare("UPDATE admins SET pass_hash = ?, salt = ? WHERE id = ?").bind(hash, salt, id).run();
+  const signin = a.username && a.email.includes("@") ? `${a.email} (or the username "${a.username}")` : a.email;
+  let sent = false;
+  if (a.email.includes("@")) sent = await sendEmail(env, { to: a.email, subject: "Your Zen Recovery admin sign-in", text: [`Hi ${a.name},`, ``, `Here is your sign-in for the Zen Recovery admin:`, ``, `Where:     ${env.SITE_URL}/admin`, `Sign in:   ${signin}`, `Password:  ${password}`, ``, `This password is temporary. After signing in, change it under Settings → Your password.`, ``, `Zen Recovery`].join("\n") });
+  return json({ ok: true, sent, signin, password: sent ? undefined : password });
 }
 async function adminPassword(req, env, admin) {
   const b = await body(req);
