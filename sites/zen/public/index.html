@@ -467,10 +467,15 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
 
         <!-- cup group: translates down to land on skin -->
         <g id="cup" transform="translate(0,-140)">
-          <!-- skin dome inside cup (rises) -->
+          <!-- skin under the cup: lifts a little (step 3), reddens as blood comes up, settles back when the cup goes (step 5) -->
           <g clip-path="url(#cupClip)">
-            <ellipse id="dome" cx="260" cy="470" rx="110" ry="90" fill="url(#skinG)"/>
-            <ellipse id="bloom" cx="260" cy="470" rx="110" ry="90" fill="url(#bloomG)" opacity="0"/>
+            <ellipse id="dome" cx="260" cy="470" rx="112" ry="90" fill="url(#skinG)"/>
+            <ellipse id="bloom" cx="260" cy="470" rx="112" ry="90" fill="url(#bloomG)" opacity="0"/>
+            <!-- the "bad blood": rises out of the tissue into the bulge, then leaves with the cup -->
+            <g id="blood" fill="#9E2A2B">
+              <circle cx="220" cy="404" r="6.5" opacity="0"/><circle cx="246" cy="411" r="8" opacity="0"/><circle cx="271" cy="402" r="7" opacity="0"/>
+              <circle cx="298" cy="409" r="7.5" opacity="0"/><circle cx="234" cy="420" r="5.5" opacity="0"/><circle cx="286" cy="421" r="6" opacity="0"/><circle cx="260" cy="425" r="9" opacity="0"/>
+            </g>
           </g>
           <!-- vacuum haze -->
           <path id="vac" d="M150 380 C150 250 190 175 260 175 C330 175 370 250 370 380 Z" fill="#2F7BEA" opacity="0"/>
@@ -509,7 +514,7 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
       </article>
       <article class="step" data-step="2">
         <p class="eyebrow">Step three</p>
-        <h3>Skin and fascia lift. Blood follows.</h3>
+        <h3>The skin lifts a little. Blood comes up.</h3>
         <p>The tissue under the cup rises a few millimetres. Fresh blood moves toward the surface and the area warms. The tug settles into something closer to a deep stretch that's being held for you.</p>
       </article>
       <article class="step" data-step="3">
@@ -1016,8 +1021,8 @@ $$(".reveal").forEach((el, i) => { el.style.transitionDelay = (i % 5) * 60 + "ms
     onToggle: self => { if (self.isActive) { steps.forEach(s => s.classList.remove("active")); st.classList.add("active"); } }
   }));
 
-  if (reduced) { // static final-ish frame
-    gsap.set("#cup", { y: 0 }); gsap.set("#dome", { attr: { cy: 420 } }); gsap.set("#bloom", { opacity: .8, attr: { cy: 420 } }); return;
+  if (reduced) { // static frame: cup on, skin lifted a little, blood at the surface
+    gsap.set("#cup", { y: 0 }); gsap.set("#dome", { attr: { cy: 452, ry: 96 } }); gsap.set("#bloom", { opacity: .75, attr: { cy: 452, ry: 96 } }); gsap.set("#blood circle", { opacity: .85, y: -46 }); return;
   }
 
   const tl = gsap.timeline({
@@ -1031,17 +1036,21 @@ $$(".reveal").forEach((el, i) => { el.style.transitionDelay = (i % 5) * 60 + "ms
   tl.to("#arrows", { opacity: 1, duration: .4 }, 1.2);
   tl.fromTo("#arrows", { y: 18 }, { y: -10, duration: .8 }, 1.2);
   tl.to("#arrows", { opacity: 0, duration: .4 }, 2.1);
-  // step 3: dome rises, blood blooms (2 → 3)
-  tl.to("#dome", { attr: { cy: 410, ry: 100 }, duration: 1, ease: "power1.inOut" }, 2);
-  tl.to("#bloom", { attr: { cy: 410, ry: 100 }, opacity: .85, duration: 1, ease: "power1.inOut" }, 2);
+  // step 3: the skin lifts a little (a few millimetres, not a mound) and blood comes up out of the tissue (2 → 3)
+  tl.to("#dome", { attr: { cy: 452, ry: 96 }, duration: 1, ease: "power1.inOut" }, 2);
+  tl.to("#bloom", { attr: { cy: 452, ry: 96 }, opacity: .75, duration: 1, ease: "power1.inOut" }, 2);
+  tl.to("#blood circle", { y: -46, opacity: .92, duration: .9, ease: "power1.out", stagger: .07 }, 2.2);
   tl.to("#vac", { opacity: .12, duration: 1 }, 2);
   // step 4: timer (3 → 4)
   tl.to("#timer", { opacity: 1, duration: .3 }, 3);
   tl.to("#timerArc", { strokeDashoffset: 0, duration: 1, onUpdate() { const p = this.progress(); $("#timerText").textContent = Math.round(5 + p * 10) + "′"; } }, 3.1);
-  // step 5: cup lifts away, marks remain and fade (4 → 5)
+  // step 5: the cup lifts and takes the blood with it; the skin settles back flat; the marks remain and fade (4 → 5)
   tl.to("#timer", { opacity: 0, duration: .3 }, 4);
-  tl.to("#cup", { y: -160, opacity: 0, duration: .8, ease: "power2.in" }, 4);
-  tl.to("#marks", { opacity: 1, duration: .3 }, 4.3);
+  tl.to("#dome", { attr: { cy: 470, ry: 90 }, duration: .7, ease: "power2.out" }, 4);
+  tl.to("#bloom", { attr: { cy: 470, ry: 90 }, opacity: 0, duration: .7 }, 4);
+  tl.to("#blood circle", { y: -190, opacity: 0, duration: .9, ease: "power2.in", stagger: .04 }, 4);
+  tl.to("#cup", { y: -160, opacity: 0, duration: .9, ease: "power2.in" }, 4.1);
+  tl.to("#marks", { opacity: 1, duration: .3 }, 4.4);
   tl.fromTo("#marks circle", { attr: { r: 30 }, opacity: .6 }, { attr: { r: 26 }, opacity: .18, duration: .9, stagger: .05 }, 4.5);
   tl.to({}, { duration: .4 }, 5.4);
 })();
