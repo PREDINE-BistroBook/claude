@@ -108,6 +108,19 @@
   .latest div{display:flex;justify-content:space-between;gap:10px;border-top:1px solid var(--line);padding-top:6px}
   .ex-list{margin:8px 0 0;padding-inline-start:18px;display:grid;gap:8px;font-size:.92rem}
   .ex-list li b{font-weight:500;color:var(--mark)}
+  /* packs, photos, review button */
+  .pack{display:grid;gap:8px;padding:18px;border-radius:14px;border:1px solid var(--line);background:var(--ground-3)}
+  .pack .n{font-family:var(--display);font-size:1.6rem;font-weight:400;line-height:1}
+  .pack .per{font-size:.86rem;color:var(--ink-soft)}
+  .pack .bar{height:6px;background:var(--ground-2);border-radius:3px;overflow:hidden} .pack .bar i{display:block;height:100%;background:var(--mark)}
+  .packs{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+  .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-top:10px}
+  .gallery figure{margin:0;display:grid;gap:4px} .gallery img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:12px;background:var(--ground-2)}
+  .gallery figcaption{font-size:.78rem;color:var(--ink-soft)}
+  .gbtn.apple{background:#000;color:#fff;border-color:#000}
+  .sms{display:grid;gap:8px;padding:12px 14px;border-radius:12px;background:var(--ground-2)}
+  .review-cta{margin-top:8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:.9rem}
+  .waiting{padding:10px 14px;border-radius:12px;background:var(--ground-2);font-size:.88rem;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
 </style>
 </head>
 <body>
@@ -134,12 +147,19 @@
       <p class="err" id="expired-note" hidden>That link has expired. Ask for a fresh one below.</p>
       <p class="err" id="google-err" hidden>Sign-in with Google didn't work. Try again, or use the email link.</p>
       <a class="gbtn" id="google-btn" href="/api/auth/google" hidden><svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.6l6.7-6.7C35.6 2.6 30.2 0 24 0 14.6 0 6.5 5.4 2.5 13.3l7.8 6.1C12.2 13.6 17.6 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.2 5.5-4.7 7.2l7.6 5.9c4.4-4.1 6.9-10.1 6.9-17.6z"/><path fill="#FBBC05" d="M10.3 28.6c-.5-1.5-.8-3-.8-4.6s.3-3.1.8-4.6l-7.8-6.1C.9 16.5 0 20.1 0 24s.9 7.5 2.5 10.7l7.8-6.1z"/><path fill="#34A853" d="M24 48c6.2 0 11.6-2 15.6-5.6l-7.6-5.9c-2.1 1.4-4.8 2.3-8 2.3-6.4 0-11.8-4.1-13.7-9.9l-7.8 6.1C6.5 42.6 14.6 48 24 48z"/></svg><span>Continue with Google</span></a>
+      <a class="gbtn apple" id="apple-btn" href="/api/auth/apple" hidden><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M16.4 12.6c0-2.6 2.1-3.8 2.2-3.9-1.2-1.8-3.1-2-3.7-2-1.6-.2-3.1.9-3.9.9-.8 0-2-.9-3.4-.9-1.7 0-3.3 1-4.2 2.6-1.8 3.1-.5 7.8 1.3 10.3.9 1.2 1.9 2.6 3.2 2.6 1.3-.1 1.8-.8 3.3-.8s2 .8 3.4.8c1.4 0 2.3-1.3 3.1-2.5 1-1.4 1.4-2.8 1.4-2.9 0 0-2.7-1-2.7-4.2zM13.9 4.9c.7-.8 1.2-2 1-3.1-1 0-2.2.7-2.9 1.5-.6.7-1.2 1.9-1.1 3 1.1.1 2.3-.6 3-1.4z"/></svg><span>Continue with Apple</span></a>
       <p class="tiny" id="google-off" hidden>Google sign-in isn't set up yet.</p>
       <div class="or" id="or-line" hidden>or</div>
       <div class="field"><label for="l-email">Email</label><input id="l-email" type="email" autocomplete="email" required placeholder="you@example.com"><span class="tiny">We use it only to sign you in and confirm sessions.</span></div>
       <div class="field" id="name-field"><label for="l-name">Your name</label><input id="l-name" autocomplete="name" placeholder="How should we greet you?"><span class="tiny">Only needed the first time.</span></div>
       <p class="err" id="login-err" hidden></p>
       <button class="btn" type="submit" id="login-btn">Email me a sign-in link</button>
+      <div class="sms" id="sms-wrap" hidden>
+        <b style="font-size:.9rem">Prefer a text?</b>
+        <div class="row"><input id="sms-phone" type="tel" placeholder="+20 … or +39 …" style="flex:1;font:inherit;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px"><button class="btn small ghost" type="button" id="sms-btn">Text me the link</button></div>
+        <span class="tiny">Works once your account has a phone number (add it in your profile).</span>
+        <span class="ok" id="sms-ok" hidden>Sent. Check your messages.</span><span class="err" id="sms-err" hidden></span>
+      </div>
       <ol class="steps-intro" style="padding-inline-start:18px;margin:0">
         <li>Open the email and tap the link. It works for 20 minutes.</li>
         <li>First time? We ask a few questions about you, two minutes, so we know which room is nearest and how to work with your body.</li>
@@ -232,6 +252,7 @@
     <div class="tabs" role="tablist">
       <button role="tab" aria-selected="true" data-tab="rewards">Rewards</button>
       <button role="tab" aria-selected="false" data-tab="sessions">Sessions</button>
+      <button role="tab" aria-selected="false" data-tab="packages">Packs</button>
       <button role="tab" aria-selected="false" data-tab="progress">Progress</button>
       <button role="tab" aria-selected="false" data-tab="guide">Your guide</button>
       <button role="tab" aria-selected="false" data-tab="profile">Profile</button>
@@ -246,6 +267,7 @@
           <div class="progress"><div class="ring" id="ring"><i id="ring-n" class="no-i18n">0</i></div><p id="loyalty-text" class="muted"></p></div>
           <div class="credits" id="credits"></div>
           <p class="tiny" style="margin-top:12px">A session counts once your therapist marks it as done. Sessions in any city count.</p>
+          <p class="tiny" id="bday-line" style="margin-top:8px"></p>
         </div>
         <div class="card invite">
           <p class="eyebrow">Invite a friend</p>
@@ -267,8 +289,17 @@
     <div id="tab-sessions" hidden>
       <div class="section-head"><h2>Upcoming</h2><a class="btn small" id="book-link" href="index.html#places">Book a session</a></div>
       <div class="sessions" id="upcoming"></div>
+      <div class="sessions" id="waitlist" style="margin-top:10px"></div>
       <div class="section-head"><h2>Past sessions</h2><span class="tiny" id="past-count"></span></div>
       <div class="sessions" id="past"></div>
+    </div>
+
+    <div id="tab-packages" hidden>
+      <div class="section-head"><div><h2>Your packs</h2><p class="tiny">Sessions you've bought in advance. Pick "Use my pack" when you book and there's nothing to pay.</p></div></div>
+      <div class="packs" id="my-packs"></div>
+      <div class="section-head"><div><h2>Buy a pack</h2><p class="tiny" id="packs-note">Several sessions at once, less per session, valid for months.</p></div></div>
+      <div class="packs" id="packs-shop"></div>
+      <p class="err" id="packs-err" hidden></p>
     </div>
 
     <div id="tab-progress" hidden>
@@ -288,6 +319,11 @@
           <div class="line-chart" id="ci-chart"></div>
           <p class="tiny" id="ci-legend">Sessions are marked on the line.</p>
           <div class="latest" id="ci-latest"></div>
+        </div>
+        <div class="card" style="grid-column:1/-1" id="photos-card" hidden>
+          <h3>Before and after</h3>
+          <p class="tiny">Photos your therapist took, with your permission, so you can see the change over time. Only you and the team can see them.</p>
+          <div class="gallery" id="gallery"></div>
         </div>
         <div class="card" style="grid-column:1/-1">
           <h3>Exercises for your focus areas</h3>
@@ -331,6 +367,7 @@
           <div class="field"><label for="p-city">Your room</label><select id="p-city"><option value="">Choose</option><option value="cairo">Cairo</option><option value="dahab">Dahab</option><option value="florence">Florence</option></select><span class="tiny" id="p-rec-hint"></span></div>
           <div class="field"><label for="p-lang">Language</label><select id="p-lang"><option value="en">English</option><option value="it">Italiano</option><option value="ar">العربية</option></select></div>
         </div>
+        <div class="field" id="p-therapist-wrap" hidden><label for="p-therapist">Preferred therapist</label><select id="p-therapist"><option value="">No preference</option></select><span class="tiny">Preselected when you book, if they're free.</span></div>
         <div class="field"><label for="p-notes">Notes for your therapist <span class="tiny">(injuries, areas to avoid, what works for you)</span></label><textarea id="p-notes"></textarea></div>
         <div class="card" style="padding:16px">
           <div class="row" style="justify-content:space-between"><b>Your answers</b><button class="btn small ghost" type="button" id="redo-intake">Update answers</button></div>
@@ -338,6 +375,9 @@
         </div>
         <div class="row"><button class="btn" type="submit" id="save-btn">Save changes</button><span class="ok" id="saved" hidden>Saved</span><span class="err" id="save-err" hidden></span></div>
       </form>
+      <div class="card" style="margin-top:16px;padding:16px">
+        <div class="row" style="justify-content:space-between"><div><b>Your data</b><p class="tiny">Everything we hold about you: profile, answers, sessions, check-ins, rewards. Yours to keep.</p></div><div class="row"><a class="btn small ghost" href="export.html" target="_blank" rel="noopener">Print a summary</a><a class="btn small ghost" href="/api/me/export" download="zen-recovery-data.json">Download (JSON)</a></div></div>
+      </div>
     </div>
   </section>
 </main>
@@ -357,7 +397,7 @@ const initials = (n) => (n || "?").split(" ").map((w) => w[0]).slice(0, 2).join(
 const fmtDate = (d) => new Date(d + "T12:00:00").toLocaleDateString(LOCALE(), { weekday: "short", day: "numeric", month: "short" });
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const ROOM_WA = { cairo: "201145638166", dahab: "201145638166", florence: "" };
-let me = null, bookingsCache = [], checkinsCache = [];
+let me = null, bookingsCache = [], checkinsCache = [], STATUS = {}, TEAM = [];
 $("#lang-slot").innerHTML = I.switcher();
 
 async function boot() {
@@ -369,8 +409,13 @@ async function boot() {
   const [data, status] = await Promise.all([ZenAPI("GET", "/api/me").catch(() => ({ user: null })), ZenAPI("GET", "/api/status").catch(() => ({}))]);
   if (status.settings) { Object.assign(G.SETTINGS, status.settings); if (params.get("ref")) $("#ref-note").textContent = t("You've been invited: your first session is {pct}% off once you sign in.", { pct: G.SETTINGS.referral_pct }); }
   if (ZenAPI.isDemo()) { $("#demo-banner").hidden = false; $("#demo-login").hidden = false; }
-  if (status.google) { $("#google-btn").hidden = false; $("#or-line").hidden = false; $("#google-btn").href = "/api/auth/google?lang=" + I.lang + (params.get("ref") ? "&ref=" + encodeURIComponent(params.get("ref")) : ""); }
-  else if (!ZenAPI.isDemo()) $("#google-off").hidden = false;
+  const refq = (params.get("ref") ? "&ref=" + encodeURIComponent(params.get("ref")) : "");
+  if (status.google) { $("#google-btn").hidden = false; $("#or-line").hidden = false; $("#google-btn").href = "/api/auth/google?lang=" + I.lang + refq; }
+  if (status.apple) { $("#apple-btn").hidden = false; $("#or-line").hidden = false; $("#apple-btn").href = "/api/auth/apple?lang=" + I.lang + refq; }
+  if (!status.google && !status.apple && !ZenAPI.isDemo()) $("#google-off").hidden = false;
+  if (status.sms) $("#sms-wrap").hidden = false;
+  if (params.get("error") === "apple") { $("#google-err").textContent = t("Sign-in with Apple didn't work. Try again, or use the email link."); $("#google-err").hidden = false; }
+  STATUS = status;
   if (data.user) { me = data; if (data.user.lang && data.user.lang !== I.lang && !params.get("lang")) I.set(data.user.lang); data.user.intake?.completed_at ? show(data) : startWizard(); } else $("#login-view").hidden = false;
   I.apply();
 }
@@ -483,15 +528,50 @@ function show(data) {
   $("#p-country").value = u.country || ""; $("#p-city-text").value = u.city_text || ""; $("#p-city").value = room || ""; $("#p-notes").value = u.notes || ""; $("#p-lang").value = u.lang || I.lang;
   const f = G.flagged(i.health || []);
   $("#p-intake").innerHTML = [...(i.goals || []).map((g) => `<span class="chip">${t(G.label("goals", g))}</span>`), ...(i.pain || []).map((p) => `<span class="chip">${t(G.label("pain", p))}</span>`), ...(i.health || []).filter((h) => h !== "none").map((h) => `<span class="chip${f.includes(h) ? " flag" : ""}">${t(G.label("health", h))}</span>`), i.activity ? `<span class="chip">${t(G.label("activity", i.activity))}</span>` : "", i.experience ? `<span class="chip">${t(G.label("experience", i.experience))}</span>` : ""].join("") || `<span class="tiny">${t("Not answered yet.")}</span>`;
-  renderGuide("cupping"); renderExercises(); loadSessions(); loadCheckins();
+  const bp = data.settings.birthday_pct || 20;
+  $("#bday-line").textContent = u.birthday ? t("Birthday month: {pct}% off one session, added by itself.", { pct: bp }) : t("Add your birthday in your profile: {pct}% off in your birthday month.", { pct: bp });
+  renderGuide("cupping"); renderExercises(); loadSessions(); loadCheckins(); loadPackages(); loadPhotos(); loadWaitlist(); loadTeam(room);
   I.apply($("#app-view"));
+}
+async function loadTeam(room) {
+  if (!room) { $("#p-therapist-wrap").hidden = true; return; }
+  try { TEAM = (await ZenAPI("GET", "/api/team?city=" + room)).therapists || []; } catch { TEAM = []; }
+  $("#p-therapist-wrap").hidden = TEAM.length < 2;
+  $("#p-therapist").innerHTML = `<option value="">${t("No preference")}</option>` + TEAM.map((th) => `<option value="${th.id}" ${me.user.preferred_therapist === th.id ? "selected" : ""}>${esc(th.name)}</option>`).join("");
+}
+/* packs */
+async function loadPackages() {
+  const room = me.user.nearest_city || me.user.city;
+  let mine = [], shop = [];
+  try { mine = (await ZenAPI("GET", "/api/me/packages")).packages || []; } catch {}
+  try { shop = (await ZenAPI("GET", "/api/packages" + (room ? "?city=" + room : ""))).packages || []; } catch {}
+  $("#my-packs").innerHTML = mine.length ? mine.map((p) => `<div class="pack"><span class="eyebrow">${cityName(p.city)}</span><b>${esc(p.name)}</b><span class="n">${p.remaining}<small class="per"> / ${p.sessions} ${t("left")}</small></span><div class="bar"><i style="width:${(p.remaining / p.sessions) * 100}%"></i></div><span class="per">${p.expires_at ? t("Valid until {date}", { date: fmtDate(p.expires_at) }) : ""}${p.usable ? "" : " · " + t("used up or expired")}</span>${p.usable ? `<a class="btn small" href="index.html?city=${p.city}#book">${t("Book with this pack")}</a>` : ""}</div>`).join("") : `<div class="empty">${t("No packs yet. Buy one below and save on every session.")}</div>`;
+  $("#packs-note").textContent = room ? t("Packs for {city}. Several sessions at once, less per session, valid for months.", { city: cityName(room) }) : t("Several sessions at once, less per session, valid for months.");
+  $("#packs-shop").innerHTML = shop.length ? shop.map((p) => `<div class="pack"><span class="eyebrow">${cityName(p.city)}</span><b>${esc(p.name)}</b><span class="n">${p.sessions} <small class="per">${t("sessions")}</small></span><span class="num">${money(p.amount, p.currency)}</span><span class="per">${t("about {per} per session · valid {months} months", { per: money(p.per_session, p.currency), months: p.months_valid })}</span><button class="btn small" type="button" data-buy="${p.id}">${t("Buy")}</button></div>`).join("") : `<div class="empty">${t("No packs on offer in your room yet.")}</div>`;
+  $$("#packs-shop [data-buy]").forEach((b) => b.addEventListener("click", async () => {
+    $("#packs-err").hidden = true; b.disabled = true;
+    try { const r = await ZenAPI("POST", "/api/packages/checkout", { package_id: b.dataset.buy }); if (r.url) location.href = r.url; }
+    catch (ex) { $("#packs-err").textContent = ex.data?.preview ? t("Payments aren't switched on yet. Once Zen's Stripe account is connected, this takes you to a secure card page.") : ex.message; $("#packs-err").hidden = false; }
+    finally { b.disabled = false; }
+  }));
+  I.apply($("#tab-packages"));
+}
+/* photos from the therapist */
+async function loadPhotos() {
+  let photos = []; try { photos = (await ZenAPI("GET", "/api/me/photos")).photos || []; } catch {}
+  $("#photos-card").hidden = !photos.length;
+  $("#gallery").innerHTML = photos.map((p) => `<figure><img src="/api/photo/${p.id}" alt="" loading="lazy"><figcaption>${t({ before: "Before", after: "After", other: "Photo" }[p.kind] || "Photo")} · ${fmtDate(p.created_at.slice(0, 10))}${p.note ? " · " + esc(p.note) : ""}</figcaption></figure>`).join("");
+}
+async function loadWaitlist() {
+  let rows = []; try { rows = (await ZenAPI("GET", "/api/me/waitlist")).waitlist || []; } catch {}
+  $("#waitlist").innerHTML = rows.map((w) => `<div class="waiting"><span>${t("On the list for {city}, {date}. We email you if a time opens.", { city: cityName(w.city), date: fmtDate(w.date) })}</span>${w.notified_at ? `<span class="ok">${t("A slot opened — check your email.")}</span>` : ""}</div>`).join("");
 }
 function renderAvatar(el, u) { el.innerHTML = u.photo ? `<img src="${u.photo}" alt="">` : initials(u.name); }
 $("#p-country").addEventListener("change", profileHint); $("#p-city-text").addEventListener("input", profileHint);
 function profileHint() { const r = G.recommend($("#p-country").value, $("#p-city-text").value); $("#p-rec-hint").textContent = r.city ? t("Nearest to you: {city}.", { city: cityName(r.city) }) : ""; if (r.city) $("#p-city").value = r.city; }
 
 /* sessions */
-const label = (s) => t({ paid: "Reserved · hour to confirm", confirmed: "Confirmed", done: "Done", cancelled: "Cancelled", no_show: "Missed" }[s] || s);
+const label = (s) => t({ paid: "Reserved · hour to confirm", confirmed: "Confirmed", done: "Done", cancelled: "Cancelled", no_show: "Missed", review: "Waiting for a therapist's OK" }[s] || s);
 const slotTime = (slot) => /^\d{1,2}:\d{2}$/.test(slot) ? slot : { morning: "10:00", afternoon: "14:00", evening: "18:00" }[slot] || "10:00";
 function icsFor(b) {
   const [h, m] = slotTime(b.slot).split(":"); const start = b.date.replace(/-/g, "") + "T" + h.padStart(2, "0") + m + "00";
@@ -502,18 +582,18 @@ function icsFor(b) {
 async function loadSessions() {
   const { bookings } = await ZenAPI("GET", "/api/me/bookings"); bookingsCache = bookings;
   const today = new Date().toISOString().slice(0, 10);
-  const up = bookings.filter((b) => b.date >= today && ["paid", "confirmed"].includes(b.status)).sort((a, b) => (a.date > b.date ? 1 : -1));
+  const up = bookings.filter((b) => b.date >= today && ["paid", "confirmed", "review"].includes(b.status)).sort((a, b) => (a.date > b.date ? 1 : -1));
   const past = bookings.filter((b) => !up.includes(b));
   const card = (b, isUp) => { const d = new Date(b.date + "T12:00:00"); const svc = t(b.service_name.split(" · ")[0]); const wa = ROOM_WA[b.city];
     const msg = encodeURIComponent(t("Hi, I'd like to move my {service} session on {date}. When would suit you?", { service: svc, date: fmtDate(b.date) }));
     return `<div class="session-card" data-id="${b.id}">
       <div class="d">${d.getDate()}<small>${d.toLocaleDateString(LOCALE(), { month: "short" })}</small></div>
-      <div class="info"><b>${svc} · ${cityName(b.city)}</b><span class="muted">${fmtDate(b.date)} · ${SLOT[b.slot] ? t(SLOT[b.slot]) : esc(b.slot)}${b.discount_kind ? " · " + t(b.discount_kind === "loyalty" ? "free session" : "reward applied") : ""}</span>
+      <div class="info"><b>${svc} · ${cityName(b.city)}</b><span class="muted">${fmtDate(b.date)} · ${SLOT[b.slot] ? t(SLOT[b.slot]) : esc(b.slot)}${b.therapist ? " · " + esc(b.therapist) : ""}${b.discount_kind ? " · " + t({ loyalty: "free session", referral: "reward applied", package: "from your pack", gift: "gift code", partner: "partner discount", manual: "custom price", birthday: "birthday discount" }[b.discount_kind] || "reward applied") : ""}</span>
         ${isUp ? `<div class="tools"><a href="${icsFor(b)}" download="zen-session.ics">${t("Add to calendar")}</a><a href="${wa ? `https://wa.me/${wa}?text=${msg}` : "https://ig.me/m/zen_recovery10"}" target="_blank" rel="noopener">${t("Need to move it?")} ${t("Message the room")}</a></div>` : ""}
         ${b.therapist_note ? `<div class="tnote"><b>${t("From your therapist")}</b>${esc(b.therapist_note)}</div>` : ""}
         ${b.status === "done" ? (b.rating ? `<div class="rate" title="${t("Your rating")}">${"★".repeat(b.rating)}<span class="tiny">${"☆".repeat(5 - b.rating)}</span>${b.feedback ? `<span class="tiny" style="margin-inline-start:8px">“${esc(b.feedback)}”</span>` : ""}</div>` : `<div class="rate-form"><span class="tiny">${t("How was it?")}</span><div class="rate" data-rate="0">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-n="${n}" aria-label="${n}">★</button>`).join("")}</div><textarea class="fb" placeholder="${t("A word for your therapist (optional)")}"></textarea><div class="row"><button type="button" class="btn small send-fb">${t("Send")}</button><span class="ok" hidden>${t("Thanks, saved.")}</span><span class="err" hidden></span></div></div>`) : ""}
       </div>
-      <div class="side"><span class="num">${b.amount === 0 ? t("Free") : money(b.amount, b.currency)}</span><span class="status ${b.status}">${label(b.status)}</span></div></div>`; };
+      <div class="side"><span class="num">${b.status === "review" ? t("At the session") : b.amount === 0 ? t("Free") : money(b.amount, b.currency)}</span><span class="status ${b.status}">${label(b.status)}</span></div></div>`; };
   let upHtml = up.map((b) => card(b, true)).join("");
   if (up.length) { const k = G.serviceKey(up[0].service_name); upHtml += `<div class="prep"><h4>${t("Before your {service} session on {date}", { service: t(G.SERVICE_LABEL[k]).toLowerCase(), date: fmtDate(up[0].date) })}</h4>${G.list("before", k)}</div>`; }
   const recent = past.find((b) => b.status === "done" && (Date.now() - new Date(b.date + "T12:00:00")) < 2 * 86400e3);
@@ -526,7 +606,8 @@ async function loadSessions() {
     const stars = f.querySelector(".rate");
     stars.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { stars.dataset.rate = b.dataset.n; stars.querySelectorAll("button").forEach((x) => x.classList.toggle("on", Number(x.dataset.n) <= Number(b.dataset.n))); }));
     f.querySelector(".send-fb").addEventListener("click", async () => { const id = f.closest(".session-card").dataset.id; const err = f.querySelector(".err"); err.hidden = true;
-      try { await ZenAPI("POST", `/api/me/bookings/${id}/feedback`, { rating: Number(stars.dataset.rate), feedback: f.querySelector(".fb").value.trim() }); f.querySelector(".ok").hidden = false; setTimeout(loadSessions, 900); }
+      try { const r = await ZenAPI("POST", `/api/me/bookings/${id}/feedback`, { rating: Number(stars.dataset.rate), feedback: f.querySelector(".fb").value.trim() }); f.querySelector(".ok").hidden = false;
+        if (r.review_url) { const cta = document.createElement("div"); cta.className = "review-cta"; cta.innerHTML = `<span>${t("Thank you. Would you say that in public? It helps the room a lot.")}</span><a class="btn small accent" href="${esc(r.review_url)}" target="_blank" rel="noopener">${t("Leave a Google review")}</a>`; f.replaceWith(cta); } else setTimeout(loadSessions, 900); }
       catch (ex) { err.textContent = ex.message; err.hidden = false; } });
   });
   I.apply($("#tab-sessions")); drawChart();
@@ -571,9 +652,9 @@ function renderGuide(key) {
 }
 
 /* tabs */
-$$(".tabs button").forEach((b) => b.addEventListener("click", () => { $$(".tabs button").forEach((x) => x.setAttribute("aria-selected", x === b)); ["rewards", "sessions", "progress", "guide", "profile"].forEach((tb) => ($("#tab-" + tb).hidden = tb !== b.dataset.tab)); }));
-if (location.hash === "#guide") setTimeout(() => $$(".tabs button")[3]?.click(), 300);
-if (location.hash === "#progress") setTimeout(() => $$(".tabs button")[2]?.click(), 300);
+const TABS = ["rewards", "sessions", "packages", "progress", "guide", "profile"];
+$$(".tabs button").forEach((b) => b.addEventListener("click", () => { $$(".tabs button").forEach((x) => x.setAttribute("aria-selected", x === b)); TABS.forEach((tb) => ($("#tab-" + tb).hidden = tb !== b.dataset.tab)); }));
+{ const h = location.hash.slice(1); if (TABS.includes(h)) setTimeout(() => $(`.tabs button[data-tab="${h}"]`)?.click(), 300); }
 
 /* login */
 $("#login-form").addEventListener("submit", async (e) => {
@@ -586,6 +667,11 @@ $("#login-form").addEventListener("submit", async (e) => {
     $("#login-form").hidden = true; $("#sent").hidden = false; $("#sent-email").textContent = $("#l-email").value.trim();
   } catch (ex) { err.textContent = ex.message; err.hidden = false; if (ex.data?.needName) $("#l-name").focus(); }
   finally { btn.disabled = false; }
+});
+$("#sms-btn").addEventListener("click", async () => {
+  $("#sms-ok").hidden = true; $("#sms-err").hidden = true; $("#sms-btn").disabled = true;
+  try { const r = await ZenAPI("POST", "/api/auth/request-link", { via: "sms", phone: $("#sms-phone").value.trim() }); if (r.link) { location.href = r.link; return; } $("#sms-ok").hidden = false; }
+  catch (ex) { $("#sms-err").textContent = ex.message; $("#sms-err").hidden = false; } finally { $("#sms-btn").disabled = false; }
 });
 $("#demo-btn").addEventListener("click", async () => { me = await ZenAPI("POST", "/api/auth/demo-login"); me.user.intake?.completed_at ? show(me) : startWizard(); });
 $("#demo-new").addEventListener("click", async () => { me = await ZenAPI("POST", "/api/auth/demo-login", { fresh: true }); startWizard(); });
@@ -607,9 +693,9 @@ $("#photo-remove").addEventListener("click", () => { photoData = null; $("#avata
 $("#profile-form").addEventListener("submit", async (e) => {
   e.preventDefault(); const btn = $("#save-btn"); btn.disabled = true; $("#saved").hidden = true; $("#save-err").hidden = true;
   try {
-    const body = { name: $("#p-name").value.trim(), phone: $("#p-phone").value.trim(), birthday: $("#p-birthday").value || null, notes: $("#p-notes").value.trim(), country: $("#p-country").value || undefined, city_text: $("#p-city-text").value.trim(), nearest_city: $("#p-city").value || null, city: $("#p-city").value || undefined, lang: $("#p-lang").value };
+    const body = { name: $("#p-name").value.trim(), phone: $("#p-phone").value.trim(), birthday: $("#p-birthday").value || null, notes: $("#p-notes").value.trim(), country: $("#p-country").value || undefined, city_text: $("#p-city-text").value.trim(), nearest_city: $("#p-city").value || null, city: $("#p-city").value || undefined, lang: $("#p-lang").value, preferred_therapist: $("#p-therapist").value || null };
     if (photoData !== undefined) body.photo = photoData;
-    const data = await ZenAPI("PUT", "/api/me", body); photoData = undefined; if (body.lang !== I.lang) I.set(body.lang); show(data); $("#saved").hidden = false; $$(".tabs button")[4].click();
+    const data = await ZenAPI("PUT", "/api/me", body); photoData = undefined; if (body.lang !== I.lang) I.set(body.lang); show(data); $("#saved").hidden = false; $(`.tabs button[data-tab="profile"]`).click();
   } catch (ex) { $("#save-err").textContent = ex.message; $("#save-err").hidden = false; }
   finally { btn.disabled = false; }
 });

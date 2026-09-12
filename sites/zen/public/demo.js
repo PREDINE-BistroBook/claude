@@ -57,7 +57,11 @@
   const credits = [];
   users.forEach((u, i) => { if (i % 4 === 1) credits.push({ id: "c" + i, user_id: u.id, kind: "referral", pct: 40, status: "available", reason: "Invited by " + NAMES[(i + 3) % NAMES.length], created_at: iso(today) }); if (i % 9 === 2) credits.push({ id: "cl" + i, user_id: u.id, kind: "loyalty", pct: 100, status: "available", reason: "Session 10 — every 10th is free", created_at: iso(today) }); });
   const admins = [{ id: "a1", email: "owner@zenrecovery.com", name: "Owner", role: "all", created_at: "2026-09-01", last_login: iso(today) }, { id: "a2", email: "shaarawy@zenrecovery.com", name: "Shaarawy", role: "cairo", created_at: "2026-09-01", last_login: iso(today) }, { id: "a3", email: "florence@zenrecovery.com", name: "Zen Florence", role: "florence", created_at: "2026-09-01", last_login: null }];
-  const settings = { loyalty_every: 10, referral_pct: 40, platform_fee_pct: 2 };
+  const settings = { loyalty_every: 10, referral_pct: 40, birthday_pct: 20, package_pct: 15, platform_fee_pct: 2, gmaps: { cairo: "", dahab: "", florence: "" }, whatsapp: { cairo: "", dahab: "", florence: "" }, review: { cairo: "", dahab: "", florence: "" } };
+  const therapists = [{ id: "t1", city: "cairo", name: "Shaarawy", bio: "Manual therapy and cupping, Cairo & Dahab", photo: null, languages: "Arabic, English", active: 1, sort: 0 }, { id: "t2", city: "dahab", name: "Shaarawy", bio: "Manual therapy and cupping", photo: null, languages: "Arabic, English", active: 1, sort: 0 }, { id: "t3", city: "florence", name: "Zen Florence", bio: "Cupping and sports recovery", photo: null, languages: "Italian, English", active: 1, sort: 0 }];
+  const packs = [{ id: "p1", city: "cairo", name: "5 sessions", sessions: 5, amount: 400000, currency: "egp", months_valid: 6, active: 1, sort: 0 }, { id: "p2", city: "dahab", name: "5 sessions", sessions: 5, amount: 400000, currency: "egp", months_valid: 6, active: 1, sort: 0 }, { id: "p3", city: "florence", name: "5 sessions", sessions: 5, amount: 25000, currency: "eur", months_valid: 6, active: 1, sort: 0 }];
+  const partners = [{ id: "pa1", code: "DIVERS10", name: "Dahab Divers", city: "dahab", pct: 10, active: 1, bookings: 4, this_month: 1, revenue: 360000, last_booking: iso(today) }];
+  const availability = [], blocked = [];
 
   // demo "sessions"
   const S = { get user() { try { return sessionStorage.getItem("zen_demo_user"); } catch { return null; } }, set user(v) { try { v ? sessionStorage.setItem("zen_demo_user", v) : sessionStorage.removeItem("zen_demo_user"); } catch {} },
@@ -78,7 +82,18 @@
     handle(method, path, body) {
       const url = new URL(path, location.origin); path = url.pathname; const qp = url.searchParams;
       // ----- client -----
-      if (path === "/api/status") return { live: false, preview: true, google: false, demo: true, settings: { loyalty_every: settings.loyalty_every, referral_pct: settings.referral_pct } };
+      if (path === "/api/status") return { live: false, preview: true, google: false, apple: false, sms: false, demo: true, settings: { loyalty_every: settings.loyalty_every, referral_pct: settings.referral_pct, birthday_pct: settings.birthday_pct, package_pct: settings.package_pct }, gmaps: settings.gmaps, whatsapp: settings.whatsapp, review: settings.review };
+      if (path === "/api/slots") return { mode: "windows", slots: [] };
+      if (path === "/api/team") { const c = qp.get("city"); return { therapists: therapists.filter((t) => t.active && (!c || t.city === c)) }; }
+      if (path === "/api/packages") { const c = qp.get("city"); return { packages: packs.filter((p) => p.active && (!c || p.city === c)).map((p) => ({ ...p, per_session: Math.round(p.amount / p.sessions) })) }; }
+      if (path === "/api/packages/checkout" || path === "/api/gift/checkout") err("Payments are not switched on yet.", 503);
+      if (path.startsWith("/api/gift/")) err("We don't know that gift code.", 404);
+      if (path.startsWith("/api/partner/")) { const pr = partners.find((x) => x.code === path.split("/").pop().toUpperCase()); if (!pr) err("We don't know that code.", 404); return { partner: pr }; }
+      if (path === "/api/waitlist") { if (!S.user) err("Sign in first.", 401); return { ok: true }; }
+      if (path === "/api/me/waitlist") return { waitlist: [] };
+      if (path === "/api/me/packages") { const u = users.find((x) => x.id === S.user); if (!u) err("Sign in first.", 401); return { packages: u.id === "u4" ? [{ id: "cp1", name: "5 sessions", city: u.city, sessions: 5, remaining: 3, amount: 400000, currency: "egp", status: "paid", expires_at: iso(new Date(today.getTime() + 120 * 86400e3)), paid_at: iso(today), usable: true }] : [] }; }
+      if (path === "/api/me/photos") return { photos: [] };
+      if (path === "/api/me/export") { const u = users.find((x) => x.id === S.user); if (!u) err("Sign in first.", 401); return { exported_at: iso(today), user: u, bookings: bookings.filter((b) => b.user_id === u.id), checkins: u.checkins || [], credits: credits.filter((c) => c.user_id === u.id), packages: [], photos: [], messages: [] }; }
       if (path === "/api/me/checkins") { const u = users.find((x) => x.id === S.user); if (!u) err("Sign in first.", 401); u.checkins ||= [{ date: iso(new Date(today - 21 * 86400e3)), pain: 7, energy: 2, sleep: 2, note: "" }, { date: iso(new Date(today - 14 * 86400e3)), pain: 5, energy: 3, sleep: 3, note: "after first session" }, { date: iso(new Date(today - 7 * 86400e3)), pain: 4, energy: 3, sleep: 4, note: "" }];
         if (method === "POST") { const d = iso(today); u.checkins = u.checkins.filter((c) => c.date !== d); u.checkins.push({ date: d, pain: body.pain, energy: body.energy, sleep: body.sleep, note: body.note || "" }); u.checkins.sort((a, b) => (a.date > b.date ? 1 : -1)); }
         return { checkins: u.checkins }; }
@@ -98,8 +113,31 @@
         if (!a) err("Sign in first.", 401);
         const city = scopeOf(a, qp.get("city") || body.city);
         const inScope = (b) => !city || b.city === city;
-        if (path === "/api/admin/me") return { admin: a, cities: cityMeta(), settings, demo: true };
+        if (path === "/api/admin/me") return { admin: a, cities: cityMeta(), settings, photos: "d1", live: false, demo: true };
+        if (path === "/api/admin/availability" && method === "GET") return { rows: availability.filter((r) => !city || r.city === city) };
+        if (path === "/api/admin/availability" && method === "POST") { (body.weekdays || []).forEach((d) => availability.push({ id: "av" + availability.length, city: body.city, therapist_id: body.therapist_id || null, weekday: d, start: body.start, end: body.end, slot_minutes: body.slot_minutes || 60 })); return { ok: true }; }
+        if (path === "/api/admin/blocked" && method === "GET") return { rows: blocked.filter((r) => !city || r.city === city) };
+        if (path === "/api/admin/blocked" && method === "POST") { blocked.push({ id: "bl" + blocked.length, city: body.city, therapist_id: body.therapist_id || null, date: body.date, start: body.start || null, end: body.end || null, reason: body.reason || "" }); return { ok: true }; }
+        { const dm = path.match(/^\/api\/admin\/(availability|blocked|therapists|packages|partners|photos)\/(\w+)$/); if (dm && method === "DELETE") { const list = { availability, blocked, therapists, packages: packs, partners }[dm[1]]; if (list) { const i = list.findIndex((x) => x.id === dm[2]); if (i >= 0) list.splice(i, 1); } return { ok: true }; }
+          if (dm && method === "PATCH") { const list = { therapists, packages: packs, partners }[dm[1]]; const row = list?.find((x) => x.id === dm[2]); if (row) Object.assign(row, body.active === undefined ? body : { ...body, active: body.active ? 1 : 0 }); return { ok: true }; } }
+        if (path === "/api/admin/therapists" && method === "GET") return { rows: therapists.filter((t) => !city || t.city === city) };
+        if (path === "/api/admin/therapists" && method === "POST") { therapists.push({ id: "t" + (therapists.length + 1), city: city || body.city, name: body.name, bio: body.bio || "", photo: body.photo || null, languages: body.languages || "", active: 1, sort: 0 }); return { ok: true }; }
+        if (path === "/api/admin/packages" && method === "GET") return { rows: packs.filter((p) => !city || p.city === city) };
+        if (path === "/api/admin/packages" && method === "POST") { packs.push({ id: "p" + (packs.length + 1), city: body.city, name: body.name, sessions: body.sessions, amount: body.amount, currency: CITY[body.city].currency, months_valid: body.months_valid || 6, active: 1, sort: 0 }); return { ok: true }; }
+        if (path === "/api/admin/packages/sold") return { rows: [] };
+        if (path === "/api/admin/partners" && method === "GET") return { rows: partners };
+        if (path === "/api/admin/partners" && method === "POST") { partners.push({ id: "pa" + (partners.length + 1), code: (body.code || "ZEN" + partners.length).toUpperCase(), name: body.name, city: body.city || null, pct: body.pct, active: 1, bookings: 0, this_month: 0, revenue: 0, last_booking: null }); return { ok: true }; }
+        if (path === "/api/admin/gifts") return { rows: [] };
+        if (path === "/api/admin/review") { const FL = ["pregnant", "anticoagulant", "bleeding", "heart", "diabetes", "skin", "surgery"]; return { bookings: [], clients: users.filter((u) => !u.approved && (u.intake?.health || []).some((h) => FL.includes(h)) && (!city || u.city === city)).map((u) => ({ id: u.id, name: u.name, email: u.email, phone: u.phone, nearest_city: u.nearest_city, flags: (u.intake.health || []).filter((h) => FL.includes(h)), health_notes: u.intake.health_notes || "" })) }; }
+        { const ap = path.match(/^\/api\/admin\/clients\/(\w+)\/approve$/); if (ap) { const u = users.find((x) => x.id === ap[1]); if (u) u.approved = 1; return { ok: true, confirmed: 0 }; } }
+        if (path === "/api/admin/photos" && method === "GET") return { photos: [] };
+        if (path === "/api/admin/photos" && method === "POST") return { ok: true, id: "ph1" };
+        if (path === "/api/admin/leaderboard") { const rows = users.filter((u) => users.some((f) => f.referred_by === u.id)).map((u) => { const inv = users.filter((f) => f.referred_by === u.id); return { id: u.id, name: u.name, email: u.email, city: u.city, referral_code: u.referral_code, invited: inv.length, converted: inv.filter((f) => bookings.some((b) => b.user_id === f.id && live(b))).length, rewards: 0 }; }).sort((x, y) => y.converted - x.converted); return { rows }; }
+        if (path === "/api/admin/messages") return { rows: [] };
+        if (path === "/api/admin/waitlist") return { rows: [] };
+        if (path === "/api/admin/slots") return { mode: "windows", slots: [] };
         if (path === "/api/admin/stats") {
+          const ratingsRows = bookings.filter((b) => inScope(b) && b.rating); const ratings = { n: ratingsRows.length, avg: ratingsRows.reduce((s, b) => s + b.rating, 0) / (ratingsRows.length || 1), five: ratingsRows.filter((b) => b.rating === 5).length };
           const rows = bookings.filter((b) => inScope(b) && live(b));
           const agg = (list, key) => { const m = {}; list.forEach((b) => { const k = key(b); (m[k] ||= { n: 0, rev: 0, fee: 0, done: 0, clients: new Set() }); m[k].n++; m[k].rev += b.amount; m[k].fee += b.platform_fee; m[k].done += b.status === "done"; m[k].clients.add(b.user_id); }); return m; };
           const months = []; for (let i = -11; i <= 0; i++) { const mm = ym(i); const per = agg(rows.filter((b) => month(b.date) === mm), (b) => b.currency); Object.entries(per).forEach(([currency, v]) => months.push({ m: mm, currency, n: v.n, rev: v.rev, fee: v.fee, done: v.done, clients: v.clients.size })); }
@@ -111,7 +149,7 @@
           const t = iso(today);
           const byCity = a.role === "all" && !city ? Object.entries(agg(rows.filter((b) => month(b.date) === ym(0)), (b) => b.city + "|" + b.currency)).map(([k, v]) => ({ city: k.split("|")[0], currency: k.split("|")[1], n: v.n, rev: v.rev, fee: v.fee })) : [];
           const rw = {}; credits.filter((c) => !city || users.find((u) => u.id === c.user_id)?.city === city).forEach((c) => { const k = c.kind + "|" + c.status; rw[k] = (rw[k] || 0) + 1; });
-          return { city, months, this_month: tm, last_month: lm, by_service: bs, by_status: Object.entries(st).map(([status, n]) => ({ status, n })), clients: { total: cl.size, new_this_month: newC.size }, upcoming: rows.filter((b) => b.status !== "done" && b.date >= t).length, today: rows.filter((b) => b.date === t && b.status !== "done"), by_city: byCity, rewards: Object.entries(rw).map(([k, n]) => ({ kind: k.split("|")[0], status: k.split("|")[1], n })), show_fee: a.role === "all" };
+          return { city, months, this_month: tm, last_month: lm, by_service: bs, by_status: Object.entries(st).map(([status, n]) => ({ status, n })), clients: { total: cl.size, new_this_month: newC.size }, upcoming: rows.filter((b) => b.status !== "done" && b.date >= t).length, today: rows.filter((b) => b.date === t && b.status !== "done"), by_city: byCity, rewards: Object.entries(rw).map(([k, n]) => ({ kind: k.split("|")[0], status: k.split("|")[1], n })), review: 0, ratings, packages: [], gifts: [], show_fee: a.role === "all" };
         }
         if (path === "/api/admin/bookings" && method === "GET") {
           let list = bookings.filter((b) => inScope(b) && b.status !== "pending");
@@ -119,7 +157,7 @@
           if (status) list = list.filter((b) => b.status === status); if (from) list = list.filter((b) => b.date >= from); if (to) list = list.filter((b) => b.date <= to);
           if (q) list = list.filter((b) => (b.name + b.email + b.phone).toLowerCase().includes(q));
           const FL = ["pregnant", "anticoagulant", "bleeding", "heart", "diabetes", "skin", "surgery"];
-          return { bookings: list.slice(0, 300).map((b) => { const u = users.find((x) => x.id === b.user_id); const i = u?.intake || {}; return { ...b, platform_fee: a.role === "all" ? b.platform_fee : undefined, health: i.health || [], flags: (i.health || []).filter((h) => FL.includes(h)), pain: i.pain || [], goals: i.goals || [], experience: i.experience || null, user_notes: u?.notes || "", user_nearest: u?.nearest_city || null }; }), city };
+          return { bookings: list.slice(0, 300).map((b) => { const u = users.find((x) => x.id === b.user_id); const i = u?.intake || {}; return { ...b, therapist: null, platform_fee: a.role === "all" ? b.platform_fee : undefined, health: i.health || [], flags: (i.health || []).filter((h) => FL.includes(h)), pain: i.pain || [], goals: i.goals || [], experience: i.experience || null, user_notes: u?.notes || "", user_nearest: u?.nearest_city || null }; }), city };
         }
         if (path === "/api/admin/bookings" && method === "POST") {
           const ck = city || body.city; const svc = CITY[ck]?.services.find((s) => s[0] === body.service); if (!svc) err("Pick a city and a session."); if (!body.name || !body.date) err("Name and day are required.");
@@ -137,8 +175,8 @@
           return { clients: list, city };
         }
         mm = path.match(/^\/api\/admin\/clients\/(\w+)$/);
-        if (mm) { const u = users.find((x) => x.id === mm[1]); const bl = bookings.filter((b) => b.user_id === u?.id && inScope(b)); if (!u || (city && !bl.length)) err("Not found", 404); return { checkins: (u.checkins || []).slice().reverse(), client: { ...u, flags: (u.intake?.health || []).filter((h) => ["pregnant", "anticoagulant", "bleeding", "heart", "diabetes", "skin", "surgery"].includes(h)), referrer_name: users.find((x) => x.id === u.referred_by)?.name || null }, bookings: bl, credits: credits.filter((c) => c.user_id === u.id) }; }
-        if (path === "/api/admin/settings") { if (method === "PUT") { if (a.role !== "all") err("Only the owner can change this.", 403); settings.loyalty_every = Number(body.loyalty_every) || 10; settings.referral_pct = Number(body.referral_pct) || 40; } return settings; }
+        if (mm) { const u = users.find((x) => x.id === mm[1]); const bl = bookings.filter((b) => b.user_id === u?.id && inScope(b)); if (!u || (city && !bl.length)) err("Not found", 404); return { packages: [], photos: [], messages: [], checkins: (u.checkins || []).slice().reverse(), client: { ...u, flags: (u.intake?.health || []).filter((h) => ["pregnant", "anticoagulant", "bleeding", "heart", "diabetes", "skin", "surgery"].includes(h)), referrer_name: users.find((x) => x.id === u.referred_by)?.name || null }, bookings: bl, credits: credits.filter((c) => c.user_id === u.id) }; }
+        if (path === "/api/admin/settings") { if (method === "PUT") { if (a.role !== "all") err("Only the owner can change this.", 403); if (body.loyalty_every) settings.loyalty_every = Number(body.loyalty_every); if (body.referral_pct !== undefined) settings.referral_pct = Number(body.referral_pct); if (body.birthday_pct !== undefined) settings.birthday_pct = Number(body.birthday_pct); ["gmaps", "review", "whatsapp"].forEach((k) => { if (body[k]) Object.assign(settings[k], body[k]); }); } return settings; }
         if (path === "/api/admin/admins" && method === "GET") { if (a.role !== "all") err("Only the owner can see this.", 403); return { admins }; }
         if (path === "/api/admin/admins" && method === "POST") { if (a.role !== "all") err("Only the owner can add admins.", 403); if (!body.email || !body.name || (body.password || "").length < 10) err("Name, email, role and a password of at least 10 characters."); admins.push({ id: "a" + (admins.length + 1), email: body.email, name: body.name, role: body.role, created_at: iso(today), last_login: null }); return { ok: true }; }
         mm = path.match(/^\/api\/admin\/admins\/(\w+)$/);

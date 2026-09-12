@@ -197,7 +197,7 @@ footer .wm b{color:#fff}
 .rewards{background:var(--ink);color:var(--ground);padding:clamp(56px, 10vh, 110px) var(--gutter)}
 .rewards .eyebrow{color:var(--mark-soft)}
 .rewards-head{display:grid;gap:14px;max-width:44rem;margin-bottom:34px}
-.reward-cards{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.reward-cards{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
 .reward-card{display:grid;gap:12px;padding:28px;border-radius:var(--radius);border:1px solid rgba(237,238,234,.14);background:rgba(237,238,234,.05)}
 .reward-card p{color:rgba(237,238,234,.72);font-size:.98rem}
 .reward-num{font-family:var(--display);font-weight:800;font-style:italic;font-size:clamp(3rem, 6vw, 4.6rem);line-height:1;color:var(--mark);letter-spacing:-.04em}
@@ -315,6 +315,32 @@ legend{font-family:var(--label); font-size:.62rem; letter-spacing:.2em; text-tra
 .prep-box .fine{font-size:.86rem;color:var(--ink-soft)} .prep-box .fine b{color:var(--ink);font-weight:500} .prep-box a{color:var(--mark)}
 .prep-list{margin:0;padding-left:18px;font-size:.9rem;display:grid;gap:4px}
 .err{color:var(--mark); font-size:.9rem}
+.timeslots{display:grid; grid-template-columns:repeat(auto-fill, minmax(88px, 1fr)); gap:8px}
+.timeslots .slot label{display:block; text-align:center; padding:10px 6px}
+.timeslots .slot label small{display:block; font-family:var(--body); font-size:.7rem; color:var(--ink-mute); letter-spacing:0}
+.slot input:checked + label small{color:rgba(237,238,234,.7)}
+.slots-empty{padding:14px 16px; border-radius:12px; background:var(--ground-2); font-size:.9rem; display:grid; gap:8px}
+.codes{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:6px}
+.code-row{display:flex; gap:8px} .code-row input{flex:1; min-width:0; font-family:var(--mono); text-transform:uppercase}
+.code-row .btn{white-space:nowrap}
+.check{display:flex; gap:12px; align-items:flex-start; padding:12px 14px; border:1.5px solid var(--line); border-radius:12px; background:var(--ground-3); cursor:pointer; font-size:.92rem}
+.check input{margin-top:3px; accent-color:var(--mark)}
+.check:has(input:checked){border-color:var(--mark); box-shadow:0 0 0 3px var(--mark-glow)}
+.therapists{display:grid; gap:10px; margin-top:10px; padding-top:18px; border-top:1px solid var(--line)}
+.therapist{display:flex; gap:12px; align-items:center}
+.therapist .ph{width:44px; height:44px; border-radius:50%; flex:none; background:linear-gradient(135deg, var(--mark-soft), var(--mark)); overflow:hidden; display:grid; place-items:center; color:#fff; font-family:var(--display); font-weight:800; font-style:italic}
+.therapist .ph img{width:100%; height:100%; object-fit:cover; display:block}
+.therapist b{font-weight:500; display:block} .therapist span{font-size:.86rem; color:var(--ink-soft)}
+.maps{font-size:.9rem} .maps a{color:var(--mark); text-decoration:none; font-weight:500}
+.gift{background:var(--ground-3); padding:clamp(56px, 10vh, 110px) var(--gutter)}
+.gift-shell{display:grid; grid-template-columns:.9fr 1.1fr; gap:clamp(28px, 5vw, 80px); align-items:start; max-width:1180px; margin-inline:auto}
+.gift-intro{display:grid; gap:14px} .gift-intro p:not(.eyebrow){color:var(--ink-soft); max-width:36ch}
+.gift-intro h2{font-family:var(--display); font-weight:300; font-size:clamp(1.9rem, 4vw, 3rem); line-height:1.05}
+.gift-intro .fine{font-size:.86rem; color:var(--ink-mute); max-width:40ch}
+form.gift-form{gap:16px} .gift-form select{width:100%; font:inherit; font-size:.98rem; color:var(--ink); background:#fff; border:1.5px solid var(--line); border-radius:12px; padding:11px 13px}
+@media (max-width:760px){ .gift-shell{grid-template-columns:1fr} .codes{grid-template-columns:1fr} }
+.reward-card.small{gap:8px} .reward-card.small p{font-size:.92rem}
+.pack-hint{font-size:.9rem; padding:12px 14px; border-radius:12px; background:var(--ground-2)} .pack-hint a{color:var(--mark); font-weight:500}
 .err[hidden]{display:none}
 @media (max-width:860px){
   .book-shell{grid-template-columns:1fr}
@@ -569,10 +595,47 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
       <h3 id="rw-invite-title">Invite a friend: 40% off, for both of you.</h3>
       <p>Share your link. Your friend gets the discount on their first session. You get yours the moment they book.</p>
     </div>
+    <div class="reward-card reveal small">
+      <div class="reward-num no-i18n"><span id="rw-bday">20</span><small>%</small></div>
+      <h3 id="rw-bday-title">Your birthday month: 20% off.</h3>
+      <p>Add your birthday to your profile and a discount appears by itself when the month comes. Packs of sessions and gift codes live here too.</p>
+    </div>
   </div>
   <div class="reward-cta reveal">
     <a class="btn" href="account.html">Create your free account</a>
     <span class="fine">No password. We email you a sign-in link.</span>
+  </div>
+</section>
+
+<!-- ================= GIFT ================= -->
+<section class="gift" id="gift" aria-labelledby="gift-title">
+  <div class="gift-shell">
+    <div class="gift-intro reveal">
+      <p class="eyebrow">Gift a session</p>
+      <h2 id="gift-title">Give someone an hour of quiet.</h2>
+      <p>Pick a city and a session. You pay now; they get a code by email and book whenever they like. Valid in that city, no expiry.</p>
+      <p class="fine">Prefer to hand it over in person? Leave their email empty and we send the code to you.</p>
+    </div>
+    <form class="booking gift-form reveal" id="gift-form" novalidate>
+      <div class="two">
+        <div class="field"><label for="g-city">City</label><select id="g-city"><option value="cairo">Cairo</option><option value="dahab">Dahab</option><option value="florence">Florence</option></select></div>
+        <div class="field"><label for="g-service">Session</label><select id="g-service"></select></div>
+      </div>
+      <div class="two">
+        <div class="field"><label for="g-buyer">Your name</label><input id="g-buyer" autocomplete="name" required></div>
+        <div class="field"><label for="g-buyer-email">Your email</label><input id="g-buyer-email" type="email" autocomplete="email" required></div>
+      </div>
+      <div class="two">
+        <div class="field"><label for="g-to">Their name</label><input id="g-to" required></div>
+        <div class="field"><label for="g-to-email">Their email <span style="color:var(--ink-mute);font-weight:400">(optional)</span></label><input id="g-to-email" type="email"></div>
+      </div>
+      <div class="field"><label for="g-msg">A message <span style="color:var(--ink-mute);font-weight:400">(optional)</span></label><textarea id="g-msg" placeholder="Happy birthday. Go lie down."></textarea></div>
+      <div class="book-actions">
+        <p class="err" id="g-err" hidden></p>
+        <button class="btn" type="submit" id="g-pay">Pay and send</button>
+        <p class="fine">Secure card payment by Stripe. The code arrives by email within a minute of paying.</p>
+      </div>
+    </form>
   </div>
 </section>
 
@@ -710,7 +773,9 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
       <div id="book-place" hidden>
         <p class="place-name" id="place-name">Florence</p>
         <div class="addr" id="place-addr"></div>
+        <p class="maps" id="place-maps" hidden><a id="place-maps-link" href="#" target="_blank" rel="noopener">Open in Google Maps</a></p>
         <div class="team"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span id="place-team"></span></div>
+        <div class="therapists" id="place-therapists" hidden></div>
         <p class="wa" id="place-wa" hidden>Questions first? <a id="place-wa-link" href="#" target="_blank" rel="noopener">Message on WhatsApp</a></p>
       </div>
     </div>
@@ -728,16 +793,22 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
             <label for="date">Day</label>
             <input type="date" id="date" name="date" required>
           </div>
-          <div class="field">
-            <label for="slot-any">Preferred time</label>
-            <div class="slots" id="slots">
-              <span class="slot"><input type="radio" name="slot" id="slot-morning" value="morning" checked><label for="slot-morning">Morning</label></span>
-              <span class="slot"><input type="radio" name="slot" id="slot-afternoon" value="afternoon"><label for="slot-afternoon">Afternoon</label></span>
-              <span class="slot"><input type="radio" name="slot" id="slot-evening" value="evening"><label for="slot-evening">Evening</label></span>
-            </div>
+          <div class="field" id="therapist-wrap" hidden>
+            <label for="therapist">Therapist</label>
+            <select id="therapist"><option value="">Anyone available</option></select>
           </div>
         </div>
-        <p class="book-actions fine">Zen confirms the exact hour with you on WhatsApp within a few hours of booking.</p>
+        <div class="field">
+          <label id="time-label">Preferred time</label>
+          <div class="slots" id="slots">
+            <span class="slot"><input type="radio" name="slot" id="slot-morning" value="morning" checked><label for="slot-morning">Morning</label></span>
+            <span class="slot"><input type="radio" name="slot" id="slot-afternoon" value="afternoon"><label for="slot-afternoon">Afternoon</label></span>
+            <span class="slot"><input type="radio" name="slot" id="slot-evening" value="evening"><label for="slot-evening">Evening</label></span>
+          </div>
+          <div class="timeslots" id="timeslots" hidden></div>
+          <div class="slots-empty" id="slots-empty" hidden></div>
+        </div>
+        <p class="book-actions fine" id="when-note">Zen confirms the exact hour with you on WhatsApp within a few hours of booking.</p>
       </fieldset>
 
       <fieldset>
@@ -753,13 +824,25 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
       <div id="prep-box" class="prep-box"></div>
 
       <fieldset id="rewards-box">
-        <legend>Your rewards</legend>
+        <legend>Rewards, packs and codes</legend>
         <p class="fine" id="rewards-guest">Have an account? <a href="account.html">Sign in</a> to use your rewards and make this session count toward your free one.</p>
         <div id="rewards-user" hidden>
           <p class="fine" id="rewards-who"></p>
           <div class="slots" id="credit-options"></div>
         </div>
+        <div class="pack-hint" id="pack-hint" hidden></div>
+        <div class="codes">
+          <div class="field"><label for="gift-code">Gift code</label><div class="code-row"><input id="gift-code" placeholder="GIFT-XXXXXX" autocomplete="off" spellcheck="false"><button class="btn small ghost" type="button" id="gift-apply">Apply</button></div><span class="fine" id="gift-msg"></span></div>
+          <div class="field"><label for="partner-code">Partner or promo code</label><div class="code-row"><input id="partner-code" placeholder="From your hotel, gym or dive centre" autocomplete="off" spellcheck="false"><button class="btn small ghost" type="button" id="partner-apply">Apply</button></div><span class="fine" id="partner-msg"></span></div>
+        </div>
       </fieldset>
+
+      <fieldset id="health-box">
+        <legend>One safety question</legend>
+        <label class="check"><input type="checkbox" id="flagged"><span>I'm pregnant, I take blood thinners, I have a bleeding or heart condition, or I've had surgery in the last three months.</span></label>
+        <p class="fine" style="color:var(--ink-soft)">Tick it and nothing is charged online: a therapist reads your note first, confirms on WhatsApp, and you pay at the session.</p>
+      </fieldset>
+      <p class="fine" id="review-note" hidden style="color:var(--ink-soft)">Because of your health answers, a therapist checks this booking before it's confirmed. Nothing is charged online; you pay at the session.</p>
 
       <div class="summary" id="summary" aria-live="polite">
         <div class="line"><span id="sum-service">—</span><span class="num" id="sum-price">—</span></div>
@@ -801,6 +884,7 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
         <li><a href="#methods">Methods</a></li>
         <li><a href="#know">Before and after</a></li>
         <li><a href="#rewards">Rewards</a></li>
+        <li><a href="#gift">Gift a session</a></li>
         <li><a href="account.html">My account</a></li>
       </ul>
     </div>
@@ -884,8 +968,10 @@ function applySettings(st) {
   $("#rw-every").textContent = n; $("#rw-suffix").textContent = I.ordSuffix(n); $("#rw-pct").textContent = pct;
   $("#rw-loyalty-title").textContent = t("Every {nth} session is free.", { nth: I.ordinal(n) });
   $("#rw-invite-title").textContent = t("Invite a friend: {pct}% off, for both of you.", { pct });
+  const bd = ZenGuide.SETTINGS.birthday_pct || 20; $("#rw-bday").textContent = bd; $("#rw-bday-title").textContent = t("Your birthday month: {pct}% off.", { pct: bd });
 }
-fetch("/api/status").then(r => (r.headers.get("content-type") || "").includes("json") ? r.json() : {}).then(s => applySettings(s.settings)).catch(() => applySettings());
+let ST = { settings: {}, gmaps: {}, whatsapp: {}, review: {} };
+fetch("/api/status").then(r => (r.headers.get("content-type") || "").includes("json") ? r.json() : {}).then(s => { ST = { ...ST, ...s }; applySettings(s.settings); if (city) placeLinks(); }).catch(() => applySettings());
 document.addEventListener("zen:lang", () => { applySettings(); if (city) { renderServices(); updateSummary(); renderPrep(); } });
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 document.documentElement.classList.add("js");
@@ -958,10 +1044,22 @@ fetch("/api/me", { credentials: "same-origin" }).then(r => (r.headers.get("conte
   const cr = d.credits.filter(c => c.status === "available");
   $("#rewards-who").textContent = cr.length ? t("Signed in as {name}. Pick a reward to use on this session:", { name: d.user.name }) : t("Signed in as {name}. {n}/{every} toward your free session.", { name: d.user.name, n: d.stats.done % d.settings.loyalty_every, every: d.settings.loyalty_every });
   if (d.user.nearest_city && !city) choose(d.user.nearest_city, true);
-  $("#credit-options").innerHTML = cr.length ? [`<span class="slot"><input type="radio" name="credit" id="cr-none" value="" checked><label for="cr-none">${t("No reward")}</label></span>`, ...cr.map(c => `<span class="slot"><input type="radio" name="credit" id="cr-${c.id}" value="${c.id}" data-pct="${c.pct}"><label for="cr-${c.id}">${c.pct === 100 ? t("Free session") : t("{pct}% off", { pct: c.pct })}</label></span>`)].join("") : "";
-  if (cr.length) { $("#cr-" + cr[0].id).checked = true; }
+  renderDiscounts();
+  $("#health-box").hidden = Boolean(d.user.intake?.completed_at);
+  $("#review-note").hidden = !(d.user.flags?.length && !d.user.approved);
   updateSummary();
 }).catch(() => {});
+// reward credits + session packs as one radio group (name=discount): "" | credit:ID | package:ID
+function renderDiscounts() {
+  if (!ME) return;
+  const cr = ME.credits.filter(c => c.status === "available"), packs = (ME.packages || []).filter(p => !city || p.city === city);
+  const opts = [];
+  if (cr.length || packs.length) opts.push(`<span class="slot"><input type="radio" name="discount" id="cr-none" value=""><label for="cr-none">${t("No reward")}</label></span>`);
+  cr.forEach(c => opts.push(`<span class="slot"><input type="radio" name="discount" id="cr-${c.id}" value="credit:${c.id}" data-pct="${c.pct}"><label for="cr-${c.id}">${c.pct === 100 ? t("Free session") : t("{pct}% off", { pct: c.pct })}</label></span>`));
+  packs.forEach(p => opts.push(`<span class="slot"><input type="radio" name="discount" id="pk-${p.id}" value="package:${p.id}" data-pct="100"><label for="pk-${p.id}">${t("Use my pack · {n} left", { n: p.remaining })}</label></span>`));
+  $("#credit-options").innerHTML = opts.join("");
+  const first = $("input[name=discount][value^='package:']") || $("input[name=discount][value^='credit:']") || $("#cr-none"); if (first) first.checked = true;
+}
 
 /* ---------- city choice + booking ---------- */
 let city = null;
@@ -977,16 +1075,108 @@ function choose(key, quiet) {
   panels.classList.add("has-choice");
   $("#book-empty").hidden = true;
   const pl = $("#book-place"); pl.hidden = false;
-  $("#place-wa").hidden = !c.whatsapp; if (c.whatsapp) $("#place-wa-link").href = "https://wa.me/" + c.whatsapp;
+  placeLinks();
   const form = $("#booking"); form.hidden = false;
   renderServices();
   const d = $("#date"); const t = new Date(); t.setDate(t.getDate() + 1);
-  d.min = t.toISOString().slice(0, 10); if (!d.value) d.value = d.min;
+  d.min = t.toISOString().slice(0, 10); if (!d.value || d.value < d.min) d.value = d.min;
   $("#phone").placeholder = c.currency === "EUR" ? "+39 …" : "+20 …";
+  renderDiscounts(); loadTeam(); loadSlots(); loadPackHint();
   updateSummary();
   if (!reduced) window.gsap?.from("#booking > *", { y: 18, opacity: 0, duration: .7, stagger: .07, ease: "power2.out", clearProps: "all" });
   if (!quiet) setTimeout(() => $("#book").scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" }), 120);
   renderPrep();
+}
+function placeLinks() {
+  const c = CITIES[city]; const wa = (ST.whatsapp?.[city] || c.whatsapp || "").replace(/\D/g, "");
+  $("#place-wa").hidden = !wa; if (wa) $("#place-wa-link").href = "https://wa.me/" + wa;
+  const gm = ST.gmaps?.[city]; $("#place-maps").hidden = !gm; if (gm) $("#place-maps-link").href = gm;
+}
+/* ---------- team (therapists per city, from the admin) ---------- */
+const TEAM = {};
+async function loadTeam() {
+  const k = city;
+  if (!TEAM[k]) { try { const r = await fetch("/api/team?city=" + k); TEAM[k] = (r.headers.get("content-type") || "").includes("json") ? (await r.json()).therapists || [] : []; } catch { TEAM[k] = []; } }
+  if (k !== city) return;
+  const list = TEAM[k], box = $("#place-therapists");
+  box.hidden = !list.length;
+  box.innerHTML = list.map(th => `<div class="therapist"><span class="ph">${th.photo ? `<img src="${th.photo}" alt="">` : th.name.slice(0, 1)}</span><div><b>${th.name}</b><span>${[th.bio, th.languages ? t("Speaks {langs}", { langs: th.languages }) : ""].filter(Boolean).join(" · ")}</span></div></div>`).join("");
+  const sel = $("#therapist"); const keep = sel.value;
+  sel.innerHTML = `<option value="">${t("Anyone available")}</option>` + list.map(th => `<option value="${th.id}">${th.name}</option>`).join("");
+  if ([...sel.options].some(o => o.value === keep)) sel.value = keep; else if (ME?.user?.preferred_therapist && list.some(th => th.id === ME.user.preferred_therapist)) sel.value = ME.user.preferred_therapist;
+  $("#therapist-wrap").hidden = list.length < 2 || SLOTMODE !== "slots";
+}
+/* ---------- live time slots (when the admin has set opening hours for the city) ---------- */
+let SLOTMODE = "windows", SLOTREQ = 0;
+async function loadSlots() {
+  const k = city, date = $("#date").value, th = $("#therapist").value; if (!k || !date) return;
+  const my = ++SLOTREQ;
+  let data = { mode: "windows", slots: [] };
+  try { const r = await fetch(`/api/slots?city=${k}&date=${date}${th ? "&therapist=" + th : ""}`); if ((r.headers.get("content-type") || "").includes("json")) data = await r.json(); } catch {}
+  if (my !== SLOTREQ || k !== city) return;
+  SLOTMODE = data.mode === "slots" ? "slots" : "windows";
+  const windows = $("#slots"), grid = $("#timeslots"), empty = $("#slots-empty");
+  if (SLOTMODE === "windows") { windows.hidden = false; grid.hidden = true; empty.hidden = true; $("#when-note").textContent = t("Zen confirms the exact hour with you on WhatsApp within a few hours of booking."); $("#time-label").textContent = t("Preferred time"); }
+  else {
+    windows.hidden = true; $("#time-label").textContent = t("Time");
+    $("#when-note").textContent = t("Times are {city} local time. Your spot is held the moment you pay.", { city: t(CITIES[k].name) });
+    const keep = $("input[name=slot]:checked")?.value;
+    if (data.slots.length) {
+      empty.hidden = true; grid.hidden = false;
+      grid.innerHTML = data.slots.map((s, i) => `<span class="slot"><input type="radio" name="slot" id="ts-${s.time.replace(":", "")}" value="${s.time}" ${(keep ? keep === s.time : i === 0) ? "checked" : ""}><label for="ts-${s.time.replace(":", "")}">${s.time}${s.therapists.length > 1 && !th ? `<small>${t("{n} free", { n: s.therapists.length })}</small>` : ""}</label></span>`).join("");
+      if (!$("input[name=slot]:checked")) grid.querySelector("input").checked = true;
+    } else {
+      grid.hidden = true; grid.innerHTML = ""; empty.hidden = false;
+      empty.innerHTML = `<b>${t("Nothing free on that day.")}</b><span>${t("Try another day, or we'll tell you if a time opens up.")}</span><div class="slots"><button class="btn small ghost" type="button" id="waitlist-btn">${t("Tell me if a slot opens")}</button><span class="fine" id="waitlist-msg"></span></div>`;
+      $("#waitlist-btn").addEventListener("click", async () => {
+        if (!ME) { location.href = "account.html"; return; }
+        try { const r = await fetch("/api/waitlist", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ city: k, date, slot_pref: "any" }) }); $("#waitlist-msg").textContent = r.ok ? t("Done. We'll email you if a time opens on {date}.", { date }) : t("Couldn't save that. Try again."); } catch { $("#waitlist-msg").textContent = t("Couldn't save that. Try again."); }
+      });
+    }
+  }
+  $("#therapist-wrap").hidden = (TEAM[k] || []).length < 2 || SLOTMODE !== "slots";
+  updateSummary();
+}
+$("#date").addEventListener("change", loadSlots); $("#therapist").addEventListener("change", loadSlots);
+async function loadPackHint() {
+  const k = city; const hint = $("#pack-hint"); hint.hidden = true;
+  try { const r = await fetch("/api/packages?city=" + k); if (!(r.headers.get("content-type") || "").includes("json")) return; const { packages } = await r.json(); if (k !== city || !packages?.length) return;
+    const best = packages[0]; hint.hidden = false; hint.innerHTML = t("Coming back regularly? A pack of {n} sessions is {price}, about {per} each.", { n: best.sessions, price: money(best.amount, best.currency.toUpperCase()), per: money(best.per_session, best.currency.toUpperCase()) }) + ` <a href="account.html#packages">${t("See packs")}</a>`; } catch {}
+}
+/* ---------- gift + partner codes ---------- */
+let GIFT = null, PARTNER = null;
+$("#gift-apply").addEventListener("click", applyGift);
+$("#gift-code").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); applyGift(); } });
+async function applyGift() {
+  const code = $("#gift-code").value.trim().toUpperCase(); const msg = $("#gift-msg"); GIFT = null; msg.textContent = "";
+  if (!code) { updateSummary(); return; }
+  try { const r = await fetch("/api/gift/" + encodeURIComponent(code)); const d = await r.json();
+    if (!r.ok) { msg.textContent = d.error || t("We don't know that code."); }
+    else if (city && d.gift.city !== city) { msg.textContent = t("That gift is for {city}.", { city: t(CITIES[d.gift.city].name) }); }
+    else { GIFT = d.gift; PARTNER = null; $("#partner-msg").textContent = ""; $$("input[name=discount]").forEach(i => (i.checked = i.value === "")); msg.textContent = t("Gift code applied: {amount} off.", { amount: money(d.gift.amount, d.gift.currency.toUpperCase()) }); if (d.gift.service_id) { const svc = $("#svc-" + d.gift.service_id); if (svc) svc.checked = true; renderPrep(); } }
+  } catch { msg.textContent = t("Couldn't check that code right now."); }
+  updateSummary();
+}
+$("#partner-apply").addEventListener("click", applyPartner);
+$("#partner-code").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); applyPartner(); } });
+async function applyPartner() {
+  const code = $("#partner-code").value.trim().toUpperCase(); const msg = $("#partner-msg"); PARTNER = null; msg.textContent = "";
+  if (!code) { updateSummary(); return; }
+  try { const r = await fetch(`/api/partner/${encodeURIComponent(code)}?city=${city || ""}`); const d = await r.json();
+    if (!r.ok) msg.textContent = d.error || t("We don't know that code.");
+    else { PARTNER = d.partner; GIFT = null; $("#gift-msg").textContent = ""; $$("input[name=discount]").forEach(i => (i.checked = i.value === "")); msg.textContent = t("{name}: {pct}% off applied.", { name: d.partner.name, pct: d.partner.pct }); }
+  } catch { msg.textContent = t("Couldn't check that code right now."); }
+  updateSummary();
+}
+$("#credit-options").addEventListener("change", () => { if ($("input[name=discount]:checked")?.value) { GIFT = null; PARTNER = null; $("#gift-msg").textContent = ""; $("#partner-msg").textContent = ""; } });
+// what's taking money off, in order of precedence: pack > gift > reward > partner
+function discount(price) {
+  const d = $("input[name=discount]:checked")?.value || "";
+  if (d.startsWith("package:")) return { kind: "package", id: d.slice(8), off: price, label: t("Session pack") };
+  if (GIFT) return { kind: "gift", code: GIFT.code, off: Math.min(price, GIFT.amount), label: t("Gift code") };
+  if (d.startsWith("credit:")) { const pct = Number($("input[name=discount]:checked").dataset.pct); const off = Math.round(price * pct / 100); return { kind: "credit", id: d.slice(7), off, label: pct === 100 ? t("Free session reward") : t("Invite reward · {pct}% off", { pct }) }; }
+  if (PARTNER) return { kind: "partner", code: PARTNER.code, off: Math.round(price * PARTNER.pct / 100), label: t("{name} · {pct}% off", { name: PARTNER.name, pct: PARTNER.pct }) };
+  return null;
 }
 function renderPrep() {
   const cur = current(); if (!cur || !cur.s) return;
@@ -994,8 +1184,30 @@ function renderPrep() {
   const items = [...ZenGuide.ADVICE.before.general.slice(0, 3), ...(ZenGuide.ADVICE.before[k] || []).slice(0, 2)];
   $("#prep-box").innerHTML = `<p class="fine"><b>${t("Before a {service} session", { service: t(ZenGuide.SERVICE_LABEL[k]).toLowerCase() })}</b></p><ul class="prep-list">${items.map((x) => `<li>${t(x)}</li>`).join("")}</ul><p class="fine">${t("Full guide, before and after, in")} <a href="account.html#guide">${t("your account")}</a>.</p>`;
 }
-// ?city=… from the account area preselects a room
-{ const pre = new URLSearchParams(location.search).get("city"); if (pre && CITIES[pre]) setTimeout(() => choose(pre, true), 50); }
+// ?city=… from the account area preselects a room; ?date=, ?gift= come from emails
+{ const q = new URLSearchParams(location.search); const pre = q.get("city");
+  if (q.get("date") && /^\d{4}-\d{2}-\d{2}$/.test(q.get("date"))) $("#date").value = q.get("date");
+  if (q.get("gift")) $("#gift-code").value = q.get("gift");
+  if (pre && CITIES[pre]) setTimeout(() => { choose(pre, true); if (q.get("gift")) applyGift(); }, 50); }
+
+/* ---------- gift a session ---------- */
+function giftServices() { const c = CITIES[$("#g-city").value]; $("#g-service").innerHTML = c.services.map(s => `<option value="${s.id}">${t(s.name)} · ${s.dur} ${t("min")} — ${money(s.price, c.currency)}</option>`).join(""); giftPrice(); }
+function giftPrice() { const c = CITIES[$("#g-city").value]; const s = c.services.find(x => x.id === $("#g-service").value); $("#g-pay").textContent = t("Pay {amount} and send", { amount: money(s.price, c.currency) }); }
+$("#g-city").addEventListener("change", giftServices); $("#g-service").addEventListener("change", giftPrice); giftServices();
+document.addEventListener("zen:lang", giftServices);
+$("#gift-form").addEventListener("submit", async (e) => {
+  e.preventDefault(); const err = $("#g-err"); err.hidden = true; if (!e.target.reportValidity()) return;
+  const c = CITIES[$("#g-city").value], s = c.services.find(x => x.id === $("#g-service").value);
+  const btn = $("#g-pay"); btn.disabled = true;
+  try {
+    const r = await fetch("/api/gift/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ city: $("#g-city").value, service: s.id, buyer_name: $("#g-buyer").value.trim(), buyer_email: $("#g-buyer-email").value.trim(), recipient_name: $("#g-to").value.trim(), recipient_email: $("#g-to-email").value.trim(), message: $("#g-msg").value.trim() }) });
+    const data = (r.headers.get("content-type") || "").includes("json") ? await r.json().catch(() => ({})) : { preview: true };
+    if (r.ok && data.url) { location.href = data.url; return; }
+    if (data.preview) tell(t("Payments aren't switched on yet"), t("Once Zen's Stripe account is connected, this takes you to a secure card page for {amount} and the gift code goes out by email.", { amount: money(s.price, c.currency) }));
+    else { err.textContent = data.error || t("Something went wrong. Try again in a minute."); err.hidden = false; }
+  } catch { tell(t("Preview only"), t("Nothing was charged. On the live site this takes you to a secure Stripe card page for {amount}.", { amount: money(s.price, c.currency) })); }
+  finally { btn.disabled = false; }
+});
 function renderServices() {
   const c = CITIES[city]; const keep = $("input[name=service]:checked")?.value;
   $("#place-name").textContent = t(c.name);
@@ -1022,17 +1234,19 @@ function current() {
 function updateSummary() {
   const cur = current(); if (!cur || !cur.s) return;
   const { c, s } = cur;
-  const date = $("#date").value; const slot = $("input[name=slot]:checked").value;
+  const date = $("#date").value; const slot = $("input[name=slot]:checked")?.value || "";
   $("#sum-service").textContent = `${t(s.name)} · ${s.dur} ${t("min")} · ${t(c.name)}`;
   $("#sum-price").textContent = money(s.price, c.currency);
-  $("#sum-when").textContent = date ? new Date(date + "T12:00:00").toLocaleDateString(LOCALE(), { weekday: "long", day: "numeric", month: "long" }) + " · " + t(SLOT_LABEL[slot]) : t("Pick a day");
-  const cr = $("input[name=credit]:checked"); const pct = cr && cr.value ? Number(cr.dataset.pct) : 0;
-  const total = Math.round(s.price * (100 - pct) / 100);
-  $("#sum-discount-line").hidden = !pct; if (pct) { $("#sum-discount").textContent = pct === 100 ? t("Free session reward") : t("Invite reward · {pct}% off", { pct }); $("#sum-discount-amt").textContent = "− " + money(s.price - total, c.currency); }
-  $("#sum-total").textContent = total === 0 ? t("Nothing to pay") : money(total, c.currency);
-  $("#pay").textContent = total === 0 ? t("Reserve my free session") : t("Reserve and pay");
+  const slotTxt = slot ? (SLOT_LABEL[slot] ? t(SLOT_LABEL[slot]) : slot) : t("no time picked");
+  $("#sum-when").textContent = date ? new Date(date + "T12:00:00").toLocaleDateString(LOCALE(), { weekday: "long", day: "numeric", month: "long" }) + " · " + slotTxt : t("Pick a day");
+  const dc = discount(s.price); const total = s.price - (dc ? dc.off : 0);
+  $("#sum-discount-line").hidden = !dc; if (dc) { $("#sum-discount").textContent = dc.label; $("#sum-discount-amt").textContent = "− " + money(dc.off, c.currency); }
+  const review = $("#flagged").checked || !$("#review-note").hidden;
+  $("#sum-total").textContent = review ? t("Pay at the session") : total === 0 ? t("Nothing to pay") : money(total, c.currency);
+  $("#pay").textContent = review ? t("Send for a therapist's OK") : total === 0 ? t("Reserve my free session") : t("Reserve and pay");
 }
 $("#booking").addEventListener("change", (e) => { updateSummary(); if (e.target.name === "service") renderPrep(); });
+$("#flagged").addEventListener("change", updateSummary);
 $("#booking").addEventListener("input", (e) => { if (e.target.id === "date") updateSummary(); });
 
 const dlg = $("#dlg");
@@ -1044,16 +1258,21 @@ $("#booking").addEventListener("submit", async (e) => {
   const form = e.target; const err = $("#err"); err.hidden = true;
   if (!form.reportValidity()) return;
   const { c, s } = current();
+  const slot = $("input[name=slot]:checked")?.value;
+  if (!slot) { err.textContent = t("Pick a time first."); err.hidden = false; return; }
+  const dc = discount(s.price);
   const payload = {
-    city, service: s.id, date: $("#date").value, slot: $("input[name=slot]:checked").value,
+    city, service: s.id, date: $("#date").value, slot, therapist_id: $("#therapist").value || undefined,
     name: $("#name").value.trim(), phone: $("#phone").value.trim(), email: $("#email").value.trim(), note: $("#note").value.trim(),
-    credit_id: $("input[name=credit]:checked")?.value || undefined
+    credit_id: dc?.kind === "credit" ? dc.id : undefined, package_id: dc?.kind === "package" ? dc.id : undefined, gift_code: dc?.kind === "gift" ? dc.code : undefined, partner_code: dc?.kind === "partner" ? dc.code : undefined,
+    flagged: $("#flagged").checked || undefined
   };
   const btn = $("#pay"); btn.disabled = true; btn.textContent = t("One moment…");
   try {
     const r = await fetch("/api/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
-    const data = await r.json().catch(() => ({}));
+    const data = (r.headers.get("content-type") || "").includes("json") ? await r.json().catch(() => ({})) : { preview: true };
     if (r.ok && data.url) { location.href = data.url; return; }
+    if (r.status === 409 && data.slots) { loadSlots(); }
     if (data.preview) {
       tell(t("Payments aren't switched on yet"), t("This is the preview build. Once Zen's Stripe account is connected, this button takes you to a secure card page for {amount} and Zen Recovery gets your booking by email and WhatsApp.", { amount: money(s.price, c.currency) }));
     } else {
