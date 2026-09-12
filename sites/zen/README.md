@@ -136,16 +136,43 @@ Keep the domain in Ash's GoDaddy/Cloudflare accounts, not Zen's: it's the one pi
 
 ## Things to know about the build
 
-- **D1 is used** (accounts, bookings, rewards, admins). Ash upgraded the Cloudflare account to the paid Workers plan on 2026-09-12, so the old free-tier daily read cap that the demo sites used to hit is gone; nothing to watch here.
+- **D1 is used** (accounts, bookings, rewards, admins, calendar, packs, gifts, partners, photos). Ash upgraded the Cloudflare account to the paid Workers plan on 2026-09-12, so the old free-tier daily read cap that the demo sites used to hit is gone; nothing to watch here.
 - **Prices are enforced server-side** (`src/catalog.js`). The browser sends a service id; if someone edits the page they still pay the catalog price.
 - **Emails go through Resend.** `FROM_EMAIL` must be on a verified domain. Today the only verified domain on the account is `amicomioflorence.com`, which is the Tours agency's brand. Either accept that for now or verify a Zen domain.
-- **Availability is not live.** The client picks a day and a morning/afternoon/evening window; Zen confirms the exact hour on WhatsApp. This matches how the team already works via Instagram DMs and avoids building a calendar nobody maintains. A real calendar (Cal.com embed, or a small KV-backed slot table) is a follow-up if Zen wants it.
+- **Availability: two modes.** Until the admin adds opening hours for a city (Calendar tab), the client picks a day and a morning/afternoon/evening window and Zen confirms the hour on WhatsApp. Once hours exist, the site shows exact free times, per therapist if the team is set up, and a time disappears the moment it's booked (`slotsFor` in `src/lib.js`, checked again server-side at checkout).
 - **Motion**: one scroll-scrubbed illustration (GSAP ScrollTrigger), a breathing ring in the hero, soft reveals. Everything respects `prefers-reduced-motion`.
 - **Photos**: real ones are in `public/img/`. Replace any file with the same name and the page picks it up; if a city photo is missing the page falls back to a drawn skyline.
+- **Hourly cron** (`src/cron.js`, `[triggers]` in `wrangler.toml`): reminders the day before, "how do you feel?" two days after, birthday credits, waitlist alerts. WhatsApp templates when configured, email otherwise; every send is logged in `messages` and shown in the client's admin drawer.
+- **Code layout**: `src/worker.js` (routing, auth, checkout, webhook, core admin), `src/features.js` (everything added on 2026-09-12: slots, team, packs, gifts, partners, waitlist, export, photos, Apple, review queue, leaderboard), `src/lib.js` (shared helpers, settings, email/WhatsApp/SMS, Stripe session builder, slot maths), `src/cron.js`. An offline API test lives in the session scratchpad (`smoke.mjs`, runs the Worker against an in-memory SQLite copy of `schema.sql`) and a Playwright test of the three pages in demo mode; both passed before the deploy.
+
+## What was built on 2026-09-12 (evening batch) — and what Ash still has to switch on
+
+Everything from the ideas list below numbered 15–30 is now in the code and deployed. How each one shows up:
+
+| Feature | Client sees | Admin does | Needs from Ash |
+|---|---|---|---|
+| Live time slots | Exact free times per day once hours exist; "fully booked" + waitlist button otherwise | Calendar tab: opening hours per city (or per therapist), days off, a "free times on a day" preview | Nothing. Add hours when Zen is ready; until then the old window flow runs |
+| Therapist profiles | Team on the booking page, therapist choice at booking, preferred therapist in the profile | Team tab: add name, one line, languages, photo; pause/remove; assign a therapist on a booking | Nothing |
+| Session packs | Packs tab in the account, "Use my pack" at booking | Packs & partners tab: create packs (owner), see what's sold | Stripe live (packs are paid by card; the 2% is taken once on the pack) |
+| Gift a session | New section on the site; code by email; `?gift=CODE` prefills the booking form | Gift vouchers list | Stripe live |
+| Partner / gym codes | "Partner or promo code" box in the booking form | Codes per partner (all cities or one), report: bookings, this month, revenue, last booking | Nothing |
+| Birthday reward | Card on the site and in Rewards; credit appears in the birthday month | Birthday % in Settings → Rewards rules | Nothing (cron does it) |
+| Reminders + follow-ups | WhatsApp message (once templates are approved) or email the day before, "how do you feel?" two days after | Message log in each client's drawer | WhatsApp Cloud API: `WA_PHONE_ID` var, `WA_TOKEN` secret, approved templates `zen_reminder` / `zen_followup` in Meta Business. Until then: email |
+| Waitlist | "Tell me if a slot opens" on a full day; list in Sessions | Waiting list in the Calendar tab | Nothing (cron emails when a time frees up) |
+| Health-flag review | Flagged clients (questionnaire) or anyone who ticks the safety box book without paying; they pay at the session after a therapist's OK | "Needs review" tab with a red counter: approve or cancel; approve a client once and they book normally after | Nothing |
+| Before/after photos | Progress tab → "Before and after" gallery | Client drawer: upload (resized in the browser), kind, note, consent | Stored in D1 today. **Enable R2** in the Cloudflare dashboard (R2 → accept) and the next deploy moves new photos to the `zen-photos` bucket automatically |
+| Export my data | Profile → "Print a summary" (export.html) and "Download (JSON)" | — | Nothing |
+| Google review after 5★ | After a 5-star rating: "Leave a Google review" button | Settings → Links per city: Google review link, Google Maps link, WhatsApp number | Paste the links (owner) |
+| Referral leaderboard | — | Overview → "Who brings friends" (owner) | Nothing |
+| Apple sign-in | "Continue with Apple" (hidden until configured) | — | Apple Developer account: Services ID → `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID` vars in `wrangler.toml`; `.p8` key contents as the `APPLE_PRIVATE_KEY` GitHub secret; return URL `https://zenrecovery.club/api/auth/apple/callback` |
+| SMS sign-in link | "Prefer a text?" box (hidden until configured); works for accounts that already have a phone | — | Twilio: `TWILIO_FROM` var, `TWILIO_SID` + `TWILIO_TOKEN` secrets |
+| Head Chef line | — | — | Done: the daily rundown now reads Zen's D1 for bookings, ratings and the 2% |
+
+**Still open from before:** roll the Cloudflare API token that was pasted in chat (Cloudflare → My Profile → API Tokens → roll, then update the `CLOUDFLARE_API_TOKEN` GitHub secret); change the owner's admin password (Settings → Your password); finish Resend verification for `zenrecovery.club` and switch `FROM_EMAIL` back to `booking@zenrecovery.club`; decide the Stripe Connect entity for Egypt (see above) and set `ZEN_STRIPE_ACCOUNT` + the Stripe secrets to switch payments on; add Google OAuth client id/secret for the Google button.
 
 ## Ideas for later (not built — Ash decides)
 
-Built on 2026-09-12 from this list: login bar, Google sign-in, three languages, session rating + therapist note, weekly check-ins with a progress chart, add-to-calendar, reschedule via WhatsApp, exercises per focus area, installable app. Still open, roughly in the order I'd do them:
+Built on 2026-09-12 (first batch): login bar, Google sign-in, three languages, session rating + therapist note, weekly check-ins with a progress chart, add-to-calendar, reschedule via WhatsApp, exercises per focus area, installable app. Built the same evening (second batch): items 15–30 below, plus 1–4, 7–9 and 13 which they overlap with — see the table above. Still genuinely open: 5 (deposit model), 6 (fee on hand-added bookings — a business decision), 10 (body map in the guest booking form; signed-in clients already have it in the questionnaire), 12 (link-in-bio page). Kept here for the record:
 
 1. **Live availability.** Today the client picks a day and a window and Zen confirms by WhatsApp. A real slot table per therapist (open hours per city, session length, buffers) would let clients pick an exact time and would stop double-bookings. Medium effort; the schema already has a slot column.
 2. **WhatsApp reminders** the day before (and "how was it?" the day after) via the WhatsApp Business API or Twilio. Missed sessions are the biggest silent cost for a one-person room.

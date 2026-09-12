@@ -15,6 +15,16 @@ not_found_handling = "404-page"
 
 # Database. Create once with:  npx wrangler d1 create zen-recovery   → paste the id below,
 # then:  npx wrangler d1 execute zen-recovery --remote --file=schema.sql
+# Hourly: reminders the day before, follow-ups two days after, birthday credits, waitlist alerts (src/cron.js)
+[triggers]
+crons = ["15 * * * *"]
+
+# Before/after photos. R2 must be enabled once in the Cloudflare dashboard (R2 → accept terms); until then photos are
+# stored in D1 and the deploy workflow leaves these lines commented out. It uncomments them automatically once the bucket exists.
+#R2# [[r2_buckets]]
+#R2# binding = "PHOTOS"
+#R2# bucket_name = "zen-photos"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "zen-recovery"
@@ -31,4 +41,11 @@ ZEN_STRIPE_ACCOUNT = ""          # acct_... of Zen's connected account. Empty = 
 ZEN_NOTIFY_EMAIL = ""            # where Zen receives bookings
 FROM_EMAIL = "Zen Recovery <booking@amicomioflorence.com>"   # TEMPORARY: verified domain. Switch to booking@zenrecovery.club once Resend shows it verified.
 GOOGLE_CLIENT_ID = ""           # OAuth 2.0 Web client id from Google Cloud Console; empty = Google button hidden. Secret: GOOGLE_CLIENT_SECRET
+APPLE_CLIENT_ID = ""            # Apple "Services ID" (e.g. club.zenrecovery.web); with APPLE_TEAM_ID, APPLE_KEY_ID and the secret APPLE_PRIVATE_KEY (.p8 contents)
+APPLE_TEAM_ID = ""
+APPLE_KEY_ID = ""
+WA_PHONE_ID = ""                # WhatsApp Cloud API phone number id; secret WA_TOKEN. Templates below must be approved in Meta Business
+WA_TEMPLATE_REMINDER = "zen_reminder"
+WA_TEMPLATE_FOLLOWUP = "zen_followup"
+TWILIO_FROM = ""                # SMS sender (e.g. +1…); secrets TWILIO_SID, TWILIO_TOKEN. Empty = "text me the link" hidden
 DEV_MAGIC_LINK = "0"             # "1" only on a local dev run: returns the sign-in link in the API response instead of relying on email

@@ -65,6 +65,14 @@ jobs:
       - name: Database schema (idempotent)
         run: wrangler d1 execute zen-recovery --remote --file=schema.sql
 
+      - name: Photos bucket (R2) — only if R2 is enabled on the account
+        run: |
+          if wrangler r2 bucket create zen-photos >/dev/null 2>&1 || wrangler r2 bucket list 2>/dev/null | grep -q 'zen-photos'; then
+            sed -i 's/^#R2# //' wrangler.toml; echo "R2 bucket zen-photos bound"
+          else
+            echo "::warning::R2 is not enabled on this Cloudflare account yet — photos will be stored in D1. Enable R2 in the dashboard (R2 → Overview → accept) and re-run."
+          fi
+
       - name: Deploy
         run: wrangler deploy
 
@@ -75,6 +83,10 @@ jobs:
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          APPLE_PRIVATE_KEY: ${{ secrets.APPLE_PRIVATE_KEY }}
+          WA_TOKEN: ${{ secrets.WA_TOKEN }}
+          TWILIO_SID: ${{ secrets.TWILIO_SID }}
+          TWILIO_TOKEN: ${{ secrets.TWILIO_TOKEN }}
           ADMIN_BOOTSTRAP_EMAIL: fetta.amore.business@gmail.com
         run: |
           put() { if [ -n "${!1:-}" ]; then printf '%s' "${!1}" | wrangler secret put "$1"; else echo "  (skip $1 — secret not set)"; fi; }
@@ -84,6 +96,10 @@ jobs:
           put STRIPE_SECRET_KEY
           put STRIPE_WEBHOOK_SECRET
           put GOOGLE_CLIENT_SECRET
+          put APPLE_PRIVATE_KEY
+          put WA_TOKEN
+          put TWILIO_SID
+          put TWILIO_TOKEN
           if wrangler secret list | grep -q '"SESSION_SECRET"'; then echo "  SESSION_SECRET already set"; else
             openssl rand -hex 32 | tr -d '\n' | wrangler secret put SESSION_SECRET; fi
 

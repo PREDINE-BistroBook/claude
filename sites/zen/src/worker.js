@@ -2,29 +2,37 @@
 //
 // Serves the static site from ./public and runs the API:
 //   Booking + payments   POST /api/checkout · POST /api/stripe-webhook · GET /api/status
-//   Client accounts      POST /api/auth/request-link · GET /api/auth/verify · POST /api/auth/logout
-//                        GET|PUT /api/me · GET /api/me/bookings
+//   Client accounts      POST /api/auth/request-link (email link or SMS) · GET /api/auth/verify · POST /api/auth/logout
+//                        GET /api/auth/google(+/callback) · GET /api/auth/apple (+ POST /callback)
+//                        GET|PUT /api/me · GET /api/me/bookings · GET|POST /api/me/checkins · POST /api/me/bookings/:id/feedback
+//   Features (src/features.js)  /api/slots · /api/team · /api/packages(+/checkout) · /api/gift/* · /api/waitlist ·
+//                        /api/me/packages · /api/me/photos · /api/me/export · /api/photo/:id
 //   Admin                POST /api/admin/login · POST /api/admin/logout · GET /api/admin/me
 //                        GET /api/admin/stats · GET|POST /api/admin/bookings · PATCH /api/admin/bookings/:id
-//                        GET /api/admin/clients · GET /api/admin/clients/:id
-//                        GET|PUT /api/admin/settings · GET|POST|DELETE /api/admin/admins · POST /api/admin/password
+//                        GET /api/admin/clients · GET /api/admin/clients/:id · GET|PUT /api/admin/settings
+//                        GET|POST|DELETE /api/admin/admins · POST /api/admin/password
+//                        + availability, blocked, therapists, packages, partners, gifts, review, photos, leaderboard,
+//                          messages, waitlist (src/features.js)
+//   Cron (src/cron.js)   hourly: reminders, follow-ups, birthday credits, waitlist alerts
 //
 // Money flow (Stripe Connect, direct charge):
 //   client card ──► Zen's connected Stripe account (merchant of record)
 //                      └─ application_fee_amount (2%) ──► platform account (AmicoMioFlorence)
 //
 // Roles: an admin with role "all" sees every city; role "cairo" | "dahab" | "florence" is locked to that city —
-// every admin query below is filtered by scope() on the server, never by the browser.
+// every admin query is filtered by scope() on the server, never by the browser.
 //
-// Bindings (wrangler.toml): DB (D1), ASSETS.  Secrets: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, RESEND_API_KEY,
-// SESSION_SECRET, ADMIN_BOOTSTRAP_EMAIL + ADMIN_BOOTSTRAP_PASSWORD (first owner login, only used while the admins table is empty).
-// Vars: ZEN_STRIPE_ACCOUNT, ZEN_NOTIFY_EMAIL, FROM_EMAIL, SITE_URL, DEV_MAGIC_LINK ("1" returns the sign-in link in the response — local testing only).
+// Bindings (wrangler.toml): DB (D1), ASSETS, PHOTOS (R2, optional).  Secrets: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET,
+// RESEND_API_KEY, SESSION_SECRET, ADMIN_BOOTSTRAP_EMAIL + ADMIN_BOOTSTRAP_PASSWORD (first owner login, only while the
+// admins table is empty), GOOGLE_CLIENT_SECRET, APPLE_PRIVATE_KEY, WA_TOKEN, TWILIO_SID, TWILIO_TOKEN.
+// Vars: ZEN_STRIPE_ACCOUNT, ZEN_NOTIFY_EMAIL, FROM_EMAIL, SITE_URL, GOOGLE_CLIENT_ID, APPLE_*, WA_*, TWILIO_FROM,
+// DEV_MAGIC_LINK ("1" returns the sign-in link in the response — local testing only).
 
-import { CITIES, PLATFORM_FEE_BPS, SLOTS } from "./catalog.js";
-import { randomId, referralCode, signPayload, verifyPayload, getCookie, setCookie, clearCookie, hashPassword, verifyPassword } from "./auth.js";
-
-const USER_COOKIE = "zen_s", ADMIN_COOKIE = "zen_a";
-const CITY_KEYS = Object.keys(CITIES);
+import { CITIES, SLOTS } from "./catalog.js";
+import { randomId, signPayload, verifyPayload, getCookie, setCookie, clearCookie, hashPassword, verifyPassword } from "./auth.js";
+import { CITY_KEYS, USER_COOKIE, ADMIN_COOKIE, json, clean, normEmail, isDate, isTime, fmt, now, today, feeOn, body, isLive, parseIntake, healthFlags, settings, currentUser, currentAdmin, scope, sendEmail, sendSms, stripeCheckout, slotsFor, createUser, sessionCookieFor } from "./lib.js";
+import { featureRoute, adminFeatureRoute, giftPaid, packagePaid, authFlags } from "./features.js";
+import { runCron } from "./cron.js";
 
 export default {
   async fetch(req, env, ctx) {
@@ -38,11 +46,12 @@ export default {
       return json({ error: "Something went wrong on our side. Try again in a minute." }, 500);
     }
   },
+  async scheduled(event, env, ctx) { ctx.waitUntil(runCron(env)); },
 };
 
 async function route(req, env, url, ctx) {
   const p = url.pathname, m = req.method;
-  if (p === "/api/status") { const st = await settings(env); return json({ live: isLive(env), preview: !isLive(env), google: Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET), settings: { loyalty_every: st.loyalty_every, referral_pct: st.referral_pct } }); }
+  if (p === "/api/status") return status(env);
   if (p === "/api/auth/google" && m === "GET") return googleStart(env, url);
   if (p === "/api/auth/google/callback" && m === "GET") return googleCallback(req, env, url);
   if (p === "/api/me/checkins" && m === "GET") return myCheckins(req, env);
@@ -63,7 +72,7 @@ async function route(req, env, url, ctx) {
   if (p.startsWith("/api/admin/")) {
     const admin = await currentAdmin(req, env);
     if (!admin) return json({ error: "Sign in first." }, 401);
-    if (p === "/api/admin/me") return json({ admin: pub(admin), cities: cityMeta(), settings: await settings(env) });
+    if (p === "/api/admin/me") return json({ admin: pub(admin), cities: cityMeta(), settings: await settings(env), photos: authFlags(env).photos, live: isLive(env) });
     if (p === "/api/admin/stats" && m === "GET") return adminStats(env, admin, url);
     if (p === "/api/admin/bookings" && m === "GET") return adminBookings(env, admin, url);
     if (p === "/api/admin/bookings" && m === "POST") return adminCreateBooking(req, env, admin);
@@ -79,21 +88,14 @@ async function route(req, env, url, ctx) {
     mm = p.match(/^\/api\/admin\/admins\/([a-z0-9]+)$/);
     if (mm && m === "DELETE") return adminDelete(env, admin, mm[1]);
     if (p === "/api/admin/password" && m === "POST") return adminPassword(req, env, admin);
+    return adminFeatureRoute(req, env, url, admin);
   }
-  return null;
+  return featureRoute(req, env, url, ctx);
 }
 
 // ---------- small helpers ----------
-const isLive = (env) => Boolean(env.STRIPE_SECRET_KEY && env.ZEN_STRIPE_ACCOUNT);
-const json = (obj, status = 200, headers = {}) => new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json; charset=utf-8", ...headers } });
-const clean = (v, max) => String(v ?? "").replace(/[\u0000-\u001f]/g, " ").trim().slice(0, max);
-const normEmail = (e) => clean(e, 120).toLowerCase();
-const isDate = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d);
-const fmt = (minor, cur) => new Intl.NumberFormat("en", { style: "currency", currency: cur.toUpperCase(), maximumFractionDigits: cur === "egp" ? 0 : 2 }).format(minor / 100);
-const now = () => new Date().toISOString().slice(0, 19).replace("T", " ");
 const pub = (a) => ({ id: a.id, email: a.email, name: a.name, role: a.role });
 const cityMeta = () => Object.fromEntries(CITY_KEYS.map((k) => [k, { name: CITIES[k].name, currency: CITIES[k].currency, services: Object.entries(CITIES[k].services).map(([id, s]) => ({ id, ...s })) }]));
-const body = async (req) => (await req.json().catch(() => null)) || {};
 const INTAKE_LISTS = ["goals", "pain", "health"], INTAKE_STR = ["activity", "sport", "experience", "health_notes", "contact", "time_pref", "completed_at"];
 function cleanIntake(v) { // whitelist keys, cap sizes; stored as JSON text
   if (!v || typeof v !== "object") return null;
@@ -102,25 +104,19 @@ function cleanIntake(v) { // whitelist keys, cap sizes; stored as JSON text
   for (const k of INTAKE_STR) if (v[k] != null) o[k] = clean(v[k], k === "health_notes" ? 600 : 60);
   return JSON.stringify(o).slice(0, 4000);
 }
-function parseIntake(t) { try { return t ? JSON.parse(t) : null; } catch { return null; } }
-const FLAGS = ["pregnant", "anticoagulant", "bleeding", "heart", "diabetes", "skin", "surgery"];
-function healthFlags(intakeText) { const i = parseIntake(intakeText); return i?.health ? i.health.filter((h) => FLAGS.includes(h)) : []; }
+const slotLabel = (s) => SLOTS[s] || s;
 
-async function settings(env) {
-  const rows = (await env.DB.prepare("SELECT key, value FROM settings").all()).results;
-  const s = Object.fromEntries(rows.map((r) => [r.key, r.value]));
-  return { loyalty_every: Number(s.loyalty_every || 10), referral_pct: Number(s.referral_pct || 40), platform_fee_pct: PLATFORM_FEE_BPS / 100 };
+async function status(env) {
+  const st = await settings(env);
+  const f = authFlags(env);
+  return json({ live: isLive(env), preview: !isLive(env), google: Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET), apple: f.apple, sms: f.sms,
+    settings: { loyalty_every: st.loyalty_every, referral_pct: st.referral_pct, birthday_pct: st.birthday_pct, package_pct: st.package_pct }, gmaps: st.gmaps, whatsapp: st.whatsapp, review: st.review });
 }
 
 // ---------- client auth ----------
-async function currentUser(req, env) {
-  const t = await verifyPayload(env.SESSION_SECRET, getCookie(req, USER_COOKIE));
-  if (!t?.uid) return null;
-  return env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(t.uid).first();
-}
-
 async function requestLink(req, env) {
   const b = await body(req);
+  if (b.via === "sms") return requestSms(env, b);
   const email = normEmail(b.email);
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ error: "That email doesn't look right." }, 400);
   let user = await env.DB.prepare("SELECT * FROM users WHERE email = ?").bind(email).first();
@@ -131,9 +127,7 @@ async function requestLink(req, env) {
     user = await createUser(env, { email, name, ref: b.ref, city: b.city, lang: b.lang });
     created = true;
   }
-  const token = randomId(24);
-  await env.DB.prepare("INSERT INTO login_tokens (token, user_id, expires_at) VALUES (?,?,?)").bind(token, user.id, Math.floor(Date.now() / 1000) + 20 * 60).run();
-  const link = `${env.SITE_URL}/api/auth/verify?t=${token}`;
+  const link = await loginLink(env, user.id);
   await sendEmail(env, {
     to: email,
     subject: created ? "Welcome to Zen Recovery — your sign-in link" : "Your Zen Recovery sign-in link",
@@ -141,24 +135,21 @@ async function requestLink(req, env) {
   });
   return json({ ok: true, created, ...(env.DEV_MAGIC_LINK === "1" ? { link } : {}) });
 }
-
-// New account: referral credit for the invitee, adopt guest bookings made with the same email.
-async function createUser(env, { email, name, ref, city, lang, google_sub, photo }) {
-  let referrer = null;
-  if (ref) referrer = await env.DB.prepare("SELECT id, name FROM users WHERE referral_code = ?").bind(clean(ref, 12).toUpperCase()).first();
-  const id = randomId();
-  await env.DB.prepare("INSERT INTO users (id, email, name, city, referral_code, referred_by, lang, google_sub, photo) VALUES (?,?,?,?,?,?,?,?,?)")
-    .bind(id, email, name, CITY_KEYS.includes(city) ? city : null, referralCode(), referrer?.id || null, ["en", "it", "ar"].includes(lang) ? lang : null, google_sub || null, photo || null).run();
-  await env.DB.prepare("UPDATE bookings SET user_id = ? WHERE user_id IS NULL AND email = ?").bind(id, email).run();
-  if (referrer) {
-    const s = await settings(env);
-    await env.DB.prepare("INSERT INTO credits (id, user_id, kind, pct, reason) VALUES (?,?,?,?,?)").bind(randomId(), id, "referral", s.referral_pct, `Invited by ${referrer.name}`).run();
-  }
-  return env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(id).first();
+async function loginLink(env, userId) {
+  const token = randomId(24);
+  await env.DB.prepare("INSERT INTO login_tokens (token, user_id, expires_at) VALUES (?,?,?)").bind(token, userId, Math.floor(Date.now() / 1000) + 20 * 60).run();
+  return `${env.SITE_URL}/api/auth/verify?t=${token}`;
 }
-async function sessionCookieFor(env, userId) {
-  await env.DB.prepare("UPDATE users SET last_login = ? WHERE id = ?").bind(now(), userId).run();
-  return setCookie(USER_COOKIE, await signPayload(env.SESSION_SECRET, { uid: userId, exp: Math.floor(Date.now() / 1000) + 30 * 86400 }), 30 * 86400);
+// "Text me the link": only for people who already have an account with that number.
+async function requestSms(env, b) {
+  if (!authFlags(env).sms) return json({ error: "SMS sign-in isn't switched on yet — use your email." }, 404);
+  const digits = String(b.phone || "").replace(/\D/g, "");
+  if (digits.length < 8) return json({ error: "That number doesn't look right." }, 400);
+  const user = await env.DB.prepare("SELECT id, name, phone FROM users WHERE phone IS NOT NULL AND replace(replace(replace(replace(phone,' ',''),'+',''),'-',''),'(','') LIKE ?").bind(`%${digits.slice(-9)}`).first();
+  if (!user) return json({ error: "No account has that number yet. Sign up with your email first, then add your number in your profile." }, 404);
+  const link = await loginLink(env, user.id);
+  const ok = await sendSms(env, { to: digits, text: `Zen Recovery: tap to sign in (20 min): ${link}` });
+  return ok ? json({ ok: true, sms: true }) : json({ error: "We couldn't send the text — try your email instead." }, 502);
 }
 
 // ---------- Google sign-in (OAuth 2.0 authorization code, server side) ----------
@@ -200,7 +191,7 @@ async function myCheckins(req, env) {
 async function saveCheckin(req, env) {
   const u = await currentUser(req, env); if (!u) return json({ error: "Sign in first." }, 401);
   const b = await body(req);
-  const date = isDate(b.date || "") ? b.date : new Date().toISOString().slice(0, 10);
+  const date = isDate(b.date || "") ? b.date : today();
   const num = (v, lo, hi) => (Number.isInteger(v) && v >= lo && v <= hi ? v : null);
   const pain = num(b.pain, 0, 10), energy = num(b.energy, 1, 5), sleep = num(b.sleep, 1, 5);
   if (pain === null) return json({ error: "Pick a pain level from 0 to 10." }, 400);
@@ -215,7 +206,9 @@ async function bookingFeedback(req, env, id) {
   if (!rating) return json({ error: "Pick 1 to 5 stars." }, 400);
   const r = await env.DB.prepare("UPDATE bookings SET rating = ?, feedback = ? WHERE id = ? AND user_id = ? AND status = 'done'").bind(rating, clean(b.feedback, 500), id, u.id).run();
   if (!r.meta.changes) return json({ error: "You can rate a session once it's marked as done." }, 400);
-  return json({ ok: true });
+  const bk = await env.DB.prepare("SELECT city FROM bookings WHERE id = ?").bind(id).first();
+  const st = await settings(env);
+  return json({ ok: true, review_url: rating === 5 ? st.review[bk.city] || null : null });
 }
 
 async function verifyLink(req, env, url) {
@@ -233,15 +226,17 @@ async function me(req, env) {
 }
 async function userBundle(env, u) {
   const s = await settings(env);
-  const [credits, stats, referrer, invited] = await Promise.all([
+  const [credits, stats, referrer, invited, packages] = await Promise.all([
     env.DB.prepare("SELECT id, kind, pct, status, reason, created_at FROM credits WHERE user_id = ? AND status IN ('available','reserved') ORDER BY created_at").bind(u.id).all(),
     env.DB.prepare("SELECT SUM(status='done') done, SUM(status IN ('paid','confirmed')) upcoming, COUNT(*) total FROM bookings WHERE user_id = ? AND status IN ('paid','confirmed','done')").bind(u.id).first(),
     u.referred_by ? env.DB.prepare("SELECT name FROM users WHERE id = ?").bind(u.referred_by).first() : null,
     env.DB.prepare("SELECT name, created_at, (SELECT COUNT(*) FROM bookings b WHERE b.user_id = users.id AND b.status IN ('paid','confirmed','done')) sessions FROM users WHERE referred_by = ? ORDER BY created_at DESC").bind(u.id).all(),
+    env.DB.prepare("SELECT id, name, city, sessions, remaining, currency, expires_at FROM client_packages WHERE user_id = ? AND status = 'paid' AND remaining > 0 AND (expires_at IS NULL OR expires_at >= date('now')) ORDER BY expires_at").bind(u.id).all(),
   ]);
   const { pass_hash, ...user } = u;
   user.intake = parseIntake(user.intake);
-  return { user, credits: credits.results, stats: { done: stats.done || 0, upcoming: stats.upcoming || 0 }, settings: s, referrer: referrer?.name || null, invited: invited.results, share_url: `${env.SITE_URL}/account.html?ref=${u.referral_code}` };
+  user.flags = healthFlags(u.intake);
+  return { user, credits: credits.results, packages: packages.results, stats: { done: stats.done || 0, upcoming: stats.upcoming || 0 }, settings: s, referrer: referrer?.name || null, invited: invited.results, share_url: `${env.SITE_URL}/account.html?ref=${u.referral_code}` };
 }
 
 async function updateMe(req, env) {
@@ -253,82 +248,110 @@ async function updateMe(req, env) {
   const nearest = CITY_KEYS.includes(b.nearest_city) ? b.nearest_city : b.nearest_city === null ? null : u.nearest_city;
   const intake = b.intake === undefined ? u.intake : cleanIntake(b.intake);
   const lang = ["en", "it", "ar"].includes(b.lang) ? b.lang : u.lang;
-  await env.DB.prepare("UPDATE users SET name = ?, phone = ?, city = ?, notes = ?, birthday = ?, photo = ?, country = ?, city_text = ?, nearest_city = ?, intake = ?, lang = ? WHERE id = ?")
-    .bind(clean(b.name, 80) || u.name, b.phone === undefined ? u.phone : clean(b.phone, 40), CITY_KEYS.includes(b.city) ? b.city : (nearest || u.city), b.notes === undefined ? u.notes : clean(b.notes, 1000), b.birthday === undefined ? u.birthday : (isDate(b.birthday || "") ? b.birthday : null), photo, country, b.city_text === undefined ? u.city_text : clean(b.city_text, 80), nearest, intake, lang, u.id).run();
+  const therapist = b.preferred_therapist === undefined ? u.preferred_therapist : clean(b.preferred_therapist, 40) || null;
+  await env.DB.prepare("UPDATE users SET name = ?, phone = ?, city = ?, notes = ?, birthday = ?, photo = ?, country = ?, city_text = ?, nearest_city = ?, intake = ?, lang = ?, preferred_therapist = ? WHERE id = ?")
+    .bind(clean(b.name, 80) || u.name, b.phone === undefined ? u.phone : clean(b.phone, 40), CITY_KEYS.includes(b.city) ? b.city : (nearest || u.city), b.notes === undefined ? u.notes : clean(b.notes, 1000), b.birthday === undefined ? u.birthday : (isDate(b.birthday || "") ? b.birthday : null), photo, country, b.city_text === undefined ? u.city_text : clean(b.city_text, 80), nearest, intake, lang, therapist, u.id).run();
   return json(await userBundle(env, await env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(u.id).first()));
 }
 
 async function myBookings(req, env) {
   const u = await currentUser(req, env);
   if (!u) return json({ error: "Sign in first." }, 401);
-  const r = await env.DB.prepare("SELECT id, city, service_name, date, slot, amount, list_amount, currency, discount_kind, status, source, created_at, rating, feedback, therapist_note FROM bookings WHERE user_id = ? AND status != 'pending' ORDER BY date DESC, created_at DESC").bind(u.id).all();
+  const r = await env.DB.prepare("SELECT b.id, b.city, b.service_name, b.date, b.slot, b.amount, b.list_amount, b.currency, b.discount_kind, b.status, b.source, b.created_at, b.rating, b.feedback, b.therapist_note, b.therapist_id, t.name therapist FROM bookings b LEFT JOIN therapists t ON t.id = b.therapist_id WHERE b.user_id = ? AND b.status != 'pending' ORDER BY b.date DESC, b.created_at DESC").bind(u.id).all();
   return json({ bookings: r.results });
 }
 
 // ---------- checkout ----------
+// Discount precedence (one at a time): package > gift > reward credit > partner code.
+// Clients with a health red flag (from the questionnaire or the checkbox) aren't charged online:
+// the booking is saved as "review", a therapist approves it in the admin, and they pay at the session.
 async function checkout(req, env) {
   const b = await body(req);
-  const city = CITIES[b.city];
+  const cityKey = b.city, city = CITIES[cityKey];
   const svc = city?.services[b.service];
   if (!city || !svc) return json({ error: "Unknown city or session." }, 400);
   const name = clean(b.name, 80), email = normEmail(b.email), phone = clean(b.phone, 40), note = clean(b.note, 500), date = clean(b.date, 10);
-  const slot = SLOTS[b.slot] ? b.slot : "morning";
   if (!name || !email || !phone || !isDate(date)) return json({ error: "Please fill in your name, WhatsApp number, email and a day." }, 400);
-  if (new Date(date + "T00:00:00Z") < new Date(Date.now() - 86400e3)) return json({ error: "That day has already passed." }, 400);
+  if (date < today()) return json({ error: "That day has already passed." }, 400);
+
+  // time: exact slot when the city has an availability calendar, otherwise a morning/afternoon/evening window
+  const avail = await slotsFor(env, cityKey, date, null);
+  let slot, therapist_id = null;
+  if (avail.mode === "slots") {
+    slot = clean(b.slot, 5);
+    const s = avail.slots.find((x) => x.time === slot);
+    if (!s) return json({ error: "That time isn't free any more — pick another one.", slots: avail.slots }, 409);
+    const want = clean(b.therapist_id, 40) || null;
+    if (want && !s.therapists.includes(want)) return json({ error: "That therapist isn't free at that time.", slots: avail.slots }, 409);
+    therapist_id = want || s.therapists[0] || null;
+  } else slot = SLOTS[b.slot] ? b.slot : "morning";
 
   const user = await currentUser(req, env);
-  let credit = null;
-  if (b.credit_id) {
+  const list = svc.amount;
+  let amount = list, discount_kind = null, credit = null, gift = null, partner = null, pack = null;
+  if (b.package_id) {
+    if (!user) return json({ error: "Sign in to use your package." }, 401);
+    pack = await env.DB.prepare("SELECT * FROM client_packages WHERE id = ? AND user_id = ? AND status = 'paid' AND remaining > 0 AND city = ? AND (expires_at IS NULL OR expires_at >= date('now'))").bind(clean(b.package_id, 40), user.id, cityKey).first();
+    if (!pack) return json({ error: "That package can't be used for this booking (wrong city, used up, or expired)." }, 400);
+    amount = 0; discount_kind = "package";
+  } else if (b.gift_code) {
+    gift = await env.DB.prepare("SELECT * FROM gifts WHERE code = ? AND status = 'paid'").bind(clean(b.gift_code, 20).toUpperCase()).first();
+    if (!gift) return json({ error: "That gift code isn't valid or was already used." }, 400);
+    if (gift.city !== cityKey) return json({ error: `That gift is for ${CITIES[gift.city].name}.` }, 400);
+    amount = Math.max(0, list - gift.amount); discount_kind = "gift";
+  } else if (b.credit_id) {
     if (!user) return json({ error: "Sign in to use a reward." }, 401);
     credit = await env.DB.prepare("SELECT * FROM credits WHERE id = ? AND user_id = ? AND status = 'available'").bind(clean(b.credit_id, 40), user.id).first();
     if (!credit) return json({ error: "That reward isn't available any more." }, 400);
+    amount = Math.round((list * (100 - credit.pct)) / 100); discount_kind = credit.kind;
+  } else if (b.partner_code) {
+    partner = await env.DB.prepare("SELECT * FROM partners WHERE code = ? AND active = 1 AND (city IS NULL OR city = ?)").bind(clean(b.partner_code, 16).toUpperCase(), cityKey).first();
+    if (!partner) return json({ error: "We don't know that partner code (or it's not valid in this city)." }, 400);
+    amount = Math.round((list * (100 - partner.pct)) / 100); discount_kind = "partner";
   }
-  const list = svc.amount;
-  const amount = credit ? Math.round((list * (100 - credit.pct)) / 100) : list;
-  const fee = Math.round((amount * PLATFORM_FEE_BPS) / 10000);
+  const flagged = Boolean(b.flagged) || Boolean(user && !user.approved && healthFlags(user.intake).length);
   const id = randomId();
-  const base = { id, user_id: user?.id || null, email, name, phone, city: b.city, service_id: b.service, service_name: svc.name, date, slot, note, list_amount: list, amount, currency: city.currency, discount_kind: credit?.kind || null, credit_id: credit?.id || null, platform_fee: fee };
+  const base = { id, user_id: user?.id || null, email, name, phone, city: cityKey, service_id: b.service, service_name: svc.name, date, slot, note, list_amount: list, amount, currency: city.currency, discount_kind, credit_id: credit?.id || null, platform_fee: feeOn(amount), therapist_id, package_id: pack?.id || null, gift_code: gift?.code || null, partner_code: partner?.code || null };
 
+  if (flagged) { // no card: a therapist checks the health answers first
+    await insertBooking(env, { ...base, status: "review" });
+    await consume(env, base);
+    await afterReview(env, base);
+    return json({ url: `${env.SITE_URL}/success.html?review=1` });
+  }
   if (amount === 0) { // free session: no card, booking is reserved immediately
     await insertBooking(env, { ...base, status: "paid", paid_at: now() });
-    await env.DB.prepare("UPDATE credits SET status = 'used', booking_id = ?, used_at = ? WHERE id = ?").bind(id, now(), credit.id).run();
+    await consume(env, base);
     await afterPaid(env, { ...base, status: "paid" });
     return json({ url: `${env.SITE_URL}/success.html?free=1` });
   }
   if (!isLive(env)) return json({ preview: true, error: "Payments are not switched on yet." }, 503);
 
-  const params = new URLSearchParams();
-  params.set("mode", "payment");
-  params.set("customer_email", email);
-  params.set("success_url", `${env.SITE_URL}/success.html?s={CHECKOUT_SESSION_ID}`);
-  params.set("cancel_url", `${env.SITE_URL}/#book`);
-  params.set("expires_at", String(Math.floor(Date.now() / 1000) + 30 * 60));
-  params.set("line_items[0][quantity]", "1");
-  params.set("line_items[0][price_data][currency]", city.currency);
-  params.set("line_items[0][price_data][unit_amount]", String(amount));
-  params.set("line_items[0][price_data][product_data][name]", svc.name + (credit ? ` · ${credit.pct}% reward applied` : ""));
-  params.set("line_items[0][price_data][product_data][description]", `${date} · ${SLOTS[slot]} · Zen confirms the exact hour on WhatsApp`);
-  params.set("payment_intent_data[application_fee_amount]", String(fee));
-  params.set("payment_intent_data[description]", `Zen ${city.name} — ${svc.name} — ${date} ${slot}`);
-  params.set("metadata[booking_id]", id);
-  params.set("payment_intent_data[metadata][booking_id]", id);
-  params.set("payment_intent_data[metadata][city]", city.name);
-
-  const r = await fetch("https://api.stripe.com/v1/checkout/sessions", {
-    method: "POST",
-    headers: { authorization: `Bearer ${env.STRIPE_SECRET_KEY}`, "Stripe-Account": env.ZEN_STRIPE_ACCOUNT, "content-type": "application/x-www-form-urlencoded", "Stripe-Version": "2024-06-20" },
-    body: params,
-  });
-  const session = await r.json();
-  if (!r.ok) { console.error("stripe checkout error", session); return json({ error: "Stripe couldn't start the payment. Please try again or message Zen on WhatsApp." }, 502); }
+  const label = discount_kind ? ` · ${discount_kind === "gift" ? "gift applied" : discount_kind === "partner" ? `${partner.pct}% partner discount` : `${credit.pct}% reward applied`}` : "";
+  let session;
+  try {
+    session = await stripeCheckout(env, { amount, currency: city.currency, name: svc.name + label, description: `${date} · ${slotLabel(slot)}${avail.mode === "slots" ? "" : " · Zen confirms the exact hour on WhatsApp"}`, email,
+      success: `${env.SITE_URL}/success.html?s={CHECKOUT_SESSION_ID}`, cancel: `${env.SITE_URL}/#book`, metadata: { booking_id: id, city: city.name } });
+  } catch (e) { return json({ error: e.message }, 502); }
   await insertBooking(env, { ...base, status: "pending", stripe_session: session.id });
   if (credit) await env.DB.prepare("UPDATE credits SET status = 'reserved', booking_id = ? WHERE id = ?").bind(id, credit.id).run();
   return json({ url: session.url });
 }
 
 async function insertBooking(env, o) {
-  const cols = ["id", "user_id", "email", "name", "phone", "city", "service_id", "service_name", "date", "slot", "note", "list_amount", "amount", "currency", "discount_kind", "credit_id", "platform_fee", "status", "source", "stripe_session", "payment_intent", "paid_at", "done_at"];
+  const cols = ["id", "user_id", "email", "name", "phone", "city", "service_id", "service_name", "date", "slot", "note", "list_amount", "amount", "currency", "discount_kind", "credit_id", "platform_fee", "status", "source", "stripe_session", "payment_intent", "paid_at", "done_at", "therapist_id", "package_id", "gift_code", "partner_code"];
   await env.DB.prepare(`INSERT INTO bookings (${cols.join(",")}) VALUES (${cols.map(() => "?").join(",")})`).bind(...cols.map((c) => o[c] ?? (c === "source" ? "web" : null))).run();
+}
+// Use up whatever paid for the booking (reward credit, gift, package session). restore() undoes it on cancel.
+async function consume(env, bk) {
+  if (bk.credit_id) await env.DB.prepare("UPDATE credits SET status = 'used', booking_id = ?, used_at = ? WHERE id = ?").bind(bk.id, now(), bk.credit_id).run();
+  if (bk.gift_code) await env.DB.prepare("UPDATE gifts SET status = 'redeemed', redeemed_at = ?, booking_id = ? WHERE code = ? AND status = 'paid'").bind(now(), bk.id, bk.gift_code).run();
+  if (bk.package_id) await env.DB.prepare("UPDATE client_packages SET remaining = remaining - 1 WHERE id = ? AND remaining > 0").bind(bk.package_id).run();
+}
+async function restore(env, bk) {
+  if (bk.credit_id) await env.DB.prepare("UPDATE credits SET status = 'available', booking_id = NULL, used_at = NULL WHERE id = ?").bind(bk.credit_id).run();
+  if (bk.gift_code) await env.DB.prepare("UPDATE gifts SET status = 'paid', redeemed_at = NULL, booking_id = NULL WHERE code = ? AND booking_id = ?").bind(bk.gift_code, bk.id).run();
+  if (bk.package_id) await env.DB.prepare("UPDATE client_packages SET remaining = remaining + 1 WHERE id = ?").bind(bk.package_id).run();
 }
 
 // ---------- webhook ----------
@@ -337,13 +360,24 @@ async function webhook(req, env) {
   if (!(await verifyStripeSignature(raw, req.headers.get("stripe-signature") || "", env.STRIPE_WEBHOOK_SECRET))) return new Response("bad signature", { status: 400 });
   const event = JSON.parse(raw);
   const s = event.data?.object;
-  const bid = s?.metadata?.booking_id;
+  const md = s?.metadata || {};
+  if (md.kind === "gift" && md.gift_id) {
+    if (event.type === "checkout.session.completed") await giftPaid(env, md.gift_id);
+    else if (event.type === "checkout.session.expired") await env.DB.prepare("UPDATE gifts SET status = 'cancelled' WHERE id = ? AND status = 'pending'").bind(md.gift_id).run();
+    return new Response("ok");
+  }
+  if (md.kind === "package" && md.package_row) {
+    if (event.type === "checkout.session.completed") await packagePaid(env, md.package_row, s.payment_intent);
+    else if (event.type === "checkout.session.expired") await env.DB.prepare("UPDATE client_packages SET status = 'cancelled' WHERE id = ? AND status = 'pending'").bind(md.package_row).run();
+    return new Response("ok");
+  }
+  const bid = md.booking_id;
   if (!bid) return new Response("ok");
   const bk = await env.DB.prepare("SELECT * FROM bookings WHERE id = ?").bind(bid).first();
   if (!bk) return new Response("ok");
   if (event.type === "checkout.session.completed" && bk.status === "pending") {
     await env.DB.prepare("UPDATE bookings SET status = 'paid', paid_at = ?, payment_intent = ? WHERE id = ?").bind(now(), s.payment_intent || null, bid).run();
-    if (bk.credit_id) await env.DB.prepare("UPDATE credits SET status = 'used', used_at = ? WHERE id = ?").bind(now(), bk.credit_id).run();
+    await consume(env, bk);
     await afterPaid(env, { ...bk, status: "paid" });
   } else if (event.type === "checkout.session.expired" && bk.status === "pending") {
     await env.DB.prepare("UPDATE bookings SET status = 'cancelled' WHERE id = ?").bind(bid).run();
@@ -352,27 +386,36 @@ async function webhook(req, env) {
   return new Response("ok");
 }
 
+const paidLine = (bk) => bk.amount === 0 ? (bk.discount_kind === "package" ? "Package session (no charge)" : bk.discount_kind === "gift" ? "Gift voucher (no charge)" : "Free session (reward)") : `${fmt(bk.amount, bk.currency)}${bk.discount_kind ? ` (${bk.discount_kind} applied, list ${fmt(bk.list_amount, bk.currency)})` : ""}`;
+async function therapistName(env, id) { if (!id) return null; const t = await env.DB.prepare("SELECT name FROM therapists WHERE id = ?").bind(id).first(); return t?.name || null; }
+
 // After a booking is paid (card, free reward, or manual): referral reward for the inviter, emails to Zen and the client.
 async function afterPaid(env, bk) {
   if (bk.user_id) await maybeRewardReferrer(env, bk.user_id);
-  const city = CITIES[bk.city];
-  const paid = bk.amount === 0 ? "Free session (reward)" : `${fmt(bk.amount, bk.currency)}${bk.discount_kind ? ` (${bk.discount_kind} reward applied, list ${fmt(bk.list_amount, bk.currency)})` : ""}`;
+  const city = CITIES[bk.city], exact = isTime(bk.slot), th = await therapistName(env, bk.therapist_id);
   await Promise.all([
     sendEmail(env, {
       to: env.ZEN_NOTIFY_EMAIL,
-      subject: `New booking · ${city.name} · ${bk.service_name} · ${bk.date} ${SLOTS[bk.slot] || bk.slot}`,
-      text: [`New booking through the website.`, ``, `City:     ${city.name}`, `Session:  ${bk.service_name}`, `Day:      ${bk.date}`, `Time:     ${SLOTS[bk.slot] || bk.slot}`, ``,
-        `Client:   ${bk.name}`, `WhatsApp: ${bk.phone}`, `Email:    ${bk.email}`, `Note:     ${bk.note || "—"}`, ``, `Paid:     ${paid}`, ``,
-        `Confirm the exact hour with the client on WhatsApp, then mark it "Confirmed" in the admin: ${env.SITE_URL}/admin.html`].join("\n"),
+      subject: `New booking · ${city.name} · ${bk.service_name} · ${bk.date} ${slotLabel(bk.slot)}`,
+      text: [`New booking through the website.`, ``, `City:     ${city.name}`, `Session:  ${bk.service_name}`, `Day:      ${bk.date}`, `Time:     ${slotLabel(bk.slot)}`, th ? `Therapist: ${th}` : null, ``,
+        `Client:   ${bk.name}`, `WhatsApp: ${bk.phone}`, `Email:    ${bk.email}`, `Note:     ${bk.note || "—"}`, bk.partner_code ? `Partner:  ${bk.partner_code}` : null, ``, `Paid:     ${paidLine(bk)}`, ``,
+        exact ? `The time is fixed. Mark it "Confirmed" in the admin once you've said hello on WhatsApp: ${env.SITE_URL}/admin.html` : `Confirm the exact hour with the client on WhatsApp, then mark it "Confirmed" in the admin: ${env.SITE_URL}/admin.html`].filter((l) => l !== null).join("\n"),
     }),
     sendEmail(env, {
       to: bk.email,
       subject: `Your Zen Recovery session in ${city.name} — ${bk.date}`,
-      text: [`Hi ${bk.name},`, ``, `Your session is reserved: ${bk.service_name}, ${bk.date}, ${SLOTS[bk.slot] || bk.slot}. ${paid}.`, ``,
-        `Zen will message you on WhatsApp (${bk.phone}) to confirm the exact hour.`, ``,
+      text: [`Hi ${bk.name},`, ``, `Your session is reserved: ${bk.service_name}, ${bk.date}, ${slotLabel(bk.slot)}${th ? ` with ${th}` : ""}. ${paidLine(bk)}.`, ``,
+        exact ? `Zen will message you on WhatsApp (${bk.phone}) with the address and anything to bring.` : `Zen will message you on WhatsApp (${bk.phone}) to confirm the exact hour.`, ``,
         `Before: eat something light, drink water. After: keep warm, no cold showers or swimming for about six hours.`, ``,
         `Your sessions, rewards and invite link: ${env.SITE_URL}/account.html`, ``, `See you soon,`, `Zen Recovery`].join("\n"),
     }),
+  ]);
+}
+async function afterReview(env, bk) {
+  const city = CITIES[bk.city];
+  await Promise.all([
+    sendEmail(env, { to: env.ZEN_NOTIFY_EMAIL, subject: `Needs a therapist's OK · ${city.name} · ${bk.name} · ${bk.date}`, text: [`${bk.name} booked ${bk.service_name} for ${bk.date} ${slotLabel(bk.slot)} but ticked a health red flag (pregnancy, blood thinners, bleeding/heart condition, recent surgery…).`, ``, `Nothing was charged. Read their answers and approve or cancel in the admin → Needs review: ${env.SITE_URL}/admin.html`, ``, `WhatsApp: ${bk.phone} · Email: ${bk.email}`, `Note: ${bk.note || "—"}`].join("\n") }),
+    sendEmail(env, { to: bk.email, subject: `Zen Recovery — one quick check before ${bk.date}`, text: [`Hi ${bk.name},`, ``, `Thanks for booking ${bk.service_name} in ${city.name} on ${bk.date} (${slotLabel(bk.slot)}).`, ``, `Because of what you told us about your health, a therapist looks at your answers first — that's normal and usually quick. Nothing has been charged. You'll get a confirmation (and a WhatsApp) once it's approved, and you pay at the session.`, ``, `Zen Recovery`].join("\n") }),
   ]);
 }
 
@@ -403,16 +446,6 @@ async function maybeRewardLoyalty(env, userId) {
 }
 
 // ---------- admin ----------
-async function currentAdmin(req, env) {
-  const t = await verifyPayload(env.SESSION_SECRET, getCookie(req, ADMIN_COOKIE));
-  if (!t?.aid) return null;
-  return env.DB.prepare("SELECT * FROM admins WHERE id = ?").bind(t.aid).first();
-}
-// The one place city access is decided. Returns the city an admin may see (null = all).
-function scope(admin, requested) {
-  if (admin.role !== "all") return admin.role;
-  return CITY_KEYS.includes(requested) ? requested : null;
-}
 const cityWhere = (city, col = "city") => (city ? { sql: ` AND ${col} = ?`, args: [city] } : { sql: "", args: [] });
 
 async function adminLogin(req, env) {
@@ -438,7 +471,7 @@ async function adminStats(env, admin, url) {
   const w = cityWhere(city);
   const live = "status IN ('paid','confirmed','done')";
   const q = (sql, ...args) => env.DB.prepare(sql).bind(...args, ...w.args);
-  const [months, thisMonth, lastMonth, byService, byStatus, clients, upcoming, today, byCity, rewards] = await Promise.all([
+  const [months, thisMonth, lastMonth, byService, byStatus, clients, upcoming, todayRows, byCity, rewards, review, ratings, packs, gifts] = await Promise.all([
     q(`SELECT strftime('%Y-%m', date) m, currency, COUNT(*) n, SUM(amount) rev, SUM(platform_fee) fee, SUM(status='done') done, COUNT(DISTINCT COALESCE(user_id, email)) clients
        FROM bookings WHERE ${live} AND date >= date('now','-11 months','start of month') AND date < date('now','+1 month','start of month')${w.sql} GROUP BY m, currency ORDER BY m`).all(),
     q(`SELECT currency, COUNT(*) n, SUM(amount) rev, SUM(platform_fee) fee, SUM(status='done') done FROM bookings WHERE ${live} AND date >= date('now','start of month') AND date < date('now','+1 month','start of month')${w.sql} GROUP BY currency`).all(),
@@ -447,19 +480,23 @@ async function adminStats(env, admin, url) {
     q(`SELECT status, COUNT(*) n FROM bookings WHERE status != 'pending'${w.sql} GROUP BY status`).all(),
     q(`SELECT COUNT(DISTINCT COALESCE(user_id, email)) total, COUNT(DISTINCT CASE WHEN created_at >= date('now','start of month') THEN COALESCE(user_id, email) END) new_this_month FROM bookings WHERE ${live}${w.sql}`).first(),
     q(`SELECT COUNT(*) n FROM bookings WHERE status IN ('paid','confirmed') AND date >= date('now')${w.sql}`).first(),
-    q(`SELECT id, name, service_name, slot, status, city FROM bookings WHERE status IN ('paid','confirmed') AND date = date('now')${w.sql} ORDER BY slot`).all(),
+    q(`SELECT b.id, b.name, b.service_name, b.slot, b.status, b.city, t.name therapist FROM bookings b LEFT JOIN therapists t ON t.id = b.therapist_id WHERE b.status IN ('paid','confirmed') AND b.date = date('now')${w.sql.replace(" city = ?", " b.city = ?")} ORDER BY b.slot`).all(),
     admin.role === "all" && !city ? env.DB.prepare(`SELECT city, currency, COUNT(*) n, SUM(amount) rev, SUM(platform_fee) fee FROM bookings WHERE ${live} AND date >= date('now','start of month') GROUP BY city, currency`).all() : { results: [] },
     q(`SELECT kind, status, COUNT(*) n FROM credits WHERE user_id IN (SELECT DISTINCT user_id FROM bookings WHERE user_id IS NOT NULL${w.sql}) GROUP BY kind, status`).all(),
+    q(`SELECT COUNT(*) n FROM bookings WHERE status = 'review'${w.sql}`).first(),
+    q(`SELECT AVG(rating) avg, COUNT(rating) n, SUM(rating = 5) five FROM bookings WHERE rating IS NOT NULL${w.sql}`).first(),
+    q(`SELECT currency, COUNT(*) n, SUM(amount) rev, SUM(platform_fee) fee, SUM(remaining) remaining FROM client_packages WHERE status = 'paid'${w.sql} GROUP BY currency`).all(),
+    q(`SELECT currency, COUNT(*) n, SUM(amount) rev, SUM(platform_fee) fee, SUM(status = 'paid') unused FROM gifts WHERE status IN ('paid','redeemed')${w.sql} GROUP BY currency`).all(),
   ]);
-  return json({ city, months: months.results, this_month: thisMonth.results, last_month: lastMonth.results, by_service: byService.results, by_status: byStatus.results, clients, upcoming: upcoming.n, today: today.results, by_city: byCity.results, rewards: rewards.results, show_fee: admin.role === "all" });
+  return json({ city, months: months.results, this_month: thisMonth.results, last_month: lastMonth.results, by_service: byService.results, by_status: byStatus.results, clients, upcoming: upcoming.n, today: todayRows.results, by_city: byCity.results, rewards: rewards.results, review: review.n, ratings, packages: packs.results, gifts: gifts.results, show_fee: admin.role === "all" });
 }
 
 async function adminBookings(env, admin, url) {
   const city = scope(admin, url.searchParams.get("city"));
   const w = cityWhere(city);
   const status = clean(url.searchParams.get("status"), 20), from = clean(url.searchParams.get("from"), 10), to = clean(url.searchParams.get("to"), 10), qs = clean(url.searchParams.get("q"), 60);
-  let sql = `SELECT b.id, b.user_id, b.name, b.email, b.phone, b.city, b.service_name, b.date, b.slot, b.amount, b.list_amount, b.currency, b.discount_kind, b.platform_fee, b.status, b.source, b.note, b.created_at, b.rating, b.feedback, b.therapist_note, u.intake AS user_intake, u.notes AS user_notes, u.nearest_city AS user_nearest, u.lang AS user_lang
-    FROM bookings b LEFT JOIN users u ON u.id = b.user_id WHERE b.status != 'pending'${w.sql.replace(" city = ?", " b.city = ?")}`;
+  let sql = `SELECT b.id, b.user_id, b.name, b.email, b.phone, b.city, b.service_name, b.date, b.slot, b.amount, b.list_amount, b.currency, b.discount_kind, b.platform_fee, b.status, b.source, b.note, b.created_at, b.rating, b.feedback, b.therapist_note, b.therapist_id, b.gift_code, b.partner_code, b.package_id, t.name therapist, u.intake AS user_intake, u.notes AS user_notes, u.nearest_city AS user_nearest, u.lang AS user_lang, u.approved AS user_approved
+    FROM bookings b LEFT JOIN users u ON u.id = b.user_id LEFT JOIN therapists t ON t.id = b.therapist_id WHERE b.status != 'pending'${w.sql.replace(" city = ?", " b.city = ?")}`;
   const args = [...w.args];
   if (status) { sql += " AND b.status = ?"; args.push(status); }
   if (isDate(from)) { sql += " AND b.date >= ?"; args.push(from); }
@@ -483,7 +520,8 @@ async function adminCreateBooking(req, env, admin) {
   const status = ["paid", "confirmed", "done"].includes(b.status) ? b.status : "confirmed";
   const user = email ? await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(email).first() : null;
   const id = randomId();
-  await insertBooking(env, { id, user_id: user?.id || null, email: email || null, name, phone, city: cityKey, service_id: b.service, service_name: svc.name, date, slot: clean(b.slot, 20) || "morning", note: clean(b.note, 500), list_amount: svc.amount, amount, currency: city.currency, discount_kind: amount !== svc.amount ? "manual" : null, platform_fee: 0, status, source: "manual", paid_at: now(), done_at: status === "done" ? now() : null });
+  const slot = isTime(b.slot) || SLOTS[b.slot] ? b.slot : "morning";
+  await insertBooking(env, { id, user_id: user?.id || null, email: email || null, name, phone, city: cityKey, service_id: b.service, service_name: svc.name, date, slot, note: clean(b.note, 500), list_amount: svc.amount, amount, currency: city.currency, discount_kind: amount !== svc.amount ? "manual" : null, platform_fee: 0, status, source: "manual", paid_at: now(), done_at: status === "done" ? now() : null, therapist_id: clean(b.therapist_id, 40) || null });
   if (user) { await maybeRewardReferrer(env, user.id); if (status === "done") await maybeRewardLoyalty(env, user.id); }
   return json({ ok: true, id });
 }
@@ -496,10 +534,12 @@ async function adminUpdateBooking(req, env, admin, id) {
   const slot = b.slot !== undefined ? clean(b.slot, 20) : bk.slot;
   const note = b.note !== undefined ? clean(b.note, 500) : bk.note;
   const tnote = b.therapist_note !== undefined ? clean(b.therapist_note, 800) : bk.therapist_note;
-  await env.DB.prepare("UPDATE bookings SET status = ?, slot = ?, note = ?, therapist_note = ?, done_at = CASE WHEN ? = 'done' THEN COALESCE(done_at, ?) ELSE done_at END WHERE id = ?")
-    .bind(status || bk.status, slot, note, tnote, status || bk.status, now(), id).run();
+  const th = b.therapist_id !== undefined ? clean(b.therapist_id, 40) || null : bk.therapist_id;
+  await env.DB.prepare("UPDATE bookings SET status = ?, slot = ?, note = ?, therapist_note = ?, therapist_id = ?, done_at = CASE WHEN ? = 'done' THEN COALESCE(done_at, ?) ELSE done_at END WHERE id = ?")
+    .bind(status || bk.status, slot, note, tnote, th, status || bk.status, now(), id).run();
+  if (bk.status === "review" && status && status !== "cancelled" && bk.user_id) await env.DB.prepare("UPDATE users SET approved = 1 WHERE id = ?").bind(bk.user_id).run();
   if (status === "done" && bk.status !== "done") await maybeRewardLoyalty(env, bk.user_id);
-  if (status === "cancelled" && bk.credit_id) await env.DB.prepare("UPDATE credits SET status = 'available', booking_id = NULL, used_at = NULL WHERE id = ?").bind(bk.credit_id).run();
+  if (status === "cancelled" && bk.status !== "cancelled") await restore(env, bk);
   return json({ ok: true });
 }
 
@@ -507,10 +547,11 @@ async function adminClients(env, admin, url) {
   const city = scope(admin, url.searchParams.get("city"));
   const qs = clean(url.searchParams.get("q"), 60);
   const w = cityWhere(city, "b.city");
-  let sql = `SELECT u.id, u.name, u.email, u.phone, u.city, u.photo, u.created_at, u.referred_by, u.nearest_city, u.city_text, u.intake,
+  let sql = `SELECT u.id, u.name, u.email, u.phone, u.city, u.photo, u.created_at, u.referred_by, u.nearest_city, u.city_text, u.intake, u.approved, u.birthday,
       (SELECT name FROM users r WHERE r.id = u.referred_by) referrer_name,
       COUNT(b.id) sessions, SUM(b.status='done') done, MAX(b.date) last_visit,
-      (SELECT COUNT(*) FROM credits c WHERE c.user_id = u.id AND c.status = 'available') credits
+      (SELECT COUNT(*) FROM credits c WHERE c.user_id = u.id AND c.status = 'available') credits,
+      (SELECT SUM(remaining) FROM client_packages cp WHERE cp.user_id = u.id AND cp.status = 'paid') package_left
     FROM users u LEFT JOIN bookings b ON b.user_id = u.id AND b.status IN ('paid','confirmed','done')${w.sql}
     WHERE 1=1`;
   const args = [...w.args];
@@ -523,28 +564,41 @@ async function adminClients(env, admin, url) {
 }
 
 async function adminClient(env, admin, id) {
-  const u = await env.DB.prepare("SELECT id, name, email, phone, city, photo, notes, birthday, referral_code, referred_by, created_at, last_login, country, city_text, nearest_city, intake, lang, google_sub FROM users WHERE id = ?").bind(id).first();
+  const u = await env.DB.prepare("SELECT id, name, email, phone, city, photo, notes, birthday, referral_code, referred_by, created_at, last_login, country, city_text, nearest_city, intake, lang, google_sub, apple_sub, approved, preferred_therapist FROM users WHERE id = ?").bind(id).first();
   if (!u) return json({ error: "Not found" }, 404);
   const city = admin.role === "all" ? null : admin.role;
   const w = cityWhere(city);
-  const [bookings, credits, referrer, checkins] = await Promise.all([
-    env.DB.prepare(`SELECT id, city, service_name, date, slot, amount, currency, discount_kind, status, source, rating, feedback, therapist_note FROM bookings WHERE user_id = ? AND status != 'pending'${w.sql} ORDER BY date DESC`).bind(id, ...w.args).all(),
+  const [bookings, credits, referrer, checkins, packages, photos, messages] = await Promise.all([
+    env.DB.prepare(`SELECT b.id, b.city, b.service_name, b.date, b.slot, b.amount, b.currency, b.discount_kind, b.status, b.source, b.rating, b.feedback, b.therapist_note, t.name therapist FROM bookings b LEFT JOIN therapists t ON t.id = b.therapist_id WHERE b.user_id = ? AND b.status != 'pending'${w.sql.replace(" city = ?", " b.city = ?")} ORDER BY b.date DESC`).bind(id, ...w.args).all(),
     env.DB.prepare("SELECT kind, pct, status, reason, created_at FROM credits WHERE user_id = ? ORDER BY created_at DESC").bind(id).all(),
     u.referred_by ? env.DB.prepare("SELECT name FROM users WHERE id = ?").bind(u.referred_by).first() : null,
     env.DB.prepare("SELECT date, pain, energy, sleep, note FROM checkins WHERE user_id = ? ORDER BY date DESC LIMIT 12").bind(id).all(),
+    env.DB.prepare("SELECT id, name, city, sessions, remaining, currency, status, expires_at, paid_at FROM client_packages WHERE user_id = ? AND status = 'paid' ORDER BY paid_at DESC").bind(id).all(),
+    env.DB.prepare("SELECT id, booking_id, kind, note, consent, created_at FROM photos WHERE user_id = ? ORDER BY created_at DESC").bind(id).all(),
+    env.DB.prepare("SELECT kind, channel, status, detail, created_at FROM messages WHERE user_id = ? ORDER BY created_at DESC LIMIT 20").bind(id).all(),
   ]);
-  if (city && bookings.results.length === 0) return json({ error: "Not found" }, 404); // no sessions in this admin's city: not theirs to see
-  return json({ client: { ...u, intake: parseIntake(u.intake), flags: healthFlags(u.intake), referrer_name: referrer?.name || null }, bookings: bookings.results, credits: credits.results, checkins: checkins.results });
+  if (city && bookings.results.length === 0 && u.nearest_city !== city && u.city !== city) return json({ error: "Not found" }, 404); // nothing to do with this admin's city
+  return json({ client: { ...u, intake: parseIntake(u.intake), flags: healthFlags(u.intake), referrer_name: referrer?.name || null }, bookings: bookings.results, credits: credits.results, checkins: checkins.results, packages: packages.results, photos: photos.results, messages: messages.results });
 }
 
 async function adminSaveSettings(req, env, admin) {
   if (admin.role !== "all") return json({ error: "Only the owner can change this." }, 403);
   const b = await body(req);
-  const every = Math.min(50, Math.max(2, Number(b.loyalty_every) || 10)), pct = Math.min(100, Math.max(0, Number(b.referral_pct) || 40));
-  await env.DB.batch([
-    env.DB.prepare("INSERT OR REPLACE INTO settings VALUES ('loyalty_every', ?)").bind(String(every)),
-    env.DB.prepare("INSERT OR REPLACE INTO settings VALUES ('referral_pct', ?)").bind(String(pct)),
-  ]);
+  const cur = await settings(env);
+  const num = (v, lo, hi, d) => String(Math.min(hi, Math.max(lo, Number(v) || d)));
+  const stmts = [
+    env.DB.prepare("INSERT OR REPLACE INTO settings VALUES ('loyalty_every', ?)").bind(num(b.loyalty_every ?? cur.loyalty_every, 2, 50, 10)),
+    env.DB.prepare("INSERT OR REPLACE INTO settings VALUES ('referral_pct', ?)").bind(num(b.referral_pct ?? cur.referral_pct, 0, 100, 40)),
+    env.DB.prepare("INSERT OR REPLACE INTO settings VALUES ('birthday_pct', ?)").bind(num(b.birthday_pct ?? cur.birthday_pct, 0, 100, 20)),
+    env.DB.prepare("INSERT OR REPLACE INTO settings VALUES ('package_pct', ?)").bind(num(b.package_pct ?? cur.package_pct, 0, 100, 15)),
+  ];
+  const link = (v) => { v = clean(v, 300); return /^https?:\/\//.test(v) ? v : ""; };
+  for (const c of CITY_KEYS) {
+    if (b.gmaps?.[c] !== undefined) stmts.push(env.DB.prepare("INSERT OR REPLACE INTO settings VALUES (?, ?)").bind(`gmaps_${c}`, link(b.gmaps[c])));
+    if (b.review?.[c] !== undefined) stmts.push(env.DB.prepare("INSERT OR REPLACE INTO settings VALUES (?, ?)").bind(`review_${c}`, link(b.review[c])));
+    if (b.whatsapp?.[c] !== undefined) stmts.push(env.DB.prepare("INSERT OR REPLACE INTO settings VALUES (?, ?)").bind(`wa_${c}`, clean(b.whatsapp[c], 20).replace(/[^\d+]/g, "")));
+  }
+  await env.DB.batch(stmts);
   return json(await settings(env));
 }
 async function adminList(env, admin) {
@@ -577,12 +631,7 @@ async function adminPassword(req, env, admin) {
   return json({ ok: true });
 }
 
-// ---------- email + stripe signature ----------
-async function sendEmail(env, { to, subject, text }) {
-  if (!env.RESEND_API_KEY || !to) return;
-  const r = await fetch("https://api.resend.com/emails", { method: "POST", headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" }, body: JSON.stringify({ from: env.FROM_EMAIL, to: [to], subject, text }) });
-  if (!r.ok) console.error("resend error", await r.text());
-}
+// ---------- stripe signature ----------
 async function verifyStripeSignature(payload, header, secret) {
   if (!secret) return false;
   const parts = Object.fromEntries(header.split(",").map((p) => p.split("=")));

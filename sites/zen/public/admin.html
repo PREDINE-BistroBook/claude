@@ -42,6 +42,15 @@
   .start ol{margin:0;padding-left:18px;display:grid;gap:6px;font-size:.92rem} .start a{color:var(--mark-soft)}
   .chart-note{font-size:.8rem;color:var(--ink-mute);margin-top:8px}
   .settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .count{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--bad);color:#fff;font-size:.7rem;font-weight:600;margin-left:6px}
+  .days{display:flex;gap:6px;flex-wrap:wrap} .days label{display:inline-flex;align-items:center;gap:5px;padding:6px 10px;border:1.5px solid var(--line);border-radius:999px;font-size:.84rem;cursor:pointer;background:var(--ground-3)} .days label:has(input:checked){background:var(--ink);color:var(--ground);border-color:var(--ink)}
+  .team-card{display:flex;gap:14px;align-items:center;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--ground-3)} .team-card .avatar{width:56px;height:56px;font-size:1rem}
+  .team-card .meta{flex:1;display:grid;gap:2px;font-size:.9rem} .team-card .meta b{font-weight:500}
+  .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin:8px 0} .gallery figure{margin:0;display:grid;gap:3px;position:relative} .gallery img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;background:var(--ground-2)} .gallery figcaption{font-size:.72rem;color:var(--ink-soft)} .gallery .x{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.6);color:#fff;border:0;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:.8rem}
+  .review-item{display:grid;gap:8px;padding:16px;border:1px solid color-mix(in srgb,var(--bad) 40%,transparent);border-radius:14px;background:color-mix(in srgb,var(--bad) 5%,var(--ground-3))}
+  .slot-chips{display:flex;gap:6px;flex-wrap:wrap} .slot-chips span{padding:5px 10px;border-radius:999px;background:var(--ground-2);font-family:var(--mono);font-size:.82rem}
+  .lb{display:grid;gap:6px;font-size:.9rem} .lb div{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid var(--line)}
+  .subtabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 16px}
   @media (max-width:860px){.settings-grid{grid-template-columns:1fr}}
 </style>
 </head>
@@ -74,6 +83,10 @@
       <button role="tab" aria-selected="true" data-tab="overview">Overview</button>
       <button role="tab" aria-selected="false" data-tab="bookings">Bookings</button>
       <button role="tab" aria-selected="false" data-tab="clients">Clients</button>
+      <button role="tab" aria-selected="false" data-tab="calendar">Calendar</button>
+      <button role="tab" aria-selected="false" data-tab="team">Team</button>
+      <button role="tab" aria-selected="false" data-tab="offers">Packs &amp; partners</button>
+      <button role="tab" aria-selected="false" data-tab="review">Needs review<span class="count" id="review-count" hidden></span></button>
       <button role="tab" aria-selected="false" data-tab="settings">Settings</button>
     </div>
 
@@ -105,6 +118,8 @@
         <div class="card chart-card" id="city-card" hidden><h3>By city <span>this month</span></h3><div class="chart" id="ch-city"></div><div class="legend" id="city-legend"></div></div>
         <div class="card"><h3>Today</h3><div class="today" id="today"></div></div>
         <div class="card"><h3>Rewards</h3><div class="mini" id="rewards"></div></div>
+        <div class="card"><h3>Ratings, packs, gifts</h3><div class="mini" id="extras"></div></div>
+        <div class="card" id="lb-card" hidden><h3>Who brings friends <span style="font-family:var(--body);font-size:.8rem;color:var(--ink-mute);font-weight:400">invite leaderboard</span></h3><div class="lb" id="leaderboard"></div><p class="chart-note">People whose invite link brought paying clients. Worth a thank-you message, or a small extra.</p></div>
       </div>
     </div>
 
@@ -120,10 +135,10 @@
           <li>A red <b>!</b> next to a name means the client told us about a health condition. Open the row and read it before the session.</li>
         </ol>
       </details>
-      <div class="legend-status"><span><span class="status paid">Reserved</span> paid online, hour not agreed yet</span><span><span class="status confirmed">Confirmed</span> hour agreed</span><span><span class="status done">Done</span> session happened</span><span><span class="status no_show">Missed</span></span><span><span class="status cancelled">Cancelled</span></span></div>
+      <div class="legend-status"><span><span class="status paid">Reserved</span> paid online, hour not agreed yet</span><span><span class="status confirmed">Confirmed</span> hour agreed</span><span><span class="status done">Done</span> session happened</span><span><span class="status no_show">Missed</span></span><span><span class="status cancelled">Cancelled</span></span><span><span class="status review">Needs review</span> health flag, not charged yet</span></div>
       <div class="filters">
         <div class="field" id="f-city-wrap" hidden><label for="f-city">City</label><select id="f-city"><option value="">All cities</option><option value="cairo">Cairo</option><option value="dahab">Dahab</option><option value="florence">Florence</option></select></div>
-        <div class="field"><label for="f-status">Status</label><select id="f-status"><option value="">Any</option><option value="paid">Reserved</option><option value="confirmed">Confirmed</option><option value="done">Done</option><option value="cancelled">Cancelled</option><option value="no_show">Missed</option></select></div>
+        <div class="field"><label for="f-status">Status</label><select id="f-status"><option value="">Any</option><option value="paid">Reserved</option><option value="confirmed">Confirmed</option><option value="done">Done</option><option value="cancelled">Cancelled</option><option value="no_show">Missed</option><option value="review">Needs review</option></select></div>
         <div class="field"><label for="f-from">From</label><input id="f-from" type="date"></div>
         <div class="field"><label for="f-to">To</label><input id="f-to" type="date"></div>
         <div class="field" style="flex:1"><label for="f-q">Search</label><input id="f-q" placeholder="name, email, phone"></div>
@@ -145,6 +160,123 @@
       <div class="table-wrap"><table id="clients-table"><thead><tr><th></th><th>Client</th><th>Room</th><th>Sessions</th><th>Last visit</th><th>Rewards</th><th>Invited by</th></tr></thead><tbody></tbody></table></div>
     </div>
 
+    <!-- calendar: opening hours, days off, waitlist -->
+    <div id="tab-calendar" hidden>
+      <div class="section-head"><h2>Calendar</h2></div>
+      <details class="help" open><summary>How live time slots work</summary>
+        <ul>
+          <li>Until you add opening hours for a city, clients pick a rough window (morning / afternoon / evening) and you agree the hour on WhatsApp. That's fine to start with.</li>
+          <li>Add <b>opening hours</b> below (for example Mon–Sat 10:00–18:00, one-hour slots) and the website shows exact free times instead. A time disappears the moment someone books it, so no double bookings.</li>
+          <li>Hours can be for the whole room or for one therapist. If you add therapists in the Team tab, clients can choose who they see.</li>
+          <li>Holiday, a dentist appointment, an afternoon off: add it under <b>Days off</b>. A whole day, or just a few hours.</li>
+          <li><b>Waiting list</b>: clients who wanted a full day get an email by themselves if a time opens up there.</li>
+        </ul>
+      </details>
+      <div class="settings-grid">
+        <div class="card">
+          <h3>Opening hours</h3>
+          <div class="table-wrap" style="margin-bottom:14px"><table id="avail-table"><thead><tr><th>City</th><th>Day</th><th>Hours</th><th>Slot</th><th>Who</th><th></th></tr></thead><tbody></tbody></table></div>
+          <form id="avail-form" class="grid" style="gap:12px">
+            <div class="row"><div class="field" id="av-city-wrap" style="flex:1"><label for="av-city">City</label><select id="av-city"></select></div><div class="field" style="flex:1"><label for="av-th">Therapist</label><select id="av-th"><option value="">Whole room</option></select></div></div>
+            <div class="field"><label>Days</label><div class="days" id="av-days"><label><input type="checkbox" value="1" checked>Mon</label><label><input type="checkbox" value="2" checked>Tue</label><label><input type="checkbox" value="3" checked>Wed</label><label><input type="checkbox" value="4" checked>Thu</label><label><input type="checkbox" value="5" checked>Fri</label><label><input type="checkbox" value="6" checked>Sat</label><label><input type="checkbox" value="0">Sun</label></div></div>
+            <div class="row"><div class="field" style="flex:1"><label for="av-start">From</label><input id="av-start" type="time" value="10:00"></div><div class="field" style="flex:1"><label for="av-end">To</label><input id="av-end" type="time" value="18:00"></div><div class="field" style="flex:1"><label for="av-min">Slot length</label><select id="av-min"><option value="30">30 min</option><option value="45">45 min</option><option value="60" selected>60 min</option><option value="90">90 min</option></select></div></div>
+            <div class="row"><button class="btn small" type="submit">Add hours</button><span class="err" id="avail-err" hidden></span></div>
+          </form>
+        </div>
+        <div class="card">
+          <h3>Days off</h3>
+          <div class="table-wrap" style="margin-bottom:14px"><table id="blocked-table"><thead><tr><th>City</th><th>Day</th><th>Hours</th><th>Who</th><th>Why</th><th></th></tr></thead><tbody></tbody></table></div>
+          <form id="blocked-form" class="grid" style="gap:12px">
+            <div class="row"><div class="field" id="bl-city-wrap" style="flex:1"><label for="bl-city">City</label><select id="bl-city"></select></div><div class="field" style="flex:1"><label for="bl-th">Therapist</label><select id="bl-th"><option value="">Whole room</option></select></div></div>
+            <div class="row"><div class="field" style="flex:1"><label for="bl-from">From day</label><input id="bl-from" type="date" required></div><div class="field" style="flex:1"><label for="bl-to">To day <span class="tiny">(optional)</span></label><input id="bl-to" type="date"></div></div>
+            <div class="row"><div class="field" style="flex:1"><label for="bl-start">From time <span class="tiny">(blank = all day)</span></label><input id="bl-start" type="time"></div><div class="field" style="flex:1"><label for="bl-end">To time</label><input id="bl-end" type="time"></div><div class="field" style="flex:2"><label for="bl-reason">Reason <span class="tiny">(only you see it)</span></label><input id="bl-reason" placeholder="Holiday, dentist…"></div></div>
+            <div class="row"><button class="btn small" type="submit">Block it</button><span class="err" id="blocked-err" hidden></span></div>
+          </form>
+        </div>
+        <div class="card">
+          <h3>Free times on a day</h3>
+          <p class="tiny">What a client sees for that day, after bookings and days off.</p>
+          <div class="row" style="margin:10px 0"><select id="pv-city" style="font:inherit;padding:8px 10px;border:1.5px solid var(--line);border-radius:10px"></select><input id="pv-date" type="date" style="font:inherit;padding:8px 10px;border:1.5px solid var(--line);border-radius:10px"><button class="btn small ghost" type="button" id="pv-go">Show</button></div>
+          <div class="slot-chips" id="pv-out"></div>
+        </div>
+        <div class="card">
+          <h3>Waiting list</h3>
+          <div class="table-wrap"><table id="wait-table"><thead><tr><th>Client</th><th>City</th><th>Day</th><th>Prefers</th><th>Told</th></tr></thead><tbody></tbody></table></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- team -->
+    <div id="tab-team" hidden>
+      <div class="section-head"><h2>Team</h2></div>
+      <details class="help"><summary>Why add therapists</summary>
+        <ul>
+          <li>Clients see the team on the booking page, can pick a favourite, and their preferred therapist is preselected next time.</li>
+          <li>Each booking can be assigned to a therapist (open a booking). Opening hours and days off can be per person.</li>
+          <li>This is the public profile only. Sign-in accounts for the team are under Settings → Who can sign in.</li>
+        </ul>
+      </details>
+      <div class="grid cols-2" id="team-list" style="margin-bottom:18px"></div>
+      <div class="card">
+        <h3>Add a therapist</h3>
+        <form id="team-form" class="grid" style="gap:12px">
+          <div class="row"><div class="field" id="th-city-wrap" style="flex:1"><label for="th-city">City</label><select id="th-city"></select></div><div class="field" style="flex:2"><label for="th-name">Name</label><input id="th-name" required></div></div>
+          <div class="row"><div class="field" style="flex:2"><label for="th-bio">One line about them</label><input id="th-bio" placeholder="Sports massage and cupping, 8 years"></div><div class="field" style="flex:1"><label for="th-langs">Languages</label><input id="th-langs" placeholder="Arabic, English"></div><div class="field" style="flex:1"><label for="th-photo">Photo</label><input id="th-photo" type="file" accept="image/*"></div></div>
+          <div class="row"><button class="btn small" type="submit">Add</button><span class="err" id="team-err" hidden></span></div>
+        </form>
+      </div>
+    </div>
+
+    <!-- offers: packs, partners, gifts -->
+    <div id="tab-offers" hidden>
+      <div class="section-head"><h2>Packs, partners and gifts</h2></div>
+      <div class="subtabs pills"><button class="pill" data-sub="packs" aria-pressed="true">Session packs</button><button class="pill" data-sub="partners" aria-pressed="false">Partner codes</button><button class="pill" data-sub="gifts" aria-pressed="false">Gift vouchers</button></div>
+      <div id="sub-packs">
+        <details class="help"><summary>About packs</summary><ul><li>A pack is several sessions paid up front at a lower price per session, valid for a number of months. Clients buy them in their account; when they book they pick "Use my pack" and nothing is charged.</li><li>The platform fee is taken once, on the pack purchase. Sessions used from a pack show as "from pack" in Bookings.</li><li>Owner only: create, pause or remove packs. Everyone can see what's been sold.</li></ul></details>
+        <div class="table-wrap" style="margin-bottom:14px"><table id="packs-table"><thead><tr><th>City</th><th>Name</th><th>Sessions</th><th>Price</th><th>Per session</th><th>Valid</th><th>Status</th><th></th></tr></thead><tbody></tbody></table></div>
+        <form id="pack-form" class="filters card" style="align-items:end" hidden>
+          <div class="field"><label for="pk-city">City</label><select id="pk-city"><option value="cairo">Cairo</option><option value="dahab">Dahab</option><option value="florence">Florence</option></select></div>
+          <div class="field"><label for="pk-name">Name</label><input id="pk-name" placeholder="5 sessions" required></div>
+          <div class="field" style="min-width:100px"><label for="pk-n">Sessions</label><input id="pk-n" type="number" min="2" max="50" value="5"></div>
+          <div class="field"><label for="pk-amount">Total price <span class="tiny">(major units)</span></label><input id="pk-amount" type="number" min="1" step="0.01" required></div>
+          <div class="field" style="min-width:100px"><label for="pk-months">Valid months</label><input id="pk-months" type="number" min="1" max="36" value="6"></div>
+          <button class="btn small" type="submit">Add pack</button><span class="err" id="pack-err" hidden></span>
+        </form>
+        <div class="section-head"><h3>Packs sold</h3></div>
+        <div class="table-wrap"><table id="sold-table"><thead><tr><th>Client</th><th>City</th><th>Pack</th><th>Left</th><th>Paid</th><th>Valid until</th></tr></thead><tbody></tbody></table></div>
+      </div>
+      <div id="sub-partners" hidden>
+        <details class="help"><summary>About partner codes</summary><ul><li>Give a hotel, hostel, gym or dive centre a code. Their guests type it when booking and get the discount; you see exactly how many bookings each partner brings, so you know who deserves a bigger thank-you.</li><li>A code can be for one city or all of them. Pause it any time.</li></ul></details>
+        <div class="table-wrap" style="margin-bottom:14px"><table id="partners-table"><thead><tr><th>Code</th><th>Partner</th><th>City</th><th>Off</th><th>Bookings</th><th>This month</th><th>Revenue</th><th>Last</th><th></th></tr></thead><tbody></tbody></table></div>
+        <form id="partner-form" class="filters card" style="align-items:end">
+          <div class="field"><label for="pa-name">Partner</label><input id="pa-name" placeholder="Dahab Divers" required></div>
+          <div class="field"><label for="pa-code">Code <span class="tiny">(blank = random)</span></label><input id="pa-code" placeholder="DIVERS10" style="text-transform:uppercase"></div>
+          <div class="field"><label for="pa-city">City</label><select id="pa-city"><option value="">All cities</option><option value="cairo">Cairo</option><option value="dahab">Dahab</option><option value="florence">Florence</option></select></div>
+          <div class="field" style="min-width:90px"><label for="pa-pct">% off</label><input id="pa-pct" type="number" min="1" max="50" value="10"></div>
+          <button class="btn small" type="submit">Add code</button><span class="err" id="partner-err" hidden></span>
+        </form>
+      </div>
+      <div id="sub-gifts" hidden>
+        <details class="help"><summary>About gift vouchers</summary><ul><li>Anyone can buy a session as a gift on the website. The buyer pays, the code goes out by email, and the recipient books with it. "Redeemed" means it's been used on a booking.</li></ul></details>
+        <div class="table-wrap"><table id="gifts-table"><thead><tr><th>Code</th><th>City</th><th>Session</th><th>Value</th><th>From</th><th>For</th><th>Status</th><th>Bought</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- needs review -->
+    <div id="tab-review" hidden>
+      <div class="section-head"><h2>Needs a therapist's OK</h2></div>
+      <details class="help" open><summary>What this is</summary>
+        <ul>
+          <li>When a client tells us they're pregnant, take blood thinners, have a bleeding or heart condition, or had recent surgery, the website doesn't take their money. The booking lands here instead.</li>
+          <li>Read their answers, message them on WhatsApp if you need to, then <b>Approve</b> (the booking becomes Confirmed, they pay at the session, and future bookings go straight through) or <b>Cancel</b>.</li>
+          <li>Clients who filled in the questionnaire with a red flag but haven't booked yet are listed below too; approving them in advance lets them book online normally.</li>
+        </ul>
+      </details>
+      <div class="grid" id="review-bookings"></div>
+      <div class="section-head"><h3>Clients with a health flag, not yet approved</h3></div>
+      <div class="table-wrap"><table id="review-clients"><thead><tr><th>Client</th><th>Flags</th><th>Details</th><th>Room</th><th></th></tr></thead><tbody></tbody></table></div>
+    </div>
+
     <!-- settings -->
     <div id="tab-settings" hidden>
       <details class="help"><summary>About this page</summary>
@@ -160,9 +292,16 @@
           <form id="rules-form" class="grid" style="gap:12px">
             <div class="field"><label for="s-every">Free session every … sessions</label><input id="s-every" type="number" min="2" max="50"></div>
             <div class="field"><label for="s-pct">Invite discount, % for both</label><input id="s-pct" type="number" min="0" max="100"></div>
+            <div class="field"><label for="s-bday">Birthday month discount, %</label><input id="s-bday" type="number" min="0" max="100"></div>
             <p class="tiny">Platform fee on card bookings: <b id="s-fee"></b> (fixed in the code, collected by Stripe).</p>
             <div class="row"><button class="btn small" type="submit">Save rules</button><span class="ok" id="rules-ok" hidden>Saved</span><span class="err" id="rules-err" hidden></span></div>
           </form>
+        </div>
+        <div class="card" id="links-card" hidden>
+          <h3>Links per city</h3>
+          <p class="tiny" style="margin-bottom:10px">Google Maps link shows "Open in Google Maps" on the booking page. The review link is what a client is sent to after a 5-star rating. WhatsApp number is the one clients message from the site.</p>
+          <form id="links-form" class="grid" style="gap:10px"></form>
+          <div class="row" style="margin-top:10px"><button class="btn small" type="submit" form="links-form">Save links</button><span class="ok" id="links-ok" hidden>Saved</span><span class="err" id="links-err" hidden></span></div>
         </div>
         <div class="card">
           <h3>Your password</h3>
@@ -209,6 +348,7 @@
       <div class="field" style="flex:1"><label for="ad-phone">WhatsApp</label><input id="ad-phone"></div>
       <div class="field" style="flex:1"><label for="ad-date">Day</label><input id="ad-date" type="date" required></div>
       <div class="field" style="flex:1"><label for="ad-slot">Time</label><input id="ad-slot" placeholder="17:00"></div>
+      <div class="field" style="flex:1"><label for="ad-th">Therapist</label><select id="ad-th"><option value="">—</option></select></div>
     </div>
     <div class="row">
       <div class="field" style="flex:1"><label for="ad-amount">Paid <span class="tiny">(major units, blank = list price)</span></label><input id="ad-amount" type="number" min="0" step="0.01"></div>
@@ -227,7 +367,13 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const G = window.ZenGuide;
 const CITY_NAME = { cairo: "Cairo", dahab: "Dahab", florence: "Florence" };
 const CITY_COLOR = { cairo: "#C4681E", dahab: "#1FA08A", florence: "#2F7BEA" };
-const STATUS = { paid: "Reserved", confirmed: "Confirmed", done: "Done", cancelled: "Cancelled", no_show: "Missed" };
+const STATUS = { paid: "Reserved", confirmed: "Confirmed", done: "Done", cancelled: "Cancelled", no_show: "Missed", review: "Needs review" };
+const DISC = { loyalty: "free session", referral: "invite discount", manual: "custom price", package: "from pack", gift: "gift voucher", partner: "partner code", birthday: "birthday discount" };
+const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+let TEAM = [];
+const teamIn = (city) => TEAM.filter((t) => !city || t.city === city);
+const thName = (id) => TEAM.find((t) => t.id === id)?.name || "";
+async function loadTeamList() { try { TEAM = (await ZenAPI("GET", "/api/admin/therapists")).rows || []; } catch { TEAM = []; } }
 const SLOT = { morning: "Morning", afternoon: "Afternoon", evening: "Evening" };
 const money = (minor, cur) => new Intl.NumberFormat("en", { style: "currency", currency: cur.toUpperCase(), maximumFractionDigits: cur === "egp" ? 0 : 2 }).format(minor / 100);
 const short = (minor, cur) => { const v = minor / 100; const s = v >= 1000 ? (v / 1000).toFixed(1) + "k" : String(Math.round(v)); return (cur === "eur" ? "€" : "E£") + s; };
@@ -249,9 +395,14 @@ function start(r) {
   $("#scope-badge").textContent = isOwner() ? "All cities" : CITY_NAME[A.role]; $("#scope-badge").className = "badge " + (isOwner() ? "all" : "city-" + A.role);
   $("#city-pills").innerHTML = isOwner() ? `<span class="tiny">Showing</span><div class="pills">${[["", "All cities"], ["cairo", "Cairo"], ["dahab", "Dahab"], ["florence", "Florence"]].map(([k, n]) => `<button class="pill" data-city="${k}" aria-pressed="${k === cityFilter}">${n}</button>`).join("")}</div>` : `<span class="tiny">You see ${CITY_NAME[A.role]} only. Bookings, clients and money from the other cities aren't visible to this account.</span>`;
   $$("#city-pills .pill").forEach((p) => p.addEventListener("click", () => { cityFilter = p.dataset.city; $$("#city-pills .pill").forEach((x) => x.setAttribute("aria-pressed", x === p)); loadOverview(); }));
-  $("#f-city-wrap").hidden = !isOwner(); $("#rules-card").hidden = !isOwner(); $("#admins-card").hidden = !isOwner();
-  loadOverview();
+  $("#f-city-wrap").hidden = !isOwner(); $("#rules-card").hidden = !isOwner(); $("#admins-card").hidden = !isOwner(); $("#links-card").hidden = !isOwner(); $("#pack-form").hidden = !isOwner();
+  const cityKeys = isOwner() ? Object.keys(CITIES) : [A.role];
+  ["av-city", "bl-city", "th-city", "pv-city"].forEach((id) => { $("#" + id).innerHTML = cityKeys.map((k) => `<option value="${k}">${CITY_NAME[k]}</option>`).join(""); });
+  ["av-city-wrap", "bl-city-wrap", "th-city-wrap"].forEach((id) => ($("#" + id).hidden = !isOwner()));
+  $("#pv-date").value = new Date().toISOString().slice(0, 10);
+  loadTeamList().then(() => { loadOverview(); refreshReviewCount(); });
 }
+async function refreshReviewCount() { try { const r = await ZenAPI("GET", "/api/admin/review"); const n = r.bookings.length + r.clients.length; $("#review-count").textContent = n; $("#review-count").hidden = !n; } catch {} }
 
 /* ---------- overview ---------- */
 async function loadOverview() {
@@ -274,6 +425,9 @@ async function loadOverview() {
   if (s.by_city.length) { const rows = ["cairo", "dahab", "florence"].map((k) => ({ label: CITY_NAME[k], value: s.by_city.filter((r) => r.city === k).reduce((a, r) => a + r.n, 0), color: CITY_COLOR[k] })); hBarChart($("#ch-city"), rows, { fmt: (v) => v + " sessions" }); $("#city-legend").innerHTML = s.by_city.map((r) => `<span><i class="dot ${r.city}"></i>${CITY_NAME[r.city]}: ${money(r.rev, r.currency)}${s.show_fee ? ` · fee ${money(r.fee, r.currency)}` : ""}</span>`).join(""); }
   $("#today").innerHTML = s.today.length ? s.today.map((b) => `<div class="item"><span>${esc(b.name)} · ${esc(b.service_name.split(" · ")[0])}${s.city ? "" : " · " + CITY_NAME[b.city]}</span><span class="num">${SLOT[b.slot] || b.slot}</span></div>`).join("") : `<p class="muted">Nothing booked for today.</p>`;
   const rw = (kind, status) => s.rewards.find((r) => r.kind === kind && r.status === status)?.n || 0;
+  const rt = s.ratings || {}, pk = s.packages || [], gf = s.gifts || [];
+  $("#extras").innerHTML = `<dl class="kv"><dt>Rating</dt><dd>${rt.n ? `${Number(rt.avg).toFixed(1)} ★ from ${rt.n} · ${rt.five} five-star` : "no ratings yet"}</dd><dt>Packs sold</dt><dd>${pk.length ? pk.map((p) => `${p.n} · ${money(p.rev, p.currency)} · ${p.remaining} sessions unused`).join("<br>") : "none yet"}</dd><dt>Gifts</dt><dd>${gf.length ? gf.map((g) => `${g.n} sold · ${money(g.rev, g.currency)} · ${g.unused} unused`).join("<br>") : "none yet"}</dd>${s.review ? `<dt>Needs review</dt><dd><b style="color:var(--bad)">${s.review} booking${s.review > 1 ? "s" : ""}</b> waiting for a therapist's OK</dd>` : ""}</dl>`;
+  if (isOwner()) { try { const { rows } = await ZenAPI("GET", "/api/admin/leaderboard"); $("#lb-card").hidden = !rows.length; $("#leaderboard").innerHTML = rows.slice(0, 8).map((r, i) => `<div><span>${i + 1}. ${esc(r.name)} <span class="tiny">${r.city ? CITY_NAME[r.city] : ""}</span></span><span class="num">${r.converted} booked · ${r.invited} invited</span></div>`).join(""); } catch {} }
   $("#rewards").innerHTML = `<dl class="kv"><dt>Free sessions</dt><dd>${rw("loyalty", "available")} waiting · ${rw("loyalty", "used")} used</dd><dt>Invite discounts</dt><dd>${rw("referral", "available")} waiting · ${rw("referral", "used")} used</dd><dt>Rules</dt><dd>every ${SETTINGS.loyalty_every}th free · ${SETTINGS.referral_pct}% for invites</dd></dl>`;
 }
 
@@ -319,20 +473,20 @@ async function loadBookings() {
       <td class="num">${fmtDate(b.date)}<div class="tiny">${SLOT[b.slot] || b.slot}</div></td>
       <td>${esc(b.name)}${b.flags?.length ? ` <span class="flag" title="${b.flags.map((f) => G.label("health", f)).join(", ")}">health</span>` : ""}${b.experience === "first" ? ` <span class="chip" style="font-size:.7rem;padding:2px 7px">first time</span>` : ""}<div class="tiny">${esc(b.phone || b.email || "")}</div></td>
       <td><i class="dot ${b.city}"></i>${CITY_NAME[b.city]}</td>
-      <td>${esc(b.service_name.split(" · ")[0])}${b.discount_kind ? `<div class="tiny">${b.discount_kind === "loyalty" ? "free session" : b.discount_kind === "referral" ? "invite discount" : "custom price"}</div>` : ""}${b.source === "manual" ? `<div class="tiny">added by hand</div>` : ""}</td>
-      <td class="num">${b.amount === 0 ? "Free" : money(b.amount, b.currency)}${b.platform_fee != null && b.platform_fee > 0 ? `<div class="tiny">fee ${money(b.platform_fee, b.currency)}</div>` : ""}</td>
+      <td>${esc(b.service_name.split(" · ")[0])}${b.therapist ? `<div class="tiny">with ${esc(b.therapist)}</div>` : ""}${b.discount_kind ? `<div class="tiny">${DISC[b.discount_kind] || b.discount_kind}${b.partner_code ? " " + esc(b.partner_code) : ""}</div>` : ""}${b.source === "manual" ? `<div class="tiny">added by hand</div>` : ""}</td>
+      <td class="num">${b.status === "review" ? "at session" : b.amount === 0 ? "Free" : money(b.amount, b.currency)}${b.platform_fee != null && b.platform_fee > 0 ? `<div class="tiny">fee ${money(b.platform_fee, b.currency)}</div>` : ""}</td>
       <td><span class="status ${b.status}">${STATUS[b.status]}</span></td>
       <td><div class="actions">${actionsFor(b)}</div></td></tr>`).join("") : `<tr><td colspan="7" class="empty">No bookings match.</td></tr>`;
   tb.querySelectorAll("button[data-act]").forEach((btn) => btn.addEventListener("click", async (e) => { e.stopPropagation(); await setStatus(btn.closest("tr").dataset.id, btn.dataset.act); }));
   tb.querySelectorAll("tr.click").forEach((tr) => tr.addEventListener("click", () => openBooking(bookings.find((b) => b.id === tr.dataset.id))));
 }
-const actionsFor = (b) => ({ paid: [["confirmed", "Confirm"], ["cancelled", "Cancel"]], confirmed: [["done", "Done"], ["no_show", "Missed"], ["cancelled", "Cancel"]], done: [], cancelled: [["confirmed", "Restore"]], no_show: [["done", "Done after all"]] }[b.status] || []).map(([s, l]) => `<button class="btn ghost" data-act="${s}">${l}</button>`).join("");
-async function setStatus(id, status) { await ZenAPI("PATCH", "/api/admin/bookings/" + id, { status }); loadBookings(); }
+const actionsFor = (b) => ({ review: [["confirmed", "Approve"], ["cancelled", "Cancel"]], paid: [["confirmed", "Confirm"], ["cancelled", "Cancel"]], confirmed: [["done", "Done"], ["no_show", "Missed"], ["cancelled", "Cancel"]], done: [], cancelled: [["confirmed", "Restore"]], no_show: [["done", "Done after all"]] }[b.status] || []).map(([s, l]) => `<button class="btn ghost" data-act="${s}">${l}</button>`).join("");
+async function setStatus(id, status) { await ZenAPI("PATCH", "/api/admin/bookings/" + id, { status }); loadBookings(); refreshReviewCount(); }
 function openBooking(b) {
   const d = $("#drawer");
   d.innerHTML = `<button class="btn small ghost close" id="dr-close">Close</button><p class="eyebrow">Booking</p><h2>${esc(b.name)}</h2><span class="status ${b.status}">${STATUS[b.status]}</span>
-    <dl class="kv"><dt>When</dt><dd>${fmtDate(b.date)} · <input id="dr-slot" value="${esc(b.slot)}" style="width:110px;font:inherit;padding:3px 6px;border:1px solid var(--line);border-radius:6px"> <button class="btn small ghost" id="dr-save-slot">Save time</button></dd>
-    <dt>City</dt><dd>${CITY_NAME[b.city]}</dd><dt>Session</dt><dd>${esc(b.service_name)}</dd><dt>Paid</dt><dd>${b.amount === 0 ? "Free (reward)" : money(b.amount, b.currency)}${b.list_amount !== b.amount ? ` <span class="tiny">list ${money(b.list_amount, b.currency)}</span>` : ""}</dd>
+    <dl class="kv"><dt>When</dt><dd>${fmtDate(b.date)} · <input id="dr-slot" value="${esc(b.slot)}" style="width:90px;font:inherit;padding:3px 6px;border:1px solid var(--line);border-radius:6px"> ${teamIn(b.city).length ? `<select id="dr-th" style="font:inherit;padding:3px 6px;border:1px solid var(--line);border-radius:6px"><option value="">any therapist</option>${teamIn(b.city).map((t) => `<option value="${t.id}" ${t.id === b.therapist_id ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select>` : ""} <button class="btn small ghost" id="dr-save-slot">Save</button></dd>
+    <dt>City</dt><dd>${CITY_NAME[b.city]}</dd><dt>Session</dt><dd>${esc(b.service_name)}</dd><dt>Paid</dt><dd>${b.status === "review" ? "Nothing yet — pays at the session" : b.amount === 0 ? `Free (${DISC[b.discount_kind] || "reward"})` : money(b.amount, b.currency)}${b.list_amount !== b.amount ? ` <span class="tiny">list ${money(b.list_amount, b.currency)}${b.discount_kind ? " · " + (DISC[b.discount_kind] || b.discount_kind) : ""}${b.gift_code ? " " + esc(b.gift_code) : ""}${b.partner_code ? " " + esc(b.partner_code) : ""}</span>` : ""}</dd>
     <dt>Contact</dt><dd>${esc(b.phone || "")}${b.phone ? ` · <a href="https://wa.me/${b.phone.replace(/\D/g, "")}" target="_blank" rel="noopener">WhatsApp</a>` : ""}<br>${esc(b.email || "")}</dd><dt>Source</dt><dd>${b.source === "manual" ? "added by hand" : "website"}</dd><dt>Booked</dt><dd>${esc(b.created_at)}</dd></dl>
     ${b.flags?.length ? `<div class="help" style="border-color:var(--bad);background:color-mix(in srgb,var(--bad) 7%,var(--ground-3))"><b>Health: ${b.flags.map((f) => G.label("health", f)).join(", ")}.</b> Adapt the session or ask for a doctor's okay first. Details in the client's notes below.</div>` : ""}
     ${b.user_id ? `<p class="eyebrow">About the client</p><div class="intake-grid">${G.bodyMap(b.pain || [], false)}<div><div class="chips">${(b.goals || []).map((g) => `<span class="chip">${G.label("goals", g)}</span>`).join("")}${(b.health || []).filter((h) => h !== "none").map((h) => `<span class="chip">${G.label("health", h)}</span>`).join("")}${b.experience ? `<span class="chip">${G.label("experience", b.experience)}</span>` : ""}</div>${b.pain?.length ? `<p class="tiny" style="margin-top:8px">Focus: ${b.pain.map((p) => G.label("pain", p)).join(", ")}</p>` : `<p class="tiny" style="margin-top:8px">No focus areas given.</p>`}${b.user_notes ? `<p class="mini" style="margin-top:8px"><b>Client's notes:</b> ${esc(b.user_notes)}</p>` : ""}</div></div>` : `<p class="tiny">Booked without an account, so no questionnaire. Ask on WhatsApp about injuries, medication and pregnancy before the session.</p>`}
@@ -344,7 +498,7 @@ function openBooking(b) {
     <div class="actions" style="margin-top:18px">${actionsFor(b)}</div>`;
   d.classList.add("open"); d.setAttribute("aria-hidden", "false");
   $("#dr-close").onclick = closeDrawer;
-  $("#dr-save-slot").onclick = async () => { await ZenAPI("PATCH", "/api/admin/bookings/" + b.id, { slot: $("#dr-slot").value }); $("#dr-ok").hidden = false; loadBookings(); };
+  $("#dr-save-slot").onclick = async () => { await ZenAPI("PATCH", "/api/admin/bookings/" + b.id, { slot: $("#dr-slot").value, therapist_id: $("#dr-th")?.value ?? undefined }); $("#dr-ok").hidden = false; loadBookings(); };
   $("#dr-save-note").onclick = async () => { await ZenAPI("PATCH", "/api/admin/bookings/" + b.id, { note: $("#dr-note").value, therapist_note: $("#dr-tnote").value }); $("#dr-ok").hidden = false; };
   d.querySelectorAll("button[data-act]").forEach((btn) => (btn.onclick = async () => { await setStatus(b.id, btn.dataset.act); closeDrawer(); }));
 }
@@ -358,13 +512,13 @@ $("#add-booking").addEventListener("click", () => {
   $("#ad-city").innerHTML = cityKeys.map((k) => `<option value="${k}">${CITIES[k].name}</option>`).join(""); $("#add-city-wrap").hidden = !isOwner();
   fillServices(); $("#ad-date").value = new Date().toISOString().slice(0, 10); $("#add-err").hidden = true; $("#dlg-add").showModal();
 });
-function fillServices() { const c = CITIES[$("#ad-city").value]; $("#ad-service").innerHTML = c.services.map((s) => `<option value="${s.id}">${s.name.split(" · ").slice(0, 2).join(" · ")} — ${money(s.amount, c.currency)}</option>`).join(""); }
+function fillServices() { const c = CITIES[$("#ad-city").value]; $("#ad-service").innerHTML = c.services.map((s) => `<option value="${s.id}">${s.name.split(" · ").slice(0, 2).join(" · ")} — ${money(s.amount, c.currency)}</option>`).join(""); $("#ad-th").innerHTML = `<option value="">—</option>` + teamIn($("#ad-city").value).map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join(""); }
 $("#ad-city").addEventListener("change", fillServices);
 $("#add-cancel").addEventListener("click", () => $("#dlg-add").close());
 $("#add-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const amt = $("#ad-amount").value;
-  try { await ZenAPI("POST", "/api/admin/bookings", { city: $("#ad-city").value, service: $("#ad-service").value, name: $("#ad-name").value.trim(), email: $("#ad-email").value.trim(), phone: $("#ad-phone").value.trim(), date: $("#ad-date").value, slot: $("#ad-slot").value.trim(), status: $("#ad-status").value, amount: amt === "" ? undefined : Math.round(Number(amt) * 100) }); $("#dlg-add").close(); $("#add-form").reset(); loadBookings(); }
+  try { await ZenAPI("POST", "/api/admin/bookings", { city: $("#ad-city").value, service: $("#ad-service").value, name: $("#ad-name").value.trim(), email: $("#ad-email").value.trim(), phone: $("#ad-phone").value.trim(), date: $("#ad-date").value, slot: $("#ad-slot").value.trim(), therapist_id: $("#ad-th").value || undefined, status: $("#ad-status").value, amount: amt === "" ? undefined : Math.round(Number(amt) * 100) }); $("#dlg-add").close(); $("#add-form").reset(); loadBookings(); }
   catch (ex) { $("#add-err").textContent = ex.message; $("#add-err").hidden = false; }
 });
 
@@ -373,12 +527,12 @@ async function loadClients() {
   const { clients } = await ZenAPI("GET", "/api/admin/clients?q=" + encodeURIComponent($("#c-q").value.trim()));
   $("#clients-count").textContent = clients.length + " clients";
   const tb = $("#clients-table tbody");
-  tb.innerHTML = clients.length ? clients.map((c) => `<tr class="click" data-id="${c.id}"><td><span class="avatar" style="width:32px;height:32px;font-size:.8rem">${c.photo ? `<img src="${c.photo}" alt="">` : initials(c.name)}</span></td><td>${esc(c.name)}${c.flags?.length ? ` <span class="flag">health</span>` : ""}${c.has_intake === false ? ` <span class="tiny">· no questionnaire</span>` : ""}<div class="tiny">${esc(c.phone || c.email)}</div></td><td>${(c.nearest_city || c.city) ? CITY_NAME[c.nearest_city || c.city] : "—"}${c.city_text ? `<div class="tiny">${esc(c.city_text)}</div>` : ""}</td><td class="num">${c.sessions}<span class="tiny"> · ${c.done} done</span></td><td class="num">${c.last_visit ? fmtDate(c.last_visit) : "—"}</td><td>${c.credits ? `<span class="status paid">${c.credits} waiting</span>` : ""}</td><td class="tiny">${esc(c.referrer_name || "")}</td></tr>`).join("") : `<tr><td colspan="7" class="empty">No clients yet.</td></tr>`;
+  tb.innerHTML = clients.length ? clients.map((c) => `<tr class="click" data-id="${c.id}"><td><span class="avatar" style="width:32px;height:32px;font-size:.8rem">${c.photo ? `<img src="${c.photo}" alt="">` : initials(c.name)}</span></td><td>${esc(c.name)}${c.flags?.length ? ` <span class="flag">health</span>` : ""}${c.has_intake === false ? ` <span class="tiny">· no questionnaire</span>` : ""}<div class="tiny">${esc(c.phone || c.email)}</div></td><td>${(c.nearest_city || c.city) ? CITY_NAME[c.nearest_city || c.city] : "—"}${c.city_text ? `<div class="tiny">${esc(c.city_text)}</div>` : ""}</td><td class="num">${c.sessions}<span class="tiny"> · ${c.done} done</span></td><td class="num">${c.last_visit ? fmtDate(c.last_visit) : "—"}</td><td>${c.credits ? `<span class="status paid">${c.credits} waiting</span>` : ""}${c.package_left ? `<div class="tiny">${c.package_left} pack sessions</div>` : ""}${c.flags?.length && !c.approved ? `<div class="tiny" style="color:var(--bad)">not approved yet</div>` : ""}</td><td class="tiny">${esc(c.referrer_name || "")}</td></tr>`).join("") : `<tr><td colspan="7" class="empty">No clients yet.</td></tr>`;
   tb.querySelectorAll("tr.click").forEach((tr) => tr.addEventListener("click", () => openClient(tr.dataset.id)));
 }
 const initials = (n) => (n || "?").split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 async function openClient(id) {
-  const { client: c, bookings, credits, checkins = [] } = await ZenAPI("GET", "/api/admin/clients/" + id);
+  const { client: c, bookings, credits, checkins = [], packages = [], photos = [], messages = [] } = await ZenAPI("GET", "/api/admin/clients/" + id);
   const d = $("#drawer");
   d.innerHTML = `<button class="btn small ghost close" id="dr-close">Close</button><div class="row" style="gap:14px"><span class="avatar">${c.photo ? `<img src="${c.photo}" alt="">` : initials(c.name)}</span><div><h2>${esc(c.name)}</h2><span class="tiny">${c.city ? CITY_NAME[c.city] + " · " : ""}with Zen since ${esc((c.created_at || "").slice(0, 10))}</span></div></div>
     <dl class="kv"><dt>WhatsApp</dt><dd>${esc(c.phone || "—")}${c.phone ? ` · <a href="https://wa.me/${c.phone.replace(/\D/g, "")}" target="_blank" rel="noopener">message</a>` : ""}</dd><dt>Email</dt><dd>${esc(c.email)}</dd><dt>Birthday</dt><dd>${esc(c.birthday || "—")}</dd><dt>Invited by</dt><dd>${esc(c.referrer_name || "—")}</dd><dt>Invite code</dt><dd class="num">${esc(c.referral_code || "")}</dd></dl>
@@ -393,23 +547,105 @@ async function openClient(id) {
     </div></div>` : `<p class="tiny" style="margin:10px 0">Hasn't filled in the questionnaire yet. Ask about injuries, medication and pregnancy on WhatsApp before the first session.</p>`}
     ${c.notes ? `<div class="card" style="padding:14px;margin-bottom:14px"><p class="eyebrow">Notes from the client</p><p style="margin-top:6px">${esc(c.notes)}</p></div>` : ""}
     ${checkins.length ? `<p class="eyebrow">How they've been feeling</p><div class="table-wrap" style="margin:6px 0 16px"><table><tbody>${checkins.map((k) => `<tr><td class="num">${fmtDate(k.date)}</td><td class="num">pain ${k.pain}/10</td><td class="tiny">energy ${k.energy ?? "–"} · sleep ${k.sleep ?? "–"}</td><td class="tiny">${esc(k.note || "")}</td></tr>`).join("")}</tbody></table></div>` : ""}
+    ${c.flags?.length ? `<div class="row" style="margin-bottom:14px">${c.approved ? `<span class="status confirmed">Approved for online booking</span>` : `<button class="btn small" id="dr-approve">Approve for online booking</button><span class="tiny">Until then their bookings land in "Needs review".</span>`}</div>` : ""}
+    <p class="eyebrow">Photos <span class="tiny" style="text-transform:none;letter-spacing:0">before / after, only the client and the team see them</span></p>
+    <div class="gallery" id="dr-gallery">${photos.map((p) => `<figure><img src="/api/photo/${p.id}" alt="" loading="lazy"><figcaption>${p.kind} · ${esc((p.created_at || "").slice(0, 10))}${p.note ? " · " + esc(p.note) : ""}</figcaption><button class="x" data-del-photo="${p.id}" title="Delete">×</button></figure>`).join("")}</div>
+    <form class="row" id="photo-form" style="margin-bottom:16px"><input type="file" id="ph-file" accept="image/*" capture="environment" style="font-size:.85rem"><select id="ph-kind" style="font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px"><option value="before">Before</option><option value="after">After</option><option value="other">Other</option></select><input id="ph-note" placeholder="note (optional)" style="font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px;width:150px"><label class="tiny" style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="ph-consent" checked>client agreed</label><button class="btn small ghost" type="submit">Upload</button><span class="err" id="ph-err" hidden></span></form>
+    ${packages.length ? `<p class="eyebrow">Packs</p><ul class="mini" style="margin:6px 0 16px;padding-left:18px">${packages.map((p) => `<li>${esc(p.name)} · ${CITY_NAME[p.city]} · ${p.remaining}/${p.sessions} left · valid until ${p.expires_at || "—"}</li>`).join("")}</ul>` : ""}
     <p class="eyebrow">Rewards</p><ul class="mini" style="margin:6px 0 16px;padding-left:18px">${credits.length ? credits.map((x) => `<li>${x.pct === 100 ? "Free session" : x.pct + "% off"} · ${esc(x.reason)} · ${x.status}</li>`).join("") : "<li>None yet</li>"}</ul>
-    <p class="eyebrow">Sessions${isOwner() ? "" : " in " + CITY_NAME[A.role]}</p><div class="table-wrap" style="margin-top:6px"><table><tbody>${bookings.map((b) => `<tr><td class="num">${fmtDate(b.date)}</td><td>${esc(b.service_name.split(" · ")[0])}${isOwner() ? " · " + CITY_NAME[b.city] : ""}${b.rating ? `<div class="tiny">${"★".repeat(b.rating)}${b.feedback ? " “" + esc(b.feedback) + "”" : ""}</div>` : ""}</td><td class="num">${b.amount === 0 ? "Free" : money(b.amount, b.currency)}</td><td><span class="status ${b.status}">${STATUS[b.status]}</span></td></tr>`).join("") || `<tr><td class="empty">No sessions</td></tr>`}</tbody></table></div>`;
+    <p class="eyebrow">Sessions${isOwner() ? "" : " in " + CITY_NAME[A.role]}</p><div class="table-wrap" style="margin-top:6px"><table><tbody>${bookings.map((b) => `<tr><td class="num">${fmtDate(b.date)}</td><td>${esc(b.service_name.split(" · ")[0])}${isOwner() ? " · " + CITY_NAME[b.city] : ""}${b.rating ? `<div class="tiny">${"★".repeat(b.rating)}${b.feedback ? " “" + esc(b.feedback) + "”" : ""}</div>` : ""}</td><td class="num">${b.amount === 0 ? "Free" : money(b.amount, b.currency)}</td><td><span class="status ${b.status}">${STATUS[b.status]}</span></td></tr>`).join("") || `<tr><td class="empty">No sessions</td></tr>`}</tbody></table></div>
+    ${messages.length ? `<p class="eyebrow" style="margin-top:16px">Messages sent</p><ul class="mini tiny" style="margin:6px 0 0;padding-left:18px">${messages.map((m) => `<li>${m.kind} by ${m.channel} · ${m.status} · ${esc((m.created_at || "").slice(0, 16))}</li>`).join("")}</ul>` : ""}`;
   d.classList.add("open"); d.setAttribute("aria-hidden", "false"); $("#dr-close").onclick = closeDrawer;
+  const ap = $("#dr-approve"); if (ap) ap.onclick = async () => { await ZenAPI("POST", `/api/admin/clients/${id}/approve`); refreshReviewCount(); openClient(id); };
+  $("#photo-form").onsubmit = async (e) => { e.preventDefault(); const f = $("#ph-file").files[0]; const err = $("#ph-err"); err.hidden = true; if (!f) { err.textContent = "Pick a photo first."; err.hidden = false; return; }
+    try { const data = await shrink(f, 1280, .8); await ZenAPI("POST", "/api/admin/photos", { user_id: id, kind: $("#ph-kind").value, note: $("#ph-note").value.trim(), consent: $("#ph-consent").checked, data }); openClient(id); } catch (ex) { err.textContent = ex.message; err.hidden = false; } };
+  $$("#dr-gallery [data-del-photo]").forEach((b) => (b.onclick = async () => { if (confirm("Delete this photo?")) { await ZenAPI("DELETE", "/api/admin/photos/" + b.dataset.delPhoto); openClient(id); } }));
+}
+function shrink(file, max, q) { return new Promise((res, rej) => { const img = new Image(); img.onload = () => { const r = Math.min(1, max / Math.max(img.width, img.height)); const c = document.createElement("canvas"); c.width = Math.round(img.width * r); c.height = Math.round(img.height * r); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(img.src); res(c.toDataURL("image/jpeg", q)); }; img.onerror = () => rej(new Error("That file isn't an image we can read.")); img.src = URL.createObjectURL(file); }); }
+
+/* ---------- calendar ---------- */
+async function loadCalendar() {
+  await loadTeamList();
+  const fill = (id) => { $("#" + id).innerHTML = `<option value="">Whole room</option>` + teamIn(isOwner() ? $("#" + (id === "av-th" ? "av-city" : "bl-city")).value : A.role).map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join(""); };
+  fill("av-th"); fill("bl-th"); $("#av-city").onchange = () => fill("av-th"); $("#bl-city").onchange = () => fill("bl-th");
+  const [av, bl, wl] = await Promise.all([ZenAPI("GET", "/api/admin/availability"), ZenAPI("GET", "/api/admin/blocked"), ZenAPI("GET", "/api/admin/waitlist")]);
+  $("#avail-table tbody").innerHTML = av.rows.length ? av.rows.map((r) => `<tr><td>${CITY_NAME[r.city]}</td><td>${WD[r.weekday]}</td><td class="num">${r.start}–${r.end}</td><td class="num">${r.slot_minutes} min</td><td>${r.therapist_id ? esc(thName(r.therapist_id)) : "room"}</td><td><button class="btn small ghost" data-del="${r.id}">Remove</button></td></tr>`).join("") : `<tr><td colspan="6" class="empty">No opening hours yet: clients pick a morning / afternoon / evening window.</td></tr>`;
+  $("#blocked-table tbody").innerHTML = bl.rows.length ? bl.rows.map((r) => `<tr><td>${CITY_NAME[r.city]}</td><td class="num">${fmtDate(r.date)}</td><td class="num">${r.start ? r.start + "–" + (r.end || "") : "all day"}</td><td>${r.therapist_id ? esc(thName(r.therapist_id)) : "room"}</td><td class="tiny">${esc(r.reason || "")}</td><td><button class="btn small ghost" data-del="${r.id}">Remove</button></td></tr>`).join("") : `<tr><td colspan="6" class="empty">Nothing blocked.</td></tr>`;
+  $("#wait-table tbody").innerHTML = wl.rows.length ? wl.rows.map((r) => `<tr><td>${esc(r.name)}<div class="tiny">${esc(r.phone || r.email)}</div></td><td>${CITY_NAME[r.city]}</td><td class="num">${fmtDate(r.date)}</td><td>${r.slot_pref || "any"}</td><td class="tiny">${r.notified_at ? "yes, " + r.notified_at.slice(0, 10) : "not yet"}</td></tr>`).join("") : `<tr><td colspan="5" class="empty">Nobody waiting.</td></tr>`;
+  $$("#avail-table [data-del]").forEach((b) => (b.onclick = async () => { await ZenAPI("DELETE", "/api/admin/availability/" + b.dataset.del); loadCalendar(); }));
+  $$("#blocked-table [data-del]").forEach((b) => (b.onclick = async () => { await ZenAPI("DELETE", "/api/admin/blocked/" + b.dataset.del); loadCalendar(); }));
+}
+$("#avail-form").addEventListener("submit", async (e) => { e.preventDefault(); const err = $("#avail-err"); err.hidden = true;
+  try { await ZenAPI("POST", "/api/admin/availability", { city: $("#av-city").value, therapist_id: $("#av-th").value || undefined, weekdays: $$("#av-days input:checked").map((i) => Number(i.value)), start: $("#av-start").value, end: $("#av-end").value, slot_minutes: Number($("#av-min").value) }); loadCalendar(); }
+  catch (ex) { err.textContent = ex.message; err.hidden = false; } });
+$("#blocked-form").addEventListener("submit", async (e) => { e.preventDefault(); const err = $("#blocked-err"); err.hidden = true;
+  try { await ZenAPI("POST", "/api/admin/blocked", { city: $("#bl-city").value, therapist_id: $("#bl-th").value || undefined, date: $("#bl-from").value, to: $("#bl-to").value || undefined, start: $("#bl-start").value || undefined, end: $("#bl-end").value || undefined, reason: $("#bl-reason").value.trim() }); e.target.reset(); loadCalendar(); }
+  catch (ex) { err.textContent = ex.message; err.hidden = false; } });
+$("#pv-go").addEventListener("click", async () => { const r = await ZenAPI("GET", `/api/admin/slots?city=${$("#pv-city").value}&date=${$("#pv-date").value}`); $("#pv-out").innerHTML = r.mode === "windows" ? `<span class="tiny">No opening hours for this city yet: clients pick a window.</span>` : r.slots.length ? r.slots.map((s) => `<span>${s.time}${s.therapists.length > 1 ? ` <small>×${s.therapists.length}</small>` : ""}</span>`).join("") : `<span class="tiny">Fully booked or blocked.</span>`; });
+
+/* ---------- team ---------- */
+async function loadTeamTab() {
+  await loadTeamList();
+  $("#team-list").innerHTML = TEAM.length ? TEAM.map((t) => `<div class="team-card"><span class="avatar">${t.photo ? `<img src="${t.photo}" alt="">` : initials(t.name)}</span><div class="meta"><b>${esc(t.name)} <span class="badge city-${t.city}">${CITY_NAME[t.city]}</span>${t.active ? "" : ` <span class="status cancelled">paused</span>`}</b><span>${esc(t.bio || "")}</span><span class="tiny">${esc(t.languages || "")}</span></div><div class="actions"><button class="btn ghost" data-edit="${t.id}">Edit</button><button class="btn ghost" data-toggle="${t.id}" data-active="${t.active}">${t.active ? "Pause" : "Activate"}</button><button class="btn ghost danger" data-remove="${t.id}">Remove</button></div></div>`).join("") : `<div class="empty">No therapists yet. Add the team so clients can see who they'll meet.</div>`;
+  $$("#team-list [data-toggle]").forEach((b) => (b.onclick = async () => { await ZenAPI("PATCH", "/api/admin/therapists/" + b.dataset.toggle, { active: b.dataset.active !== "1" }); loadTeamTab(); }));
+  $$("#team-list [data-remove]").forEach((b) => (b.onclick = async () => { if (confirm("Remove this therapist from the site? Past bookings keep their name.")) { await ZenAPI("DELETE", "/api/admin/therapists/" + b.dataset.remove); loadTeamTab(); } }));
+  $$("#team-list [data-edit]").forEach((b) => (b.onclick = async () => { const t = TEAM.find((x) => x.id === b.dataset.edit); const name = prompt("Name", t.name); if (name === null) return; const bio = prompt("One line about them", t.bio || ""); if (bio === null) return; const languages = prompt("Languages", t.languages || ""); if (languages === null) return; await ZenAPI("PATCH", "/api/admin/therapists/" + t.id, { name, bio, languages }); loadTeamTab(); }));
+}
+$("#team-form").addEventListener("submit", async (e) => { e.preventDefault(); const err = $("#team-err"); err.hidden = true;
+  try { const f = $("#th-photo").files[0]; const photo = f ? await shrink(f, 256, .82) : undefined; await ZenAPI("POST", "/api/admin/therapists", { city: $("#th-city").value, name: $("#th-name").value.trim(), bio: $("#th-bio").value.trim(), languages: $("#th-langs").value.trim(), photo }); e.target.reset(); loadTeamTab(); }
+  catch (ex) { err.textContent = ex.message; err.hidden = false; } });
+
+/* ---------- offers: packs, partners, gifts ---------- */
+$$(".subtabs .pill").forEach((p) => p.addEventListener("click", () => { $$(".subtabs .pill").forEach((x) => x.setAttribute("aria-pressed", x === p)); ["packs", "partners", "gifts"].forEach((k) => ($("#sub-" + k).hidden = k !== p.dataset.sub)); }));
+async function loadOffers() {
+  const [pk, sold, gf] = await Promise.all([ZenAPI("GET", "/api/admin/packages"), ZenAPI("GET", "/api/admin/packages/sold"), ZenAPI("GET", "/api/admin/gifts")]);
+  $("#packs-table tbody").innerHTML = pk.rows.length ? pk.rows.map((p) => `<tr><td>${CITY_NAME[p.city]}</td><td>${esc(p.name)}</td><td class="num">${p.sessions}</td><td class="num">${money(p.amount, p.currency)}</td><td class="num">${money(Math.round(p.amount / p.sessions), p.currency)}</td><td class="num">${p.months_valid} months</td><td>${p.active ? `<span class="status confirmed">on sale</span>` : `<span class="status cancelled">paused</span>`}</td><td>${isOwner() ? `<div class="actions"><button class="btn ghost" data-pk-toggle="${p.id}" data-active="${p.active}">${p.active ? "Pause" : "Put on sale"}</button><button class="btn ghost danger" data-pk-del="${p.id}">Remove</button></div>` : ""}</td></tr>`).join("") : `<tr><td colspan="8" class="empty">No packs yet.</td></tr>`;
+  $("#sold-table tbody").innerHTML = sold.rows.length ? sold.rows.map((p) => `<tr><td>${esc(p.user_name)}<div class="tiny">${esc(p.user_email)}</div></td><td>${CITY_NAME[p.city]}</td><td>${esc(p.name)}</td><td class="num">${p.remaining}/${p.sessions}</td><td class="num">${money(p.amount, p.currency)}${p.platform_fee ? `<div class="tiny">fee ${money(p.platform_fee, p.currency)}</div>` : ""}</td><td class="num">${p.expires_at || "—"}</td></tr>`).join("") : `<tr><td colspan="6" class="empty">None sold yet.</td></tr>`;
+  $("#gifts-table tbody").innerHTML = gf.rows.length ? gf.rows.map((g) => `<tr><td class="num">${esc(g.code)}</td><td>${CITY_NAME[g.city]}</td><td>${esc(g.service_name.split(" · ")[0])}</td><td class="num">${money(g.amount, g.currency)}</td><td>${esc(g.buyer_name)}<div class="tiny">${esc(g.buyer_email)}</div></td><td>${esc(g.recipient_name)}<div class="tiny">${esc(g.recipient_email || "")}</div></td><td><span class="status ${g.status === "paid" ? "confirmed" : g.status === "redeemed" ? "done" : "cancelled"}">${g.status === "paid" ? "unused" : g.status}</span></td><td class="num">${esc((g.paid_at || g.created_at || "").slice(0, 10))}</td></tr>`).join("") : `<tr><td colspan="8" class="empty">No gifts sold yet.</td></tr>`;
+  $$("[data-pk-toggle]").forEach((b) => (b.onclick = async () => { await ZenAPI("PATCH", "/api/admin/packages/" + b.dataset.pkToggle, { active: b.dataset.active !== "1" }); loadOffers(); }));
+  $$("[data-pk-del]").forEach((b) => (b.onclick = async () => { if (confirm("Remove this pack from sale? Packs already bought stay valid.")) { await ZenAPI("DELETE", "/api/admin/packages/" + b.dataset.pkDel); loadOffers(); } }));
+  if (isOwner()) { const { rows } = await ZenAPI("GET", "/api/admin/partners");
+    $("#partners-table tbody").innerHTML = rows.length ? rows.map((p) => `<tr><td class="num"><b>${esc(p.code)}</b></td><td>${esc(p.name)}${p.active ? "" : ` <span class="status cancelled">paused</span>`}</td><td>${p.city ? CITY_NAME[p.city] : "all"}</td><td class="num">${p.pct}%</td><td class="num">${p.bookings}</td><td class="num">${p.this_month}</td><td class="num">${p.revenue ? p.revenue : "—"}</td><td class="num">${p.last_booking ? fmtDate(p.last_booking) : "—"}</td><td><div class="actions"><button class="btn ghost" data-pa-toggle="${p.id}" data-active="${p.active}">${p.active ? "Pause" : "Activate"}</button><button class="btn ghost danger" data-pa-del="${p.id}">Remove</button></div></td></tr>`).join("") : `<tr><td colspan="9" class="empty">No partner codes yet.</td></tr>`;
+    $$("[data-pa-toggle]").forEach((b) => (b.onclick = async () => { await ZenAPI("PATCH", "/api/admin/partners/" + b.dataset.paToggle, { active: b.dataset.active !== "1" }); loadOffers(); }));
+    $$("[data-pa-del]").forEach((b) => (b.onclick = async () => { if (confirm("Remove this code?")) { await ZenAPI("DELETE", "/api/admin/partners/" + b.dataset.paDel); loadOffers(); } }));
+  } else { $("#sub-partners").innerHTML = `<div class="empty">Partner codes are managed by the owner.</div>`; $("#partner-form")?.remove(); }
+}
+$("#pack-form").addEventListener("submit", async (e) => { e.preventDefault(); const err = $("#pack-err"); err.hidden = true;
+  try { await ZenAPI("POST", "/api/admin/packages", { city: $("#pk-city").value, name: $("#pk-name").value.trim(), sessions: Number($("#pk-n").value), amount: Math.round(Number($("#pk-amount").value) * 100), months_valid: Number($("#pk-months").value) }); e.target.reset(); $("#pk-n").value = 5; $("#pk-months").value = 6; loadOffers(); }
+  catch (ex) { err.textContent = ex.message; err.hidden = false; } });
+$("#partner-form")?.addEventListener("submit", async (e) => { e.preventDefault(); const err = $("#partner-err"); err.hidden = true;
+  try { await ZenAPI("POST", "/api/admin/partners", { name: $("#pa-name").value.trim(), code: $("#pa-code").value.trim(), city: $("#pa-city").value || null, pct: Number($("#pa-pct").value) }); e.target.reset(); $("#pa-pct").value = 10; loadOffers(); }
+  catch (ex) { err.textContent = ex.message; err.hidden = false; } });
+
+/* ---------- needs review ---------- */
+async function loadReview() {
+  const r = await ZenAPI("GET", "/api/admin/review");
+  $("#review-count").textContent = r.bookings.length + r.clients.length; $("#review-count").hidden = !(r.bookings.length + r.clients.length);
+  $("#review-bookings").innerHTML = r.bookings.length ? r.bookings.map((b) => `<div class="review-item"><div class="row" style="justify-content:space-between"><b>${esc(b.name)} · ${esc(b.service_name.split(" · ")[0])} · ${CITY_NAME[b.city]} · ${fmtDate(b.date)} ${esc(b.slot)}</b><span class="tiny">booked ${esc((b.created_at || "").slice(0, 16))}</span></div>
+    <div class="chips">${(b.flags || []).map((f) => `<span class="flag">${G.label("health", f)}</span>`).join("") || `<span class="flag">ticked the safety box</span>`}</div>
+    ${b.health_notes ? `<p class="mini"><b>Their details:</b> ${esc(b.health_notes)}</p>` : ""}${b.note ? `<p class="mini"><b>Booking note:</b> ${esc(b.note)}</p>` : ""}
+    <div class="row"><a class="btn small ghost" href="https://wa.me/${(b.phone || "").replace(/\D/g, "")}" target="_blank" rel="noopener">WhatsApp ${esc(b.phone || "")}</a><span class="tiny">${esc(b.email || "")}</span><span style="flex:1"></span><button class="btn small" data-ok="${b.id}">Approve · confirm booking</button><button class="btn small danger" data-no="${b.id}">Cancel</button></div></div>`).join("") : `<div class="empty">Nothing waiting. Good.</div>`;
+  $("#review-clients tbody").innerHTML = r.clients.length ? r.clients.map((c) => `<tr><td>${esc(c.name)}<div class="tiny">${esc(c.phone || c.email)}</div></td><td>${c.flags.map((f) => `<span class="flag">${G.label("health", f)}</span>`).join(" ")}</td><td class="tiny">${esc(c.health_notes || "")}</td><td>${c.nearest_city ? CITY_NAME[c.nearest_city] : "—"}</td><td><button class="btn small ghost" data-approve="${c.id}">Approve</button></td></tr>`).join("") : `<tr><td colspan="5" class="empty">Nobody waiting.</td></tr>`;
+  $$("#review-bookings [data-ok]").forEach((b) => (b.onclick = async () => { await ZenAPI("PATCH", "/api/admin/bookings/" + b.dataset.ok, { status: "confirmed" }); loadReview(); }));
+  $$("#review-bookings [data-no]").forEach((b) => (b.onclick = async () => { if (confirm("Cancel this booking? Tell the client why on WhatsApp.")) { await ZenAPI("PATCH", "/api/admin/bookings/" + b.dataset.no, { status: "cancelled" }); loadReview(); } }));
+  $$("#review-clients [data-approve]").forEach((b) => (b.onclick = async () => { await ZenAPI("POST", `/api/admin/clients/${b.dataset.approve}/approve`); loadReview(); }));
 }
 let tc; $("#c-q").addEventListener("input", () => { clearTimeout(tc); tc = setTimeout(loadClients, 250); });
 
 /* ---------- settings ---------- */
 async function loadSettings() {
-  $("#s-every").value = SETTINGS.loyalty_every; $("#s-pct").value = SETTINGS.referral_pct; $("#s-fee").textContent = SETTINGS.platform_fee_pct + "%";
+  $("#s-every").value = SETTINGS.loyalty_every; $("#s-pct").value = SETTINGS.referral_pct; $("#s-bday").value = SETTINGS.birthday_pct ?? 20; $("#s-fee").textContent = SETTINGS.platform_fee_pct + "%";
+  if (isOwner()) $("#links-form").innerHTML = Object.keys(CITY_NAME).map((k) => `<b style="font-size:.9rem">${CITY_NAME[k]}</b><div class="row"><div class="field" style="flex:1"><label for="lk-gm-${k}">Google Maps link</label><input id="lk-gm-${k}" type="url" placeholder="https://maps.app.goo.gl/…" value="${esc(SETTINGS.gmaps?.[k] || "")}"></div><div class="field" style="flex:1"><label for="lk-rv-${k}">Google review link</label><input id="lk-rv-${k}" type="url" placeholder="https://g.page/r/…/review" value="${esc(SETTINGS.review?.[k] || "")}"></div><div class="field" style="flex:1"><label for="lk-wa-${k}">WhatsApp number</label><input id="lk-wa-${k}" placeholder="+20 …" value="${esc(SETTINGS.whatsapp?.[k] || "")}"></div></div>`).join("");
   if (isOwner()) { const { admins } = await ZenAPI("GET", "/api/admin/admins"); $("#admins-table tbody").innerHTML = admins.map((a) => `<tr><td>${esc(a.name)}</td><td>${esc(a.email)}</td><td><span class="badge ${a.role === "all" ? "all" : "city-" + a.role}">${a.role === "all" ? "All cities" : CITY_NAME[a.role]}</span></td><td class="tiny">${a.last_login ? esc(a.last_login.slice(0, 10)) : "never"}</td><td>${a.id === A.id ? "<span class='tiny'>you</span>" : `<button class="btn small danger" data-del="${a.id}">Remove</button>`}</td></tr>`).join(""); $$("#admins-table [data-del]").forEach((b) => b.addEventListener("click", async () => { if (confirm("Remove this admin's access?")) { await ZenAPI("DELETE", "/api/admin/admins/" + b.dataset.del); loadSettings(); } })); }
 }
-$("#rules-form").addEventListener("submit", async (e) => { e.preventDefault(); $("#rules-ok").hidden = true; $("#rules-err").hidden = true; try { SETTINGS = await ZenAPI("PUT", "/api/admin/settings", { loyalty_every: +$("#s-every").value, referral_pct: +$("#s-pct").value }); $("#rules-ok").hidden = false; } catch (ex) { $("#rules-err").textContent = ex.message; $("#rules-err").hidden = false; } });
+$("#rules-form").addEventListener("submit", async (e) => { e.preventDefault(); $("#rules-ok").hidden = true; $("#rules-err").hidden = true; try { SETTINGS = await ZenAPI("PUT", "/api/admin/settings", { loyalty_every: +$("#s-every").value, referral_pct: +$("#s-pct").value, birthday_pct: +$("#s-bday").value }); $("#rules-ok").hidden = false; } catch (ex) { $("#rules-err").textContent = ex.message; $("#rules-err").hidden = false; } });
+$("#links-form").addEventListener("submit", async (e) => { e.preventDefault(); $("#links-ok").hidden = true; $("#links-err").hidden = true; const ks = Object.keys(CITY_NAME); const pick = (p) => Object.fromEntries(ks.map((k) => [k, $(`#lk-${p}-${k}`).value.trim()]));
+  try { SETTINGS = await ZenAPI("PUT", "/api/admin/settings", { gmaps: pick("gm"), review: pick("rv"), whatsapp: pick("wa") }); $("#links-ok").hidden = false; } catch (ex) { $("#links-err").textContent = ex.message; $("#links-err").hidden = false; } });
 $("#pw-form").addEventListener("submit", async (e) => { e.preventDefault(); $("#pw-ok").hidden = true; $("#pw-err").hidden = true; try { await ZenAPI("POST", "/api/admin/password", { current: $("#pw-cur").value, password: $("#pw-new").value }); $("#pw-ok").hidden = false; e.target.reset(); } catch (ex) { $("#pw-err").textContent = ex.message; $("#pw-err").hidden = false; } });
 $("#admin-form").addEventListener("submit", async (e) => { e.preventDefault(); $("#admin-err").hidden = true; try { await ZenAPI("POST", "/api/admin/admins", { name: $("#n-name").value.trim(), email: $("#n-email").value.trim(), role: $("#n-role").value, password: $("#n-pass").value }); e.target.reset(); loadSettings(); } catch (ex) { $("#admin-err").textContent = ex.message; $("#admin-err").hidden = false; } });
 
 /* ---------- tabs, login ---------- */
-$$(".tabs button").forEach((b) => b.addEventListener("click", () => { $$(".tabs button").forEach((x) => x.setAttribute("aria-selected", x === b)); ["overview", "bookings", "clients", "settings"].forEach((t) => ($("#tab-" + t).hidden = t !== b.dataset.tab)); closeDrawer(); ({ overview: loadOverview, bookings: loadBookings, clients: loadClients, settings: loadSettings })[b.dataset.tab](); }));
+$$(".tabs button").forEach((b) => b.addEventListener("click", () => { $$(".tabs button").forEach((x) => x.setAttribute("aria-selected", x === b)); ["overview", "bookings", "clients", "calendar", "team", "offers", "review", "settings"].forEach((t) => ($("#tab-" + t).hidden = t !== b.dataset.tab)); closeDrawer(); ({ overview: loadOverview, bookings: loadBookings, clients: loadClients, calendar: loadCalendar, team: loadTeamTab, offers: loadOffers, review: loadReview, settings: loadSettings })[b.dataset.tab](); }));
 $("#login-form").addEventListener("submit", async (e) => { e.preventDefault(); const err = $("#login-err"); err.hidden = true; $("#login-btn").disabled = true; try { await ZenAPI("POST", "/api/admin/login", { email: $("#a-email").value.trim(), password: $("#a-pass").value }); start(await ZenAPI("GET", "/api/admin/me")); } catch (ex) { err.textContent = ex.message; err.hidden = false; } finally { $("#login-btn").disabled = false; } });
 $$("#demo-login [data-role]").forEach((b) => b.addEventListener("click", async () => { await ZenAPI("POST", "/api/admin/demo-login", { role: b.dataset.role }); start(await ZenAPI("GET", "/api/admin/me")); }));
 $("#signout").addEventListener("click", async (e) => { e.preventDefault(); await ZenAPI("POST", "/api/admin/logout").catch(() => {}); location.reload(); });

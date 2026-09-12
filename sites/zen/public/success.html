@@ -34,6 +34,15 @@
 <script src="/i18n.js"></script>
 <script src="/guide.js"></script>
 <script>document.getElementById("prep").innerHTML = ZenGuide.ADVICE.before.general.slice(0, 5).map((t) => "<li>" + t + "</li>").join("");</script>
-<script>if (new URLSearchParams(location.search).get("free")) document.getElementById("msg").textContent = "Your free session is reserved and a confirmation is on its way to your inbox. Zen will message you on WhatsApp to agree the exact hour."; ZenI18n.apply();</script>
+<script>
+(function () {
+  const q = new URLSearchParams(location.search), msg = document.getElementById("msg"), h1 = document.querySelector("h1"), prep = document.querySelector(".prep");
+  if (q.get("free")) msg.textContent = "Your free session is reserved and a confirmation is on its way to your inbox. Zen will message you on WhatsApp to agree the exact hour.";
+  if (q.get("review")) { h1.textContent = "Sent. A therapist will look first."; msg.textContent = "Nothing has been charged. Because of what you told us about your health, a therapist reads your answers before confirming — usually the same day. You'll get an email and a WhatsApp, and you pay at the session."; }
+  if (q.get("gift")) { h1.textContent = "Sent. That's a good gift."; msg.textContent = "Your payment went through. The gift code is on its way by email — to you, and to them if you gave us their address. They book whenever they like."; prep.hidden = true; document.querySelector("main > a").textContent = "Back to Zen Recovery"; document.querySelector("main > a").href = "/"; }
+  if (q.get("package")) { h1.textContent = "Your pack is ready."; msg.textContent = "Your sessions are in your account. When you book, pick \"Use my pack\" and there's nothing to pay."; prep.hidden = true; }
+  ZenI18n.apply();
+})();
+</script>
 </body>
 </html>
