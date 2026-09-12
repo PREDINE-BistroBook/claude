@@ -43,7 +43,9 @@
   .chart-note{font-size:.8rem;color:var(--ink-mute);margin-top:8px}
   .settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   .count{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--bad);color:#fff;font-size:.7rem;font-weight:600;margin-left:6px}
-  .days{display:flex;gap:6px;flex-wrap:wrap} .days label{display:inline-flex;align-items:center;gap:5px;padding:6px 10px;border:1.5px solid var(--line);border-radius:999px;font-size:.84rem;cursor:pointer;background:var(--ground-3)} .days label:has(input:checked){background:var(--ink);color:var(--ground);border-color:var(--ink)}
+  .days{display:flex;gap:6px;flex-wrap:wrap} .days label{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border:1.5px solid var(--line);border-radius:999px;font-size:.84rem;cursor:pointer;background:var(--ground-3);white-space:nowrap}
+  .days input{width:14px;height:14px}
+  @media (max-width:640px){.charts{grid-template-columns:1fr} .settings-grid{grid-template-columns:1fr} .team-card{flex-wrap:wrap} .review-item .row{align-items:stretch} .subtabs .pill{flex:1;text-align:center}} .days label:has(input:checked){background:var(--ink);color:var(--ground);border-color:var(--ink)}
   .team-card{display:flex;gap:14px;align-items:center;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--ground-3)} .team-card .avatar{width:56px;height:56px;font-size:1rem}
   .team-card .meta{flex:1;display:grid;gap:2px;font-size:.9rem} .team-card .meta b{font-weight:500}
   .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin:8px 0} .gallery figure{margin:0;display:grid;gap:3px;position:relative} .gallery img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;background:var(--ground-2)} .gallery figcaption{font-size:.72rem;color:var(--ink-soft)} .gallery .x{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.6);color:#fff;border:0;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:.8rem}

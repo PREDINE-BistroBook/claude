@@ -69,6 +69,10 @@ p{margin:0} a{color:inherit} button{font:inherit;color:inherit}
 .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--mark);box-shadow:0 0 0 3px var(--mark-glow)}
 .field textarea{min-height:90px;resize:vertical}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.row>.field{align-self:flex-end}
+.field input[type=checkbox],.field input[type=radio],.days input,.check input{width:auto;padding:0;margin:0;accent-color:var(--mark)}
+select{max-width:100%}
+input[type=date],input[type=time]{min-width:0;-webkit-appearance:none;appearance:none}
 .err{color:var(--bad);font-size:.9rem} .ok{color:var(--good);font-size:.9rem}
 .filters{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:14px}
 .filters .field{min-width:150px}
@@ -125,6 +129,22 @@ dialog .inner{padding:26px;display:grid;gap:14px}
 .drawer.open{transform:none}
 .banner{padding:8px var(--gutter);background:var(--ink);color:var(--ground);font-size:.8rem;text-align:center}
 .empty{padding:36px;text-align:center;color:var(--ink-soft)}
+/* phones: side-by-side fields stack, drawers and dialogs use the whole width */
+@media (max-width:640px){
+  .row>.field,.filters>.field,.filters>button,.filters>.err{flex:1 1 100%!important;min-width:0}
+  .row>.field{align-self:stretch}
+  .row>select,.row>input:not([type=checkbox]):not([type=file]){flex:1 1 100%;min-width:0}
+  .drawer{width:100vw;padding:18px;padding-top:56px}
+  .drawer .close{top:12px}
+  dialog{max-width:100vw;border-radius:16px}
+  dialog .inner{padding:18px}
+  .card{padding:16px}
+  .wrap{padding-inline:14px}
+  .top{padding-inline:14px;gap:10px}
+  .top .who{gap:8px;font-size:.86rem}
+  .kpi .value{font-size:1.5rem}
+  th,td{padding:9px 10px}
+}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 
 /* language switch + RTL + Arabic */
