@@ -41,13 +41,16 @@
   .start{display:grid;gap:10px;padding:20px;border-radius:var(--radius);background:var(--ink);color:var(--ground);margin-bottom:16px}
   .start ol{margin:0;padding-left:18px;display:grid;gap:6px;font-size:.92rem} .start a{color:var(--mark-soft)}
   .chart-note{font-size:.8rem;color:var(--ink-mute);margin-top:8px}
-  .settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px} .settings-grid>*{min-width:0} /* a wide table inside a card scrolls, it never widens the page */
   .count{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--bad);color:#fff;font-size:.7rem;font-weight:600;margin-left:6px}
   .days{display:flex;gap:6px;flex-wrap:wrap} .days label{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border:1.5px solid var(--line);border-radius:999px;font-size:.84rem;cursor:pointer;background:var(--ground-3);white-space:nowrap}
   .days input{width:14px;height:14px}
   @media (max-width:640px){.charts{grid-template-columns:1fr} .settings-grid{grid-template-columns:1fr} .team-card{flex-wrap:wrap} .review-item .row{align-items:stretch} .subtabs .pill{flex:1;text-align:center}} .days label:has(input:checked){background:var(--ink);color:var(--ground);border-color:var(--ink)}
-  .team-card{display:flex;gap:14px;align-items:center;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--ground-3)} .team-card .avatar{width:56px;height:56px;font-size:1rem}
-  .team-card .meta{flex:1;display:grid;gap:2px;font-size:.9rem} .team-card .meta b{font-weight:500}
+  .team-card{display:flex;gap:16px;align-items:center;padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--ground-3);cursor:pointer;transition:border-color .15s,transform .15s} .team-card:hover{border-color:var(--mark);transform:translateY(-1px)} .team-card .avatar{width:72px;height:72px;font-size:1.2rem;flex:none;box-shadow:0 6px 16px -8px rgba(0,0,0,.35)}
+  .team-card .meta{flex:1;display:grid;gap:3px;font-size:.9rem;min-width:0} .team-card .meta b{font-weight:500;font-size:1rem;display:flex;gap:8px;align-items:center;flex-wrap:wrap} .team-card .meta .bio{color:var(--ink-soft)} .team-card .meta .tiny{color:var(--ink-mute)}
+  .team-card.off{opacity:.65} .team-card .actions{flex:none}
+  .photo-pick{display:flex;gap:16px;align-items:center} .photo-pick .avatar.lg{cursor:pointer;position:relative;overflow:hidden} .photo-pick .avatar.lg::after{content:"Change";position:absolute;inset:auto 0 0 0;padding:4px 0;text-align:center;font:500 .66rem var(--body);background:rgba(0,0,0,.45);color:#fff;letter-spacing:.04em;text-transform:uppercase} .photo-pick input[type=file]{display:none}
+  #dlg-ask .inner{gap:10px} #dlg-ask p{margin:0;color:var(--ink-soft);font-size:.95rem}
   .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin:8px 0} .gallery figure{margin:0;display:grid;gap:3px;position:relative} .gallery img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;background:var(--ground-2)} .gallery figcaption{font-size:.72rem;color:var(--ink-soft)} .gallery .x{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.6);color:#fff;border:0;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:.8rem}
   .review-item{display:grid;gap:8px;padding:16px;border:1px solid color-mix(in srgb,var(--bad) 40%,transparent);border-radius:14px;background:color-mix(in srgb,var(--bad) 5%,var(--ground-3))}
   .slot-chips{display:flex;gap:6px;flex-wrap:wrap} .slot-chips span{padding:5px 10px;border-radius:999px;background:var(--ground-2);font-family:var(--mono);font-size:.82rem}
@@ -231,7 +234,7 @@
 
     <!-- team -->
     <div id="tab-team" hidden>
-      <div class="section-head"><h2>Team</h2></div>
+      <div class="section-head"><h2>Team</h2><button class="btn small" id="add-therapist">Add a therapist</button></div>
       <details class="help"><summary>Why add therapists</summary>
         <ul>
           <li>Clients see the team on the booking page, can pick a favourite, and their preferred therapist is preselected next time.</li>
@@ -239,15 +242,8 @@
           <li>This is the public profile only. Sign-in accounts for the team are under Settings → Who can sign in.</li>
         </ul>
       </details>
+      <p class="tiny" style="margin:-6px 0 12px">Tap a person to edit their photo, name, bio, languages or order on the website.</p>
       <div class="grid cols-2" id="team-list" style="margin-bottom:18px"></div>
-      <div class="card">
-        <h3>Add a therapist</h3>
-        <form id="team-form" class="grid" style="gap:12px">
-          <div class="row"><div class="field" id="th-city-wrap" style="flex:1"><label for="th-city">City</label><select id="th-city"></select></div><div class="field" style="flex:2"><label for="th-name">Name</label><input id="th-name" required></div></div>
-          <div class="row"><div class="field" style="flex:2"><label for="th-bio">One line about them</label><input id="th-bio" placeholder="Sports massage and cupping, 8 years"></div><div class="field" style="flex:1"><label for="th-langs">Languages</label><input id="th-langs" placeholder="Arabic, English"></div><div class="field" style="flex:1"><label for="th-photo">Photo</label><input id="th-photo" type="file" accept="image/*"></div></div>
-          <div class="row"><button class="btn small" type="submit">Add</button><span class="err" id="team-err" hidden></span></div>
-        </form>
-      </div>
     </div>
 
     <!-- offers: packs, partners, gifts -->
@@ -396,6 +392,31 @@
     <label class="row" style="gap:8px;font-size:.92rem"><input type="checkbox" id="sv-active" checked> Shown on the website</label>
     <p class="err" id="sv-err" hidden></p>
     <div class="row" style="justify-content:flex-end"><button class="btn small ghost" type="button" id="sv-cancel">Cancel</button><button class="btn small" type="submit">Save</button></div>
+  </form>
+</dialog>
+
+<!-- therapist -->
+<dialog id="dlg-th">
+  <form class="inner" id="th-form" method="dialog" novalidate>
+    <h3 id="th-title">Add a therapist</h3>
+    <div class="photo-pick"><label class="avatar lg" id="th-preview" for="th-photo" title="Change photo"></label><input id="th-photo" type="file" accept="image/*"><div class="grid" style="gap:6px"><span class="tiny">Square photo works best. It's resized before upload and shown on the booking page.</span><div class="row"><label class="btn small ghost" for="th-photo">Upload photo</label><button class="btn small ghost" type="button" id="th-photo-remove">Remove</button></div></div></div>
+    <div class="row"><div class="field" style="flex:1" id="th-city-wrap"><label for="th-city">City</label><select id="th-city"></select></div><div class="field" style="flex:2"><label for="th-name">Name <span class="tiny">(as clients see it)</span></label><input id="th-name" required placeholder="Hesham"></div></div>
+    <div class="field"><label for="th-bio">About them <span class="tiny">(one or two lines, shown to clients)</span></label><textarea id="th-bio" rows="2" placeholder="Sports massage and cupping, 8 years. Trained in Cairo."></textarea></div>
+    <div class="row"><div class="field" style="flex:2"><label for="th-langs">Languages</label><input id="th-langs" placeholder="Arabic, English"></div><div class="field" style="flex:1"><label for="th-sort">Order on the site <span class="tiny">(1 = first)</span></label><input id="th-sort" type="number" min="1" max="99" value="1"></div></div>
+    <label class="row" style="gap:8px;font-size:.92rem"><input type="checkbox" id="th-active" checked> Shown on the website and bookable</label>
+    <p class="err" id="th-err" hidden></p>
+    <div class="row" style="justify-content:space-between"><button class="btn small ghost danger" type="button" id="th-remove" hidden>Remove from team</button><span class="row" style="margin-left:auto"><button class="btn small ghost" type="button" id="th-cancel">Cancel</button><button class="btn small" type="submit" id="th-save">Save</button></span></div>
+  </form>
+</dialog>
+
+<!-- in-page confirm (replaces the browser's pop-ups) -->
+<dialog id="dlg-ask">
+  <form class="inner" method="dialog">
+    <h3 id="ask-title"></h3>
+    <p id="ask-text"></p>
+    <div class="field" id="ask-field" hidden><label for="ask-input" id="ask-label"></label><input id="ask-input" autocomplete="off"><span class="tiny" id="ask-hint"></span></div>
+    <p class="err" id="ask-err" hidden></p>
+    <div class="row" style="justify-content:flex-end"><button class="btn small ghost" type="button" id="ask-no">Cancel</button><button class="btn small" type="submit" id="ask-yes">OK</button></div>
   </form>
 </dialog>
 
@@ -630,6 +651,20 @@ async function loadClients() {
   tb.querySelectorAll("tr.click").forEach((tr) => tr.addEventListener("click", () => openClient(tr.dataset.id)));
 }
 const initials = (n) => (n || "?").split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+// In-page confirm / single-field prompt. Resolves with true (or the typed value) on OK, null on cancel.
+function ask({ title, text = "", ok = "OK", danger = false, field = null }) {
+  return new Promise((resolve) => {
+    const d = $("#dlg-ask"); $("#ask-title").textContent = title; $("#ask-text").textContent = text; $("#ask-text").hidden = !text; $("#ask-err").hidden = true;
+    const yes = $("#ask-yes"); yes.textContent = ok; yes.className = "btn small" + (danger ? " danger" : "");
+    $("#ask-field").hidden = !field; if (field) { $("#ask-label").textContent = field.label; $("#ask-hint").textContent = field.hint || ""; $("#ask-input").type = field.type || "text"; $("#ask-input").value = field.value || ""; $("#ask-input").placeholder = field.placeholder || ""; }
+    // Esc fires "cancel" synchronously; the "close" event is queued and would leak into the next ask(), so it isn't used.
+    const done = (v) => { d.removeEventListener("cancel", onCancel); if (d.open) d.close(); resolve(v); };
+    const onCancel = (e) => { e.preventDefault(); done(null); };
+    $("#ask-no").onclick = () => done(null);
+    d.querySelector("form").onsubmit = (e) => { e.preventDefault(); if (field) { const v = $("#ask-input").value; const bad = field.validate?.(v); if (bad) { $("#ask-err").textContent = bad; $("#ask-err").hidden = false; return; } done(v); } else done(true); };
+    d.addEventListener("cancel", onCancel); d.showModal(); if (field) $("#ask-input").focus();
+  });
+}
 async function openClient(id) {
   const { client: c, bookings, credits, checkins = [], packages = [], photos = [], messages = [] } = await ZenAPI("GET", "/api/admin/clients/" + id);
   const d = $("#drawer");
@@ -658,7 +693,7 @@ async function openClient(id) {
   const ap = $("#dr-approve"); if (ap) ap.onclick = async () => { await ZenAPI("POST", `/api/admin/clients/${id}/approve`); refreshReviewCount(); openClient(id); };
   $("#photo-form").onsubmit = async (e) => { e.preventDefault(); const f = $("#ph-file").files[0]; const err = $("#ph-err"); err.hidden = true; if (!f) { err.textContent = "Pick a photo first."; err.hidden = false; return; }
     try { const data = await shrink(f, 1280, .8); await ZenAPI("POST", "/api/admin/photos", { user_id: id, kind: $("#ph-kind").value, note: $("#ph-note").value.trim(), consent: $("#ph-consent").checked, data }); openClient(id); } catch (ex) { err.textContent = ex.message; err.hidden = false; } };
-  $$("#dr-gallery [data-del-photo]").forEach((b) => (b.onclick = async () => { if (confirm("Delete this photo?")) { await ZenAPI("DELETE", "/api/admin/photos/" + b.dataset.delPhoto); openClient(id); } }));
+  $$("#dr-gallery [data-del-photo]").forEach((b) => (b.onclick = async () => { if (await ask({ title: "Delete this photo?", text: "It's removed from the client's file for good.", ok: "Delete", danger: true })) { await ZenAPI("DELETE", "/api/admin/photos/" + b.dataset.delPhoto); openClient(id); } }));
 }
 function shrink(file, max, q) { return new Promise((res, rej) => { const img = new Image(); img.onload = () => { const r = Math.min(1, max / Math.max(img.width, img.height)); const c = document.createElement("canvas"); c.width = Math.round(img.width * r); c.height = Math.round(img.height * r); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(img.src); res(c.toDataURL("image/jpeg", q)); }; img.onerror = () => rej(new Error("That file isn't an image we can read.")); img.src = URL.createObjectURL(file); }); }
 
@@ -685,14 +720,31 @@ $("#pv-go").addEventListener("click", async () => { const r = await ZenAPI("GET"
 /* ---------- team ---------- */
 async function loadTeamTab() {
   await loadTeamList();
-  $("#team-list").innerHTML = TEAM.length ? TEAM.map((t) => `<div class="team-card"><span class="avatar">${t.photo ? `<img src="${t.photo}" alt="">` : initials(t.name)}</span><div class="meta"><b>${esc(t.name)} <span class="badge city-${t.city}">${CITY_NAME[t.city]}</span>${t.active ? "" : ` <span class="status cancelled">paused</span>`}</b><span>${esc(t.bio || "")}</span><span class="tiny">${esc(t.languages || "")}</span></div><div class="actions"><button class="btn ghost" data-edit="${t.id}">Edit</button><button class="btn ghost" data-toggle="${t.id}" data-active="${t.active}">${t.active ? "Pause" : "Activate"}</button><button class="btn ghost danger" data-remove="${t.id}">Remove</button></div></div>`).join("") : `<div class="empty">No therapists yet. Add the team so clients can see who they'll meet.</div>`;
-  $$("#team-list [data-toggle]").forEach((b) => (b.onclick = async () => { await ZenAPI("PATCH", "/api/admin/therapists/" + b.dataset.toggle, { active: b.dataset.active !== "1" }); loadTeamTab(); }));
-  $$("#team-list [data-remove]").forEach((b) => (b.onclick = async () => { if (confirm("Remove this therapist from the site? Past bookings keep their name.")) { await ZenAPI("DELETE", "/api/admin/therapists/" + b.dataset.remove); loadTeamTab(); } }));
-  $$("#team-list [data-edit]").forEach((b) => (b.onclick = async () => { const t = TEAM.find((x) => x.id === b.dataset.edit); const name = prompt("Name", t.name); if (name === null) return; const bio = prompt("One line about them", t.bio || ""); if (bio === null) return; const languages = prompt("Languages", t.languages || ""); if (languages === null) return; await ZenAPI("PATCH", "/api/admin/therapists/" + t.id, { name, bio, languages }); loadTeamTab(); }));
+  const sorted = [...TEAM].sort((a, b) => a.city.localeCompare(b.city) || (a.sort || 0) - (b.sort || 0) || a.name.localeCompare(b.name));
+  $("#team-list").innerHTML = sorted.length ? sorted.map((t) => `<div class="team-card ${t.active ? "" : "off"}" data-edit="${t.id}" role="button" tabindex="0"><span class="avatar">${t.photo ? `<img src="${t.photo}" alt="">` : initials(t.name)}</span><div class="meta"><b>${esc(t.name)}<span class="badge city-${t.city}">${CITY_NAME[t.city]}</span>${t.active ? "" : `<span class="status cancelled">paused</span>`}</b><span class="bio">${esc(t.bio || "")}</span><span class="tiny">${esc(t.languages || "")}${t.photo ? "" : " · no photo yet"}</span></div><div class="actions"><button class="btn ghost" data-edit="${t.id}">Edit</button><button class="btn ghost" data-toggle="${t.id}" data-active="${t.active}">${t.active ? "Pause" : "Show"}</button></div></div>`).join("") : `<div class="empty">No therapists yet. Tap "Add a therapist" so clients can see who they'll meet.</div>`;
+  $$("#team-list [data-toggle]").forEach((b) => (b.onclick = async (e) => { e.stopPropagation(); await ZenAPI("PATCH", "/api/admin/therapists/" + b.dataset.toggle, { active: b.dataset.active !== "1" }); loadTeamTab(); }));
+  $$("#team-list [data-edit]").forEach((el) => { const open = (e) => { e.stopPropagation(); openTherapist(TEAM.find((x) => x.id === el.dataset.edit)); }; el.onclick = open; if (el.tagName === "DIV") el.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(e); } }; });
 }
-$("#team-form").addEventListener("submit", async (e) => { e.preventDefault(); const err = $("#team-err"); err.hidden = true;
-  try { const f = $("#th-photo").files[0]; const photo = f ? await shrink(f, 256, .82) : undefined; await ZenAPI("POST", "/api/admin/therapists", { city: $("#th-city").value, name: $("#th-name").value.trim(), bio: $("#th-bio").value.trim(), languages: $("#th-langs").value.trim(), photo }); e.target.reset(); loadTeamTab(); }
-  catch (ex) { err.textContent = ex.message; err.hidden = false; } });
+let thPhoto;
+function renderThPreview(t) { const src = thPhoto === undefined ? t?.photo : thPhoto; $("#th-preview").innerHTML = src ? `<img src="${src}" alt="" style="width:100%;height:100%;object-fit:cover">` : initials($("#th-name").value || t?.name || "?"); }
+function openTherapist(t) {
+  const d = $("#dlg-th"), cityKeys = isOwner() ? Object.keys(CITY_NAME) : [A.role];
+  $("#th-title").textContent = t ? "Edit " + t.name : "Add a therapist";
+  $("#th-city").innerHTML = cityKeys.map((k) => `<option value="${k}" ${t?.city === k ? "selected" : ""}>${CITY_NAME[k]}</option>`).join(""); $("#th-city").disabled = Boolean(t); $("#th-city-wrap").hidden = !isOwner() && !t;
+  $("#th-name").value = t?.name || ""; $("#th-bio").value = t?.bio || ""; $("#th-langs").value = t?.languages || ""; $("#th-sort").value = t ? (t.sort || 0) + 1 : TEAM.filter((x) => x.city === cityKeys[0]).length + 1; $("#th-active").checked = t ? t.active === 1 : true;
+  $("#th-remove").hidden = !t; $("#th-err").hidden = true; d.dataset.id = t?.id || ""; thPhoto = undefined; $("#th-photo").value = ""; renderThPreview(t); d.showModal();
+}
+$("#add-therapist").addEventListener("click", () => openTherapist(null));
+$("#th-name").addEventListener("input", () => { if (!$("#th-preview img")) renderThPreview(TEAM.find((x) => x.id === $("#dlg-th").dataset.id)); });
+$("#th-photo").addEventListener("change", async (e) => { const f = e.target.files[0]; if (!f) return; try { thPhoto = await shrink(f, 512, .84); renderThPreview(); } catch (ex) { $("#th-err").textContent = ex.message; $("#th-err").hidden = false; } });
+$("#th-photo-remove").addEventListener("click", () => { thPhoto = null; $("#th-photo").value = ""; renderThPreview(); });
+$("#th-cancel").addEventListener("click", () => $("#dlg-th").close());
+$("#th-remove").addEventListener("click", async () => { const id = $("#dlg-th").dataset.id; const t = TEAM.find((x) => x.id === id); if (!(await ask({ title: `Remove ${t?.name || "this therapist"} from the team?`, text: "They disappear from the booking page. Past bookings keep their name. To hide someone for a while, use Pause instead.", ok: "Remove", danger: true }))) return;
+  try { await ZenAPI("DELETE", "/api/admin/therapists/" + id); $("#dlg-th").close(); loadTeamTab(); } catch (ex) { $("#th-err").textContent = ex.message; $("#th-err").hidden = false; } });
+$("#th-form").addEventListener("submit", async (e) => { e.preventDefault(); const d = $("#dlg-th"), err = $("#th-err"); err.hidden = true; $("#th-save").disabled = true;
+  const body = { city: $("#th-city").value, name: $("#th-name").value.trim(), bio: $("#th-bio").value.trim(), languages: $("#th-langs").value.trim(), sort: Math.max(0, (Number($("#th-sort").value) || 1) - 1), active: $("#th-active").checked }; if (thPhoto !== undefined) body.photo = thPhoto;
+  try { if (!body.name) throw new Error("Give them a name."); if (d.dataset.id) await ZenAPI("PATCH", "/api/admin/therapists/" + d.dataset.id, body); else await ZenAPI("POST", "/api/admin/therapists", body); d.close(); loadTeamTab(); }
+  catch (ex) { err.textContent = ex.message; err.hidden = false; } finally { $("#th-save").disabled = false; } });
 
 /* ---------- offers: packs, partners, gifts ---------- */
 $$(".subtabs .pill").forEach((p) => p.addEventListener("click", () => { $$(".subtabs .pill").forEach((x) => x.setAttribute("aria-pressed", x === p)); ["packs", "partners", "gifts"].forEach((k) => ($("#sub-" + k).hidden = k !== p.dataset.sub)); }));
@@ -702,11 +754,11 @@ async function loadOffers() {
   $("#sold-table tbody").innerHTML = sold.rows.length ? sold.rows.map((p) => `<tr><td>${esc(p.user_name)}<div class="tiny">${esc(p.user_email)}</div></td><td>${CITY_NAME[p.city]}</td><td>${esc(p.name)}</td><td class="num">${p.remaining}/${p.sessions}</td><td class="num">${money(p.amount, p.currency)}${p.platform_fee ? `<div class="tiny">fee ${money(p.platform_fee, p.currency)}</div>` : ""}</td><td class="num">${p.expires_at || "—"}</td></tr>`).join("") : `<tr><td colspan="6" class="empty">None sold yet.</td></tr>`;
   $("#gifts-table tbody").innerHTML = gf.rows.length ? gf.rows.map((g) => `<tr><td class="num">${esc(g.code)}</td><td>${CITY_NAME[g.city]}</td><td>${esc(g.service_name.split(" · ")[0])}</td><td class="num">${money(g.amount, g.currency)}</td><td>${esc(g.buyer_name)}<div class="tiny">${esc(g.buyer_email)}</div></td><td>${esc(g.recipient_name)}<div class="tiny">${esc(g.recipient_email || "")}</div></td><td><span class="status ${g.status === "paid" ? "confirmed" : g.status === "redeemed" ? "done" : "cancelled"}">${g.status === "paid" ? "unused" : g.status}</span></td><td class="num">${esc((g.paid_at || g.created_at || "").slice(0, 10))}</td></tr>`).join("") : `<tr><td colspan="8" class="empty">No gifts sold yet.</td></tr>`;
   $$("[data-pk-toggle]").forEach((b) => (b.onclick = async () => { await ZenAPI("PATCH", "/api/admin/packages/" + b.dataset.pkToggle, { active: b.dataset.active !== "1" }); loadOffers(); }));
-  $$("[data-pk-del]").forEach((b) => (b.onclick = async () => { if (confirm("Remove this pack from sale? Packs already bought stay valid.")) { await ZenAPI("DELETE", "/api/admin/packages/" + b.dataset.pkDel); loadOffers(); } }));
+  $$("[data-pk-del]").forEach((b) => (b.onclick = async () => { if (await ask({ title: "Remove this pack from sale?", text: "Packs already bought stay valid.", ok: "Remove", danger: true })) { await ZenAPI("DELETE", "/api/admin/packages/" + b.dataset.pkDel); loadOffers(); } }));
   if (isOwner()) { const { rows } = await ZenAPI("GET", "/api/admin/partners");
     $("#partners-table tbody").innerHTML = rows.length ? rows.map((p) => `<tr><td class="num"><b>${esc(p.code)}</b></td><td>${esc(p.name)}${p.active ? "" : ` <span class="status cancelled">paused</span>`}</td><td>${p.city ? CITY_NAME[p.city] : "all"}</td><td class="num">${p.pct}%</td><td class="num">${p.bookings}</td><td class="num">${p.this_month}</td><td class="num">${p.revenue ? p.revenue : "—"}</td><td class="num">${p.last_booking ? fmtDate(p.last_booking) : "—"}</td><td><div class="actions"><button class="btn ghost" data-pa-toggle="${p.id}" data-active="${p.active}">${p.active ? "Pause" : "Activate"}</button><button class="btn ghost danger" data-pa-del="${p.id}">Remove</button></div></td></tr>`).join("") : `<tr><td colspan="9" class="empty">No partner codes yet.</td></tr>`;
     $$("[data-pa-toggle]").forEach((b) => (b.onclick = async () => { await ZenAPI("PATCH", "/api/admin/partners/" + b.dataset.paToggle, { active: b.dataset.active !== "1" }); loadOffers(); }));
-    $$("[data-pa-del]").forEach((b) => (b.onclick = async () => { if (confirm("Remove this code?")) { await ZenAPI("DELETE", "/api/admin/partners/" + b.dataset.paDel); loadOffers(); } }));
+    $$("[data-pa-del]").forEach((b) => (b.onclick = async () => { if (await ask({ title: "Remove this partner code?", text: "Bookings that used it keep their record.", ok: "Remove", danger: true })) { await ZenAPI("DELETE", "/api/admin/partners/" + b.dataset.paDel); loadOffers(); } }));
   } else { $("#sub-partners").innerHTML = `<div class="empty">Partner codes are managed by the owner.</div>`; $("#partner-form")?.remove(); }
 }
 $("#pack-form").addEventListener("submit", async (e) => { e.preventDefault(); const err = $("#pack-err"); err.hidden = true;
@@ -726,7 +778,7 @@ async function loadReview() {
     <div class="row"><a class="btn small ghost" href="https://wa.me/${(b.phone || "").replace(/\D/g, "")}" target="_blank" rel="noopener">WhatsApp ${esc(b.phone || "")}</a><span class="tiny">${esc(b.email || "")}</span><span style="flex:1"></span><button class="btn small" data-ok="${b.id}">Approve · confirm booking</button><button class="btn small danger" data-no="${b.id}">Cancel</button></div></div>`).join("") : `<div class="empty">Nothing waiting. Good.</div>`;
   $("#review-clients tbody").innerHTML = r.clients.length ? r.clients.map((c) => `<tr><td>${esc(c.name)}<div class="tiny">${esc(c.phone || c.email)}</div></td><td>${c.flags.map((f) => `<span class="flag">${G.label("health", f)}</span>`).join(" ")}</td><td class="tiny">${esc(c.health_notes || "")}</td><td>${c.nearest_city ? CITY_NAME[c.nearest_city] : "—"}</td><td><button class="btn small ghost" data-approve="${c.id}">Approve</button></td></tr>`).join("") : `<tr><td colspan="5" class="empty">Nobody waiting.</td></tr>`;
   $$("#review-bookings [data-ok]").forEach((b) => (b.onclick = async () => { await ZenAPI("PATCH", "/api/admin/bookings/" + b.dataset.ok, { status: "confirmed" }); loadReview(); }));
-  $$("#review-bookings [data-no]").forEach((b) => (b.onclick = async () => { if (confirm("Cancel this booking? Tell the client why on WhatsApp.")) { await ZenAPI("PATCH", "/api/admin/bookings/" + b.dataset.no, { status: "cancelled" }); loadReview(); } }));
+  $$("#review-bookings [data-no]").forEach((b) => (b.onclick = async () => { if (await ask({ title: "Cancel this booking?", text: "Nothing was charged. Tell the client on WhatsApp why, and what they can book instead.", ok: "Cancel booking", danger: true })) { await ZenAPI("PATCH", "/api/admin/bookings/" + b.dataset.no, { status: "cancelled" }); loadReview(); } }));
   $$("#review-clients [data-approve]").forEach((b) => (b.onclick = async () => { await ZenAPI("POST", `/api/admin/clients/${b.dataset.approve}/approve`); loadReview(); }));
 }
 let tc; $("#c-q").addEventListener("input", () => { clearTimeout(tc); tc = setTimeout(loadClients, 250); });
@@ -736,9 +788,9 @@ async function loadSettings() {
   $("#s-every").value = SETTINGS.loyalty_every; $("#s-pct").value = SETTINGS.referral_pct; $("#s-bday").value = SETTINGS.birthday_pct ?? 50; $("#s-fee").textContent = SETTINGS.platform_fee_pct + "%";
   if (isOwner()) $("#links-form").innerHTML = Object.keys(CITY_NAME).map((k) => `<b style="font-size:.9rem">${CITY_NAME[k]}</b><div class="row"><div class="field" style="flex:1"><label for="lk-gm-${k}">Google Maps link</label><input id="lk-gm-${k}" type="url" placeholder="https://maps.app.goo.gl/…" value="${esc(SETTINGS.gmaps?.[k] || "")}"></div><div class="field" style="flex:1"><label for="lk-rv-${k}">Google review link</label><input id="lk-rv-${k}" type="url" placeholder="https://g.page/r/…/review" value="${esc(SETTINGS.review?.[k] || "")}"></div><div class="field" style="flex:1"><label for="lk-wa-${k}">WhatsApp number</label><input id="lk-wa-${k}" placeholder="+20 …" value="${esc(SETTINGS.whatsapp?.[k] || "")}"></div></div><div class="row"><div class="field" style="flex:2"><label for="lk-ad-${k}">Address <span class="tiny">(one line per row, shown on the booking page)</span></label><textarea id="lk-ad-${k}" rows="3" placeholder="Zen Recovery · ${CITY_NAME[k]}&#10;Street and number&#10;Area">${esc(SETTINGS.address?.[k] || "")}</textarea></div><div class="field" style="flex:1"><label for="lk-tm-${k}">Team line</label><input id="lk-tm-${k}" placeholder="Shaarawy — manual therapy & cupping" value="${esc(SETTINGS.team?.[k] || "")}"></div></div>`).join("");
   if (isOwner()) { const { admins } = await ZenAPI("GET", "/api/admin/admins"); $("#admins-table tbody").innerHTML = admins.map((a) => `<tr><td><span class="row" style="gap:8px"><span class="avatar" style="width:28px;height:28px;font-size:.7rem">${a.photo ? `<img src="${a.photo}" alt="">` : initials(a.name)}</span>${esc(a.name)}${a.phone ? `<span class="tiny">${esc(a.phone)}</span>` : ""}</span></td><td>${esc(a.email)}<div class="tiny">${a.notify ? "gets booking emails" : "no booking emails"}</div></td><td>${a.id === A.id ? `<span class="badge all">All cities</span>` : a.role === "platform" ? `<span class="badge all">Amico Mio · numbers only</span>` : `<select data-role="${a.id}" style="font:inherit;font-size:.85rem;padding:5px 8px;border:1px solid var(--line);border-radius:8px">${[["all", "All cities (owner)"], ["cairo", "Cairo only"], ["dahab", "Dahab only"], ["florence", "Florence only"]].map(([v, l]) => `<option value="${v}" ${a.role === v ? "selected" : ""}>${l}</option>`).join("")}</select>`}</td><td class="tiny">${a.last_login ? esc(a.last_login.slice(0, 10)) : "never"}</td><td>${a.id === A.id ? "<span class='tiny'>you</span>" : a.role === "platform" ? "<span class='tiny'>managed by Amico Mio</span>" : `<div class="actions"><button class="btn ghost" data-pw="${a.id}">New password</button><button class="btn ghost danger" data-del="${a.id}">Remove</button></div>`}</td></tr>`).join("");
-    $$("#admins-table [data-del]").forEach((b) => b.addEventListener("click", async () => { if (confirm("Remove this admin's access?")) { await ZenAPI("DELETE", "/api/admin/admins/" + b.dataset.del); loadSettings(); } }));
+    $$("#admins-table [data-del]").forEach((b) => b.addEventListener("click", async () => { if (await ask({ title: "Remove this admin's access?", text: "They're signed out at once and can't sign in again. You can add them back later with a new password.", ok: "Remove access", danger: true })) { await ZenAPI("DELETE", "/api/admin/admins/" + b.dataset.del); loadSettings(); } }));
     $$("#admins-table [data-role]").forEach((s) => s.addEventListener("change", async () => { await ZenAPI("PATCH", "/api/admin/admins/" + s.dataset.role, { role: s.value }); loadSettings(); }));
-    $$("#admins-table [data-pw]").forEach((b) => b.addEventListener("click", async () => { const pw = prompt("New password for this admin (10+ characters). Tell it to them in person, not by email."); if (!pw) return; try { await ZenAPI("PATCH", "/api/admin/admins/" + b.dataset.pw, { password: pw }); alert("Password changed."); } catch (ex) { alert(ex.message); } })); }
+    $$("#admins-table [data-pw]").forEach((b) => b.addEventListener("click", async () => { const pw = await ask({ title: "New password", text: "Tell it to them in person, not by email or WhatsApp.", ok: "Set password", field: { label: "New password", hint: "10 or more characters", placeholder: "10+ characters", validate: (v) => (v.length < 10 ? "Use at least 10 characters." : null) } }); if (!pw) return; try { await ZenAPI("PATCH", "/api/admin/admins/" + b.dataset.pw, { password: pw }); await ask({ title: "Password changed", text: "Tell it to them in person, not by email or WhatsApp.", ok: "Done" }); } catch (ex) { await ask({ title: "Couldn't change the password", text: ex.message, ok: "OK" }); } })); }
   // my profile
   $("#me-name").value = A.name || ""; $("#me-phone").value = A.phone || ""; $("#me-email").value = A.email; $("#me-notify").checked = A.notify !== 0; $("#me-notify-scope").textContent = isOwner() || isPlatform() ? "(all cities)" : `(${CITY_NAME[A.role]})`; $("#me-notify").closest("label").hidden = !A.email.includes("@") || isPlatform();
   renderMeAvatar();
@@ -766,7 +818,7 @@ async function loadServices() {
   const { rows } = await ZenAPI("GET", "/api/admin/services?city=" + svcCity);
   $("#services-table tbody").innerHTML = rows.length ? rows.map((s) => `<tr class="${s.active ? "" : "svc-off"}"><td><i class="dot ${s.city}"></i>${CITY_NAME[s.city]}</td><td><span class="row" style="gap:10px;flex-wrap:nowrap"><span style="width:40px;height:40px;border-radius:8px;background:var(--ground-2);overflow:hidden;flex:none;display:grid;place-items:center;font-size:.6rem;color:var(--ink-mute)">${s.photo ? `<img src="${s.photo}" alt="" style="width:100%;height:100%;object-fit:cover">` : "—"}</span><span><b>${esc(s.name)}</b><div class="tiny">${esc(s.description || "")}</div></span></span></td><td class="num">${s.minutes}</td><td class="num">${money(s.amount, s.currency)}</td><td class="num">${s.bookings}</td><td>${s.active ? `<span class="status confirmed">shown</span>` : `<span class="status cancelled">hidden</span>`}</td><td><div class="actions"><button class="btn ghost" data-edit="${s.id}">Edit</button><button class="btn ghost" data-toggle="${s.id}" data-active="${s.active}">${s.active ? "Hide" : "Show"}</button><button class="btn ghost danger" data-remove="${s.id}">Remove</button></div></td></tr>`).join("") : `<tr><td colspan="7" class="empty">No services yet.</td></tr>`;
   $$("#services-table [data-toggle]").forEach((b) => (b.onclick = async () => { await ZenAPI("PATCH", "/api/admin/services/" + b.dataset.toggle, { active: b.dataset.active !== "1" }); await refreshCities(); loadServices(); }));
-  $$("#services-table [data-remove]").forEach((b) => (b.onclick = async () => { if (confirm("Remove this service from the website? If it was ever booked it's hidden instead, so history stays.")) { await ZenAPI("DELETE", "/api/admin/services/" + b.dataset.remove); await refreshCities(); loadServices(); } }));
+  $$("#services-table [data-remove]").forEach((b) => (b.onclick = async () => { if (await ask({ title: "Remove this service from the website?", text: "If it was ever booked it's hidden instead, so history stays.", ok: "Remove", danger: true })) { await ZenAPI("DELETE", "/api/admin/services/" + b.dataset.remove); await refreshCities(); loadServices(); } }));
   $$("#services-table [data-edit]").forEach((b) => (b.onclick = () => openService(rows.find((s) => s.id === b.dataset.edit))));
 }
 function openService(s) {
