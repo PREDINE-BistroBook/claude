@@ -30,7 +30,7 @@
 
 import { CITIES, SLOTS } from "./catalog.js";
 import { randomId, signPayload, verifyPayload, getCookie, setCookie, clearCookie, hashPassword, verifyPassword } from "./auth.js";
-import { CITY_KEYS, USER_COOKIE, ADMIN_COOKIE, json, clean, normEmail, isDate, isTime, fmt, now, today, feeOn, body, isLive, parseIntake, healthFlags, settings, currentUser, currentAdmin, scope, sendEmail, sendSms, stripeCheckout, slotsFor, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, maybeRewardLoyalty } from "./lib.js";
+import { CITY_KEYS, USER_COOKIE, ADMIN_COOKIE, json, clean, normEmail, isDate, isTime, fmt, now, today, feeOn, body, isLive, parseIntake, healthFlags, settings, currentUser, currentAdmin, scope, sendEmail, sendSms, stripeCheckout, slotsFor, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, maybeRewardLoyalty, isPlatform, isOwner, seesAll } from "./lib.js";
 import { featureRoute, adminFeatureRoute, giftPaid, packagePaid, authFlags } from "./features.js";
 import { runCron } from "./cron.js";
 
@@ -73,6 +73,9 @@ async function route(req, env, url, ctx) {
   if (p.startsWith("/api/admin/")) {
     const admin = await currentAdmin(req, env);
     if (!admin) return json({ error: "Sign in first." }, 401);
+    // Platform account (Ash): numbers only. Everything operational belongs to Zen's owner and the city teams.
+    if (isPlatform(admin) && !["/api/admin/me", "/api/admin/stats", "/api/admin/platform", "/api/admin/profile", "/api/admin/password"].includes(p)) return json({ error: "Your account sees the numbers, not the operations. Ask Zen's owner for anything else." }, 403);
+    if (p === "/api/admin/platform" && m === "GET") return isPlatform(admin) ? platformReport(env, admin) : json({ error: "Only the Amico Mio account sees the platform report." }, 403);
     if (p === "/api/admin/me") return json({ admin: pub(admin), cities: await cityMeta(env), settings: await settings(env), photos: authFlags(env).photos, live: isLive(env) });
     if (p === "/api/admin/profile" && m === "PUT") return adminProfile(req, env, admin);
     if (p === "/api/admin/stats" && m === "GET") return adminStats(env, admin, url);
@@ -446,7 +449,7 @@ async function adminLogin(req, env) {
       a = await env.DB.prepare("SELECT * FROM admins WHERE email = ?").bind(email).first();
     }
   }
-  if (!a || !(await verifyPassword(password, a.pass_hash, a.salt))) return json({ error: "Wrong email or password." }, 401);
+  if (!a || !(await verifyPassword(password, a.pass_hash, a.salt))) return json({ error: "Wrong email/username or password." }, 401);
   await env.DB.prepare("UPDATE admins SET last_login = ? WHERE id = ?").bind(now(), a.id).run();
   const cookie = await signPayload(env.SESSION_SECRET, { aid: a.id, exp: Math.floor(Date.now() / 1000) + 12 * 3600 });
   return json({ admin: pub(a) }, 200, { "set-cookie": setCookie(ADMIN_COOKIE, cookie, 12 * 3600) });
@@ -467,14 +470,37 @@ async function adminStats(env, admin, url) {
     q(`SELECT COUNT(DISTINCT COALESCE(user_id, email)) total, COUNT(DISTINCT CASE WHEN created_at >= date('now','start of month') THEN COALESCE(user_id, email) END) new_this_month FROM bookings WHERE ${live}${w.sql}`).first(),
     q(`SELECT COUNT(*) n FROM bookings WHERE status IN ('paid','confirmed') AND date >= date('now')${w.sql}`).first(),
     q(`SELECT b.id, b.name, b.service_name, b.slot, b.status, b.city, t.name therapist FROM bookings b LEFT JOIN therapists t ON t.id = b.therapist_id WHERE b.status IN ('paid','confirmed') AND b.date = date('now')${w.sql.replace(" city = ?", " b.city = ?")} ORDER BY b.slot`).all(),
-    admin.role === "all" && !city ? env.DB.prepare(`SELECT city, currency, COUNT(*) n, SUM(amount) rev, SUM(platform_fee) fee FROM bookings WHERE ${live} AND date >= date('now','start of month') GROUP BY city, currency`).all() : { results: [] },
+    seesAll(admin) && !city ? env.DB.prepare(`SELECT city, currency, COUNT(*) n, SUM(amount) rev, SUM(platform_fee) fee FROM bookings WHERE ${live} AND date >= date('now','start of month') GROUP BY city, currency`).all() : { results: [] },
     q(`SELECT kind, status, COUNT(*) n FROM credits WHERE user_id IN (SELECT DISTINCT user_id FROM bookings WHERE user_id IS NOT NULL${w.sql}) GROUP BY kind, status`).all(),
     q(`SELECT COUNT(*) n FROM bookings WHERE status = 'review'${w.sql}`).first(),
     q(`SELECT AVG(rating) avg, COUNT(rating) n, SUM(rating = 5) five FROM bookings WHERE rating IS NOT NULL${w.sql}`).first(),
     q(`SELECT currency, COUNT(*) n, SUM(amount) rev, SUM(platform_fee) fee, SUM(remaining) remaining FROM client_packages WHERE status = 'paid'${w.sql} GROUP BY currency`).all(),
     q(`SELECT currency, COUNT(*) n, SUM(amount) rev, SUM(platform_fee) fee, SUM(status = 'paid') unused FROM gifts WHERE status IN ('paid','redeemed')${w.sql} GROUP BY currency`).all(),
   ]);
-  return json({ city, months: months.results, this_month: thisMonth.results, last_month: lastMonth.results, by_service: byService.results, by_status: byStatus.results, clients, upcoming: upcoming.n, today: todayRows.results, by_city: byCity.results, rewards: rewards.results, review: review.n, ratings, packages: packs.results, gifts: gifts.results, show_fee: admin.role === "all" });
+  return json({ city, months: months.results, this_month: thisMonth.results, last_month: lastMonth.results, by_service: byService.results, by_status: byStatus.results, clients, upcoming: upcoming.n, today: todayRows.results, by_city: byCity.results, rewards: rewards.results, review: review.n, ratings, packages: packs.results, gifts: gifts.results, show_fee: isPlatform(admin) });
+}
+
+// Ash's view: what the 2% platform fee earned, per month and per city, plus a health snapshot of the site. No client data.
+async function platformReport(env, admin) {
+  const live = "status IN ('paid','confirmed','done')";
+  const [months, byCity, totals, packs, gifts, admins, users, lastMsg, pendingReview] = await Promise.all([
+    env.DB.prepare(`SELECT strftime('%Y-%m', date) m, currency, COUNT(*) n, SUM(amount) rev, SUM(platform_fee) fee, SUM(source = 'manual') manual FROM bookings WHERE ${live} AND date >= date('now','-11 months','start of month') AND date < date('now','+1 month','start of month') GROUP BY m, currency ORDER BY m`).all(),
+    env.DB.prepare(`SELECT city, currency, COUNT(*) n, SUM(amount) rev, SUM(platform_fee) fee, SUM(source = 'manual') manual, MAX(date) last_date FROM bookings WHERE ${live} GROUP BY city, currency ORDER BY city`).all(),
+    env.DB.prepare(`SELECT currency, COUNT(*) n, SUM(amount) rev, SUM(platform_fee) fee, SUM(source = 'manual') manual, SUM(amount = 0) free FROM bookings WHERE ${live} GROUP BY currency`).all(),
+    env.DB.prepare("SELECT currency, COUNT(*) n, SUM(amount) rev, SUM(platform_fee) fee FROM client_packages WHERE status = 'paid' GROUP BY currency").all(),
+    env.DB.prepare("SELECT currency, COUNT(*) n, SUM(amount) rev, SUM(platform_fee) fee FROM gifts WHERE status IN ('paid','redeemed') GROUP BY currency").all(),
+    env.DB.prepare("SELECT name, role, last_login, created_at FROM admins ORDER BY created_at").all(),
+    env.DB.prepare("SELECT COUNT(*) total, SUM(created_at >= date('now','start of month')) new_this_month, SUM(created_at >= date('now','-7 days')) new_7d FROM users").first(),
+    env.DB.prepare("SELECT MAX(created_at) at, COUNT(*) n FROM messages WHERE created_at >= date('now','-7 days')").first(),
+    env.DB.prepare("SELECT COUNT(*) n FROM bookings WHERE status = 'review'").first(),
+  ]);
+  const st = await settings(env);
+  return json({
+    fee_bps: Number(env.PLATFORM_FEE_BPS || 200), live: isLive(env), stripe_account: env.ZEN_STRIPE_ACCOUNT || null,
+    months: months.results, by_city: byCity.results, totals: totals.results, packages: packs.results, gifts: gifts.results,
+    admins: admins.results, users, messages_7d: lastMsg, pending_review: pendingReview.n,
+    rules: { loyalty_every: st.loyalty_every, referral_pct: st.referral_pct, birthday_pct: st.birthday_pct, package_pct: st.package_pct },
+  });
 }
 
 async function adminBookings(env, admin, url) {
@@ -490,7 +516,7 @@ async function adminBookings(env, admin, url) {
   if (qs) { sql += " AND (b.name LIKE ? OR b.email LIKE ? OR b.phone LIKE ?)"; args.push(`%${qs}%`, `%${qs}%`, `%${qs}%`); }
   sql += " ORDER BY b.date DESC, b.created_at DESC LIMIT 300";
   const r = await env.DB.prepare(sql).bind(...args).all();
-  r.results.forEach((b) => { const i = parseIntake(b.user_intake); b.health = i?.health || []; b.flags = healthFlags(b.user_intake); b.pain = i?.pain || []; b.goals = i?.goals || []; b.experience = i?.experience || null; delete b.user_intake; if (admin.role !== "all") delete b.platform_fee; });
+  r.results.forEach((b) => { const i = parseIntake(b.user_intake); b.health = i?.health || []; b.flags = healthFlags(b.user_intake); b.pain = i?.pain || []; b.goals = i?.goals || []; b.experience = i?.experience || null; delete b.user_intake; delete b.platform_fee; });
   return json({ bookings: r.results, city });
 }
 
@@ -515,7 +541,7 @@ async function adminCreateBooking(req, env, admin) {
 async function adminUpdateBooking(req, env, admin, id) {
   const b = await body(req);
   const bk = await env.DB.prepare("SELECT * FROM bookings WHERE id = ?").bind(id).first();
-  if (!bk || (admin.role !== "all" && bk.city !== admin.role)) return json({ error: "Not found" }, 404);
+  if (!bk || (!isOwner(admin) && bk.city !== admin.role)) return json({ error: "Not found" }, 404);
   const status = ["paid", "confirmed", "done", "cancelled", "no_show"].includes(b.status) ? b.status : null;
   const slot = b.slot !== undefined ? clean(b.slot, 20) : bk.slot;
   const note = b.note !== undefined ? clean(b.note, 500) : bk.note;
@@ -553,7 +579,7 @@ async function adminClients(env, admin, url) {
 async function adminClient(env, admin, id) {
   const u = await env.DB.prepare("SELECT id, name, email, phone, city, photo, notes, birthday, referral_code, referred_by, created_at, last_login, country, city_text, nearest_city, intake, lang, google_sub, apple_sub, approved, preferred_therapist FROM users WHERE id = ?").bind(id).first();
   if (!u) return json({ error: "Not found" }, 404);
-  const city = admin.role === "all" ? null : admin.role;
+  const city = isOwner(admin) ? null : admin.role;
   const w = cityWhere(city);
   const [bookings, credits, referrer, checkins, packages, photos, messages] = await Promise.all([
     env.DB.prepare(`SELECT b.id, b.city, b.service_name, b.date, b.slot, b.amount, b.currency, b.discount_kind, b.status, b.source, b.rating, b.feedback, b.therapist_note, t.name therapist FROM bookings b LEFT JOIN therapists t ON t.id = b.therapist_id WHERE b.user_id = ? AND b.status != 'pending'${w.sql.replace(" city = ?", " b.city = ?")} ORDER BY b.date DESC`).bind(id, ...w.args).all(),
@@ -569,7 +595,7 @@ async function adminClient(env, admin, id) {
 }
 
 async function adminSaveSettings(req, env, admin) {
-  if (admin.role !== "all") return json({ error: "Only the owner can change this." }, 403);
+  if (!isOwner(admin)) return json({ error: "Only the owner can change this." }, 403);
   const b = await body(req);
   const cur = await settings(env);
   const num = (v, lo, hi, d) => String(Math.min(hi, Math.max(lo, Number(v) || d)));
@@ -591,23 +617,25 @@ async function adminSaveSettings(req, env, admin) {
   return json(await settings(env));
 }
 async function adminList(env, admin) {
-  if (admin.role !== "all") return json({ error: "Only the owner can see this." }, 403);
+  if (!isOwner(admin)) return json({ error: "Only the owner can see this." }, 403);
   const r = await env.DB.prepare("SELECT id, email, name, role, photo, phone, notify, created_at, last_login FROM admins ORDER BY created_at").all();
   return json({ admins: r.results });
 }
 async function adminCreate(req, env, admin) {
-  if (admin.role !== "all") return json({ error: "Only the owner can add admins." }, 403);
+  if (!isOwner(admin)) return json({ error: "Only the owner can add admins." }, 403);
   const b = await body(req);
   const email = normEmail(b.email), name = clean(b.name, 80), role = ["all", ...CITY_KEYS].includes(b.role) ? b.role : null, password = String(b.password || "");
-  if (!email || !name || !role || password.length < 10) return json({ error: "Name, email, role and a password of at least 10 characters." }, 400);
+  if (!email || !name || !role || password.length < 10) return json({ error: "Name, email or username, role and a password of at least 10 characters." }, 400);
   const { hash, salt } = await hashPassword(password);
   try { await env.DB.prepare("INSERT INTO admins (id, email, name, role, pass_hash, salt) VALUES (?,?,?,?,?,?)").bind(randomId(), email, name, role, hash, salt).run(); }
   catch { return json({ error: "That email already has admin access." }, 409); }
   return json({ ok: true });
 }
 async function adminDelete(env, admin, id) {
-  if (admin.role !== "all") return json({ error: "Only the owner can remove admins." }, 403);
+  if (!isOwner(admin)) return json({ error: "Only the owner can remove admins." }, 403);
   if (id === admin.id) return json({ error: "You can't remove yourself." }, 400);
+  const a = await env.DB.prepare("SELECT role FROM admins WHERE id = ?").bind(id).first();
+  if (a?.role === "platform") return json({ error: "The platform account is managed by Amico Mio, not from here." }, 403);
   await env.DB.prepare("DELETE FROM admins WHERE id = ?").bind(id).run();
   return json({ ok: true });
 }
@@ -620,9 +648,10 @@ async function adminProfile(req, env, admin) {
 }
 // Owner: change another admin's name, role or reset their password
 async function adminEdit(req, env, admin, id) {
-  if (admin.role !== "all") return json({ error: "Only the owner can change admins." }, 403);
+  if (!isOwner(admin)) return json({ error: "Only the owner can change admins." }, 403);
   const a = await env.DB.prepare("SELECT * FROM admins WHERE id = ?").bind(id).first();
   if (!a) return json({ error: "Not found" }, 404);
+  if (a.role === "platform") return json({ error: "The platform account is managed by Amico Mio, not from here." }, 403);
   const b = await body(req);
   const role = ["all", ...CITY_KEYS].includes(b.role) ? b.role : a.role;
   if (id === admin.id && role !== "all") return json({ error: "You can't remove your own owner access." }, 400);

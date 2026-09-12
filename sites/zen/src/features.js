@@ -4,7 +4,7 @@
 // checked the admin cookie). Everything money-related goes through stripeCheckout() in lib.js (2% platform fee).
 import { CITIES } from "./catalog.js";
 import { randomId, referralCode, signPayload, verifyPayload, getCookie, clearCookie } from "./auth.js";
-import { CITY_KEYS, json, clean, normEmail, isDate, isTime, fmt, now, today, addDays, feeOn, body, isLive, currentUser, scope, sendEmail, stripeCheckout, slotsFor, healthFlags, parseIntake, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer } from "./lib.js";
+import { CITY_KEYS, json, clean, normEmail, isDate, isTime, fmt, now, today, addDays, feeOn, body, isLive, currentUser, scope, sendEmail, stripeCheckout, slotsFor, healthFlags, parseIntake, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, isOwner } from "./lib.js";
 
 const b64u = (s) => btoa(typeof s === "string" ? unescape(encodeURIComponent(s)) : String.fromCharCode(...new Uint8Array(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const cityOf = (k) => (CITY_KEYS.includes(k) ? k : null);
@@ -230,7 +230,7 @@ export const authFlags = (env) => ({ apple: appleReady(env), sms: Boolean(env.TW
 // =====================================================================================
 export async function adminFeatureRoute(req, env, url, admin) {
   const p = url.pathname, m = req.method;
-  const owner = () => (admin.role === "all" ? null : json({ error: "Only the owner can do this." }, 403));
+  const owner = () => (isOwner(admin) ? null : json({ error: "Only the owner can do this." }, 403));
   let mm;
   if (p === "/api/admin/services" && m === "GET") return listServices(env, admin, url);
   if (p === "/api/admin/services" && m === "POST") return saveService(req, env, admin, null);
@@ -280,7 +280,7 @@ async function saveService(req, env, admin, id) {
   const b = await body(req);
   const cur = id ? await env.DB.prepare("SELECT * FROM services WHERE id = ?").bind(id).first() : null;
   if (id && !cur) return json({ error: "Not found" }, 404);
-  if (cur && admin.role !== "all" && cur.city !== admin.role) return json({ error: "Not your city." }, 403);
+  if (cur && !isOwner(admin) && cur.city !== admin.role) return json({ error: "Not your city." }, 403);
   const city = cur ? cur.city : cityFor(admin, b.city);
   const name = clean(b.name, 60) || cur?.name;
   const minutes = Number.isInteger(b.minutes) && b.minutes >= 10 && b.minutes <= 240 ? b.minutes : cur?.minutes || 60;
@@ -303,7 +303,7 @@ async function saveService(req, env, admin, id) {
 async function deleteService(env, admin, id) {
   const cur = await env.DB.prepare("SELECT * FROM services WHERE id = ?").bind(id).first();
   if (!cur) return json({ error: "Not found" }, 404);
-  if (admin.role !== "all" && cur.city !== admin.role) return json({ error: "Not your city." }, 403);
+  if (!isOwner(admin) && cur.city !== admin.role) return json({ error: "Not your city." }, 403);
   const used = (await env.DB.prepare("SELECT COUNT(*) n FROM bookings WHERE service_id = ?").bind(id).first()).n;
   if (used) { await env.DB.prepare("UPDATE services SET active = 0, updated_at = ? WHERE id = ?").bind(now(), id).run(); return json({ ok: true, hidden: true }); }
   await env.DB.prepare("DELETE FROM services WHERE id = ?").bind(id).run();
@@ -317,11 +317,11 @@ async function listRows(env, admin, url, table, order, extra = "") {
 async function deleteRow(env, admin, table, id) {
   const row = await env.DB.prepare(`SELECT city FROM ${table} WHERE id = ?`).bind(id).first();
   if (!row) return json({ error: "Not found" }, 404);
-  if (admin.role !== "all" && row.city && row.city !== admin.role) return json({ error: "Not your city." }, 403);
+  if (!isOwner(admin) && row.city && row.city !== admin.role) return json({ error: "Not your city." }, 403);
   await env.DB.prepare(`DELETE FROM ${table} WHERE id = ?`).bind(id).run();
   return json({ ok: true });
 }
-const cityFor = (admin, k) => (admin.role === "all" ? cityOf(k) : admin.role);
+const cityFor = (admin, k) => (isOwner(admin) ? cityOf(k) : admin.role);
 
 async function addAvailability(req, env, admin) {
   const b = await body(req);
@@ -348,7 +348,7 @@ async function saveTherapist(req, env, admin, id) {
   const b = await body(req);
   const cur = id ? await env.DB.prepare("SELECT * FROM therapists WHERE id = ?").bind(id).first() : null;
   if (id && !cur) return json({ error: "Not found" }, 404);
-  if (cur && admin.role !== "all" && cur.city !== admin.role) return json({ error: "Not your city." }, 403);
+  if (cur && !isOwner(admin) && cur.city !== admin.role) return json({ error: "Not your city." }, 403);
   const city = cur ? cur.city : cityFor(admin, b.city), name = clean(b.name, 80) || cur?.name;
   if (!city || !name) return json({ error: "City and name." }, 400);
   const photo = b.photo === undefined ? cur?.photo || null : b.photo === null ? null : validPhoto(b.photo) || cur?.photo || null;
@@ -373,7 +373,7 @@ async function savePackage(req, env, id) {
 async function soldPackages(env, admin, url) {
   const city = cityFilter(admin, url);
   const r = await env.DB.prepare("SELECT cp.*, u.name user_name, u.email user_email FROM client_packages cp JOIN users u ON u.id = cp.user_id WHERE cp.status = 'paid'" + (city ? " AND cp.city = ?" : "") + " ORDER BY cp.paid_at DESC LIMIT 200").bind(...(city ? [city] : [])).all();
-  r.results.forEach((x) => { if (admin.role !== "all") delete x.platform_fee; });
+  r.results.forEach((x) => { if (!isOwner(admin)) delete x.platform_fee; });
   return json({ rows: r.results, city });
 }
 async function savePartner(req, env, id) {
@@ -406,7 +406,7 @@ async function listGifts(env, admin, url) {
 
 // ---------- health-flag review: clients who ticked a red flag book "for review" instead of paying ----------
 async function reviewList(env, admin) {
-  const city = admin.role === "all" ? null : admin.role;
+  const city = isOwner(admin) ? null : admin.role;
   const bookings = await env.DB.prepare("SELECT b.id, b.user_id, b.name, b.email, b.phone, b.city, b.service_name, b.date, b.slot, b.amount, b.currency, b.note, b.created_at, u.intake FROM bookings b LEFT JOIN users u ON u.id = b.user_id WHERE b.status = 'review'" + (city ? " AND b.city = ?" : "") + " ORDER BY b.date").bind(...(city ? [city] : [])).all();
   bookings.results.forEach((b) => { const i = parseIntake(b.intake); b.flags = healthFlags(b.intake); b.health_notes = i?.health_notes || ""; delete b.intake; });
   const users = await env.DB.prepare("SELECT id, name, email, phone, nearest_city, intake, created_at FROM users WHERE approved = 0 AND intake IS NOT NULL" + (city ? " AND (nearest_city = ? OR city = ?)" : "") + " ORDER BY created_at DESC LIMIT 200").bind(...(city ? [city, city] : [])).all();
@@ -416,7 +416,7 @@ async function reviewList(env, admin) {
 async function approveClient(env, admin, id) {
   const u = await env.DB.prepare("SELECT id, name, email FROM users WHERE id = ?").bind(id).first();
   if (!u) return json({ error: "Not found" }, 404);
-  const city = admin.role === "all" ? null : admin.role;
+  const city = isOwner(admin) ? null : admin.role;
   await env.DB.prepare("UPDATE users SET approved = 1 WHERE id = ?").bind(id).run();
   const r = await env.DB.prepare("UPDATE bookings SET status = 'confirmed' WHERE user_id = ? AND status = 'review'" + (city ? " AND city = ?" : "")).bind(id, ...(city ? [city] : [])).run();
   if (r.meta.changes) await maybeRewardReferrer(env, id);
