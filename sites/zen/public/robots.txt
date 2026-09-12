@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /admin.html
+Disallow: /account
+Disallow: /account.html
+Disallow: /export
+Disallow: /success
+Disallow: /api/
+Sitemap: https://zenrecovery.club/sitemap.xml

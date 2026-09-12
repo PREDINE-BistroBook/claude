@@ -54,6 +54,7 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const I = window.ZenI18n, t = (s, v) => I.t(s, v);
 const LOCALE = () => ({ en: "en-GB", it: "it-IT", ar: "ar-EG" }[I.lang]);
 const money = (minor, cur) => new Intl.NumberFormat(LOCALE(), { style: "currency", currency: cur, maximumFractionDigits: cur === "EGP" ? 0 : 2 }).format(minor / 100);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const H = {};
 window.Zen = { on(ev, fn) { (H[ev] ||= []).push(fn); }, emit(ev, d) { (H[ev] || []).forEach((f) => { try { f(d); } catch (e) { console.error(e); } }); } };
 $("#lang-slot").innerHTML = I.switcher();
@@ -95,7 +96,7 @@ let ME = null;
 fetch("/api/me", { credentials: "same-origin" }).then(r => (r.headers.get("content-type") || "").includes("json") ? r.json() : { user: null }).then(d => {
   if (!d.user) return; ME = d;
   const first = d.user.name.split(" ")[0];
-  $("#nav-account").classList.add("user"); $("#nav-account").innerHTML = `<span class="av">${d.user.photo ? `<img src="${d.user.photo}" alt="">` : first.slice(0, 2).toUpperCase()}</span><span>${first}</span>`; $("#nav-account").title = t("Your sessions, rewards and guide");
+  $("#nav-account").classList.add("user"); $("#nav-account").innerHTML = `<span class="av">${d.user.photo ? `<img src="${esc(d.user.photo)}" alt="">` : esc(first.slice(0, 2).toUpperCase())}</span><span>${esc(first)}</span>`; $("#nav-account").title = t("Your sessions, rewards and guide");
   if (d.user.lang && d.user.lang !== I.lang && !new URLSearchParams(location.search).get("lang")) I.set(d.user.lang);
   applySettings({ loyalty_every: d.settings.loyalty_every, referral_pct: d.settings.referral_pct, birthday_pct: d.settings.birthday_pct });
   Zen.emit("me", d);

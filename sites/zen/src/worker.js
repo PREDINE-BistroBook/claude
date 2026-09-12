@@ -30,7 +30,7 @@
 
 import { CITIES, SLOTS } from "./catalog.js";
 import { randomId, signPayload, verifyPayload, getCookie, setCookie, clearCookie, hashPassword, verifyPassword } from "./auth.js";
-import { CITY_KEYS, USER_COOKIE, ADMIN_COOKIE, json, clean, normEmail, isDate, isTime, fmt, now, today, feeOn, body, isLive, parseIntake, healthFlags, settings, currentUser, currentAdmin, scope, sendEmail, sendSms, stripeCheckout, slotsFor, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList } from "./lib.js";
+import { CITY_KEYS, USER_COOKIE, ADMIN_COOKIE, json, clean, normEmail, isDate, isTime, fmt, now, today, feeOn, body, isLive, parseIntake, healthFlags, settings, currentUser, currentAdmin, scope, sendEmail, sendSms, stripeCheckout, slotsFor, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, maybeRewardLoyalty } from "./lib.js";
 import { featureRoute, adminFeatureRoute, giftPaid, packagePaid, authFlags } from "./features.js";
 import { runCron } from "./cron.js";
 
@@ -103,7 +103,7 @@ async function cityMeta(env) { const c = await catalog(env); return Object.fromE
 async function publicCatalog(env) {
   const [c, st] = await Promise.all([catalog(env), settings(env)]);
   return json({ cities: Object.fromEntries(CITY_KEYS.map((k) => [k, { name: c[k].name, currency: c[k].currency.toUpperCase(), address: st.address[k] ? st.address[k].split("\n").map((l) => l.trim()).filter(Boolean) : null, team: st.team[k] || null, whatsapp: st.whatsapp[k] || null, gmaps: st.gmaps[k] || null,
-    services: Object.values(c[k].services).map((s) => ({ id: s.id, name: s.short, dur: s.minutes, price: s.amount, desc: s.description, photo: s.photo })) }])) }, 200, { "cache-control": "no-store" });
+    services: Object.values(c[k].services).map((s) => ({ id: s.id, name: s.short, dur: s.minutes, price: s.amount, desc: s.description, photo: s.photo ? `/api/service-photo/${s.id}?v=${encodeURIComponent((s.updated_at || "").replace(/\D/g, ""))}` : null })) }])) }, 200, { "cache-control": "no-store" });
 }
 const INTAKE_LISTS = ["goals", "pain", "health"], INTAKE_STR = ["activity", "sport", "experience", "health_notes", "contact", "time_pref", "completed_at"];
 function cleanIntake(v) { // whitelist keys, cap sizes; stored as JSON text
@@ -136,7 +136,7 @@ async function requestLink(req, env) {
     user = await createUser(env, { email, name, ref: b.ref, city: b.city, lang: b.lang });
     created = true;
   }
-  const link = await loginLink(env, user.id);
+  let link; try { link = await loginLink(env, user.id); } catch (e) { if (e.status) return json({ error: e.message }, e.status); throw e; }
   await sendEmail(env, {
     to: email,
     subject: created ? "Welcome to Zen Recovery — your sign-in link" : "Your Zen Recovery sign-in link",
@@ -145,6 +145,9 @@ async function requestLink(req, env) {
   return json({ ok: true, created, ...(env.DEV_MAGIC_LINK === "1" ? { link } : {}) });
 }
 async function loginLink(env, userId) {
+  // at most 3 links per account per ~15 minutes (tokens live 20 min, so "expires in more than 5 min" = issued in the last 15)
+  const recent = (await env.DB.prepare("SELECT COUNT(*) n FROM login_tokens WHERE user_id = ? AND expires_at > ?").bind(userId, Math.floor(Date.now() / 1000) + 300).first()).n;
+  if (recent >= 3) throw Object.assign(new Error("Too many sign-in links. Check your inbox (and spam), or try again in 15 minutes."), { status: 429 });
   const token = randomId(24);
   await env.DB.prepare("INSERT INTO login_tokens (token, user_id, expires_at) VALUES (?,?,?)").bind(token, userId, Math.floor(Date.now() / 1000) + 20 * 60).run();
   return `${env.SITE_URL}/api/auth/verify?t=${token}`;
@@ -156,7 +159,7 @@ async function requestSms(env, b) {
   if (digits.length < 8) return json({ error: "That number doesn't look right." }, 400);
   const user = await env.DB.prepare("SELECT id, name, phone FROM users WHERE phone IS NOT NULL AND replace(replace(replace(replace(phone,' ',''),'+',''),'-',''),'(','') LIKE ?").bind(`%${digits.slice(-9)}`).first();
   if (!user) return json({ error: "No account has that number yet. Sign up with your email first, then add your number in your profile." }, 404);
-  const link = await loginLink(env, user.id);
+  let link; try { link = await loginLink(env, user.id); } catch (e) { if (e.status) return json({ error: e.message }, e.status); throw e; }
   const ok = await sendSms(env, { to: digits, text: `Zen Recovery: tap to sign in (20 min): ${link}` });
   return ok ? json({ ok: true, sms: true }) : json({ error: "We couldn't send the text — try your email instead." }, 502);
 }
@@ -252,7 +255,7 @@ async function updateMe(req, env) {
   const u = await currentUser(req, env);
   if (!u) return json({ error: "Sign in first." }, 401);
   const b = await body(req);
-  const photo = typeof b.photo === "string" && b.photo.startsWith("data:image/") && b.photo.length < 160000 ? b.photo : b.photo === null ? null : u.photo;
+  const photo = b.photo === undefined ? u.photo : b.photo === null ? null : validPhoto(b.photo) || u.photo;
   const country = ["EG", "IT", "other"].includes(b.country) ? b.country : u.country;
   const nearest = CITY_KEYS.includes(b.nearest_city) ? b.nearest_city : b.nearest_city === null ? null : u.nearest_city;
   const intake = b.intake === undefined ? u.intake : cleanIntake(b.intake);
@@ -281,7 +284,7 @@ async function checkout(req, env) {
   if (!city || !svc) return json({ error: "Unknown city or session." }, 400);
   const name = clean(b.name, 80), email = normEmail(b.email), phone = clean(b.phone, 40), note = clean(b.note, 500), date = clean(b.date, 10);
   if (!name || !email || !phone || !isDate(date)) return json({ error: "Please fill in your name, WhatsApp number, email and a day." }, 400);
-  if (date < today()) return json({ error: "That day has already passed." }, 400);
+  if (date < localNow(city.tz).date) return json({ error: "That day has already passed." }, 400);
 
   // time: exact slot when the city has an availability calendar, otherwise a morning/afternoon/evening window
   const avail = await slotsFor(env, cityKey, date, null);
@@ -428,32 +431,6 @@ async function afterReview(env, bk) {
   ]);
 }
 
-async function maybeRewardReferrer(env, userId) {
-  const u = await env.DB.prepare("SELECT id, name, referred_by FROM users WHERE id = ?").bind(userId).first();
-  if (!u?.referred_by) return;
-  const paidCount = await env.DB.prepare("SELECT COUNT(*) n FROM bookings WHERE user_id = ? AND status IN ('paid','confirmed','done')").bind(userId).first();
-  if (paidCount.n !== 1) return; // only the friend's first booking rewards the inviter
-  const already = await env.DB.prepare("SELECT 1 FROM credits WHERE user_id = ? AND reason = ?").bind(u.referred_by, `ref:${userId}`).first();
-  if (already) return;
-  const s = await settings(env);
-  await env.DB.prepare("INSERT INTO credits (id, user_id, kind, pct, reason) VALUES (?,?,?,?,?)").bind(randomId(), u.referred_by, "referral", s.referral_pct, `ref:${userId}`).run();
-  const ref = await env.DB.prepare("SELECT email, name FROM users WHERE id = ?").bind(u.referred_by).first();
-  await sendEmail(env, { to: ref.email, subject: `${u.name} booked with Zen — your ${s.referral_pct}% is ready`, text: [`Hi ${ref.name},`, ``, `${u.name} just booked their first session with your invite. You've got ${s.referral_pct}% off your next session.`, ``, `Use it when you book: ${env.SITE_URL}/booking`, ``, `Zen Recovery`].join("\n") });
-}
-
-async function maybeRewardLoyalty(env, userId) {
-  if (!userId) return;
-  const s = await settings(env);
-  const done = await env.DB.prepare("SELECT COUNT(*) n FROM bookings WHERE user_id = ? AND status = 'done'").bind(userId).first();
-  if (!done.n || done.n % s.loyalty_every !== 0) return;
-  const reason = `Session ${done.n} — every ${s.loyalty_every}th is free`;
-  const already = await env.DB.prepare("SELECT 1 FROM credits WHERE user_id = ? AND reason = ?").bind(userId, reason).first();
-  if (already) return;
-  await env.DB.prepare("INSERT INTO credits (id, user_id, kind, pct, reason) VALUES (?,?,?,?,?)").bind(randomId(), userId, "loyalty", 100, reason).run();
-  const u = await env.DB.prepare("SELECT email, name FROM users WHERE id = ?").bind(userId).first();
-  await sendEmail(env, { to: u.email, subject: "Your next Zen session is on us", text: [`Hi ${u.name},`, ``, `That was session number ${done.n}. The next one is free — pick a day whenever you like: ${env.SITE_URL}/booking`, ``, `Zen Recovery`].join("\n") });
-}
-
 // ---------- admin ----------
 const cityWhere = (city, col = "city") => (city ? { sql: ` AND ${col} = ?`, args: [city] } : { sql: "", args: [] });
 
@@ -546,7 +523,7 @@ async function adminUpdateBooking(req, env, admin, id) {
   const th = b.therapist_id !== undefined ? clean(b.therapist_id, 40) || null : bk.therapist_id;
   await env.DB.prepare("UPDATE bookings SET status = ?, slot = ?, note = ?, therapist_note = ?, therapist_id = ?, done_at = CASE WHEN ? = 'done' THEN COALESCE(done_at, ?) ELSE done_at END WHERE id = ?")
     .bind(status || bk.status, slot, note, tnote, th, status || bk.status, now(), id).run();
-  if (bk.status === "review" && status && status !== "cancelled" && bk.user_id) await env.DB.prepare("UPDATE users SET approved = 1 WHERE id = ?").bind(bk.user_id).run();
+  if (bk.status === "review" && status && status !== "cancelled" && bk.user_id) { await env.DB.prepare("UPDATE users SET approved = 1 WHERE id = ?").bind(bk.user_id).run(); await maybeRewardReferrer(env, bk.user_id); }
   if (status === "done" && bk.status !== "done") await maybeRewardLoyalty(env, bk.user_id);
   if (status === "cancelled" && bk.status !== "cancelled") await restore(env, bk);
   return json({ ok: true });
@@ -637,7 +614,7 @@ async function adminDelete(env, admin, id) {
 // Any admin: own name, phone, photo, "email me about bookings"
 async function adminProfile(req, env, admin) {
   const b = await body(req);
-  const photo = typeof b.photo === "string" && b.photo.startsWith("data:image/") && b.photo.length < 160000 ? b.photo : b.photo === null ? null : admin.photo;
+  const photo = b.photo === undefined ? admin.photo : b.photo === null ? null : validPhoto(b.photo) || admin.photo;
   await env.DB.prepare("UPDATE admins SET name = ?, phone = ?, photo = ?, notify = ? WHERE id = ?").bind(clean(b.name, 80) || admin.name, b.phone === undefined ? admin.phone : clean(b.phone, 40), photo, b.notify === undefined ? admin.notify ?? 1 : b.notify ? 1 : 0, admin.id).run();
   return json({ admin: pub(await env.DB.prepare("SELECT * FROM admins WHERE id = ?").bind(admin.id).first()) });
 }

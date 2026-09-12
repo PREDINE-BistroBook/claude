@@ -2,7 +2,7 @@
 Zen.on("catalog", () => giftServices());
 Zen.on("lang", () => giftServices());
 /* ---------- gift a session ---------- */
-function giftServices() { const c = CITIES[$("#g-city").value]; $("#g-service").innerHTML = c.services.map(s => `<option value="${s.id}">${t(s.name)} · ${s.dur} ${t("min")} — ${money(s.price, c.currency)}</option>`).join(""); giftPrice(); }
+function giftServices() { const c = CITIES[$("#g-city").value]; $("#g-service").innerHTML = c.services.map(s => `<option value="${esc(s.id)}">${esc(t(s.name))} · ${s.dur} ${t("min")} — ${money(s.price, c.currency)}</option>`).join(""); giftPrice(); }
 function giftPrice() { const c = CITIES[$("#g-city").value]; const s = c.services.find(x => x.id === $("#g-service").value); $("#g-pay").textContent = t("Pay {amount} and send", { amount: money(s.price, c.currency) }); }
 $("#g-city").addEventListener("change", giftServices); $("#g-service").addEventListener("change", giftPrice); giftServices();
 $("#gift-form").addEventListener("submit", async (e) => {

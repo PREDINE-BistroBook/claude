@@ -24,7 +24,7 @@ export async function catalog(env, { all = false } = {}) {
   let rows = [];
   try { rows = (await env.DB.prepare("SELECT * FROM services" + (all ? "" : " WHERE active = 1") + " ORDER BY city, sort, name").all()).results; } catch (e) { console.error("services table missing, using static catalog", e.message); }
   if (!rows.length) { for (const k of CITY_KEYS) for (const [id, s] of Object.entries(CITIES[k].services)) out[k].services[id] = { id, name: s.name, amount: s.amount, minutes: 60, description: "", active: 1, sort: 0, short: s.name.split(" · ")[0] }; return out; }
-  for (const r of rows) { if (!out[r.city]) continue; out[r.city].services[r.id] = { id: r.id, name: `${r.name} · ${r.minutes} min · ${CITIES[r.city].name}`, short: r.name, amount: r.amount, minutes: r.minutes, description: r.description || "", active: r.active, sort: r.sort, photo: r.photo || null }; }
+  for (const r of rows) { if (!out[r.city]) continue; out[r.city].services[r.id] = { id: r.id, name: `${r.name} · ${r.minutes} min · ${CITIES[r.city].name}`, short: r.name, amount: r.amount, minutes: r.minutes, description: r.description || "", active: r.active, sort: r.sort, photo: r.photo || null, updated_at: r.updated_at || "" }; }
   return out;
 }
 export async function serviceOf(env, city, id) { if (!CITY_KEYS.includes(city) || !id) return null; const c = await catalog(env); return c[city].services[id] || null; }
@@ -32,6 +32,14 @@ export async function serviceOf(env, city, id) { if (!CITY_KEYS.includes(city) |
 export async function notifyList(env, city) {
   const rows = (await env.DB.prepare("SELECT email FROM admins WHERE notify = 1 AND (role = 'all' OR role = ?)").bind(city || "").all()).results;
   return [...new Set([env.ZEN_NOTIFY_EMAIL, ...rows.map((r) => r.email)].filter(Boolean))];
+}
+// Photos are stored as data URLs. Only a clean base64 image is accepted, so nothing can break out of an <img src="…"> in the admin.
+export function validPhoto(v, max = 160000) { return typeof v === "string" && v.length < max && /^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/]+=*$/.test(v) ? v : null; }
+// "Now" in a city's own time zone: the local date and minutes since midnight (slots for today, "that day has passed").
+export function localNow(tz) {
+  const p = new Intl.DateTimeFormat("en-GB", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(new Date());
+  const g = (t) => p.find((x) => x.type === t)?.value || "00";
+  return { date: `${g("year")}-${g("month")}-${g("day")}`, minutes: (Number(g("hour")) % 24) * 60 + Number(g("minute")) };
 }
 export const FLAGS = ["pregnant", "anticoagulant", "bleeding", "heart", "diabetes", "skin", "surgery"];
 export function parseIntake(t) { try { return t ? JSON.parse(t) : null; } catch { return null; } }
@@ -128,6 +136,33 @@ export async function stripeCheckout(env, { amount, currency, name, description,
   return { url: s.url, id: s.id };
 }
 
+// ---------- rewards: the inviter's discount on a friend's first booking, the free session every Nth done ----------
+export async function maybeRewardReferrer(env, userId) {
+  if (!userId) return;
+  const u = await env.DB.prepare("SELECT id, name, referred_by FROM users WHERE id = ?").bind(userId).first();
+  if (!u?.referred_by) return;
+  const paidCount = await env.DB.prepare("SELECT COUNT(*) n FROM bookings WHERE user_id = ? AND status IN ('paid','confirmed','done')").bind(userId).first();
+  if (paidCount.n !== 1) return; // only the friend's first booking rewards the inviter
+  const already = await env.DB.prepare("SELECT 1 FROM credits WHERE user_id = ? AND reason = ?").bind(u.referred_by, `ref:${userId}`).first();
+  if (already) return;
+  const s = await settings(env);
+  await env.DB.prepare("INSERT INTO credits (id, user_id, kind, pct, reason) VALUES (?,?,?,?,?)").bind(randomId(), u.referred_by, "referral", s.referral_pct, `ref:${userId}`).run();
+  const ref = await env.DB.prepare("SELECT email, name FROM users WHERE id = ?").bind(u.referred_by).first();
+  await sendEmail(env, { to: ref.email, subject: `${u.name} booked with Zen — your ${s.referral_pct}% is ready`, text: [`Hi ${ref.name},`, ``, `${u.name} just booked their first session with your invite. You've got ${s.referral_pct}% off your next session.`, ``, `Use it when you book: ${env.SITE_URL}/booking`, ``, `Zen Recovery`].join("\n") });
+}
+export async function maybeRewardLoyalty(env, userId) {
+  if (!userId) return;
+  const s = await settings(env);
+  const done = await env.DB.prepare("SELECT COUNT(*) n FROM bookings WHERE user_id = ? AND status = 'done'").bind(userId).first();
+  if (!done.n || done.n % s.loyalty_every !== 0) return;
+  const reason = `Session ${done.n} — every ${s.loyalty_every}th is free`;
+  const already = await env.DB.prepare("SELECT 1 FROM credits WHERE user_id = ? AND reason = ?").bind(userId, reason).first();
+  if (already) return;
+  await env.DB.prepare("INSERT INTO credits (id, user_id, kind, pct, reason) VALUES (?,?,?,?,?)").bind(randomId(), userId, "loyalty", 100, reason).run();
+  const u = await env.DB.prepare("SELECT email, name FROM users WHERE id = ?").bind(userId).first();
+  await sendEmail(env, { to: u.email, subject: "Your next Zen session is on us", text: [`Hi ${u.name},`, ``, `That was session number ${done.n}. The next one is free — pick a day whenever you like: ${env.SITE_URL}/booking`, ``, `Zen Recovery`].join("\n") });
+}
+
 // ---------- availability → free slots ----------
 const toMin = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
 const toHHMM = (m) => String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
@@ -150,6 +185,8 @@ export async function slotsFor(env, city, date, therapistId) {
       if (free.length && (!therapistId || free.includes(therapistId))) out.set(t, [...new Set([...(out.get(t) || []), ...free])]);
     }
   }
-  if (date === today()) { const nowMin = new Date().getUTCHours() * 60 + new Date().getUTCMinutes() + 60; for (const t of [...out.keys()]) if (toMin(t) < nowMin) out.delete(t); }
+  const ln = localNow(CITIES[city].tz); // in the city's own time, not UTC
+  if (date < ln.date) return { mode: "slots", slots: [] };
+  if (date === ln.date) { const cutoff = ln.minutes + 60; for (const t of [...out.keys()]) if (toMin(t) < cutoff) out.delete(t); }
   return { mode: "slots", slots: [...out.entries()].sort().map(([time, th]) => ({ time, therapists: th.filter(Boolean) })) };
 }
