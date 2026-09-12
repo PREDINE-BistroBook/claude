@@ -89,12 +89,12 @@ button { font: inherit; color: inherit; }
 
 /* ---------- hero ---------- */
 .hero {
-  position: relative; min-height: 100svh;
-  padding: calc(var(--nav-h) + 12vh) var(--gutter) 12vh;
+  position: relative;
+  padding: calc(var(--nav-h) + 9vh) var(--gutter) 10vh;
   display: flex; flex-direction: column; justify-content: center;
 }
 .hero .rail { top: calc(var(--nav-h) + 28px); }
-.hero h1 { margin: 0 0 clamp(28px, 5vh, 56px); line-height: .92; font-weight: 400; }
+.hero h1 { margin: 0 0 clamp(24px, 4vh, 44px); line-height: .92; font-weight: 400; }
 .h1-a {
   display: block; font-family: var(--sans); font-weight: 500; font-size: clamp(.9rem, 1.8vw, 1.2rem);
   letter-spacing: .42em; text-transform: uppercase; color: var(--muted); margin: 0 0 .6em .12em;
@@ -114,6 +114,17 @@ button { font: inherit; color: inherit; }
 .scroll-hint { position: absolute; left: 50%; bottom: 26px; width: 1px; height: 54px; background: var(--gold-soft); overflow: hidden; }
 .scroll-hint i { position: absolute; inset: 0; background: var(--gold); transform: translateY(-100%); animation: drip 2.2s ease-in-out infinite; }
 @keyframes drip { 0% { transform: translateY(-100%); } 60% { transform: translateY(100%); } 100% { transform: translateY(100%); } }
+
+/* ---------- vedute: photographs hung like paintings ---------- */
+.veduta { position: relative; margin: 0; padding: 6px; border: 1px solid var(--gold); outline: 1px solid var(--gold-soft); outline-offset: 5px; background: rgba(0,0,0,.18); }
+.veduta img { display: block; width: 100%; height: auto; }
+.veduta figcaption { position: absolute; left: 18px; bottom: -14px; display: inline-flex; align-items: baseline; gap: 10px; padding: 8px 14px 7px; font-size: .74rem; letter-spacing: .06em; text-transform: uppercase; box-shadow: 0 10px 24px -14px rgba(0,0,0,.7); }
+.veduta figcaption::before { display: none; }
+.cap-n { font-family: var(--display); font-style: italic; font-size: .95rem; color: #8A6A2E; }
+.hero-veduta { margin: 0 0 clamp(36px, 6vh, 64px); }
+.hero-veduta img { aspect-ratio: 2000 / 539; object-fit: cover; }
+.visit-photos { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 28px 32px; max-width: 1100px; margin: 0 0 44px; }
+.visit-photos img { aspect-ratio: 4 / 3; object-fit: cover; }
 
 /* ---------- plaque (museum label) ---------- */
 .plaque {
@@ -295,7 +306,9 @@ button { font: inherit; color: inherit; }
   :root { --nav-h: 56px; --route-h: 48px; }
   .brand-a { display: none; }
   .btn.small { padding: 9px 12px; }
-  .hero { padding-top: calc(var(--nav-h) + 8vh); }
+  .hero { padding-top: calc(var(--nav-h) + 6vh); }
+  .hero-veduta img { aspect-ratio: 16 / 9; }
+  .veduta figcaption { left: 10px; font-size: .68rem; }
   .h1-b { font-size: clamp(3.2rem, 17vw, 5rem); }
   .room-head { grid-template-columns: 1fr; }
   .numeral { grid-row: auto; font-size: 3.4rem; margin: 0 0 6px; }
