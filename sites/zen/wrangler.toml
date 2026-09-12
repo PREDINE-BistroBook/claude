@@ -1,13 +1,24 @@
-name = "zen-cupping"
+name = "zen-recovery"
 main = "src/worker.js"
 compatibility_date = "2025-06-01"
 
 [assets]
 directory = "./public"
-not_found_handling = "single-page-application"
+binding = "ASSETS"
+not_found_handling = "404-page"
 
-# Non-secret configuration. Secrets (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, RESEND_API_KEY)
-# are set with `wrangler secret put <NAME>` and never committed.
+# Database. Create once with:  npx wrangler d1 create zen-recovery   → paste the id below,
+# then:  npx wrangler d1 execute zen-recovery --remote --file=schema.sql
+[[d1_databases]]
+binding = "DB"
+database_name = "zen-recovery"
+database_id = "REPLACE_WITH_ID_FROM_wrangler_d1_create"
+
+# Secrets (never committed) — set each with `npx wrangler secret put NAME`:
+#   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, RESEND_API_KEY,
+#   SESSION_SECRET (any long random string, signs login cookies),
+#   ADMIN_BOOTSTRAP_EMAIL + ADMIN_BOOTSTRAP_PASSWORD (first owner login; only honoured while no admin exists yet)
+
 # Custom domain — uncomment once zenrecovery.com is in this Cloudflare account (see README "Domain").
 # routes = [
 #   { pattern = "zenrecovery.com", custom_domain = true },
@@ -15,7 +26,8 @@ not_found_handling = "single-page-application"
 # ]
 
 [vars]
-SITE_URL = "https://zen-cupping.fetta-amore-business.workers.dev"   # -> "https://zenrecovery.com" once the domain is live
-ZEN_STRIPE_ACCOUNT = ""          # acct_... of Zen's connected account. Empty = preview mode (no payments).
+SITE_URL = "https://zen-recovery.fetta-amore-business.workers.dev"   # -> "https://zenrecovery.com" once the domain is live
+ZEN_STRIPE_ACCOUNT = ""          # acct_... of Zen's connected account. Empty = preview mode (no card payments).
 ZEN_NOTIFY_EMAIL = ""            # where Zen receives bookings
 FROM_EMAIL = "Zen Recovery <booking@amicomioflorence.com>"   # -> "Zen Recovery <booking@zenrecovery.com>" once the domain is verified in Resend
+DEV_MAGIC_LINK = "0"             # "1" only on a local dev run: returns the sign-in link in the API response instead of relying on email

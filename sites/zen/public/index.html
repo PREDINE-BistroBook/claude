@@ -177,6 +177,20 @@ footer .wm b{color:#fff}
 .room-strip figcaption{font-size:.86rem; color:var(--ink-soft)}
 @media (max-width:760px){ .room-strip{grid-template-columns:1fr} }
 
+/* ---------- rewards ---------- */
+.rewards{background:var(--ink);color:var(--ground);padding:clamp(56px, 10vh, 110px) var(--gutter)}
+.rewards .eyebrow{color:var(--mark-soft)}
+.rewards-head{display:grid;gap:14px;max-width:44rem;margin-bottom:34px}
+.reward-cards{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.reward-card{display:grid;gap:12px;padding:28px;border-radius:var(--radius);border:1px solid rgba(237,238,234,.14);background:rgba(237,238,234,.05)}
+.reward-card p{color:rgba(237,238,234,.72);font-size:.98rem}
+.reward-num{font-family:var(--display);font-weight:800;font-style:italic;font-size:clamp(3rem, 6vw, 4.6rem);line-height:1;color:var(--mark);letter-spacing:-.04em}
+.reward-num small{font-size:.4em;font-weight:400;font-style:normal;color:var(--mark-soft);margin-left:4px}
+.reward-cta{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-top:26px}
+.reward-cta .btn{background:var(--mark);border-color:var(--mark);color:#fff}
+.reward-cta .fine{font-size:.86rem;color:rgba(237,238,234,.6)}
+@media (max-width:760px){ .reward-cards{grid-template-columns:1fr} }
+
 /* ---------- good to know ---------- */
 .know{background:var(--ground-2); padding:clamp(56px, 10vh, 110px) var(--gutter)}
 .know-grid{display:grid; grid-template-columns:1fr 1fr; gap:clamp(24px, 5vw, 72px); align-items:start}
@@ -278,6 +292,8 @@ legend{font-family:var(--label); font-size:.62rem; letter-spacing:.2em; text-tra
 .book-actions{display:grid; gap:12px}
 .book-actions .fine{font-size:.82rem; color:var(--ink-mute)}
 .book-actions .fine a{color:var(--ink-soft)}
+#rewards-box .fine{font-size:.86rem;color:var(--ink-soft)} #rewards-box .fine a{color:var(--mark);font-weight:500}
+#rewards-user{display:grid;gap:10px}
 .err{color:var(--mark); font-size:.9rem}
 .err[hidden]{display:none}
 @media (max-width:860px){
@@ -329,6 +345,7 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
     <a href="#how" class="hide-sm">How it works</a>
     <a href="#methods" class="hide-sm">Methods</a>
     <a href="#places" class="hide-sm">Cities</a>
+    <a href="account.html" id="nav-account">Account</a>
     <a href="#places" class="btn small">Book a session</a>
   </div>
 </nav>
@@ -514,6 +531,30 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
   </div>
 </section>
 
+<!-- ================= REWARDS ================= -->
+<section class="rewards" id="rewards" aria-labelledby="rewards-title">
+  <div class="rewards-head reveal">
+    <p class="eyebrow">Come back. Bring someone.</p>
+    <h2 id="rewards-title">Recovery is a habit. We reward the habit.</h2>
+  </div>
+  <div class="reward-cards">
+    <div class="reward-card reveal">
+      <div class="reward-num"><span id="rw-every">10</span><small>th</small></div>
+      <h3>Every tenth session is free.</h3>
+      <p>Sessions in any city count. Your account keeps the tally, and the free one appears by itself when you get there.</p>
+    </div>
+    <div class="reward-card reveal">
+      <div class="reward-num"><span id="rw-pct">40</span><small>%</small></div>
+      <h3>Invite a friend: 40% off, for both of you.</h3>
+      <p>Share your link. Your friend gets the discount on their first session. You get yours the moment they book.</p>
+    </div>
+  </div>
+  <div class="reward-cta reveal">
+    <a class="btn" href="account.html">Create your free account</a>
+    <span class="fine">No password. We email you a sign-in link.</span>
+  </div>
+</section>
+
 <!-- ================= GOOD TO KNOW ================= -->
 <section class="know" id="know" aria-labelledby="know-title">
   <div class="know-grid">
@@ -688,9 +729,19 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
         <div class="field"><label for="note">Anything we should know? <span style="color:var(--ink-mute);font-weight:400">(optional)</span></label><textarea id="note" name="note" placeholder="An old injury, a spot to avoid, a first time…"></textarea></div>
       </fieldset>
 
+      <fieldset id="rewards-box">
+        <legend>Your rewards</legend>
+        <p class="fine" id="rewards-guest">Have an account? <a href="account.html">Sign in</a> to use your rewards and make this session count toward your free one.</p>
+        <div id="rewards-user" hidden>
+          <p class="fine" id="rewards-who"></p>
+          <div class="slots" id="credit-options"></div>
+        </div>
+      </fieldset>
+
       <div class="summary" id="summary" aria-live="polite">
         <div class="line"><span id="sum-service">—</span><span class="num" id="sum-price">—</span></div>
         <div class="line"><span id="sum-when">—</span><span></span></div>
+        <div class="line" id="sum-discount-line" hidden><span id="sum-discount">Reward</span><span class="num" id="sum-discount-amt"></span></div>
         <div class="line total"><span>To pay now</span><span class="num" id="sum-total">—</span></div>
       </div>
 
@@ -726,12 +777,14 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
         <li><a href="#how">How cupping works</a></li>
         <li><a href="#methods">Methods</a></li>
         <li><a href="#know">Before and after</a></li>
+        <li><a href="#rewards">Rewards</a></li>
+        <li><a href="account.html">My account</a></li>
       </ul>
     </div>
   </div>
   <div class="foot-bottom">
     <span>© <span id="year"></span> Zen Recovery</span>
-    <span>Cupping is a complementary therapy and not a substitute for medical care.</span>
+    <span>Cupping is a complementary therapy and not a substitute for medical care. <a href="admin.html" style="color:inherit;opacity:.6">Team sign-in</a></span>
   </div>
 </footer>
 
@@ -855,6 +908,21 @@ $$(".reveal").forEach((el, i) => { el.style.transitionDelay = (i % 5) * 60 + "ms
   tl.to({}, { duration: .4 }, 5.4);
 })();
 
+/* ---------- signed-in client (optional) ---------- */
+let ME = null;
+fetch("/api/me", { credentials: "same-origin" }).then(r => (r.headers.get("content-type") || "").includes("json") ? r.json() : { user: null }).then(d => {
+  if (!d.user) return; ME = d;
+  $("#nav-account").textContent = d.user.name.split(" ")[0];
+  $("#rw-every").textContent = d.settings.loyalty_every; $("#rw-pct").textContent = d.settings.referral_pct;
+  $("#name").value = d.user.name || ""; $("#email").value = d.user.email || ""; $("#phone").value = d.user.phone || "";
+  $("#rewards-guest").hidden = true; $("#rewards-user").hidden = false;
+  const cr = d.credits.filter(c => c.status === "available");
+  $("#rewards-who").textContent = `Signed in as ${d.user.name}. ${cr.length ? "Pick a reward to use on this session:" : `${d.stats.done % d.settings.loyalty_every}/${d.settings.loyalty_every} toward your free session.`}`;
+  $("#credit-options").innerHTML = cr.length ? [`<span class="slot"><input type="radio" name="credit" id="cr-none" value="" checked><label for="cr-none">No reward</label></span>`, ...cr.map(c => `<span class="slot"><input type="radio" name="credit" id="cr-${c.id}" value="${c.id}" data-pct="${c.pct}"><label for="cr-${c.id}">${c.pct === 100 ? "Free session" : c.pct + "% off"}</label></span>`)].join("") : "";
+  if (cr.length) { $("#cr-" + cr[0].id).checked = true; }
+  updateSummary();
+}).catch(() => {});
+
 /* ---------- city choice + booking ---------- */
 let city = null;
 const panels = $("#panels");
@@ -904,7 +972,11 @@ function updateSummary() {
   $("#sum-service").textContent = `${s.name} · ${s.dur} min · ${c.name}`;
   $("#sum-price").textContent = money(s.price, c.currency, c.locale);
   $("#sum-when").textContent = date ? new Date(date + "T12:00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }) + " · " + SLOT_LABEL[slot] : "Pick a day";
-  $("#sum-total").textContent = money(s.price, c.currency, c.locale);
+  const cr = $("input[name=credit]:checked"); const pct = cr && cr.value ? Number(cr.dataset.pct) : 0;
+  const total = Math.round(s.price * (100 - pct) / 100);
+  $("#sum-discount-line").hidden = !pct; if (pct) { $("#sum-discount").textContent = pct === 100 ? "Free session reward" : `Invite reward · ${pct}% off`; $("#sum-discount-amt").textContent = "− " + money(s.price - total, c.currency, c.locale); }
+  $("#sum-total").textContent = total === 0 ? "Nothing to pay" : money(total, c.currency, c.locale);
+  $("#pay").textContent = total === 0 ? "Reserve my free session" : "Reserve and pay";
 }
 $("#booking").addEventListener("change", updateSummary);
 $("#booking").addEventListener("input", (e) => { if (e.target.id === "date") updateSummary(); });
@@ -920,7 +992,8 @@ $("#booking").addEventListener("submit", async (e) => {
   const { c, s } = current();
   const payload = {
     city, service: s.id, date: $("#date").value, slot: $("input[name=slot]:checked").value,
-    name: $("#name").value.trim(), phone: $("#phone").value.trim(), email: $("#email").value.trim(), note: $("#note").value.trim()
+    name: $("#name").value.trim(), phone: $("#phone").value.trim(), email: $("#email").value.trim(), note: $("#note").value.trim(),
+    credit_id: $("input[name=credit]:checked")?.value || undefined
   };
   const btn = $("#pay"); btn.disabled = true; btn.textContent = "One moment…";
   try {
@@ -936,7 +1009,7 @@ $("#booking").addEventListener("submit", async (e) => {
   } catch (_) {
     tell("Preview only", `Nothing was charged. On the live site this takes you to a secure Stripe card page for ${money(s.price, c.currency, c.locale)}, and Zen confirms the hour on WhatsApp.`);
   } finally {
-    btn.disabled = false; btn.textContent = "Reserve and pay";
+    btn.disabled = false; updateSummary();
   }
 });
 </script>

@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zen Recovery · Admin</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira:ital,wght@0,300;0,400;1,800&family=Michroma&family=Figtree:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="app.css">
+<style>
+  .login{max-width:420px;margin:8vh auto 0;display:grid;gap:18px}
+  .login .card{display:grid;gap:14px}
+  .scope{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0 4px}
+  .charts{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+  @media (max-width:860px){.charts{grid-template-columns:1fr}}
+  .chart-card h3{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+  .chart-card h3 span{font-family:var(--body);font-size:.8rem;color:var(--ink-mute);font-weight:400}
+  .today{display:grid;gap:8px}
+  .today .item{display:flex;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:10px;background:var(--ground-3);border:1px solid var(--line);font-size:.9rem}
+  .actions{display:flex;gap:6px;flex-wrap:wrap}
+  .actions .btn{padding:5px 10px;font-size:.76rem}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.8rem;color:var(--ink-soft);margin-top:8px}
+  .drawer h2{margin-bottom:4px}
+  .drawer .close{position:absolute;top:16px;right:16px}
+  .kv{display:grid;grid-template-columns:110px 1fr;gap:6px 12px;font-size:.9rem;margin:12px 0}
+  .kv dt{color:var(--ink-soft)} .kv dd{margin:0}
+  .mini{font-size:.86rem}
+  .settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media (max-width:860px){.settings-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="banner" id="demo-banner" hidden>Preview — sample data. Choose "owner" to see every city, or "Florence admin" to see how a city account is walled off.</div>
+<header class="top">
+  <div class="row" style="gap:14px"><a class="wm" href="index.html"><b>ZEN</b><small>RECOVERY</small></a><span class="badge">Admin</span></div>
+  <div class="who" id="who" hidden><span class="badge" id="scope-badge"></span><span id="admin-name"></span><a href="#" id="signout" class="tiny">Sign out</a></div>
+</header>
+
+<main class="wrap">
+  <!-- ===== login ===== -->
+  <section class="login" id="login-view" hidden>
+    <div><p class="eyebrow">Zen Recovery</p><h1>Admin sign-in</h1></div>
+    <form class="card" id="login-form" novalidate>
+      <div class="field"><label for="a-email">Email</label><input id="a-email" type="email" autocomplete="username" required></div>
+      <div class="field"><label for="a-pass">Password</label><input id="a-pass" type="password" autocomplete="current-password" required></div>
+      <p class="err" id="login-err" hidden></p>
+      <button class="btn" type="submit" id="login-btn">Sign in</button>
+    </form>
+    <div class="card" id="demo-login" hidden>
+      <h3>Reviewing the preview?</h3>
+      <div class="row"><button class="btn small" data-role="all">Preview as owner</button><button class="btn small ghost" data-role="florence">Preview as Florence admin</button><button class="btn small ghost" data-role="cairo">Preview as Cairo admin</button></div>
+    </div>
+  </section>
+
+  <!-- ===== app ===== -->
+  <section id="app-view" hidden>
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" data-tab="overview">Overview</button>
+      <button role="tab" aria-selected="false" data-tab="bookings">Bookings</button>
+      <button role="tab" aria-selected="false" data-tab="clients">Clients</button>
+      <button role="tab" aria-selected="false" data-tab="settings">Settings</button>
+    </div>
+
+    <!-- overview -->
+    <div id="tab-overview">
+      <div class="scope" id="city-pills"></div>
+      <div class="grid cols-4" id="kpis"></div>
+      <div class="charts">
+        <div class="card chart-card"><h3>Sessions per month <span>last 12 months</span></h3><div class="chart" id="ch-bookings"></div></div>
+        <div class="card chart-card" id="rev-card"><h3>Revenue per month <span id="rev-note"></span></h3><div id="ch-revenue"></div></div>
+        <div class="card chart-card"><h3>By session type <span>all time</span></h3><div class="chart" id="ch-service"></div></div>
+        <div class="card chart-card" id="city-card" hidden><h3>By city <span>this month</span></h3><div class="chart" id="ch-city"></div><div class="legend" id="city-legend"></div></div>
+        <div class="card"><h3>Today</h3><div class="today" id="today"></div></div>
+        <div class="card"><h3>Rewards</h3><div class="mini" id="rewards"></div></div>
+      </div>
+    </div>
+
+    <!-- bookings -->
+    <div id="tab-bookings" hidden>
+      <div class="section-head"><h2>Bookings</h2><button class="btn small" id="add-booking">Add a booking</button></div>
+      <div class="filters">
+        <div class="field" id="f-city-wrap" hidden><label for="f-city">City</label><select id="f-city"><option value="">All cities</option><option value="cairo">Cairo</option><option value="dahab">Dahab</option><option value="florence">Florence</option></select></div>
+        <div class="field"><label for="f-status">Status</label><select id="f-status"><option value="">Any</option><option value="paid">Reserved</option><option value="confirmed">Confirmed</option><option value="done">Done</option><option value="cancelled">Cancelled</option><option value="no_show">Missed</option></select></div>
+        <div class="field"><label for="f-from">From</label><input id="f-from" type="date"></div>
+        <div class="field"><label for="f-to">To</label><input id="f-to" type="date"></div>
+        <div class="field" style="flex:1"><label for="f-q">Search</label><input id="f-q" placeholder="name, email, phone"></div>
+      </div>
+      <div class="table-wrap"><table id="bookings-table"><thead><tr><th>Day</th><th>Client</th><th>City</th><th>Session</th><th>Paid</th><th>Status</th><th></th></tr></thead><tbody></tbody></table></div>
+    </div>
+
+    <!-- clients -->
+    <div id="tab-clients" hidden>
+      <div class="section-head"><h2>Clients</h2><span class="tiny" id="clients-count"></span></div>
+      <div class="filters"><div class="field" style="flex:1"><label for="c-q">Search</label><input id="c-q" placeholder="name, email, phone"></div></div>
+      <div class="table-wrap"><table id="clients-table"><thead><tr><th></th><th>Client</th><th>Home</th><th>Sessions</th><th>Last visit</th><th>Rewards</th><th>Invited by</th></tr></thead><tbody></tbody></table></div>
+    </div>
+
+    <!-- settings -->
+    <div id="tab-settings" hidden>
+      <div class="settings-grid">
+        <div class="card" id="rules-card" hidden>
+          <h3>Rewards rules</h3>
+          <form id="rules-form" class="grid" style="gap:12px">
+            <div class="field"><label for="s-every">Free session every … sessions</label><input id="s-every" type="number" min="2" max="50"></div>
+            <div class="field"><label for="s-pct">Invite discount, % for both</label><input id="s-pct" type="number" min="0" max="100"></div>
+            <p class="tiny">Platform fee on card bookings: <b id="s-fee"></b> (fixed in the code, collected by Stripe).</p>
+            <div class="row"><button class="btn small" type="submit">Save rules</button><span class="ok" id="rules-ok" hidden>Saved</span><span class="err" id="rules-err" hidden></span></div>
+          </form>
+        </div>
+        <div class="card">
+          <h3>Your password</h3>
+          <form id="pw-form" class="grid" style="gap:12px">
+            <div class="field"><label for="pw-cur">Current password</label><input id="pw-cur" type="password" autocomplete="current-password"></div>
+            <div class="field"><label for="pw-new">New password <span class="tiny">(10+ characters)</span></label><input id="pw-new" type="password" autocomplete="new-password"></div>
+            <div class="row"><button class="btn small" type="submit">Change password</button><span class="ok" id="pw-ok" hidden>Changed</span><span class="err" id="pw-err" hidden></span></div>
+          </form>
+        </div>
+        <div class="card" id="admins-card" hidden style="grid-column:1/-1">
+          <h3>Who can sign in</h3>
+          <div class="table-wrap" style="margin-bottom:16px"><table id="admins-table"><thead><tr><th>Name</th><th>Email</th><th>Sees</th><th>Last sign-in</th><th></th></tr></thead><tbody></tbody></table></div>
+          <form id="admin-form" class="filters" style="align-items:end">
+            <div class="field"><label for="n-name">Name</label><input id="n-name" required></div>
+            <div class="field"><label for="n-email">Email</label><input id="n-email" type="email" required></div>
+            <div class="field"><label for="n-role">Sees</label><select id="n-role"><option value="florence">Florence only</option><option value="cairo">Cairo only</option><option value="dahab">Dahab only</option><option value="all">All cities (owner)</option></select></div>
+            <div class="field"><label for="n-pass">Password</label><input id="n-pass" type="text" autocomplete="off" placeholder="10+ characters"></div>
+            <button class="btn small" type="submit">Add admin</button>
+            <span class="err" id="admin-err" hidden></span>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- booking drawer -->
+<aside class="drawer" id="drawer" aria-hidden="true"></aside>
+
+<!-- add booking -->
+<dialog id="dlg-add">
+  <form class="inner" id="add-form" method="dialog" novalidate>
+    <h3>Add a booking</h3>
+    <p class="tiny">For walk-ins, WhatsApp bookings and cash payments. Sessions added here count toward the client's loyalty reward if the email matches their account.</p>
+    <div class="row">
+      <div class="field" style="flex:1" id="add-city-wrap"><label for="ad-city">City</label><select id="ad-city"></select></div>
+      <div class="field" style="flex:2"><label for="ad-service">Session</label><select id="ad-service"></select></div>
+    </div>
+    <div class="row">
+      <div class="field" style="flex:1"><label for="ad-name">Client name</label><input id="ad-name" required></div>
+      <div class="field" style="flex:1"><label for="ad-email">Email <span class="tiny">(links to their account)</span></label><input id="ad-email" type="email"></div>
+    </div>
+    <div class="row">
+      <div class="field" style="flex:1"><label for="ad-phone">WhatsApp</label><input id="ad-phone"></div>
+      <div class="field" style="flex:1"><label for="ad-date">Day</label><input id="ad-date" type="date" required></div>
+      <div class="field" style="flex:1"><label for="ad-slot">Time</label><input id="ad-slot" placeholder="17:00"></div>
+    </div>
+    <div class="row">
+      <div class="field" style="flex:1"><label for="ad-amount">Paid <span class="tiny">(major units, blank = list price)</span></label><input id="ad-amount" type="number" min="0" step="0.01"></div>
+      <div class="field" style="flex:1"><label for="ad-status">Status</label><select id="ad-status"><option value="confirmed">Confirmed</option><option value="done">Done (already happened)</option><option value="paid">Reserved</option></select></div>
+    </div>
+    <p class="err" id="add-err" hidden></p>
+    <div class="row" style="justify-content:flex-end"><button class="btn small ghost" type="button" id="add-cancel">Cancel</button><button class="btn small" type="submit">Save booking</button></div>
+  </form>
+</dialog>
+
+<script src="demo.js"></script>
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const CITY_NAME = { cairo: "Cairo", dahab: "Dahab", florence: "Florence" };
+const CITY_COLOR = { cairo: "#C4681E", dahab: "#1FA08A", florence: "#2F7BEA" };
+const STATUS = { paid: "Reserved", confirmed: "Confirmed", done: "Done", cancelled: "Cancelled", no_show: "Missed" };
+const SLOT = { morning: "Morning", afternoon: "Afternoon", evening: "Evening" };
+const money = (minor, cur) => new Intl.NumberFormat("en", { style: "currency", currency: cur.toUpperCase(), maximumFractionDigits: cur === "egp" ? 0 : 2 }).format(minor / 100);
+const short = (minor, cur) => { const v = minor / 100; const s = v >= 1000 ? (v / 1000).toFixed(1) + "k" : String(Math.round(v)); return (cur === "eur" ? "€" : "E£") + s; };
+const fmtDate = (d) => new Date(d + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+const monthLabel = (m) => new Date(m + "-01T12:00:00").toLocaleDateString("en-GB", { month: "short" });
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+let A = null, CITIES = {}, SETTINGS = {}, cityFilter = "";
+const isOwner = () => A.role === "all";
+
+async function boot() {
+  try { const r = await ZenAPI("GET", "/api/admin/me"); start(r); }
+  catch { $("#login-view").hidden = false; }
+  if (ZenAPI.isDemo()) { $("#demo-banner").hidden = false; $("#demo-login").hidden = false; }
+}
+function start(r) {
+  A = r.admin; CITIES = r.cities; SETTINGS = r.settings;
+  $("#login-view").hidden = true; $("#app-view").hidden = false; $("#who").hidden = false;
+  $("#admin-name").textContent = A.name;
+  $("#scope-badge").textContent = isOwner() ? "All cities" : CITY_NAME[A.role]; $("#scope-badge").className = "badge " + (isOwner() ? "all" : "city-" + A.role);
+  $("#city-pills").innerHTML = isOwner() ? `<span class="tiny">Showing</span><div class="pills">${[["", "All cities"], ["cairo", "Cairo"], ["dahab", "Dahab"], ["florence", "Florence"]].map(([k, n]) => `<button class="pill" data-city="${k}" aria-pressed="${k === cityFilter}">${n}</button>`).join("")}</div>` : `<span class="tiny">You see ${CITY_NAME[A.role]} only. Bookings, clients and money from the other cities aren't visible to this account.</span>`;
+  $$("#city-pills .pill").forEach((p) => p.addEventListener("click", () => { cityFilter = p.dataset.city; $$("#city-pills .pill").forEach((x) => x.setAttribute("aria-pressed", x === p)); loadOverview(); }));
+  $("#f-city-wrap").hidden = !isOwner(); $("#rules-card").hidden = !isOwner(); $("#admins-card").hidden = !isOwner();
+  loadOverview();
+}
+
+/* ---------- overview ---------- */
+async function loadOverview() {
+  const s = await ZenAPI("GET", "/api/admin/stats?city=" + cityFilter);
+  const tm = s.this_month, lm = s.last_month;
+  const n = tm.reduce((a, r) => a + r.n, 0), nl = lm.reduce((a, r) => a + r.n, 0);
+  const delta = (cur, prev) => prev ? `<span class="delta ${cur >= prev ? "up" : "down"}">${cur >= prev ? "▲" : "▼"} ${Math.abs(Math.round(((cur - prev) / prev) * 100))}% vs last month</span>` : `<span class="delta">no data last month</span>`;
+  const revTiles = tm.map((r) => { const prev = lm.find((x) => x.currency === r.currency)?.rev || 0; return `<div class="kpi"><span class="label">Revenue this month${tm.length > 1 ? " · " + r.currency.toUpperCase() : ""}</span><span class="value">${money(r.rev, r.currency)}</span>${delta(r.rev, prev)}${s.show_fee ? `<span class="delta">platform fee ${money(r.fee, r.currency)}</span>` : ""}</div>`; }).join("") || `<div class="kpi"><span class="label">Revenue this month</span><span class="value">—</span></div>`;
+  $("#kpis").innerHTML = `<div class="kpi"><span class="label">Sessions this month</span><span class="value">${n}</span>${delta(n, nl)}</div>${revTiles}<div class="kpi"><span class="label">Clients</span><span class="value">${s.clients.total}</span><span class="delta">${s.clients.new_this_month} new this month</span></div><div class="kpi"><span class="label">Upcoming</span><span class="value">${s.upcoming}</span><span class="delta">reserved or confirmed</span></div>`;
+  // sessions per month (all currencies together — counts, not money)
+  const months = []; for (let i = -11; i <= 0; i++) { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + i); months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); }
+  barChart($("#ch-bookings"), months.map((m) => ({ label: monthLabel(m), key: m, value: s.months.filter((r) => r.m === m).reduce((a, r) => a + r.n, 0) })), { fmt: (v) => v + " sessions" });
+  const currencies = [...new Set(s.months.map((r) => r.currency))];
+  $("#rev-note").textContent = currencies.length > 1 ? "EUR and EGP are shown separately, never added together" : "last 12 months";
+  $("#ch-revenue").innerHTML = currencies.map((c) => `<p class="tiny" style="margin:8px 0 2px">${c.toUpperCase()}</p><div class="chart" data-cur="${c}"></div>`).join("") || `<div class="empty">No revenue yet.</div>`;
+  currencies.forEach((c) => barChart($(`#ch-revenue .chart[data-cur="${c}"]`), months.map((m) => ({ label: monthLabel(m), key: m, value: s.months.filter((r) => r.m === m && r.currency === c).reduce((a, r) => a + r.rev, 0) })), { fmt: (v) => money(v, c), short: (v) => short(v, c), height: 150 }));
+  hBarChart($("#ch-service"), s.by_service.map((r) => ({ label: r.name.split(" · ")[0] + (s.city ? "" : " · " + r.name.split(" · ")[2]), value: r.n })), { fmt: (v) => v + " sessions" });
+  const cc = $("#city-card"); cc.hidden = !s.by_city.length;
+  if (s.by_city.length) { const rows = ["cairo", "dahab", "florence"].map((k) => ({ label: CITY_NAME[k], value: s.by_city.filter((r) => r.city === k).reduce((a, r) => a + r.n, 0), color: CITY_COLOR[k] })); hBarChart($("#ch-city"), rows, { fmt: (v) => v + " sessions" }); $("#city-legend").innerHTML = s.by_city.map((r) => `<span><i class="dot ${r.city}"></i>${CITY_NAME[r.city]}: ${money(r.rev, r.currency)}${s.show_fee ? ` · fee ${money(r.fee, r.currency)}` : ""}</span>`).join(""); }
+  $("#today").innerHTML = s.today.length ? s.today.map((b) => `<div class="item"><span>${esc(b.name)} · ${esc(b.service_name.split(" · ")[0])}${s.city ? "" : " · " + CITY_NAME[b.city]}</span><span class="num">${SLOT[b.slot] || b.slot}</span></div>`).join("") : `<p class="muted">Nothing booked for today.</p>`;
+  const rw = (kind, status) => s.rewards.find((r) => r.kind === kind && r.status === status)?.n || 0;
+  $("#rewards").innerHTML = `<dl class="kv"><dt>Free sessions</dt><dd>${rw("loyalty", "available")} waiting · ${rw("loyalty", "used")} used</dd><dt>Invite discounts</dt><dd>${rw("referral", "available")} waiting · ${rw("referral", "used")} used</dd><dt>Rules</dt><dd>every ${SETTINGS.loyalty_every}th free · ${SETTINGS.referral_pct}% for invites</dd></dl>`;
+}
+
+/* ---------- charts (single hue, thin marks, hover tooltip, table fallback) ---------- */
+function barChart(el, rows, o = {}) {
+  const W = 600, H = o.height || 190, padL = 34, padB = 22, padT = 14; const max = Math.max(1, ...rows.map((r) => r.value)); const iw = (W - padL) / rows.length; const bw = Math.min(28, iw * .6);
+  const y = (v) => padT + (H - padT - padB) * (1 - v / max);
+  const ticks = [0, .5, 1].map((t) => Math.round(max * t));
+  const maxIdx = rows.findIndex((r) => r.value === max);
+  const shortF = o.short || ((v) => v);
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${o.label || "bar chart"}">`;
+  ticks.forEach((t) => { svg += `<line class="grid-line" x1="${padL}" x2="${W}" y1="${y(t)}" y2="${y(t)}"/><text class="axis" x="${padL - 6}" y="${y(t) + 4}" text-anchor="end">${shortF(t)}</text>`; });
+  rows.forEach((r, i) => { const x = padL + i * iw + (iw - bw) / 2, top = y(r.value), h = Math.max(0, H - padB - top); const rr = Math.min(4, h);
+    svg += `<path class="bar" data-i="${i}" d="M${x} ${H - padB} v${-(h - rr)} q0 ${-rr} ${rr} ${-rr} h${bw - 2 * rr} q${rr} 0 ${rr} ${rr} v${h - rr} z"/>`;
+    if (i === maxIdx || i === rows.length - 1) svg += `<text class="lbl" x="${x + bw / 2}" y="${top - 5}" text-anchor="middle">${r.value ? shortF(r.value) : ""}</text>`;
+    svg += `<text class="axis" x="${x + bw / 2}" y="${H - 6}" text-anchor="middle">${r.label}</text><rect data-i="${i}" x="${padL + i * iw}" y="${padT}" width="${iw}" height="${H - padT - padB}" fill="transparent"/>`; });
+  svg += `</svg><div class="tip"></div><details class="tbl"><summary>Show as table</summary><table>${rows.map((r) => `<tr><td>${r.label}</td><td class="num">${o.fmt ? o.fmt(r.value) : r.value}</td></tr>`).join("")}</table></details>`;
+  el.innerHTML = svg; hover(el, rows, o, (i) => { const b = el.querySelectorAll(".bar")[i].getBBox(); return [b.x + b.width / 2, b.y]; });
+}
+function hBarChart(el, rows, o = {}) {
+  const W = 600, rh = 26, padL = 150, H = Math.max(40, rows.length * rh + 10); const max = Math.max(1, ...rows.map((r) => r.value));
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img">`;
+  rows.forEach((r, i) => { const yy = 6 + i * rh, w = ((W - padL - 50) * r.value) / max, rr = Math.min(4, w);
+    svg += `<text class="axis" x="${padL - 8}" y="${yy + 14}" text-anchor="end">${esc(r.label.length > 24 ? r.label.slice(0, 23) + "…" : r.label)}</text><path class="bar" data-i="${i}" ${r.color ? `style="fill:${r.color}"` : ""} d="M${padL} ${yy} h${w - rr} q${rr} 0 ${rr} ${rr} v${18 - 2 * rr} q0 ${rr} ${-rr} ${rr} h${-(w - rr)} z"/><text class="lbl" x="${padL + w + 6}" y="${yy + 14}">${r.value}</text><rect data-i="${i}" x="0" y="${yy - 3}" width="${W}" height="${rh}" fill="transparent"/>`; });
+  svg += `</svg><div class="tip"></div><details class="tbl"><summary>Show as table</summary><table>${rows.map((r) => `<tr><td>${esc(r.label)}</td><td class="num">${o.fmt ? o.fmt(r.value) : r.value}</td></tr>`).join("")}</table></details>`;
+  el.innerHTML = rows.length ? svg : `<div class="empty">Nothing yet.</div>`;
+  if (rows.length) hover(el, rows, o, (i) => { const b = el.querySelectorAll(".bar")[i].getBBox(); return [b.x + b.width, b.y]; });
+}
+function hover(el, rows, o, anchor) {
+  const tip = el.querySelector(".tip"), svg = el.querySelector("svg"), bars = el.querySelectorAll(".bar");
+  el.querySelectorAll("rect[data-i]").forEach((hit) => {
+    hit.addEventListener("mouseenter", () => { const i = +hit.dataset.i; bars.forEach((b, j) => b.classList.toggle("dim", j !== i)); const [ax, ay] = anchor(i); const pt = svg.createSVGPoint(); pt.x = ax; pt.y = ay; const sp = pt.matrixTransform(svg.getScreenCTM()); const er = el.getBoundingClientRect(); tip.style.left = sp.x - er.left + "px"; tip.style.top = sp.y - er.top + "px"; tip.textContent = `${rows[i].label}: ${o.fmt ? o.fmt(rows[i].value) : rows[i].value}`; tip.classList.add("on"); });
+    hit.addEventListener("mouseleave", () => { bars.forEach((b) => b.classList.remove("dim")); tip.classList.remove("on"); });
+  });
+}
+
+/* ---------- bookings ---------- */
+async function loadBookings() {
+  const q = new URLSearchParams({ city: isOwner() ? $("#f-city").value : "", status: $("#f-status").value, from: $("#f-from").value, to: $("#f-to").value, q: $("#f-q").value.trim() });
+  const { bookings } = await ZenAPI("GET", "/api/admin/bookings?" + q);
+  const tb = $("#bookings-table tbody");
+  tb.innerHTML = bookings.length ? bookings.map((b) => `<tr class="click" data-id="${b.id}">
+      <td class="num">${fmtDate(b.date)}<div class="tiny">${SLOT[b.slot] || b.slot}</div></td>
+      <td>${esc(b.name)}<div class="tiny">${esc(b.phone || b.email || "")}</div></td>
+      <td><i class="dot ${b.city}"></i>${CITY_NAME[b.city]}</td>
+      <td>${esc(b.service_name.split(" · ")[0])}${b.discount_kind ? `<div class="tiny">${b.discount_kind === "loyalty" ? "free session" : b.discount_kind === "referral" ? "invite discount" : "custom price"}</div>` : ""}${b.source === "manual" ? `<div class="tiny">added by hand</div>` : ""}</td>
+      <td class="num">${b.amount === 0 ? "Free" : money(b.amount, b.currency)}${b.platform_fee != null && b.platform_fee > 0 ? `<div class="tiny">fee ${money(b.platform_fee, b.currency)}</div>` : ""}</td>
+      <td><span class="status ${b.status}">${STATUS[b.status]}</span></td>
+      <td><div class="actions">${actionsFor(b)}</div></td></tr>`).join("") : `<tr><td colspan="7" class="empty">No bookings match.</td></tr>`;
+  tb.querySelectorAll("button[data-act]").forEach((btn) => btn.addEventListener("click", async (e) => { e.stopPropagation(); await setStatus(btn.closest("tr").dataset.id, btn.dataset.act); }));
+  tb.querySelectorAll("tr.click").forEach((tr) => tr.addEventListener("click", () => openBooking(bookings.find((b) => b.id === tr.dataset.id))));
+}
+const actionsFor = (b) => ({ paid: [["confirmed", "Confirm"], ["cancelled", "Cancel"]], confirmed: [["done", "Done"], ["no_show", "Missed"], ["cancelled", "Cancel"]], done: [], cancelled: [["confirmed", "Restore"]], no_show: [["done", "Done after all"]] }[b.status] || []).map(([s, l]) => `<button class="btn ghost" data-act="${s}">${l}</button>`).join("");
+async function setStatus(id, status) { await ZenAPI("PATCH", "/api/admin/bookings/" + id, { status }); loadBookings(); }
+function openBooking(b) {
+  const d = $("#drawer");
+  d.innerHTML = `<button class="btn small ghost close" id="dr-close">Close</button><p class="eyebrow">Booking</p><h2>${esc(b.name)}</h2><span class="status ${b.status}">${STATUS[b.status]}</span>
+    <dl class="kv"><dt>When</dt><dd>${fmtDate(b.date)} · <input id="dr-slot" value="${esc(b.slot)}" style="width:110px;font:inherit;padding:3px 6px;border:1px solid var(--line);border-radius:6px"> <button class="btn small ghost" id="dr-save-slot">Save time</button></dd>
+    <dt>City</dt><dd>${CITY_NAME[b.city]}</dd><dt>Session</dt><dd>${esc(b.service_name)}</dd><dt>Paid</dt><dd>${b.amount === 0 ? "Free (reward)" : money(b.amount, b.currency)}${b.list_amount !== b.amount ? ` <span class="tiny">list ${money(b.list_amount, b.currency)}</span>` : ""}</dd>
+    <dt>Contact</dt><dd>${esc(b.phone || "")}${b.phone ? ` · <a href="https://wa.me/${b.phone.replace(/\D/g, "")}" target="_blank" rel="noopener">WhatsApp</a>` : ""}<br>${esc(b.email || "")}</dd><dt>Source</dt><dd>${b.source === "manual" ? "added by hand" : "website"}</dd><dt>Booked</dt><dd>${esc(b.created_at)}</dd></dl>
+    <div class="field"><label for="dr-note">Note</label><textarea id="dr-note">${esc(b.note || "")}</textarea></div>
+    <div class="row" style="margin-top:10px"><button class="btn small" id="dr-save-note">Save note</button><span class="ok" id="dr-ok" hidden>Saved</span></div>
+    <div class="actions" style="margin-top:18px">${actionsFor(b)}</div>`;
+  d.classList.add("open"); d.setAttribute("aria-hidden", "false");
+  $("#dr-close").onclick = closeDrawer;
+  $("#dr-save-slot").onclick = async () => { await ZenAPI("PATCH", "/api/admin/bookings/" + b.id, { slot: $("#dr-slot").value }); $("#dr-ok").hidden = false; loadBookings(); };
+  $("#dr-save-note").onclick = async () => { await ZenAPI("PATCH", "/api/admin/bookings/" + b.id, { note: $("#dr-note").value }); $("#dr-ok").hidden = false; };
+  d.querySelectorAll("button[data-act]").forEach((btn) => (btn.onclick = async () => { await setStatus(b.id, btn.dataset.act); closeDrawer(); }));
+}
+function closeDrawer() { const d = $("#drawer"); d.classList.remove("open"); d.setAttribute("aria-hidden", "true"); }
+["f-city", "f-status", "f-from", "f-to"].forEach((id) => $("#" + id).addEventListener("change", loadBookings));
+let t; $("#f-q").addEventListener("input", () => { clearTimeout(t); t = setTimeout(loadBookings, 250); });
+
+// add booking
+$("#add-booking").addEventListener("click", () => {
+  const cityKeys = isOwner() ? Object.keys(CITIES) : [A.role];
+  $("#ad-city").innerHTML = cityKeys.map((k) => `<option value="${k}">${CITIES[k].name}</option>`).join(""); $("#add-city-wrap").hidden = !isOwner();
+  fillServices(); $("#ad-date").value = new Date().toISOString().slice(0, 10); $("#add-err").hidden = true; $("#dlg-add").showModal();
+});
+function fillServices() { const c = CITIES[$("#ad-city").value]; $("#ad-service").innerHTML = c.services.map((s) => `<option value="${s.id}">${s.name.split(" · ").slice(0, 2).join(" · ")} — ${money(s.amount, c.currency)}</option>`).join(""); }
+$("#ad-city").addEventListener("change", fillServices);
+$("#add-cancel").addEventListener("click", () => $("#dlg-add").close());
+$("#add-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const amt = $("#ad-amount").value;
+  try { await ZenAPI("POST", "/api/admin/bookings", { city: $("#ad-city").value, service: $("#ad-service").value, name: $("#ad-name").value.trim(), email: $("#ad-email").value.trim(), phone: $("#ad-phone").value.trim(), date: $("#ad-date").value, slot: $("#ad-slot").value.trim(), status: $("#ad-status").value, amount: amt === "" ? undefined : Math.round(Number(amt) * 100) }); $("#dlg-add").close(); $("#add-form").reset(); loadBookings(); }
+  catch (ex) { $("#add-err").textContent = ex.message; $("#add-err").hidden = false; }
+});
+
+/* ---------- clients ---------- */
+async function loadClients() {
+  const { clients } = await ZenAPI("GET", "/api/admin/clients?q=" + encodeURIComponent($("#c-q").value.trim()));
+  $("#clients-count").textContent = clients.length + " clients";
+  const tb = $("#clients-table tbody");
+  tb.innerHTML = clients.length ? clients.map((c) => `<tr class="click" data-id="${c.id}"><td><span class="avatar" style="width:32px;height:32px;font-size:.8rem">${c.photo ? `<img src="${c.photo}" alt="">` : initials(c.name)}</span></td><td>${esc(c.name)}<div class="tiny">${esc(c.phone || c.email)}</div></td><td>${c.city ? CITY_NAME[c.city] : "—"}</td><td class="num">${c.sessions}<span class="tiny"> · ${c.done} done</span></td><td class="num">${c.last_visit ? fmtDate(c.last_visit) : "—"}</td><td>${c.credits ? `<span class="status paid">${c.credits} waiting</span>` : ""}</td><td class="tiny">${esc(c.referrer_name || "")}</td></tr>`).join("") : `<tr><td colspan="7" class="empty">No clients yet.</td></tr>`;
+  tb.querySelectorAll("tr.click").forEach((tr) => tr.addEventListener("click", () => openClient(tr.dataset.id)));
+}
+const initials = (n) => (n || "?").split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+async function openClient(id) {
+  const { client: c, bookings, credits } = await ZenAPI("GET", "/api/admin/clients/" + id);
+  const d = $("#drawer");
+  d.innerHTML = `<button class="btn small ghost close" id="dr-close">Close</button><div class="row" style="gap:14px"><span class="avatar">${c.photo ? `<img src="${c.photo}" alt="">` : initials(c.name)}</span><div><h2>${esc(c.name)}</h2><span class="tiny">${c.city ? CITY_NAME[c.city] + " · " : ""}with Zen since ${esc((c.created_at || "").slice(0, 10))}</span></div></div>
+    <dl class="kv"><dt>WhatsApp</dt><dd>${esc(c.phone || "—")}${c.phone ? ` · <a href="https://wa.me/${c.phone.replace(/\D/g, "")}" target="_blank" rel="noopener">message</a>` : ""}</dd><dt>Email</dt><dd>${esc(c.email)}</dd><dt>Birthday</dt><dd>${esc(c.birthday || "—")}</dd><dt>Invited by</dt><dd>${esc(c.referrer_name || "—")}</dd><dt>Invite code</dt><dd class="num">${esc(c.referral_code || "")}</dd></dl>
+    ${c.notes ? `<div class="card" style="padding:14px;margin-bottom:14px"><p class="eyebrow">Notes from the client</p><p style="margin-top:6px">${esc(c.notes)}</p></div>` : ""}
+    <p class="eyebrow">Rewards</p><ul class="mini" style="margin:6px 0 16px;padding-left:18px">${credits.length ? credits.map((x) => `<li>${x.pct === 100 ? "Free session" : x.pct + "% off"} · ${esc(x.reason)} · ${x.status}</li>`).join("") : "<li>None yet</li>"}</ul>
+    <p class="eyebrow">Sessions${isOwner() ? "" : " in " + CITY_NAME[A.role]}</p><div class="table-wrap" style="margin-top:6px"><table><tbody>${bookings.map((b) => `<tr><td class="num">${fmtDate(b.date)}</td><td>${esc(b.service_name.split(" · ")[0])}${isOwner() ? " · " + CITY_NAME[b.city] : ""}</td><td class="num">${b.amount === 0 ? "Free" : money(b.amount, b.currency)}</td><td><span class="status ${b.status}">${STATUS[b.status]}</span></td></tr>`).join("") || `<tr><td class="empty">No sessions</td></tr>`}</tbody></table></div>`;
+  d.classList.add("open"); d.setAttribute("aria-hidden", "false"); $("#dr-close").onclick = closeDrawer;
+}
+let tc; $("#c-q").addEventListener("input", () => { clearTimeout(tc); tc = setTimeout(loadClients, 250); });
+
+/* ---------- settings ---------- */
+async function loadSettings() {
+  $("#s-every").value = SETTINGS.loyalty_every; $("#s-pct").value = SETTINGS.referral_pct; $("#s-fee").textContent = SETTINGS.platform_fee_pct + "%";
+  if (isOwner()) { const { admins } = await ZenAPI("GET", "/api/admin/admins"); $("#admins-table tbody").innerHTML = admins.map((a) => `<tr><td>${esc(a.name)}</td><td>${esc(a.email)}</td><td><span class="badge ${a.role === "all" ? "all" : "city-" + a.role}">${a.role === "all" ? "All cities" : CITY_NAME[a.role]}</span></td><td class="tiny">${a.last_login ? esc(a.last_login.slice(0, 10)) : "never"}</td><td>${a.id === A.id ? "<span class='tiny'>you</span>" : `<button class="btn small danger" data-del="${a.id}">Remove</button>`}</td></tr>`).join(""); $$("#admins-table [data-del]").forEach((b) => b.addEventListener("click", async () => { if (confirm("Remove this admin's access?")) { await ZenAPI("DELETE", "/api/admin/admins/" + b.dataset.del); loadSettings(); } })); }
+}
+$("#rules-form").addEventListener("submit", async (e) => { e.preventDefault(); $("#rules-ok").hidden = true; $("#rules-err").hidden = true; try { SETTINGS = await ZenAPI("PUT", "/api/admin/settings", { loyalty_every: +$("#s-every").value, referral_pct: +$("#s-pct").value }); $("#rules-ok").hidden = false; } catch (ex) { $("#rules-err").textContent = ex.message; $("#rules-err").hidden = false; } });
+$("#pw-form").addEventListener("submit", async (e) => { e.preventDefault(); $("#pw-ok").hidden = true; $("#pw-err").hidden = true; try { await ZenAPI("POST", "/api/admin/password", { current: $("#pw-cur").value, password: $("#pw-new").value }); $("#pw-ok").hidden = false; e.target.reset(); } catch (ex) { $("#pw-err").textContent = ex.message; $("#pw-err").hidden = false; } });
+$("#admin-form").addEventListener("submit", async (e) => { e.preventDefault(); $("#admin-err").hidden = true; try { await ZenAPI("POST", "/api/admin/admins", { name: $("#n-name").value.trim(), email: $("#n-email").value.trim(), role: $("#n-role").value, password: $("#n-pass").value }); e.target.reset(); loadSettings(); } catch (ex) { $("#admin-err").textContent = ex.message; $("#admin-err").hidden = false; } });
+
+/* ---------- tabs, login ---------- */
+$$(".tabs button").forEach((b) => b.addEventListener("click", () => { $$(".tabs button").forEach((x) => x.setAttribute("aria-selected", x === b)); ["overview", "bookings", "clients", "settings"].forEach((t) => ($("#tab-" + t).hidden = t !== b.dataset.tab)); closeDrawer(); ({ overview: loadOverview, bookings: loadBookings, clients: loadClients, settings: loadSettings })[b.dataset.tab](); }));
+$("#login-form").addEventListener("submit", async (e) => { e.preventDefault(); const err = $("#login-err"); err.hidden = true; $("#login-btn").disabled = true; try { await ZenAPI("POST", "/api/admin/login", { email: $("#a-email").value.trim(), password: $("#a-pass").value }); start(await ZenAPI("GET", "/api/admin/me")); } catch (ex) { err.textContent = ex.message; err.hidden = false; } finally { $("#login-btn").disabled = false; } });
+$$("#demo-login [data-role]").forEach((b) => b.addEventListener("click", async () => { await ZenAPI("POST", "/api/admin/demo-login", { role: b.dataset.role }); start(await ZenAPI("GET", "/api/admin/me")); }));
+$("#signout").addEventListener("click", async (e) => { e.preventDefault(); await ZenAPI("POST", "/api/admin/logout").catch(() => {}); location.reload(); });
+boot();
+</script>
+</body>
+</html>

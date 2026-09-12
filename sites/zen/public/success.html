@@ -21,9 +21,10 @@
 <main>
   <div class="core" aria-hidden="true"></div>
   <h1>Reserved. Breathe out.</h1>
-  <p>Your payment went through and a confirmation is on its way to your inbox. Zen will message you on WhatsApp to agree the exact hour.</p>
+  <p id="msg">Your payment went through and a confirmation is on its way to your inbox. Zen will message you on WhatsApp to agree the exact hour.</p>
   <p>Until then: drink water, and don't plan anything strenuous for that day.</p>
   <a href="/">Back to Zen</a>
 </main>
+<script>if (new URLSearchParams(location.search).get("free")) document.getElementById("msg").textContent = "Your free session is reserved and a confirmation is on its way to your inbox. Zen will message you on WhatsApp to agree the exact hour.";</script>
 </body>
 </html>
