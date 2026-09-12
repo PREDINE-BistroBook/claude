@@ -35,7 +35,8 @@
   const users = NAMES.map((n, i) => {
     const city = i % 3 === 0 ? "cairo" : i % 3 === 1 ? "dahab" : "florence";
     const created = new Date(today); created.setDate(created.getDate() - Math.floor(rnd() * 330));
-    return { id: "u" + (i + 1), name: n, email: n.toLowerCase().replace(/ /g, ".") + "@example.com", phone: city === "florence" ? "+39 3" + Math.floor(10000000 + rnd() * 89999999) : "+20 1" + Math.floor(100000000 + rnd() * 899999999), city, photo: null, notes: i % 7 === 0 ? "Lower back — old disc issue, go light" : "", birthday: null, referral_code: "ZEN" + (100 + i), referred_by: i > 4 && rnd() < .3 ? "u" + (1 + Math.floor(rnd() * 4)) : null, created_at: iso(created) + " 10:00:00", last_login: iso(today) };
+    const intake = i % 5 === 4 ? null : { goals: pick([["recovery"], ["pain", "posture"], ["stress"], ["recovery", "injury"], ["curious"]]), pain: pick([["lower_back"], ["neck", "shoulder_r"], ["upper_back", "mid_back"], [], ["calf_l", "thigh_l"]]), activity: pick(["low", "moderate", "high", "athlete"]), sport: pick(["Gym", "Football", "Diving", "", "Running"]), experience: pick(["first", "some", "regular"]), health: i % 6 === 0 ? ["anticoagulant"] : i % 9 === 0 ? ["pregnant"] : ["none"], health_notes: i % 6 === 0 ? "Daily aspirin 100mg" : "", contact: "whatsapp", time_pref: pick(["morning", "evening", "any"]), completed_at: iso(created) + "T10:05:00Z" };
+    return { id: "u" + (i + 1), name: n, email: n.toLowerCase().replace(/ /g, ".") + "@example.com", phone: city === "florence" ? "+39 3" + Math.floor(10000000 + rnd() * 89999999) : "+20 1" + Math.floor(100000000 + rnd() * 899999999), city, photo: null, notes: i % 7 === 0 ? "Lower back — old disc issue, go light" : "", birthday: null, referral_code: "ZEN" + (100 + i), referred_by: i > 4 && rnd() < .3 ? "u" + (1 + Math.floor(rnd() * 4)) : null, created_at: iso(created) + " 10:00:00", last_login: iso(today), country: city === "florence" ? "IT" : "EG", city_text: city === "florence" ? "Firenze" : city === "dahab" ? "Sharm El Sheikh" : "Maadi", nearest_city: city, intake };
   });
   const bookings = []; let bid = 1;
   for (const u of users) {
@@ -78,9 +79,9 @@
       // ----- client -----
       if (path === "/api/status") return { live: false, preview: true, demo: true };
       if (path === "/api/auth/request-link") { if (!body.email) err("That email doesn't look right."); if (!body.name && !users.find((u) => u.email === body.email)) err("Tell us your name so we know who's coming."); return { ok: true, demo: true }; }
-      if (path === "/api/auth/demo-login") { S.user = "u4"; return bundle(users[3]); }
+      if (path === "/api/auth/demo-login") { if (body.fresh) { const u = users.find((x) => !x.intake) || users[4]; u.intake = null; S.user = u.id; return bundle(u); } S.user = "u4"; return bundle(users[3]); }
       if (path === "/api/auth/logout") { S.user = null; return {}; }
-      if (path === "/api/me") { const u = users.find((x) => x.id === S.user); if (!u) return { user: null, demo: true }; if (method === "PUT") Object.assign(u, { name: body.name || u.name, phone: body.phone ?? u.phone, city: body.city || u.city, notes: body.notes ?? u.notes, birthday: body.birthday || null, photo: body.photo === undefined ? u.photo : body.photo }); return bundle(u); }
+      if (path === "/api/me") { const u = users.find((x) => x.id === S.user); if (!u) return { user: null, demo: true }; if (method === "PUT") Object.assign(u, { name: body.name || u.name, phone: body.phone ?? u.phone, city: body.city || u.city, notes: body.notes ?? u.notes, birthday: body.birthday === undefined ? u.birthday : body.birthday, photo: body.photo === undefined ? u.photo : body.photo, country: body.country || u.country, city_text: body.city_text ?? u.city_text, nearest_city: body.nearest_city === undefined ? u.nearest_city : body.nearest_city, intake: body.intake === undefined ? u.intake : body.intake }); return bundle(u); }
       if (path === "/api/me/bookings") { return { bookings: bookings.filter((b) => b.user_id === S.user && b.status !== "pending") }; }
       if (path === "/api/checkout") return { preview: true, error: "Payments are not switched on yet." };
       // ----- admin -----
@@ -112,7 +113,8 @@
           const status = qp.get("status"), from = qp.get("from"), to = qp.get("to"), q = (qp.get("q") || "").toLowerCase();
           if (status) list = list.filter((b) => b.status === status); if (from) list = list.filter((b) => b.date >= from); if (to) list = list.filter((b) => b.date <= to);
           if (q) list = list.filter((b) => (b.name + b.email + b.phone).toLowerCase().includes(q));
-          return { bookings: list.slice(0, 300).map((b) => (a.role === "all" ? b : { ...b, platform_fee: undefined })), city };
+          const FL = ["pregnant", "anticoagulant", "bleeding", "heart", "diabetes", "skin", "surgery"];
+          return { bookings: list.slice(0, 300).map((b) => { const u = users.find((x) => x.id === b.user_id); const i = u?.intake || {}; return { ...b, platform_fee: a.role === "all" ? b.platform_fee : undefined, health: i.health || [], flags: (i.health || []).filter((h) => FL.includes(h)), pain: i.pain || [], goals: i.goals || [], experience: i.experience || null, user_notes: u?.notes || "", user_nearest: u?.nearest_city || null }; }), city };
         }
         if (path === "/api/admin/bookings" && method === "POST") {
           const ck = city || body.city; const svc = CITY[ck]?.services.find((s) => s[0] === body.service); if (!svc) err("Pick a city and a session."); if (!body.name || !body.date) err("Name and day are required.");
@@ -125,10 +127,12 @@
         if (path === "/api/admin/clients") {
           const q = (qp.get("q") || "").toLowerCase();
           const list = users.filter((u) => (!city || bookings.some((b) => b.user_id === u.id && b.city === city)) && (!q || (u.name + u.email + u.phone).toLowerCase().includes(q))).map((u) => { const mine = bookings.filter((b) => b.user_id === u.id && live(b) && inScope(b)); return { ...u, referrer_name: users.find((x) => x.id === u.referred_by)?.name || null, sessions: mine.length, done: mine.filter((b) => b.status === "done").length, last_visit: mine[0]?.date || null, credits: credits.filter((c) => c.user_id === u.id && c.status === "available").length }; }).sort((x, y) => ((y.last_visit || "") > (x.last_visit || "") ? 1 : -1));
+          const FL2 = ["pregnant", "anticoagulant", "bleeding", "heart", "diabetes", "skin", "surgery"];
+          list.forEach((c) => { c.flags = (c.intake?.health || []).filter((h) => FL2.includes(h)); c.has_intake = Boolean(c.intake); delete c.intake; });
           return { clients: list, city };
         }
         mm = path.match(/^\/api\/admin\/clients\/(\w+)$/);
-        if (mm) { const u = users.find((x) => x.id === mm[1]); const bl = bookings.filter((b) => b.user_id === u?.id && inScope(b)); if (!u || (city && !bl.length)) err("Not found", 404); return { client: { ...u, referrer_name: users.find((x) => x.id === u.referred_by)?.name || null }, bookings: bl, credits: credits.filter((c) => c.user_id === u.id) }; }
+        if (mm) { const u = users.find((x) => x.id === mm[1]); const bl = bookings.filter((b) => b.user_id === u?.id && inScope(b)); if (!u || (city && !bl.length)) err("Not found", 404); return { client: { ...u, flags: (u.intake?.health || []).filter((h) => ["pregnant", "anticoagulant", "bleeding", "heart", "diabetes", "skin", "surgery"].includes(h)), referrer_name: users.find((x) => x.id === u.referred_by)?.name || null }, bookings: bl, credits: credits.filter((c) => c.user_id === u.id) }; }
         if (path === "/api/admin/settings") { if (method === "PUT") { if (a.role !== "all") err("Only the owner can change this.", 403); settings.loyalty_every = Number(body.loyalty_every) || 10; settings.referral_pct = Number(body.referral_pct) || 40; } return settings; }
         if (path === "/api/admin/admins" && method === "GET") { if (a.role !== "all") err("Only the owner can see this.", 403); return { admins }; }
         if (path === "/api/admin/admins" && method === "POST") { if (a.role !== "all") err("Only the owner can add admins.", 403); if (!body.email || !body.name || (body.password || "").length < 10) err("Name, email, role and a password of at least 10 characters."); admins.push({ id: "a" + (admins.length + 1), email: body.email, name: body.name, role: body.role, created_at: iso(today), last_login: null }); return { ok: true }; }

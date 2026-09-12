@@ -14,6 +14,10 @@
   h1{font-family:"Fraunces",Georgia,serif;font-weight:300;font-size:clamp(2rem,6vw,3.4rem);line-height:1.05;margin:0;font-variation-settings:"SOFT" 100,"opsz" 96}
   p{margin:0;color:var(--ink-soft);line-height:1.55}
   a{display:inline-block;margin-top:8px;padding:12px 20px;border-radius:999px;background:var(--ink);color:var(--ground);text-decoration:none;font-weight:500}
+  .prep{text-align:left;background:#F7F7F5;border:1px solid rgba(27,30,29,.14);border-radius:18px;padding:18px 20px;max-width:34rem}
+  .prep h2{font-family:"Saira",sans-serif;font-weight:400;font-size:1.2rem;margin:0 0 8px}
+  .prep ul{margin:0;padding-left:18px;display:grid;gap:6px;font-size:.92rem}
+  .prep .small{font-size:.82rem;margin-top:10px} .prep a.plain{display:inline;margin:0;padding:0;background:none;color:#2F7BEA;font-weight:500}
   @media (prefers-reduced-motion:reduce){.core{animation:none}}
 </style>
 </head>
@@ -23,8 +27,11 @@
   <h1>Reserved. Breathe out.</h1>
   <p id="msg">Your payment went through and a confirmation is on its way to your inbox. Zen will message you on WhatsApp to agree the exact hour.</p>
   <p>Until then: drink water, and don't plan anything strenuous for that day.</p>
-  <a href="/">Back to Zen</a>
+  <div class="prep"><h2>Before you come</h2><ul id="prep"></ul><p class="small">The full guide, before and after, is in <a class="plain" href="/account.html#guide">your account</a>.</p></div>
+  <a href="/account.html">Open my account</a>
 </main>
+<script src="/guide.js"></script>
+<script>document.getElementById("prep").innerHTML = ZenGuide.ADVICE.before.general.slice(0, 5).map((t) => "<li>" + t + "</li>").join("");</script>
 <script>if (new URLSearchParams(location.search).get("free")) document.getElementById("msg").textContent = "Your free session is reserved and a confirmation is on its way to your inbox. Zen will message you on WhatsApp to agree the exact hour.";</script>
 </body>
 </html>

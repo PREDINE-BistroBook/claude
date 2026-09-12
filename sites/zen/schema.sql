@@ -11,6 +11,10 @@ CREATE TABLE IF NOT EXISTS users (
   birthday      TEXT,
   referral_code TEXT UNIQUE,
   referred_by   TEXT,                      -- users.id of the person who invited them
+  country       TEXT,                      -- EG | IT | other
+  city_text     TEXT,                      -- where they live, as typed
+  nearest_city  TEXT,                      -- recommended centre: cairo | dahab | florence
+  intake        TEXT,                      -- JSON: goals, pain areas, activity, experience, health flags, preferences
   created_at    TEXT DEFAULT (datetime('now')),
   last_login    TEXT
 );

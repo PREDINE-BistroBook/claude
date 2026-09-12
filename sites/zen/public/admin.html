@@ -27,6 +27,20 @@
   .kv{display:grid;grid-template-columns:110px 1fr;gap:6px 12px;font-size:.9rem;margin:12px 0}
   .kv dt{color:var(--ink-soft)} .kv dd{margin:0}
   .mini{font-size:.86rem}
+  .help{display:grid;gap:6px;padding:14px 16px;border-radius:14px;background:color-mix(in srgb,var(--mark) 7%,var(--ground-3));border:1px solid color-mix(in srgb,var(--mark) 25%,transparent);font-size:.9rem;margin-bottom:16px}
+  .help summary{cursor:pointer;font-weight:500;list-style:none;display:flex;justify-content:space-between;align-items:center}
+  .help summary::after{content:"Show";font-size:.78rem;color:var(--mark)} .help[open] summary::after{content:"Hide"}
+  .help ul,.help ol{margin:6px 0 0;padding-left:18px;display:grid;gap:5px}
+  .help b{font-weight:600}
+  .flag{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:999px;font-size:.74rem;font-weight:500;background:color-mix(in srgb,var(--bad) 14%,transparent);color:#7A1F17;white-space:nowrap}
+  .flag::before{content:"!";display:inline-grid;place-items:center;width:14px;height:14px;border-radius:50%;background:var(--bad);color:#fff;font-size:.66rem;font-weight:700}
+  .chips{display:flex;flex-wrap:wrap;gap:6px} .chip{padding:5px 9px;border-radius:999px;background:var(--ground-2);font-size:.8rem}
+  .bodymap{width:120px;height:auto;display:block;color:var(--ink)} .bodymap .part{fill:var(--ground-2);stroke:var(--line);stroke-width:1} .bodymap .part.on{fill:var(--mark)} .bodymap .bm-caption{font-family:var(--label);font-size:6px;letter-spacing:.12em;text-transform:uppercase;fill:var(--ink-mute)}
+  .intake-grid{display:grid;grid-template-columns:120px 1fr;gap:14px;align-items:start;margin:12px 0}
+  .legend-status{display:flex;gap:12px;flex-wrap:wrap;font-size:.8rem;color:var(--ink-soft);margin:-6px 0 12px}
+  .start{display:grid;gap:10px;padding:20px;border-radius:var(--radius);background:var(--ink);color:var(--ground);margin-bottom:16px}
+  .start ol{margin:0;padding-left:18px;display:grid;gap:6px;font-size:.92rem} .start a{color:var(--mark-soft)}
+  .chart-note{font-size:.8rem;color:var(--ink-mute);margin-top:8px}
   .settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   @media (max-width:860px){.settings-grid{grid-template-columns:1fr}}
 </style>
@@ -65,12 +79,29 @@
 
     <!-- overview -->
     <div id="tab-overview">
+      <div class="start" id="start-card" hidden>
+        <b style="font-family:var(--display);font-size:1.3rem;font-weight:400">Welcome. Four things to do first.</b>
+        <ol>
+          <li><b>Add your team</b> in Settings: one account per person, locked to their city.</li>
+          <li><b>Check prices and session names</b> with us; they're placeholders until confirmed.</li>
+          <li><b>Add today's bookings by hand</b> (Bookings → Add a booking) so the statistics and the clients' loyalty count start from day one.</li>
+          <li><b>Share the site</b>: put zenrecovery.club in the Instagram bio. Clients who register get their invite link and rewards automatically.</li>
+        </ol>
+      </div>
+      <details class="help"><summary>How to read this page</summary>
+        <ul>
+          <li><b>Sessions</b> counts bookings that are reserved, confirmed or done. Cancelled and missed ones are not counted.</li>
+          <li><b>Revenue</b> is what clients actually paid, after rewards. Euro and Egyptian pound are always shown separately.</li>
+          <li><b>Clients</b> are people with at least one session; "new" means their first session was this month.</li>
+          <li><b>Upcoming</b> is everything reserved or confirmed from today onwards. Hover any bar for the exact number; "Show as table" lists them.</li>
+        </ul>
+      </details>
       <div class="scope" id="city-pills"></div>
       <div class="grid cols-4" id="kpis"></div>
       <div class="charts">
-        <div class="card chart-card"><h3>Sessions per month <span>last 12 months</span></h3><div class="chart" id="ch-bookings"></div></div>
+        <div class="card chart-card"><h3>Sessions per month <span>last 12 months</span></h3><div class="chart" id="ch-bookings"></div><p class="chart-note">Is the room getting busier? Compare the last three bars.</p></div>
         <div class="card chart-card" id="rev-card"><h3>Revenue per month <span id="rev-note"></span></h3><div id="ch-revenue"></div></div>
-        <div class="card chart-card"><h3>By session type <span>all time</span></h3><div class="chart" id="ch-service"></div></div>
+        <div class="card chart-card"><h3>By session type <span>all time</span></h3><div class="chart" id="ch-service"></div><p class="chart-note">What people come for. Useful when deciding what to post about and what to price.</p></div>
         <div class="card chart-card" id="city-card" hidden><h3>By city <span>this month</span></h3><div class="chart" id="ch-city"></div><div class="legend" id="city-legend"></div></div>
         <div class="card"><h3>Today</h3><div class="today" id="today"></div></div>
         <div class="card"><h3>Rewards</h3><div class="mini" id="rewards"></div></div>
@@ -80,6 +111,16 @@
     <!-- bookings -->
     <div id="tab-bookings" hidden>
       <div class="section-head"><h2>Bookings</h2><button class="btn small" id="add-booking">Add a booking</button></div>
+      <details class="help"><summary>How bookings work</summary>
+        <ol>
+          <li>A client books online: it appears as <b>Reserved</b>. Message them on WhatsApp, agree the hour, then click <b>Confirm</b> and type the hour in the booking (click the row).</li>
+          <li>After the session, click <b>Done</b>. This is what counts the session for their free-session reward, so don't skip it.</li>
+          <li>Didn't show up? <b>Missed</b>. Cancelled in time? <b>Cancel</b> (their reward, if they used one, is given back).</li>
+          <li>Walk-ins, WhatsApp bookings and cash: <b>Add a booking</b>. If the email matches an account, it counts for their rewards too.</li>
+          <li>A red <b>!</b> next to a name means the client told us about a health condition. Open the row and read it before the session.</li>
+        </ol>
+      </details>
+      <div class="legend-status"><span><span class="status paid">Reserved</span> paid online, hour not agreed yet</span><span><span class="status confirmed">Confirmed</span> hour agreed</span><span><span class="status done">Done</span> session happened</span><span><span class="status no_show">Missed</span></span><span><span class="status cancelled">Cancelled</span></span></div>
       <div class="filters">
         <div class="field" id="f-city-wrap" hidden><label for="f-city">City</label><select id="f-city"><option value="">All cities</option><option value="cairo">Cairo</option><option value="dahab">Dahab</option><option value="florence">Florence</option></select></div>
         <div class="field"><label for="f-status">Status</label><select id="f-status"><option value="">Any</option><option value="paid">Reserved</option><option value="confirmed">Confirmed</option><option value="done">Done</option><option value="cancelled">Cancelled</option><option value="no_show">Missed</option></select></div>
@@ -93,12 +134,26 @@
     <!-- clients -->
     <div id="tab-clients" hidden>
       <div class="section-head"><h2>Clients</h2><span class="tiny" id="clients-count"></span></div>
+      <details class="help"><summary>What you see here</summary>
+        <ul>
+          <li>Everyone with an account${'${'}""}. Click a row for their answers (where they live, goals, focus areas, health), their sessions and their rewards.</li>
+          <li><b>Room</b> is the centre we recommended from where they live. A red <b>!</b> means a health condition to read before their first session.</li>
+          <li>City admins see only clients who have had a session in their city.</li>
+        </ul>
+      </details>
       <div class="filters"><div class="field" style="flex:1"><label for="c-q">Search</label><input id="c-q" placeholder="name, email, phone"></div></div>
-      <div class="table-wrap"><table id="clients-table"><thead><tr><th></th><th>Client</th><th>Home</th><th>Sessions</th><th>Last visit</th><th>Rewards</th><th>Invited by</th></tr></thead><tbody></tbody></table></div>
+      <div class="table-wrap"><table id="clients-table"><thead><tr><th></th><th>Client</th><th>Room</th><th>Sessions</th><th>Last visit</th><th>Rewards</th><th>Invited by</th></tr></thead><tbody></tbody></table></div>
     </div>
 
     <!-- settings -->
     <div id="tab-settings" hidden>
+      <details class="help"><summary>About this page</summary>
+        <ul>
+          <li><b>Rewards rules</b> (owner only): the free-session count and the invite discount. Changes apply to future sessions; rewards already earned stay as they are.</li>
+          <li><b>Who can sign in</b> (owner only): add one account per team member. "Florence only" sees Florence bookings, clients and money and nothing else. "All cities" sees everything and can change these settings.</li>
+          <li>Everyone can change their own password here. Forgotten one? The owner removes the account and adds it again with a new password.</li>
+        </ul>
+      </details>
       <div class="settings-grid">
         <div class="card" id="rules-card" hidden>
           <h3>Rewards rules</h3>
@@ -141,7 +196,7 @@
 <dialog id="dlg-add">
   <form class="inner" id="add-form" method="dialog" novalidate>
     <h3>Add a booking</h3>
-    <p class="tiny">For walk-ins, WhatsApp bookings and cash payments. Sessions added here count toward the client's loyalty reward if the email matches their account.</p>
+    <p class="tiny">For walk-ins, WhatsApp bookings and cash payments. Type the client's email exactly as on their account and the session counts toward their free-session reward. Leave "Paid" empty to use the list price; type 0 for a free one.</p>
     <div class="row">
       <div class="field" style="flex:1" id="add-city-wrap"><label for="ad-city">City</label><select id="ad-city"></select></div>
       <div class="field" style="flex:2"><label for="ad-service">Session</label><select id="ad-service"></select></div>
@@ -164,10 +219,12 @@
   </form>
 </dialog>
 
+<script src="guide.js"></script>
 <script src="demo.js"></script>
 <script>
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const G = window.ZenGuide;
 const CITY_NAME = { cairo: "Cairo", dahab: "Dahab", florence: "Florence" };
 const CITY_COLOR = { cairo: "#C4681E", dahab: "#1FA08A", florence: "#2F7BEA" };
 const STATUS = { paid: "Reserved", confirmed: "Confirmed", done: "Done", cancelled: "Cancelled", no_show: "Missed" };
@@ -200,6 +257,7 @@ function start(r) {
 async function loadOverview() {
   const s = await ZenAPI("GET", "/api/admin/stats?city=" + cityFilter);
   const tm = s.this_month, lm = s.last_month;
+  $("#start-card").hidden = !(isOwner() && !cityFilter && s.clients.total === 0);
   const n = tm.reduce((a, r) => a + r.n, 0), nl = lm.reduce((a, r) => a + r.n, 0);
   const delta = (cur, prev) => prev ? `<span class="delta ${cur >= prev ? "up" : "down"}">${cur >= prev ? "▲" : "▼"} ${Math.abs(Math.round(((cur - prev) / prev) * 100))}% vs last month</span>` : `<span class="delta">no data last month</span>`;
   const revTiles = tm.map((r) => { const prev = lm.find((x) => x.currency === r.currency)?.rev || 0; return `<div class="kpi"><span class="label">Revenue this month${tm.length > 1 ? " · " + r.currency.toUpperCase() : ""}</span><span class="value">${money(r.rev, r.currency)}</span>${delta(r.rev, prev)}${s.show_fee ? `<span class="delta">platform fee ${money(r.fee, r.currency)}</span>` : ""}</div>`; }).join("") || `<div class="kpi"><span class="label">Revenue this month</span><span class="value">—</span></div>`;
@@ -259,7 +317,7 @@ async function loadBookings() {
   const tb = $("#bookings-table tbody");
   tb.innerHTML = bookings.length ? bookings.map((b) => `<tr class="click" data-id="${b.id}">
       <td class="num">${fmtDate(b.date)}<div class="tiny">${SLOT[b.slot] || b.slot}</div></td>
-      <td>${esc(b.name)}<div class="tiny">${esc(b.phone || b.email || "")}</div></td>
+      <td>${esc(b.name)}${b.flags?.length ? ` <span class="flag" title="${b.flags.map((f) => G.label("health", f)).join(", ")}">health</span>` : ""}${b.experience === "first" ? ` <span class="chip" style="font-size:.7rem;padding:2px 7px">first time</span>` : ""}<div class="tiny">${esc(b.phone || b.email || "")}</div></td>
       <td><i class="dot ${b.city}"></i>${CITY_NAME[b.city]}</td>
       <td>${esc(b.service_name.split(" · ")[0])}${b.discount_kind ? `<div class="tiny">${b.discount_kind === "loyalty" ? "free session" : b.discount_kind === "referral" ? "invite discount" : "custom price"}</div>` : ""}${b.source === "manual" ? `<div class="tiny">added by hand</div>` : ""}</td>
       <td class="num">${b.amount === 0 ? "Free" : money(b.amount, b.currency)}${b.platform_fee != null && b.platform_fee > 0 ? `<div class="tiny">fee ${money(b.platform_fee, b.currency)}</div>` : ""}</td>
@@ -276,7 +334,10 @@ function openBooking(b) {
     <dl class="kv"><dt>When</dt><dd>${fmtDate(b.date)} · <input id="dr-slot" value="${esc(b.slot)}" style="width:110px;font:inherit;padding:3px 6px;border:1px solid var(--line);border-radius:6px"> <button class="btn small ghost" id="dr-save-slot">Save time</button></dd>
     <dt>City</dt><dd>${CITY_NAME[b.city]}</dd><dt>Session</dt><dd>${esc(b.service_name)}</dd><dt>Paid</dt><dd>${b.amount === 0 ? "Free (reward)" : money(b.amount, b.currency)}${b.list_amount !== b.amount ? ` <span class="tiny">list ${money(b.list_amount, b.currency)}</span>` : ""}</dd>
     <dt>Contact</dt><dd>${esc(b.phone || "")}${b.phone ? ` · <a href="https://wa.me/${b.phone.replace(/\D/g, "")}" target="_blank" rel="noopener">WhatsApp</a>` : ""}<br>${esc(b.email || "")}</dd><dt>Source</dt><dd>${b.source === "manual" ? "added by hand" : "website"}</dd><dt>Booked</dt><dd>${esc(b.created_at)}</dd></dl>
-    <div class="field"><label for="dr-note">Note</label><textarea id="dr-note">${esc(b.note || "")}</textarea></div>
+    ${b.flags?.length ? `<div class="help" style="border-color:var(--bad);background:color-mix(in srgb,var(--bad) 7%,var(--ground-3))"><b>Health: ${b.flags.map((f) => G.label("health", f)).join(", ")}.</b> Adapt the session or ask for a doctor's okay first. Details in the client's notes below.</div>` : ""}
+    ${b.user_id ? `<p class="eyebrow">About the client</p><div class="intake-grid">${G.bodyMap(b.pain || [], false)}<div><div class="chips">${(b.goals || []).map((g) => `<span class="chip">${G.label("goals", g)}</span>`).join("")}${(b.health || []).filter((h) => h !== "none").map((h) => `<span class="chip">${G.label("health", h)}</span>`).join("")}${b.experience ? `<span class="chip">${G.label("experience", b.experience)}</span>` : ""}</div>${b.pain?.length ? `<p class="tiny" style="margin-top:8px">Focus: ${b.pain.map((p) => G.label("pain", p)).join(", ")}</p>` : `<p class="tiny" style="margin-top:8px">No focus areas given.</p>`}${b.user_notes ? `<p class="mini" style="margin-top:8px"><b>Client's notes:</b> ${esc(b.user_notes)}</p>` : ""}</div></div>` : `<p class="tiny">Booked without an account, so no questionnaire. Ask on WhatsApp about injuries, medication and pregnancy before the session.</p>`}
+    ${(() => { const k = G.serviceKey(b.service_name); return b.status === "confirmed" || b.status === "paid" ? `<details class="help"><summary>What to remind them before a ${G.SERVICE_LABEL[k].toLowerCase()} session</summary>${G.list("before", k)}</details>` : ""; })()}
+    <div class="field"><label for="dr-note">Team note <span class="tiny">(only the team sees this)</span></label><textarea id="dr-note">${esc(b.note || "")}</textarea></div>
     <div class="row" style="margin-top:10px"><button class="btn small" id="dr-save-note">Save note</button><span class="ok" id="dr-ok" hidden>Saved</span></div>
     <div class="actions" style="margin-top:18px">${actionsFor(b)}</div>`;
   d.classList.add("open"); d.setAttribute("aria-hidden", "false");
@@ -310,7 +371,7 @@ async function loadClients() {
   const { clients } = await ZenAPI("GET", "/api/admin/clients?q=" + encodeURIComponent($("#c-q").value.trim()));
   $("#clients-count").textContent = clients.length + " clients";
   const tb = $("#clients-table tbody");
-  tb.innerHTML = clients.length ? clients.map((c) => `<tr class="click" data-id="${c.id}"><td><span class="avatar" style="width:32px;height:32px;font-size:.8rem">${c.photo ? `<img src="${c.photo}" alt="">` : initials(c.name)}</span></td><td>${esc(c.name)}<div class="tiny">${esc(c.phone || c.email)}</div></td><td>${c.city ? CITY_NAME[c.city] : "—"}</td><td class="num">${c.sessions}<span class="tiny"> · ${c.done} done</span></td><td class="num">${c.last_visit ? fmtDate(c.last_visit) : "—"}</td><td>${c.credits ? `<span class="status paid">${c.credits} waiting</span>` : ""}</td><td class="tiny">${esc(c.referrer_name || "")}</td></tr>`).join("") : `<tr><td colspan="7" class="empty">No clients yet.</td></tr>`;
+  tb.innerHTML = clients.length ? clients.map((c) => `<tr class="click" data-id="${c.id}"><td><span class="avatar" style="width:32px;height:32px;font-size:.8rem">${c.photo ? `<img src="${c.photo}" alt="">` : initials(c.name)}</span></td><td>${esc(c.name)}${c.flags?.length ? ` <span class="flag">health</span>` : ""}${c.has_intake === false ? ` <span class="tiny">· no questionnaire</span>` : ""}<div class="tiny">${esc(c.phone || c.email)}</div></td><td>${(c.nearest_city || c.city) ? CITY_NAME[c.nearest_city || c.city] : "—"}${c.city_text ? `<div class="tiny">${esc(c.city_text)}</div>` : ""}</td><td class="num">${c.sessions}<span class="tiny"> · ${c.done} done</span></td><td class="num">${c.last_visit ? fmtDate(c.last_visit) : "—"}</td><td>${c.credits ? `<span class="status paid">${c.credits} waiting</span>` : ""}</td><td class="tiny">${esc(c.referrer_name || "")}</td></tr>`).join("") : `<tr><td colspan="7" class="empty">No clients yet.</td></tr>`;
   tb.querySelectorAll("tr.click").forEach((tr) => tr.addEventListener("click", () => openClient(tr.dataset.id)));
 }
 const initials = (n) => (n || "?").split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
@@ -319,6 +380,15 @@ async function openClient(id) {
   const d = $("#drawer");
   d.innerHTML = `<button class="btn small ghost close" id="dr-close">Close</button><div class="row" style="gap:14px"><span class="avatar">${c.photo ? `<img src="${c.photo}" alt="">` : initials(c.name)}</span><div><h2>${esc(c.name)}</h2><span class="tiny">${c.city ? CITY_NAME[c.city] + " · " : ""}with Zen since ${esc((c.created_at || "").slice(0, 10))}</span></div></div>
     <dl class="kv"><dt>WhatsApp</dt><dd>${esc(c.phone || "—")}${c.phone ? ` · <a href="https://wa.me/${c.phone.replace(/\D/g, "")}" target="_blank" rel="noopener">message</a>` : ""}</dd><dt>Email</dt><dd>${esc(c.email)}</dd><dt>Birthday</dt><dd>${esc(c.birthday || "—")}</dd><dt>Invited by</dt><dd>${esc(c.referrer_name || "—")}</dd><dt>Invite code</dt><dd class="num">${esc(c.referral_code || "")}</dd></dl>
+    ${c.flags?.length ? `<div class="help" style="border-color:var(--bad);background:color-mix(in srgb,var(--bad) 7%,var(--ground-3))"><b>Health: ${c.flags.map((f) => G.label("health", f)).join(", ")}.</b> Read before the first session; adapt or ask for a doctor's okay.</div>` : ""}
+    ${c.intake ? `<p class="eyebrow">Their answers</p><div class="intake-grid">${G.bodyMap(c.intake.pain || [], false)}<div class="mini" style="display:grid;gap:6px">
+      <div><b>Lives in:</b> ${esc(c.city_text || "—")}${c.country ? " (" + { EG: "Egypt", IT: "Italy", other: "elsewhere" }[c.country] + ")" : ""} · recommended room: ${c.nearest_city ? CITY_NAME[c.nearest_city] : "—"}</div>
+      <div><b>Why:</b> ${(c.intake.goals || []).map((g) => G.label("goals", g)).join(", ") || "—"}</div>
+      <div><b>Focus areas:</b> ${(c.intake.pain || []).map((p) => G.label("pain", p)).join(", ") || "none given"}</div>
+      <div><b>Activity:</b> ${c.intake.activity ? G.label("activity", c.intake.activity) : "—"}${c.intake.sport ? " · " + esc(c.intake.sport) : ""} · <b>Experience:</b> ${c.intake.experience ? G.label("experience", c.intake.experience) : "—"}</div>
+      <div><b>Health:</b> ${(c.intake.health || []).map((h) => G.label("health", h)).join(", ") || "—"}${c.intake.health_notes ? `<br><i>${esc(c.intake.health_notes)}</i>` : ""}</div>
+      <div><b>Contact:</b> ${c.intake.contact ? G.label("contact", c.intake.contact) : "—"} · prefers ${c.intake.time_pref ? G.label("time", c.intake.time_pref).toLowerCase() : "any time"}</div>
+    </div></div>` : `<p class="tiny" style="margin:10px 0">Hasn't filled in the questionnaire yet. Ask about injuries, medication and pregnancy on WhatsApp before the first session.</p>`}
     ${c.notes ? `<div class="card" style="padding:14px;margin-bottom:14px"><p class="eyebrow">Notes from the client</p><p style="margin-top:6px">${esc(c.notes)}</p></div>` : ""}
     <p class="eyebrow">Rewards</p><ul class="mini" style="margin:6px 0 16px;padding-left:18px">${credits.length ? credits.map((x) => `<li>${x.pct === 100 ? "Free session" : x.pct + "% off"} · ${esc(x.reason)} · ${x.status}</li>`).join("") : "<li>None yet</li>"}</ul>
     <p class="eyebrow">Sessions${isOwner() ? "" : " in " + CITY_NAME[A.role]}</p><div class="table-wrap" style="margin-top:6px"><table><tbody>${bookings.map((b) => `<tr><td class="num">${fmtDate(b.date)}</td><td>${esc(b.service_name.split(" · ")[0])}${isOwner() ? " · " + CITY_NAME[b.city] : ""}</td><td class="num">${b.amount === 0 ? "Free" : money(b.amount, b.currency)}</td><td><span class="status ${b.status}">${STATUS[b.status]}</span></td></tr>`).join("") || `<tr><td class="empty">No sessions</td></tr>`}</tbody></table></div>`;
