@@ -560,13 +560,13 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
   </div>
   <div class="reward-cards">
     <div class="reward-card reveal">
-      <div class="reward-num"><span id="rw-every">10</span><small>th</small></div>
-      <h3>Every tenth session is free.</h3>
+      <div class="reward-num no-i18n"><span id="rw-every">10</span><small id="rw-suffix">th</small></div>
+      <h3 id="rw-loyalty-title">Every 10th session is free.</h3>
       <p>Sessions in any city count. Your account keeps the tally, and the free one appears by itself when you get there.</p>
     </div>
     <div class="reward-card reveal">
-      <div class="reward-num"><span id="rw-pct">40</span><small>%</small></div>
-      <h3>Invite a friend: 40% off, for both of you.</h3>
+      <div class="reward-num no-i18n"><span id="rw-pct">40</span><small>%</small></div>
+      <h3 id="rw-invite-title">Invite a friend: 40% off, for both of you.</h3>
       <p>Share your link. Your friend gets the discount on their first session. You get yours the moment they book.</p>
     </div>
   </div>
@@ -878,7 +878,15 @@ const I = window.ZenI18n, t = (s, v) => I.t(s, v);
 const LOCALE = () => ({ en: "en-GB", it: "it-IT", ar: "ar-EG" }[I.lang]);
 const money = (minor, cur) => new Intl.NumberFormat(LOCALE(), { style: "currency", currency: cur, maximumFractionDigits: cur === "EGP" ? 0 : 2 }).format(minor / 100);
 $("#lang-slot").innerHTML = I.switcher();
-document.addEventListener("zen:lang", () => { if (city) { renderServices(); updateSummary(); renderPrep(); } });
+function applySettings(st) {
+  if (st) Object.assign(ZenGuide.SETTINGS, st);
+  const n = ZenGuide.SETTINGS.loyalty_every, pct = ZenGuide.SETTINGS.referral_pct;
+  $("#rw-every").textContent = n; $("#rw-suffix").textContent = I.ordSuffix(n); $("#rw-pct").textContent = pct;
+  $("#rw-loyalty-title").textContent = t("Every {nth} session is free.", { nth: I.ordinal(n) });
+  $("#rw-invite-title").textContent = t("Invite a friend: {pct}% off, for both of you.", { pct });
+}
+fetch("/api/status").then(r => (r.headers.get("content-type") || "").includes("json") ? r.json() : {}).then(s => applySettings(s.settings)).catch(() => applySettings());
+document.addEventListener("zen:lang", () => { applySettings(); if (city) { renderServices(); updateSummary(); renderPrep(); } });
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 document.documentElement.classList.add("js");
 $("#year").textContent = new Date().getFullYear();
@@ -944,7 +952,7 @@ fetch("/api/me", { credentials: "same-origin" }).then(r => (r.headers.get("conte
   const first = d.user.name.split(" ")[0];
   $("#nav-account").classList.add("user"); $("#nav-account").innerHTML = `<span class="av">${d.user.photo ? `<img src="${d.user.photo}" alt="">` : first.slice(0, 2).toUpperCase()}</span><span>${first}</span>`; $("#nav-account").title = t("Your sessions, rewards and guide");
   if (d.user.lang && d.user.lang !== I.lang && !new URLSearchParams(location.search).get("lang")) I.set(d.user.lang);
-  $("#rw-every").textContent = d.settings.loyalty_every; $("#rw-pct").textContent = d.settings.referral_pct;
+  applySettings({ loyalty_every: d.settings.loyalty_every, referral_pct: d.settings.referral_pct });
   $("#name").value = d.user.name || ""; $("#email").value = d.user.email || ""; $("#phone").value = d.user.phone || "";
   $("#rewards-guest").hidden = true; $("#rewards-user").hidden = false;
   const cr = d.credits.filter(c => c.status === "available");

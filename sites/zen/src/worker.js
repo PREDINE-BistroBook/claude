@@ -42,7 +42,7 @@ export default {
 
 async function route(req, env, url, ctx) {
   const p = url.pathname, m = req.method;
-  if (p === "/api/status") return json({ live: isLive(env), preview: !isLive(env), google: Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) });
+  if (p === "/api/status") { const st = await settings(env); return json({ live: isLive(env), preview: !isLive(env), google: Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET), settings: { loyalty_every: st.loyalty_every, referral_pct: st.referral_pct } }); }
   if (p === "/api/auth/google" && m === "GET") return googleStart(env, url);
   if (p === "/api/auth/google/callback" && m === "GET") return googleCallback(req, env, url);
   if (p === "/api/me/checkins" && m === "GET") return myCheckins(req, env);

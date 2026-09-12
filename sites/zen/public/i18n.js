@@ -47,9 +47,9 @@ window.ZenI18n = (function () {
     "Hijama · sterile single-use cups, every time": "Hijama · coppette sterili monouso, sempre", "The morning after · marks fade in three to ten days": "La mattina dopo · i segni spariscono in tre-dieci giorni",
     // rewards
     "Come back. Bring someone.": "Torna. Porta qualcuno.", "Recovery is a habit. We reward the habit.": "Il recupero è un'abitudine. Noi premiamo l'abitudine.",
-    "th": "ª", "Every tenth session is free.": "Ogni decima seduta è gratis.",
+    "th": "ª", "Every {nth} session is free.": "Ogni {nth} seduta è gratis.",
     "Sessions in any city count. Your account keeps the tally, and the free one appears by itself when you get there.": "Contano le sedute in qualsiasi città. Il tuo account tiene il conto, e quella gratis compare da sola quando ci arrivi.",
-    "Invite a friend: 40% off, for both of you.": "Invita un amico: 40% di sconto, per tutti e due.",
+    "Invite a friend: {pct}% off, for both of you.": "Invita un amico: {pct}% di sconto, per tutti e due.",
     "Share your link. Your friend gets the discount on their first session. You get yours the moment they book.": "Condividi il tuo link. Il tuo amico ha lo sconto sulla prima seduta. Tu lo ricevi nel momento in cui prenota.",
     "Create your free account": "Crea il tuo account gratuito", "No password. We email you a sign-in link.": "Senza password. Ti mandiamo un link di accesso via email.",
     // good to know
@@ -115,11 +115,11 @@ window.ZenI18n = (function () {
     "Your room": "La tua stanza", "we'll preselect it when you book": "la preselezioniamo quando prenoti", "not chosen yet": "non ancora scelta", "Why you're coming": "Perché vieni", "Focus areas": "Zone su cui lavorare", "we'll find out on the table": "lo scopriremo sul lettino",
     "Activity": "Attività", "Experience": "Esperienza", "Health": "Salute", "nothing noted": "niente da segnalare", "Flagged for your therapist to review before the first session.": "Segnalato al terapista da leggere prima della prima seduta.", "Contact": "Contatto",
     "Thank you for telling us.": "Grazie per avercelo detto.", "With {conditions}, your therapist will adapt the session or ask you to check with your doctor first. That's not a no, it's how we keep you safe. Please add details below.": "Con {conditions}, il terapista adatterà la seduta o ti chiederà di sentire prima il medico. Non è un no: è così che ti teniamo al sicuro. Aggiungi i dettagli qui sotto.",
-    "Your guide": "La tua guida", "Progress": "Progressi", "Profile": "Profilo", "Loyalty": "Fedeltà", "Every 10th session is free": "Ogni 10ª seduta è gratis", "Every {n}th session is free": "Ogni {n}ª seduta è gratis",
+    "Your guide": "La tua guida", "Progress": "Progressi", "Profile": "Profilo", "Loyalty": "Fedeltà", "Every {nth} session is free": "Ogni {nth} seduta è gratis",
     "A session counts once your therapist marks it as done. Sessions in any city count.": "Una seduta conta quando il terapista la segna come fatta. Contano le sedute in qualsiasi città.",
     "Your first session starts the count. After {every} you get one on us.": "La prima seduta inizia il conto. Dopo {every} te ne offriamo una noi.", "You just earned a free session. It's waiting below.": "Hai appena guadagnato una seduta gratis. Ti aspetta qui sotto.",
     "{done} sessions so far. {left} more and the next one is on us.": "{done} sedute finora. Ancora {left} e la prossima la offriamo noi.", "No rewards waiting right now.": "Nessun premio in attesa per ora.", "Use it": "Usalo",
-    "Invite a friend": "Invita un amico", "40% off, for both of you": "40% di sconto, per tutti e due", "{pct}% off, for both of you": "{pct}% di sconto, per tutti e due",
+    "Invite a friend": "Invita un amico", "{pct}% off, for both of you": "{pct}% di sconto, per tutti e due",
     "Your friend gets the discount on their first session. You get yours as soon as they've booked.": "Il tuo amico ha lo sconto sulla prima seduta. Tu lo ricevi appena prenota.",
     "Share on WhatsApp": "Condividi su WhatsApp", "Copy link": "Copia link", "Copied": "Copiato", "You joined through {name}.": "Sei entrato tramite {name}.", "signed up, not booked yet": "iscritto, non ha ancora prenotato", "{n} sessions": "{n} sedute", "1 session": "1 seduta",
     "Try Zen Recovery with me — cupping and recovery in Cairo, Dahab and Florence. We both get {pct}% off with this link: {url}": "Prova Zen Recovery con me: coppettazione e recupero al Cairo, a Dahab e a Firenze. Con questo link abbiamo tutti e due il {pct}% di sconto: {url}",
@@ -205,7 +205,7 @@ window.ZenI18n = (function () {
     "Blood thinners, haemophilia or serious anaemia: talk to your doctor first and tell us.": "Anticoagulanti, emofilia o anemia grave: parla prima con il medico e diccelo.",
     "Within 48 hours of surgery, a fracture, or a bad fall.": "Entro 48 ore da un intervento, una frattura o una brutta caduta.", "You've had alcohol today.": "Hai bevuto alcol oggi.",
     "While something is bothering you: once every 1–2 weeks.": "Finché qualcosa ti dà fastidio: una volta ogni 1–2 settimane.", "For maintenance and training recovery: every 3–4 weeks.": "Per mantenimento e recupero dall'allenamento: ogni 3–4 settimane.",
-    "Hijama: not more than once a month, and not in the same spots back to back.": "Hijama: non più di una volta al mese, e non negli stessi punti di seguito.", "Every 10th session with us is free; your account keeps the tally.": "Ogni 10ª seduta da noi è gratis; il tuo account tiene il conto.",
+    "Hijama: not more than once a month, and not in the same spots back to back.": "Hijama: non più di una volta al mese, e non negli stessi punti di seguito.", "Every {nth} session with us is free; your account keeps the tally.": "Ogni {nth} seduta da noi è gratis; il tuo account tiene il conto.",
     // exercises
     "Chin tucks: sit tall, draw the chin straight back (make a double chin), hold 5 seconds. 10 times.": "Retrazioni del mento: seduto dritto, porta il mento indietro (fai il doppio mento), tieni 5 secondi. 10 volte.",
     "Slow neck circles, half circles only, front side to side. 5 each way.": "Cerchi lenti del collo, solo mezzi cerchi, davanti da un lato all'altro. 5 per lato.",
@@ -244,6 +244,7 @@ window.ZenI18n = (function () {
     "Your sessions, rewards and guide": "Le tue sedute, premi e guida",
     "Sign in or create an account": "Accedi o crea un account",
     "Sign-in with Google didn't work. Try again, or use the email link.": "L'accesso con Google non ha funzionato. Riprova, o usa il link via email.",
+    "You've been invited: your first session is {pct}% off once you sign in.": "Sei stato invitato: la tua prima seduta è scontata del {pct}% appena entri.",
     "January": "gennaio", "February": "febbraio", "March": "marzo", "April": "aprile", "May": "maggio", "June": "giugno", "July": "luglio", "August": "agosto", "September": "settembre", "October": "ottobre", "November": "novembre", "December": "dicembre",
   };
   const AR = {
@@ -284,9 +285,9 @@ window.ZenI18n = (function () {
     "In the room": "داخل الغرفة", "Three cities. The same hands, the same quiet.": "ثلاث مدن. نفس الأيدي، نفس الهدوء.",
     "Dry and sliding cups together · a full-back session": "كؤوس ثابتة ومنزلقة معاً · جلسة ظهر كاملة", "Hijama · sterile single-use cups, every time": "حجامة · كؤوس معقمة تُستخدم مرة واحدة، في كل مرة", "The morning after · marks fade in three to ten days": "صباح اليوم التالي · تزول العلامات خلال ثلاثة إلى عشرة أيام",
     "Come back. Bring someone.": "عُد. وأحضر أحداً معك.", "Recovery is a habit. We reward the habit.": "الاستشفاء عادة. ونحن نكافئ العادة.",
-    "th": "", "Every tenth session is free.": "كل جلسة عاشرة مجانية.",
+    "th": "", "Every {nth} session is free.": "كل جلسة رقم {nth} مجانية.",
     "Sessions in any city count. Your account keeps the tally, and the free one appears by itself when you get there.": "الجلسات في أي مدينة تُحتسب. حسابك يتابع العدّ، والجلسة المجانية تظهر وحدها عندما تصل إليها.",
-    "Invite a friend: 40% off, for both of you.": "ادعُ صديقاً: خصم 40% لكما معاً.",
+    "Invite a friend: {pct}% off, for both of you.": "ادعُ صديقاً: خصم {pct}% لكما معاً.",
     "Share your link. Your friend gets the discount on their first session. You get yours the moment they book.": "شارك رابطك. يحصل صديقك على الخصم في جلسته الأولى. وتحصل أنت على خصمك لحظة حجزه.",
     "Create your free account": "أنشئ حسابك المجاني", "No password. We email you a sign-in link.": "بلا كلمة مرور. نرسل لك رابط دخول بالبريد.",
     "Good to know": "من المفيد أن تعرف", "Small things that make a session better.": "أشياء صغيرة تجعل الجلسة أفضل.",
@@ -349,11 +350,11 @@ window.ZenI18n = (function () {
     "Your room": "غرفتك", "we'll preselect it when you book": "سنختارها لك مسبقاً عند الحجز", "not chosen yet": "لم تُختر بعد", "Why you're coming": "سبب مجيئك", "Focus areas": "مناطق التركيز", "we'll find out on the table": "سنكتشفها على الطاولة",
     "Activity": "النشاط", "Experience": "الخبرة", "Health": "الصحة", "nothing noted": "لا شيء مسجّل", "Flagged for your therapist to review before the first session.": "مُعلَّم ليراجعه معالجك قبل الجلسة الأولى.", "Contact": "التواصل",
     "Thank you for telling us.": "شكراً لإخبارنا.", "With {conditions}, your therapist will adapt the session or ask you to check with your doctor first. That's not a no, it's how we keep you safe. Please add details below.": "مع {conditions}، سيكيّف معالجك الجلسة أو يطلب منك استشارة طبيبك أولاً. هذا ليس رفضاً، بل هكذا نحافظ على سلامتك. أضف التفاصيل في الأسفل من فضلك.",
-    "Your guide": "دليلك", "Progress": "التقدم", "Profile": "الملف الشخصي", "Loyalty": "الولاء", "Every 10th session is free": "كل جلسة عاشرة مجانية", "Every {n}th session is free": "كل جلسة رقم {n} مجانية",
+    "Your guide": "دليلك", "Progress": "التقدم", "Profile": "الملف الشخصي", "Loyalty": "الولاء", "Every {nth} session is free": "كل جلسة رقم {nth} مجانية",
     "A session counts once your therapist marks it as done. Sessions in any city count.": "تُحتسب الجلسة عندما يعلّمها معالجك كمكتملة. الجلسات في أي مدينة تُحتسب.",
     "Your first session starts the count. After {every} you get one on us.": "جلستك الأولى تبدأ العدّ. بعد {every} جلسة تحصل على واحدة على حسابنا.", "You just earned a free session. It's waiting below.": "حصلت للتو على جلسة مجانية. إنها بانتظارك في الأسفل.",
     "{done} sessions so far. {left} more and the next one is on us.": "{done} جلسة حتى الآن. {left} أخرى والجلسة التالية على حسابنا.", "No rewards waiting right now.": "لا مكافآت بانتظارك حالياً.", "Use it": "استخدمها",
-    "Invite a friend": "ادعُ صديقاً", "40% off, for both of you": "خصم 40% لكما معاً", "{pct}% off, for both of you": "خصم {pct}% لكما معاً",
+    "Invite a friend": "ادعُ صديقاً", "{pct}% off, for both of you": "خصم {pct}% لكما معاً",
     "Your friend gets the discount on their first session. You get yours as soon as they've booked.": "يحصل صديقك على الخصم في جلسته الأولى. وتحصل أنت على خصمك بمجرد أن يحجز.",
     "Share on WhatsApp": "شارك على واتساب", "Copy link": "انسخ الرابط", "Copied": "تم النسخ", "You joined through {name}.": "انضممت عبر {name}.", "signed up, not booked yet": "سجّل ولم يحجز بعد", "{n} sessions": "{n} جلسات", "1 session": "جلسة واحدة",
     "Try Zen Recovery with me — cupping and recovery in Cairo, Dahab and Florence. We both get {pct}% off with this link: {url}": "جرّب Zen Recovery معي: حجامة واستشفاء في القاهرة ودهب وفلورنسا. نحصل معاً على خصم {pct}% بهذا الرابط: {url}",
@@ -434,7 +435,7 @@ window.ZenI18n = (function () {
     "Blood thinners, haemophilia or serious anaemia: talk to your doctor first and tell us.": "مميعات الدم أو الهيموفيليا أو فقر الدم الشديد: استشر طبيبك أولاً وأخبرنا.",
     "Within 48 hours of surgery, a fracture, or a bad fall.": "خلال 48 ساعة من جراحة أو كسر أو سقوط شديد.", "You've had alcohol today.": "تناولت كحولاً اليوم.",
     "While something is bothering you: once every 1–2 weeks.": "ما دام شيء يزعجك: مرة كل أسبوع أو أسبوعين.", "For maintenance and training recovery: every 3–4 weeks.": "للصيانة والاستشفاء من التمرين: كل 3–4 أسابيع.",
-    "Hijama: not more than once a month, and not in the same spots back to back.": "الحجامة الرطبة: ليس أكثر من مرة في الشهر، وليس في نفس المواضع على التوالي.", "Every 10th session with us is free; your account keeps the tally.": "كل جلسة عاشرة معنا مجانية؛ حسابك يتابع العدّ.",
+    "Hijama: not more than once a month, and not in the same spots back to back.": "الحجامة الرطبة: ليس أكثر من مرة في الشهر، وليس في نفس المواضع على التوالي.", "Every {nth} session with us is free; your account keeps the tally.": "كل جلسة رقم {nth} معنا مجانية؛ حسابك يتابع العدّ.",
     "Chin tucks: sit tall, draw the chin straight back (make a double chin), hold 5 seconds. 10 times.": "سحب الذقن: اجلس منتصباً، اسحب الذقن إلى الخلف مباشرة (اصنع ذقناً مزدوجاً)، اثبت 5 ثوانٍ. 10 مرات.",
     "Slow neck circles, half circles only, front side to side. 5 each way.": "دوائر رقبة بطيئة، أنصاف دوائر فقط، من جانب إلى آخر من الأمام. 5 لكل اتجاه.",
     "Doorway chest stretch: forearms on the frame, step through until you feel the front of the shoulders. 30 seconds, 3 times.": "تمدد الصدر عند الباب: الساعدان على الإطار، تقدّم حتى تشعر بمقدمة الكتفين. 30 ثانية، 3 مرات.",
@@ -471,6 +472,7 @@ window.ZenI18n = (function () {
     "Your sessions, rewards and guide": "جلساتك ومكافآتك ودليلك",
     "Sign in or create an account": "سجّل الدخول أو أنشئ حساباً",
     "Sign-in with Google didn't work. Try again, or use the email link.": "لم ينجح الدخول بحساب Google. حاول مجدداً، أو استخدم رابط البريد.",
+    "You've been invited: your first session is {pct}% off once you sign in.": "تمت دعوتك: جلستك الأولى بخصم {pct}% بمجرد تسجيل دخولك.",
     "January": "يناير", "February": "فبراير", "March": "مارس", "April": "أبريل", "May": "مايو", "June": "يونيو", "July": "يوليو", "August": "أغسطس", "September": "سبتمبر", "October": "أكتوبر", "November": "نوفمبر", "December": "ديسمبر",
   };
   const D = { en: {}, it: IT, ar: AR };
@@ -482,6 +484,8 @@ window.ZenI18n = (function () {
     return D[n] ? n : "en";
   }
   let lang = detect();
+  const ordinal = (n) => { n = Number(n); if (lang === "it") return n + "ª"; if (lang === "ar") return String(n); const r = n % 100; return n + (r >= 11 && r <= 13 ? "th" : { 1: "st", 2: "nd", 3: "rd" }[n % 10] || "th"); };
+  const ordSuffix = (n) => { n = Number(n); if (lang === "it") return "ª"; if (lang === "ar") return ""; const r = n % 100; return r >= 11 && r <= 13 ? "th" : { 1: "st", 2: "nd", 3: "rd" }[n % 10] || "th"; };
   const t = (s, vars) => { let out = (D[lang] && D[lang][s]) || s; if (vars) for (const k in vars) out = out.split("{" + k + "}").join(vars[k]); return out; };
   const ATTRS = ["placeholder", "alt", "title", "aria-label"];
   function apply(root) {
@@ -503,5 +507,5 @@ window.ZenI18n = (function () {
   function switcher() { return `<span class="lang-switch no-i18n" role="group" aria-label="Language">${Object.keys(LANGS).map((l) => `<button type="button" data-lang="${l}" aria-pressed="${l === lang}" lang="${l}">${l === "ar" ? "عربي" : l.toUpperCase()}</button>`).join("")}</span>`; }
   document.addEventListener("click", (e) => { const b = e.target.closest(".lang-switch [data-lang]"); if (b) set(b.dataset.lang); });
   document.addEventListener("DOMContentLoaded", () => apply());
-  return { t, apply, set, switcher, get lang() { return lang; }, LANGS };
+  return { t, apply, set, switcher, ordinal, ordSuffix, get lang() { return lang; }, LANGS };
 })();

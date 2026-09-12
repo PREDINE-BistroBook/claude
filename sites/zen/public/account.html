@@ -362,11 +362,12 @@ $("#lang-slot").innerHTML = I.switcher();
 
 async function boot() {
   const params = new URLSearchParams(location.search);
-  if (params.get("ref")) { $("#ref-note").textContent = t("You've been invited: your first session is 40% off once you sign in."); $("#ref-note").hidden = false; }
+  if (params.get("ref")) { $("#ref-note").textContent = t("You've been invited: your first session is {pct}% off once you sign in.", { pct: G.SETTINGS.referral_pct }); $("#ref-note").hidden = false; }
   if (params.get("expired")) $("#expired-note").hidden = false;
   if (params.get("error") === "google") $("#google-err").hidden = false;
   $("#city-list").innerHTML = [...G.EGYPT_SUGGEST, ...G.ITALY_SUGGEST].map((c) => `<option value="${c}">`).join("");
   const [data, status] = await Promise.all([ZenAPI("GET", "/api/me").catch(() => ({ user: null })), ZenAPI("GET", "/api/status").catch(() => ({}))]);
+  if (status.settings) { Object.assign(G.SETTINGS, status.settings); if (params.get("ref")) $("#ref-note").textContent = t("You've been invited: your first session is {pct}% off once you sign in.", { pct: G.SETTINGS.referral_pct }); }
   if (ZenAPI.isDemo()) { $("#demo-banner").hidden = false; $("#demo-login").hidden = false; }
   if (status.google) { $("#google-btn").hidden = false; $("#or-line").hidden = false; $("#google-btn").href = "/api/auth/google?lang=" + I.lang + (params.get("ref") ? "&ref=" + encodeURIComponent(params.get("ref")) : ""); }
   else if (!ZenAPI.isDemo()) $("#google-off").hidden = false;
@@ -467,7 +468,8 @@ function show(data) {
   const rc = $("#rec-card"); rc.hidden = !room;
   if (room) rc.innerHTML = `<div style="flex:1"><span class="eyebrow" style="color:var(--mark-soft)">${t("Nearest room")}${u.city_text ? " · " + t("you're in {place}", { place: esc(u.city_text) }) : ""}</span><b>${cityName(room)}</b><p>${t(i.experience === "first" ? "First time? Read \"Your guide\" before you come. It takes three minutes and makes the session better." : "Book when you like; we confirm the hour on WhatsApp.")}</p></div><a class="btn small accent" href="index.html?city=${room}#book">${t("Book in {city}", { city: cityName(room) })}</a>`;
   const every = data.settings.loyalty_every, done = data.stats.done, into = done % every, left = every - into;
-  $("#loyalty-title").textContent = t("Every {n}th session is free", { n: every });
+  Object.assign(G.SETTINGS, { loyalty_every: every, referral_pct: data.settings.referral_pct });
+  $("#loyalty-title").textContent = t("Every {nth} session is free", { nth: I.ordinal(every) });
   $("#ring").style.setProperty("--p", (into / every) * 100); $("#ring-n").textContent = `${into}/${every}`;
   $("#loyalty-text").textContent = done === 0 ? t("Your first session starts the count. After {every} you get one on us.", { every }) : left === every ? t("You just earned a free session. It's waiting below.") : t("{done} sessions so far. {left} more and the next one is on us.", { done, left });
   const cr = data.credits.filter((c) => c.status === "available");
