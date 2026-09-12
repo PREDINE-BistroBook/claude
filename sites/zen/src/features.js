@@ -4,7 +4,8 @@
 // checked the admin cookie). Everything money-related goes through stripeCheckout() in lib.js (2% platform fee).
 import { CITIES } from "./catalog.js";
 import { randomId, referralCode, signPayload, verifyPayload, getCookie, clearCookie, hashPassword } from "./auth.js";
-import { CITY_KEYS, json, clean, normEmail, isDate, isTime, fmt, now, today, addDays, feeOn, body, isLive, currentUser, scope, sendEmail, stripeCheckout, slotsFor, healthFlags, parseIntake, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, isOwner, therapistOf, visibleWhere, isPartner, isEmployee, managesCity } from "./lib.js";
+import { CITY_KEYS, json, clean, normEmail, isDate, isTime, fmt, now, today, addDays, feeOn, body, isLive, currentUser, scope, sendEmail, stripeCheckout, slotsFor, healthFlags, parseIntake, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, isOwner, therapistOf, visibleWhere, isPartner, isEmployee, managesCity, pickLang, translateProfile, parseI18n } from "./lib.js";
+import { M } from "./mail.js";
 
 const b64u = (s) => btoa(typeof s === "string" ? unescape(encodeURIComponent(s)) : String.fromCharCode(...new Uint8Array(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const cityOf = (k) => (CITY_KEYS.includes(k) ? k : null);
@@ -52,8 +53,8 @@ async function servicePhoto(env, id) {
 }
 async function team(env, url) {
   const city = cityOf(url.searchParams.get("city"));
-  const r = await env.DB.prepare("SELECT id, city, name, bio, photo, languages, area, maps_url, title, story, certs, instagram FROM therapists WHERE active = 1" + (city ? " AND city = ?" : "") + " ORDER BY city, sort, name").bind(...(city ? [city] : [])).all();
-  return json({ therapists: r.results });
+  const r = await env.DB.prepare("SELECT id, city, name, bio, photo, languages, area, maps_url, title, story, certs, instagram, i18n FROM therapists WHERE active = 1" + (city ? " AND city = ?" : "") + " ORDER BY city, sort, name").bind(...(city ? [city] : [])).all();
+  return json({ therapists: r.results.map((t) => ({ ...t, i18n: parseI18n(t.i18n) })) });
 }
 async function packages(env, url) {
   const city = cityOf(url.searchParams.get("city"));
@@ -80,8 +81,8 @@ export async function packagePaid(env, rowId, paymentIntent) {
   const pk = await env.DB.prepare("SELECT months_valid FROM packages WHERE id = ?").bind(cp.package_id).first();
   const exp = new Date(); exp.setUTCMonth(exp.getUTCMonth() + (pk?.months_valid || 6));
   await env.DB.prepare("UPDATE client_packages SET status = 'paid', paid_at = ?, expires_at = ? WHERE id = ?").bind(now(), exp.toISOString().slice(0, 10), rowId).run();
-  const u = await env.DB.prepare("SELECT email, name FROM users WHERE id = ?").bind(cp.user_id).first();
-  await sendEmail(env, { to: u.email, subject: `Your ${cp.name} is ready — ${cp.sessions} sessions in ${CITIES[cp.city].name}`, text: [`Hi ${u.name.split(" ")[0]},`, ``, `${cp.sessions} sessions are waiting in your account, valid until ${exp.toISOString().slice(0, 10)}. When you book, pick "Use my package" and there's nothing to pay.`, ``, `${env.SITE_URL}/booking?city=${cp.city}`, ``, `Zen Recovery`].join("\n") });
+  const u = await env.DB.prepare("SELECT email, name, lang FROM users WHERE id = ?").bind(cp.user_id).first();
+  await sendEmail(env, { to: u.email, ...M("package_ready", pickLang(u.lang), { first: u.name.split(" ")[0], pack: cp.name, sessions: cp.sessions, city: CITIES[cp.city].name, until: exp.toISOString().slice(0, 10), link: `${env.SITE_URL}/booking?city=${cp.city}` }) });
   await sendEmail(env, { to: await notifyList(env, cp.city), subject: `Package sold · ${CITIES[cp.city].name} · ${cp.name} · ${fmt(cp.amount, cp.currency)}`, text: `${u.name} (${u.email}) bought ${cp.name} (${cp.sessions} sessions) in ${CITIES[cp.city].name} for ${fmt(cp.amount, cp.currency)}.` });
 }
 async function myPackages(req, env) {
@@ -101,8 +102,8 @@ async function giftCheckout(req, env) {
   const id = randomId(), code = "GIFT-" + referralCode();
   const { url, id: sid } = await stripeCheckout(env, { amount: svc.amount, currency: city.currency, name: `Gift: ${svc.name}`, description: `For ${recipient_name}. Sent by email as a code after payment.`, email: buyer_email,
     success: `${env.SITE_URL}/success.html?gift=1`, cancel: `${env.SITE_URL}/giftcard`, metadata: { kind: "gift", gift_id: id } });
-  await env.DB.prepare("INSERT INTO gifts (id, code, city, service_id, service_name, amount, currency, platform_fee, buyer_name, buyer_email, recipient_name, recipient_email, message, status, stripe_session) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-    .bind(id, code, b.city, svc.id, svc.name, svc.amount, city.currency, feeOn(svc.amount), buyer_name, buyer_email, recipient_name, recipient_email || null, message, "pending", sid).run();
+  await env.DB.prepare("INSERT INTO gifts (id, code, city, service_id, service_name, amount, currency, platform_fee, buyer_name, buyer_email, recipient_name, recipient_email, message, status, stripe_session, lang) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+    .bind(id, code, b.city, svc.id, svc.name, svc.amount, city.currency, feeOn(svc.amount), buyer_name, buyer_email, recipient_name, recipient_email || null, message, "pending", sid, pickLang(b.lang)).run();
   return json({ url });
 }
 export async function giftPaid(env, giftId) {
@@ -110,9 +111,9 @@ export async function giftPaid(env, giftId) {
   if (!g || g.status !== "pending") return;
   await env.DB.prepare("UPDATE gifts SET status = 'paid', paid_at = ? WHERE id = ?").bind(now(), giftId).run();
   const cityName = CITIES[g.city].name, link = `${env.SITE_URL}/booking?city=${g.city}&gift=${g.code}`;
-  const lines = [`${g.buyer_name} has given you a ${g.service_name.split(" · ")[0]} session with Zen Recovery in ${cityName}.`, ``, g.message ? `"${g.message}"` : null, g.message ? `` : null, `Your gift code: ${g.code}`, ``, `Book your session here (the code fills itself in): ${link}`, ``, `Zen Recovery`].filter((l) => l !== null);
-  await sendEmail(env, { to: g.buyer_email, subject: `Your gift for ${g.recipient_name} — code ${g.code}`, text: [`Hi ${g.buyer_name.split(" ")[0]},`, ``, `Thank you. The gift is paid: ${g.service_name} in ${cityName}.`, ``, `Code: ${g.code}`, `Booking link: ${link}`, ``, g.recipient_email ? `We've emailed ${g.recipient_name} too.` : `Forward the code or the link to ${g.recipient_name}.`, ``, `Zen Recovery`].join("\n") });
-  if (g.recipient_email) await sendEmail(env, { to: g.recipient_email, subject: `A gift from ${g.buyer_name}: a Zen Recovery session`, text: lines.join("\n") });
+  const lang = pickLang(g.lang);
+  await sendEmail(env, { to: g.buyer_email, ...M("gift_buyer", lang, { first: g.buyer_name.split(" ")[0], recipient: g.recipient_name, code: g.code, service: g.service_name, city: cityName, link, emailed: Boolean(g.recipient_email) }) });
+  if (g.recipient_email) await sendEmail(env, { to: g.recipient_email, ...M("gift_recipient", lang, { buyer: g.buyer_name, service: g.service_name.split(" · ")[0], city: cityName, message: g.message, code: g.code, link }) });
   await sendEmail(env, { to: await notifyList(env, g.city), subject: `Gift sold · ${cityName} · ${g.service_name} · ${fmt(g.amount, g.currency)}`, text: `${g.buyer_name} (${g.buyer_email}) bought a gift for ${g.recipient_name}. Code ${g.code}.` });
 }
 async function giftLookup(env, code) {
@@ -409,6 +410,9 @@ async function saveTherapist(req, env, admin, id) {
   const vals = [name, keep("bio", 400), photo, keep("languages", 60), b.active === undefined ? cur?.active ?? 1 : b.active ? 1 : 0, Number.isInteger(b.sort) ? b.sort : cur?.sort || 0, link.admin_id, keep("area", 80), keep("address", 200), maps, keep("title", 80), keepML("story", 2000), keepML("certs", 1200), /^[A-Za-z0-9._]*$/.test(insta) ? insta : ""];
   if (cur) await env.DB.prepare("UPDATE therapists SET name = ?, bio = ?, photo = ?, languages = ?, active = ?, sort = ?, admin_id = ?, area = ?, address = ?, maps_url = ?, title = ?, story = ?, certs = ?, instagram = ? WHERE id = ?").bind(...vals, id).run();
   else await env.DB.prepare("INSERT INTO therapists (id, city, name, bio, photo, languages, active, sort, admin_id, area, address, maps_url, title, story, certs, instagram) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(tid, city, ...vals).run();
+  // texts changed → Italian and Arabic versions again (Workers AI); if it fails now, the hourly cron fills them in
+  const textsChanged = !cur || ["title", "bio", "story", "certs", "languages", "area"].some((k) => (b[k] !== undefined && String(b[k] ?? "").trim() !== String(cur[k] || "").trim()));
+  if (textsChanged) { let i18n = null; try { i18n = await translateProfile(env, { title: vals[10], bio: vals[1], story: vals[11], certs: vals[12], languages: vals[3], area: vals[7] }); } catch (e) { console.error("translate", e.message); } await env.DB.prepare("UPDATE therapists SET i18n = ? WHERE id = ?").bind(i18n ? JSON.stringify(i18n) : null, tid).run(); }
   return json({ ok: true, id: tid, created: link.created || null, admin_id: link.admin_id || null });
 }
 async function savePackage(req, env, id) {
@@ -475,7 +479,7 @@ async function approveClient(env, admin, id) {
   await env.DB.prepare("UPDATE users SET approved = 1 WHERE id = ?").bind(id).run();
   const r = await env.DB.prepare("UPDATE bookings SET status = 'confirmed' WHERE user_id = ? AND status = 'review'" + (city ? " AND city = ?" : "")).bind(id, ...(city ? [city] : [])).run();
   if (r.meta.changes) await maybeRewardReferrer(env, id);
-  await sendEmail(env, { to: u.email, subject: "Zen Recovery — you're cleared to book", text: [`Hi ${u.name.split(" ")[0]},`, ``, `A therapist looked at what you told us about your health and you're good to go.`, r.meta.changes ? `Your pending session is now confirmed — Zen will message you on WhatsApp about the exact hour, and you pay at the session.` : `You can now book online like anyone else.`, ``, `${env.SITE_URL}/account`, ``, `Zen Recovery`].join("\n") });
+  await sendEmail(env, { to: u.email, ...M("cleared", pickLang(u.lang), { first: u.name.split(" ")[0], confirmed: Boolean(r.meta.changes), site: env.SITE_URL }) });
   return json({ ok: true, confirmed: r.meta.changes });
 }
 

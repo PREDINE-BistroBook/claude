@@ -1,4 +1,5 @@
 // Shared helpers for worker.js, features.js and cron.js.
+import { M } from "./mail.js";
 import { CITIES, PLATFORM_FEE_BPS } from "./catalog.js";
 import { randomId, referralCode, signPayload, verifyPayload, getCookie, setCookie } from "./auth.js";
 
@@ -38,6 +39,21 @@ export async function notifyList(env, city, therapistId) {
     : (await env.DB.prepare("SELECT email FROM admins WHERE notify = 1 AND email LIKE '%@%' AND role != 'platform' AND (role = 'all' OR role = ?)").bind(city || "").all()).results;
   return [...new Set([env.ZEN_NOTIFY_EMAIL, ...rows.map((r) => r.email)].filter(Boolean))];
 }
+// Profile texts in Italian and Arabic, by Workers AI (m2m100). Called after a therapist is saved and hourly for anything missing.
+// Returns { it: {...}, ar: {...} } or null when the binding is missing / the model fails; the site then falls back to the original text.
+const PROFILE_FIELDS = ["title", "bio", "story", "certs", "languages", "area"];
+export async function translateProfile(env, row) {
+  if (!env.AI) return null;
+  const out = { it: {}, ar: {} };
+  for (const lang of ["it", "ar"]) for (const k of PROFILE_FIELDS) {
+    const src = String(row[k] || "").trim(); if (!src) { out[lang][k] = ""; continue; }
+    const parts = src.split("\n"), done = [];
+    for (const p of parts) { if (!p.trim()) { done.push(""); continue; } const r = await env.AI.run("@cf/meta/m2m100-1.2b", { text: p, source_lang: "english", target_lang: lang === "it" ? "italian" : "arabic" }); done.push(String(r?.translated_text || p).trim()); }
+    out[lang][k] = done.join("\n");
+  }
+  return out;
+}
+export const parseI18n = (v) => { try { const o = typeof v === "string" ? JSON.parse(v) : v; return o && typeof o === "object" ? o : null; } catch { return null; } };
 // The therapist profile an admin account is linked to (null for the owner unless linked, and for unlinked city accounts).
 export async function therapistOf(env, admin) { return env.DB.prepare("SELECT id, name, city FROM therapists WHERE admin_id = ?").bind(admin.id).first(); }
 // Which bookings a signed-in admin may see: the owner everything; anyone else only the ones assigned to them or not assigned to anyone yet.
@@ -90,10 +106,14 @@ export async function createUser(env, { email, name, ref, city, lang, google_sub
   }
   return env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(id).first();
 }
+// The language a client hears from us in: what they chose on the site for this booking/gift, else their profile, else English.
+export const LANGS = ["en", "it", "ar"];
+export const pickLang = (...cands) => cands.find((l) => LANGS.includes(l)) || "en";
+export async function userLang(env, userId) { if (!userId) return "en"; const u = await env.DB.prepare("SELECT lang FROM users WHERE id = ?").bind(userId).first(); return pickLang(u?.lang); }
 // First sign-in through Google/Apple: no magic link was sent, so this is the client's first email from us.
 export async function welcomeEmail(env, user) {
-  const first = (user.name || "").split(" ")[0] || "there";
-  return sendEmail(env, { to: user.email, subject: "Welcome to Zen Recovery", text: [`Hi ${first},`, ``, `Your Zen Recovery account is ready. Cupping, manual therapy and recovery in Cairo, Dahab and Florence.`, ``, `What's in your account: ${env.SITE_URL}/account`, `· two minutes of questions so we know which room is nearest and how to work with your body`, `· your sessions, before/after advice, and a progress check-in`, `· rewards: every few sessions one is free, and your friends get a discount through your invite link`, ``, `Book a session: ${env.SITE_URL}/booking`, ``, `See you on the table,`, `Zen Recovery`].join("\n") });
+  const first = (user.name || "").split(" ")[0] || "";
+  return sendEmail(env, { to: user.email, ...M("welcome", pickLang(user.lang), { first, site: env.SITE_URL }) });
 }
 export async function sessionCookieFor(env, userId) {
   await env.DB.prepare("UPDATE users SET last_login = ? WHERE id = ?").bind(now(), userId).run();
@@ -181,8 +201,8 @@ export async function maybeRewardReferrer(env, userId) {
   if (already) return;
   const s = await settings(env);
   await env.DB.prepare("INSERT INTO credits (id, user_id, kind, pct, reason) VALUES (?,?,?,?,?)").bind(randomId(), u.referred_by, "referral", s.referral_pct, `ref:${userId}`).run();
-  const ref = await env.DB.prepare("SELECT email, name FROM users WHERE id = ?").bind(u.referred_by).first();
-  await sendEmail(env, { to: ref.email, subject: `${u.name} booked with Zen — your ${s.referral_pct}% is ready`, text: [`Hi ${ref.name},`, ``, `${u.name} just booked their first session with your invite. You've got ${s.referral_pct}% off your next session.`, ``, `Use it when you book: ${env.SITE_URL}/booking`, ``, `Zen Recovery`].join("\n") });
+  const ref = await env.DB.prepare("SELECT email, name, lang FROM users WHERE id = ?").bind(u.referred_by).first();
+  await sendEmail(env, { to: ref.email, ...M("referral_reward", pickLang(ref.lang), { name: ref.name, who: u.name, pct: s.referral_pct, site: env.SITE_URL }) });
 }
 export async function maybeRewardLoyalty(env, userId) {
   if (!userId) return;
@@ -193,8 +213,8 @@ export async function maybeRewardLoyalty(env, userId) {
   const already = await env.DB.prepare("SELECT 1 FROM credits WHERE user_id = ? AND reason = ?").bind(userId, reason).first();
   if (already) return;
   await env.DB.prepare("INSERT INTO credits (id, user_id, kind, pct, reason) VALUES (?,?,?,?,?)").bind(randomId(), userId, "loyalty", 100, reason).run();
-  const u = await env.DB.prepare("SELECT email, name FROM users WHERE id = ?").bind(userId).first();
-  await sendEmail(env, { to: u.email, subject: "Your next Zen session is on us", text: [`Hi ${u.name},`, ``, `That was session number ${done.n}. The next one is free — pick a day whenever you like: ${env.SITE_URL}/booking`, ``, `Zen Recovery`].join("\n") });
+  const u = await env.DB.prepare("SELECT email, name, lang FROM users WHERE id = ?").bind(userId).first();
+  await sendEmail(env, { to: u.email, ...M("loyalty_reward", pickLang(u.lang), { name: u.name, n: done.n, site: env.SITE_URL }) });
 }
 
 // ---------- availability → free slots ----------

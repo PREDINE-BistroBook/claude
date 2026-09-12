@@ -10,7 +10,7 @@ $("#gift-form").addEventListener("submit", async (e) => {
   const c = CITIES[$("#g-city").value], s = c.services.find(x => x.id === $("#g-service").value);
   const btn = $("#g-pay"); btn.disabled = true;
   try {
-    const r = await fetch("/api/gift/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ city: $("#g-city").value, service: s.id, buyer_name: $("#g-buyer").value.trim(), buyer_email: $("#g-buyer-email").value.trim(), recipient_name: $("#g-to").value.trim(), recipient_email: $("#g-to-email").value.trim(), message: $("#g-msg").value.trim() }) });
+    const r = await fetch("/api/gift/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ lang: I.lang, city: $("#g-city").value, service: s.id, buyer_name: $("#g-buyer").value.trim(), buyer_email: $("#g-buyer-email").value.trim(), recipient_name: $("#g-to").value.trim(), recipient_email: $("#g-to-email").value.trim(), message: $("#g-msg").value.trim() }) });
     const data = (r.headers.get("content-type") || "").includes("json") ? await r.json().catch(() => ({})) : { preview: true };
     if (r.ok && data.url) { location.href = data.url; return; }
     if (data.preview) tell(t("Payments aren't switched on yet"), t("Once Zen's Stripe account is connected, this takes you to a secure card page for {amount} and the gift code goes out by email.", { amount: money(s.price, c.currency) }));
