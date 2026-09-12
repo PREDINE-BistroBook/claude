@@ -242,8 +242,16 @@ footer .wm b{color:#fff}
 .panel:hover .choose::after{transform:translateX(4px)}
 .panel .tick{position:absolute; top:18px; right:18px; z-index:3; width:34px; height:34px; border-radius:50%; border:1.5px solid rgba(255,255,255,.7); display:grid; place-items:center; background:rgba(20,48,44,.35); backdrop-filter:blur(6px); opacity:0; transform:scale(.6); transition:opacity .4s, transform .5s var(--ease)}
 .panel[aria-pressed="true"] .tick{opacity:1; transform:scale(1); background:var(--mark); border-color:var(--mark)}
-.panels.has-choice .panel:not([aria-pressed="true"]){filter:saturate(.35) brightness(.72); transform:scale(.985)}
-.panels.has-choice .panel[aria-pressed="true"]{transform:scale(1.01)}
+/* once a city is chosen the other two disappear, so a stray tap can't switch rooms; "Change city" brings them back */
+.panels.has-choice .panel:not([aria-pressed="true"]){display:none}
+.panels.has-choice{grid-template-columns:1fr; max-width:560px; margin-inline:auto}
+.panels.has-choice .panel[aria-pressed="true"]{aspect-ratio:16/9; cursor:default}
+.panels.has-choice .panel[aria-pressed="true"] .choose{display:none}
+.change-city{display:inline-flex; align-items:center; gap:8px; margin-top:14px; padding:8px 14px; border-radius:999px; border:1.5px solid var(--line); background:var(--ground-3); color:var(--ink); font:inherit; font-size:.86rem; font-weight:500; cursor:pointer}
+.change-city:hover{border-color:var(--ink)}
+.change-city::before{content:"↺"; font-size:1rem}
+.book-intro .change-city{margin-top:0; padding:6px 12px; font-size:.8rem}
+.place-row{display:flex; align-items:center; gap:14px; flex-wrap:wrap}
 .panel .flag{position:absolute; top:18px; left:18px; z-index:3; font-family:var(--label); font-size:.58rem; letter-spacing:.12em; text-transform:uppercase; padding:6px 10px; border-radius:999px; background:rgba(20,48,44,.35); backdrop-filter:blur(6px); border:1px solid rgba(255,255,255,.25)}
 @media (max-width:760px){
   .panels{grid-template-columns:1fr; gap:8px; padding:0 8px}
@@ -667,6 +675,7 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
     <p class="eyebrow">Three rooms, one team</p>
     <h2 id="places-title">Where would you like us?</h2>
     <p>Zen works from Cairo, Dahab and Florence. Choose your city and we'll show you what's on offer there, in your currency.</p>
+    <p id="chosen-line" hidden><span id="chosen-text"></span> <button type="button" class="change-city" id="change-city">Change city</button></p>
   </div>
   <div class="panels" id="panels" role="group" aria-label="Choose a city">
 
@@ -771,7 +780,7 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
         <p>Prices, hours and the team change with the room. Choose Cairo, Dahab or Florence above and the booking form appears here.</p>
       </div>
       <div id="book-place" hidden>
-        <p class="place-name" id="place-name">Florence</p>
+        <div class="place-row"><p class="place-name" id="place-name">Florence</p><button type="button" class="change-city" id="change-city-2">Change city</button></div>
         <div class="addr" id="place-addr"></div>
         <p class="maps" id="place-maps" hidden><a id="place-maps-link" href="#" target="_blank" rel="noopener">Open in Google Maps</a></p>
         <div class="team"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span id="place-team"></span></div>
@@ -972,7 +981,7 @@ function applySettings(st) {
 }
 let ST = { settings: {}, gmaps: {}, whatsapp: {}, review: {} };
 fetch("/api/status").then(r => (r.headers.get("content-type") || "").includes("json") ? r.json() : {}).then(s => { ST = { ...ST, ...s }; applySettings(s.settings); if (city) placeLinks(); }).catch(() => applySettings());
-document.addEventListener("zen:lang", () => { applySettings(); if (city) { renderServices(); updateSummary(); renderPrep(); } });
+document.addEventListener("zen:lang", () => { applySettings(); if (city) { renderServices(); updateSummary(); renderPrep(); $("#chosen-text").textContent = t("You're booking in {city}.", { city: t(CITIES[city].name) }); } });
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 document.documentElement.classList.add("js");
 $("#year").textContent = new Date().getFullYear();
@@ -1069,17 +1078,19 @@ panels.addEventListener("click", (e) => {
   choose(btn.dataset.city);
 });
 function choose(key, quiet) {
+  if (panels.classList.contains("has-choice") && city === key) return; // tapping the chosen card again does nothing
   city = key;
   const c = CITIES[key];
   $$(".panel").forEach(p => p.setAttribute("aria-pressed", String(p.dataset.city === key)));
   panels.classList.add("has-choice");
+  $("#chosen-line").hidden = false; $("#chosen-text").textContent = t("You're booking in {city}.", { city: t(c.name) });
   $("#book-empty").hidden = true;
   const pl = $("#book-place"); pl.hidden = false;
   placeLinks();
   const form = $("#booking"); form.hidden = false;
   renderServices();
-  const d = $("#date"); const t = new Date(); t.setDate(t.getDate() + 1);
-  d.min = t.toISOString().slice(0, 10); if (!d.value || d.value < d.min) d.value = d.min;
+  const d = $("#date"); const tm = new Date(); tm.setDate(tm.getDate() + 1);
+  d.min = tm.toISOString().slice(0, 10); if (!d.value || d.value < d.min) d.value = d.min;
   $("#phone").placeholder = c.currency === "EUR" ? "+39 …" : "+20 …";
   renderDiscounts(); loadTeam(); loadSlots(); loadPackHint();
   updateSummary();
@@ -1087,6 +1098,13 @@ function choose(key, quiet) {
   if (!quiet) setTimeout(() => $("#book").scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" }), 120);
   renderPrep();
 }
+// bring the three cities back; the form stays as it is until a new city is picked
+function changeCity() {
+  panels.classList.remove("has-choice"); $$(".panel").forEach(p => p.setAttribute("aria-pressed", "false"));
+  $("#chosen-line").hidden = true;
+  $("#places").scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+}
+$("#change-city").addEventListener("click", changeCity); $("#change-city-2").addEventListener("click", changeCity);
 function placeLinks() {
   const c = CITIES[city]; const wa = (ST.whatsapp?.[city] || c.whatsapp || "").replace(/\D/g, "");
   $("#place-wa").hidden = !wa; if (wa) $("#place-wa-link").href = "https://wa.me/" + wa;
@@ -1209,13 +1227,14 @@ $("#gift-form").addEventListener("submit", async (e) => {
   finally { btn.disabled = false; }
 });
 function renderServices() {
-  const c = CITIES[city]; const keep = $("input[name=service]:checked")?.value;
+  const c = CITIES[city]; const kept = $("input[name=service]:checked")?.value?.split("-")[1];
+  const keepIdx = Math.max(0, c.services.findIndex(s => s.id.split("-")[1] === kept)); // same session type when switching city
   $("#place-name").textContent = t(c.name);
   $("#place-addr").innerHTML = c.address.map((l, i) => i === 0 ? `<b>${t(l)}</b>` : `<span>${t(l)}</span>`).join("");
   $("#place-team").textContent = t(c.team);
   $("#services").innerHTML = c.services.map((s, i) => `
     <div class="service">
-      <input type="radio" name="service" id="svc-${s.id}" value="${s.id}" ${(keep ? keep === s.id : i === 0) ? "checked" : ""}>
+      <input type="radio" name="service" id="svc-${s.id}" value="${s.id}" ${i === keepIdx ? "checked" : ""}>
       <label for="svc-${s.id}">
         <span class="name">${t(s.name)}</span>
         <span class="price num">${money(s.price, c.currency)}</span>

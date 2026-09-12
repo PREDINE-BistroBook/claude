@@ -5,6 +5,7 @@
 window.ZenI18n = (function () {
   const LANGS = { en: "English", it: "Italiano", ar: "العربية" };
   const IT = {
+    "Change city": "Cambia città", "You're booking in {city}.": "Stai prenotando a {city}.",
     // 2026-09-12 batch: slots, gifts, packs, partners, review, Apple/SMS, photos, export
     "Your birthday month: {pct}% off.": "Il mese del tuo compleanno: {pct}% di sconto.",
     "Add your birthday to your profile and a discount appears by itself when the month comes. Packs of sessions and gift codes live here too.": "Aggiungi la data di nascita al profilo e lo sconto compare da solo quando arriva il mese. Qui trovi anche i pacchetti di sedute e i codici regalo.",
@@ -289,6 +290,7 @@ window.ZenI18n = (function () {
     "January": "gennaio", "February": "febbraio", "March": "marzo", "April": "aprile", "May": "maggio", "June": "giugno", "July": "luglio", "August": "agosto", "September": "settembre", "October": "ottobre", "November": "novembre", "December": "dicembre",
   };
   const AR = {
+    "Change city": "غيّر المدينة", "You're booking in {city}.": "أنت تحجز في {city}.",
     // 2026-09-12 batch
     "Your birthday month: {pct}% off.": "شهر عيد ميلادك: خصم {pct}%.",
     "Add your birthday to your profile and a discount appears by itself when the month comes. Packs of sessions and gift codes live here too.": "أضف تاريخ ميلادك في ملفك ويظهر الخصم تلقائيًا عندما يحل الشهر. باقات الجلسات وأكواد الهدايا هنا أيضًا.",
