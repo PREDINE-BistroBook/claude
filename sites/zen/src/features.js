@@ -278,14 +278,15 @@ async function saveService(req, env, admin, id) {
   const minutes = Number.isInteger(b.minutes) && b.minutes >= 10 && b.minutes <= 240 ? b.minutes : cur?.minutes || 60;
   const amount = Number.isInteger(b.amount) && b.amount >= 0 && b.amount < 100000000 ? b.amount : cur?.amount;
   if (!city || !name || amount === undefined || amount === null) return json({ error: "City, a name and a price." }, 400);
+  const photo = typeof b.photo === "string" && b.photo.startsWith("data:image/") && b.photo.length < 260000 ? b.photo : b.photo === null ? null : cur?.photo || null;
   const vals = [name, minutes, amount, CITIES[city].currency, b.description === undefined ? cur?.description || "" : clean(b.description, 160), b.active === undefined ? cur?.active ?? 1 : b.active ? 1 : 0, Number.isInteger(b.sort) ? b.sort : cur?.sort || 0, now()];
-  if (cur) await env.DB.prepare("UPDATE services SET name = ?, minutes = ?, amount = ?, currency = ?, description = ?, active = ?, sort = ?, updated_at = ? WHERE id = ?").bind(...vals, id).run();
+  if (cur) await env.DB.prepare("UPDATE services SET name = ?, minutes = ?, amount = ?, currency = ?, description = ?, active = ?, sort = ?, updated_at = ?, photo = ? WHERE id = ?").bind(...vals, photo, id).run();
   else {
     const base = city.slice(0, 3) + "-" + name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 20);
     let nid = base, n = 2; while (await env.DB.prepare("SELECT 1 FROM services WHERE id = ?").bind(nid).first()) nid = `${base}-${n++}`;
     const maxSort = (await env.DB.prepare("SELECT MAX(sort) m FROM services WHERE city = ?").bind(city).first()).m;
     if (!Number.isInteger(b.sort)) vals[6] = (maxSort ?? -1) + 1;
-    await env.DB.prepare("INSERT INTO services (id, city, name, minutes, amount, currency, description, active, sort, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)").bind(nid, city, ...vals).run();
+    await env.DB.prepare("INSERT INTO services (id, city, name, minutes, amount, currency, description, active, sort, updated_at, photo) VALUES (?,?,?,?,?,?,?,?,?,?,?)").bind(nid, city, ...vals, photo).run();
     id = nid;
   }
   return json({ ok: true, id });
