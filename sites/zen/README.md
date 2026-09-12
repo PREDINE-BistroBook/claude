@@ -83,20 +83,19 @@ Zen's side:
 - [ ] Send photos (three portrait shots) + Instagram handle + WhatsApp number.
 - [ ] Domain: **zenrecovery.com** (Ash, 2026-09-12: buying it). See "Domain" below.
 
-Deploy — what exists already (done from a Claude session on 2026-09-12): the D1 database `zen-recovery` (`35c5461a-9065-4552-a6bf-bac39d1ec8f8`, WEUR) with the schema applied, the Resend domain, `wrangler.toml` pointing at zenrecovery.club.
+Deploy — runs on **GitHub Actions** (`.github/workflows/deploy-zen.yml`), because the Claude web sessions in this repo cannot reach `api.cloudflare.com` (org egress policy). Already done from a Claude session on 2026-09-12: the D1 database `zen-recovery` (`35c5461a-9065-4552-a6bf-bac39d1ec8f8`, WEUR) with the schema applied, the Resend domain, `wrangler.toml` pointing at zenrecovery.club.
 
-What still needs a machine with Cloudflare access — the Claude web sessions in this repo **cannot** reach `api.cloudflare.com` (org egress policy returns 403) and have no `CLOUDFLARE_API_TOKEN`, so `wrangler deploy` has to run either on Ash's laptop or in a Claude environment where both are configured (Environment settings → variables `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`; network policy allowing `api.cloudflare.com`):
+One-time, Ash, in GitHub → repo → Settings → Secrets and variables → Actions → New repository secret:
 
-```bash
-cd sites/zen
-export CLOUDFLARE_API_TOKEN=...            # Workers Scripts:Edit, D1:Edit, Workers Routes:Edit, Zone:Read (zenrecovery.club)
-export RESEND_API_KEY=...                  # Resend → API keys → create "zen-recovery" (sending access)
-export ADMIN_BOOTSTRAP_EMAIL=fetta.amore.business@gmail.com
-export ADMIN_BOOTSTRAP_PASSWORD='...'      # first owner login; change it in Settings after
-# later, when Stripe Connect is set up:  export STRIPE_SECRET_KEY=... STRIPE_WEBHOOK_SECRET=...
-./deploy.sh
-```
-`deploy.sh` is idempotent: it re-applies the schema (no-op if present), sets whichever secrets are exported, generates `SESSION_SECRET` if missing, and deploys. Payments stay off until `ZEN_STRIPE_ACCOUNT` is filled in `wrangler.toml`; accounts, rewards and the admin work without Stripe.
+| Secret | Value |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | a **fresh** token (the one pasted in chat on 2026-09-12 is exposed — roll it). Permissions: Workers Scripts:Edit, D1:Edit, Workers Routes:Edit, Zone:Read, DNS:Edit; zone = zenrecovery.club |
+| `CLOUDFLARE_ACCOUNT_ID` | right-hand side of Workers & Pages overview |
+| `RESEND_API_KEY` | Resend → API keys → Create → "zen-recovery", Sending access |
+| `ADMIN_BOOTSTRAP_PASSWORD` | the first owner password (email is fetta.amore.business@gmail.com); change it in the admin after first login |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | later, when Stripe Connect is set up |
+
+Then Actions → "Deploy Zen Recovery" → Run workflow (or ask a Claude session to trigger it; it can). The workflow: applies the schema, deploys, sets the Worker secrets, generates `SESSION_SECRET` once, and — as soon as zenrecovery.club is a zone in the Cloudflare account — attaches the custom domain and adds the four Resend DNS records itself. Before the zone exists it deploys to `zen-recovery.fetta-amore-business.workers.dev` and says so. Pushes to `main` touching `sites/zen/` redeploy automatically.
 
 Local run: `npx wrangler dev` with `DEV_MAGIC_LINK = "1"` returns the sign-in link in the API response, so accounts can be tested without email.
 The preview banner on the public page is already off (`PREVIEW = false`); the account/admin pages show a banner only while no API answers.

@@ -1,0 +1,101 @@
+name: Deploy Zen Recovery
+
+# Deploys sites/zen to Cloudflare from GitHub's runners (the Claude web sessions can't reach api.cloudflare.com).
+# Trigger by hand from the Actions tab, or automatically on a push to main that touches sites/zen.
+#
+# Repository secrets (Settings → Secrets and variables → Actions):
+#   CLOUDFLARE_API_TOKEN      Workers Scripts:Edit, D1:Edit, Workers Routes:Edit, Zone:Read, DNS:Edit on zenrecovery.club
+#   CLOUDFLARE_ACCOUNT_ID
+#   RESEND_API_KEY            sending key for booking + sign-in emails
+#   ADMIN_BOOTSTRAP_PASSWORD  first owner login (only honoured while no admin exists)
+#   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET   optional until Stripe Connect is set up
+# SESSION_SECRET is generated on the first run and kept as a Worker secret.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["sites/zen/**", ".github/workflows/deploy-zen.yml"]
+
+concurrency: deploy-zen
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sites/zen
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      ZONE_NAME: zenrecovery.club
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install -g wrangler@4
+
+      - name: Who am I
+        run: wrangler whoami
+
+      - name: Is the domain on Cloudflare yet?
+        id: zone
+        run: |
+          ZONE=$(curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/zones?name=$ZONE_NAME" | jq -r '.result[0].id // empty')
+          if [ -z "$ZONE" ]; then
+            echo "::warning::$ZONE_NAME is not a zone in this Cloudflare account yet — deploying to the workers.dev URL only. Add the site in Cloudflare and re-run."
+            sed -i '/^routes = \[/,/^\]/d' wrangler.toml
+            sed -i 's#^SITE_URL = .*#SITE_URL = "https://zen-recovery.fetta-amore-business.workers.dev"#' wrangler.toml
+          else
+            echo "zone $ZONE"
+          fi
+          echo "id=$ZONE" >> "$GITHUB_OUTPUT"
+
+      - name: Database schema (idempotent)
+        run: wrangler d1 execute zen-recovery --remote --file=schema.sql
+
+      - name: Deploy
+        run: wrangler deploy
+
+      - name: Worker secrets
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          ADMIN_BOOTSTRAP_PASSWORD: ${{ secrets.ADMIN_BOOTSTRAP_PASSWORD }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          ADMIN_BOOTSTRAP_EMAIL: fetta.amore.business@gmail.com
+        run: |
+          put() { if [ -n "${!1:-}" ]; then printf '%s' "${!1}" | wrangler secret put "$1"; else echo "  (skip $1 — secret not set)"; fi; }
+          put RESEND_API_KEY
+          put ADMIN_BOOTSTRAP_EMAIL
+          put ADMIN_BOOTSTRAP_PASSWORD
+          put STRIPE_SECRET_KEY
+          put STRIPE_WEBHOOK_SECRET
+          if wrangler secret list | grep -q '"SESSION_SECRET"'; then echo "  SESSION_SECRET already set"; else
+            openssl rand -hex 32 | tr -d '\n' | wrangler secret put SESSION_SECRET; fi
+
+      - name: Email DNS records for Resend (only once the zone exists)
+        if: steps.zone.outputs.id != ''
+        env:
+          ZONE_ID: ${{ steps.zone.outputs.id }}
+        run: |
+          api() { curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "content-type: application/json" "$@"; }
+          upsert() { # type name content [priority]
+            local type=$1 name=$2 content=$3 prio=${4:-}
+            local fqdn="$name.$ZONE_NAME"
+            local existing=$(api "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?type=$type&name=$fqdn" | jq -r '.result[0].id // empty')
+            local body=$(jq -n --arg t "$type" --arg n "$fqdn" --arg c "$content" --arg p "$prio" '{type:$t,name:$n,content:$c,ttl:1,proxied:false} + (if $p != "" then {priority:($p|tonumber)} else {} end)')
+            if [ -n "$existing" ]; then echo "  $type $fqdn already present"; else
+              api -X POST "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records" --data "$body" | jq -r 'if .success then "  added \(.result.type) \(.result.name)" else "  FAILED: \(.errors)" end'; fi
+          }
+          upsert TXT   resend._domainkey "p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDdmP/M+5vUYIsIjAbtJYbTKGONyOaz+PoIL8HKZMXdmFBUzmC5mwqI1VgkdWHEgtgTncephAlSAttrEiA4k56p5WC4/ufvlfuttRaSYoa8Ul4H+2R2BhaSiYi7FeFCW1nBk19prver1sHuPH3LPLBikAGtcqrNnCJcMXYfvC5nUQIDAQAB"
+          upsert MX    send "feedback-smtp.eu-west-1.amazonses.com" 10
+          upsert TXT   send "v=spf1 include:amazonses.com ~all"
+          upsert CNAME rsend "send.forge.rmta.net"
+
+      - name: Where it lives
+        run: |
+          if [ -n "${{ steps.zone.outputs.id }}" ]; then echo "https://zenrecovery.club  ·  admin: https://zenrecovery.club/admin.html";
+          else echo "https://zen-recovery.fetta-amore-business.workers.dev  ·  admin: /admin.html"; fi
