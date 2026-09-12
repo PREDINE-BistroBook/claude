@@ -1,0 +1,15 @@
+name = "zen-cupping"
+main = "src/worker.js"
+compatibility_date = "2025-06-01"
+
+[assets]
+directory = "./public"
+not_found_handling = "single-page-application"
+
+# Non-secret configuration. Secrets (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, RESEND_API_KEY)
+# are set with `wrangler secret put <NAME>` and never committed.
+[vars]
+SITE_URL = "https://zen-cupping.fetta-amore-business.workers.dev"
+ZEN_STRIPE_ACCOUNT = ""          # acct_... of Zen's connected account. Empty = preview mode (no payments).
+ZEN_NOTIFY_EMAIL = ""            # where Zen receives bookings
+FROM_EMAIL = "Zen <booking@amicomioflorence.com>"   # must be a verified Resend sender — see README

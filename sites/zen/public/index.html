@@ -1,0 +1,891 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zen Cupping</title>
+<meta name="description" content="Zen — cupping therapy in Cairo, Dahab and Florence. See how cupping works, choose your city, book a session.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,300..600,0..100&family=Figtree:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap">
+<style>
+/* ---------- tokens ---------- */
+:root{
+  --ground:#E7EDE8;        /* mist sage — the treatment room at dusk */
+  --ground-2:#DBE3DD;      /* deeper mist for alternating bands */
+  --ground-3:#F3F6F3;      /* raised surfaces (form fields, cards) */
+  --ink:#14302C;           /* deep pine */
+  --ink-soft:#42605A;      /* secondary text */
+  --ink-mute:#7C948F;      /* captions, rules */
+  --line:rgba(20,48,44,.14);
+  --mark:#7C3A4E;          /* cup-mark plum — the colour a cup leaves */
+  --mark-soft:#C98A9B;
+  --mark-glow:rgba(124,58,78,.18);
+  --sand:#D3B98C;          /* Red Sea coast, Cairo stone */
+  --glass:rgba(255,255,255,.62);
+  --display:"Fraunces", "Iowan Old Style", Georgia, serif;
+  --body:"Figtree", "Segoe UI", system-ui, sans-serif;
+  --mono:"DM Mono", "SFMono-Regular", Menlo, monospace;
+  --gutter:clamp(16px, 5vw, 64px);
+  --radius:22px;
+  --ease:cubic-bezier(.22,.61,.36,1);
+  color-scheme: light;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--body); font-size:17px; line-height:1.55;
+  -webkit-font-smoothing:antialiased; overflow-x:hidden;
+}
+h1,h2,h3{font-family:var(--display); font-weight:300; letter-spacing:-.01em; line-height:1.05; margin:0; text-wrap:balance; font-variation-settings:"SOFT" 70, "opsz" 96}
+h1{font-size:clamp(2.6rem, 7vw, 6rem)}
+h2{font-size:clamp(2rem, 4.6vw, 3.6rem)}
+h3{font-size:clamp(1.35rem, 2.2vw, 1.8rem); font-variation-settings:"SOFT" 50, "opsz" 24}
+p{margin:0}
+a{color:inherit}
+em{font-style:italic; font-family:var(--display); font-weight:400; font-size:1.06em}
+.eyebrow{font-family:var(--mono); font-size:.74rem; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-soft)}
+.measure{max-width:34rem}
+.wrap{padding-inline:var(--gutter)}
+section{position:relative}
+:focus-visible{outline:2px solid var(--mark); outline-offset:3px; border-radius:6px}
+button{font:inherit; color:inherit}
+
+/* ---------- preview banner ---------- */
+.preview{
+  position:sticky; top:0; z-index:40; display:flex; gap:12px; align-items:center; justify-content:center; flex-wrap:wrap;
+  padding:8px var(--gutter); background:var(--ink); color:#E7EDE8; font-size:.8rem; line-height:1.35;
+}
+@media (max-width:640px){ .preview{font-size:.72rem; padding:6px 12px} }
+.preview code{font-family:var(--mono); background:rgba(255,255,255,.12); padding:1px 6px; border-radius:4px}
+.preview[hidden]{display:none}
+
+/* ---------- nav ---------- */
+.nav{
+  position:sticky; top:0; z-index:30; display:flex; align-items:center; justify-content:space-between;
+  padding:14px var(--gutter); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+  background:color-mix(in srgb, var(--ground) 72%, transparent); border-bottom:1px solid transparent;
+  transition:border-color .4s;
+}
+.nav{top:var(--banner-h, 0px)}
+.nav.scrolled{border-color:var(--line)}
+.brand{display:flex; align-items:center; gap:10px; text-decoration:none}
+.brand-mark{width:26px; height:26px; border-radius:50%; border:1.5px solid var(--ink); position:relative}
+.brand-mark::after{content:""; position:absolute; inset:5px; border-radius:50%; background:var(--mark)}
+.brand-name{font-family:var(--display); font-size:1.35rem; font-weight:400; letter-spacing:.02em; font-variation-settings:"SOFT" 100, "opsz" 24}
+.nav-links{display:flex; gap:22px; align-items:center; font-size:.92rem}
+.nav-links a{text-decoration:none; color:var(--ink-soft)}
+.nav-links a:hover{color:var(--ink)}
+.nav-links a.btn, .nav-links a.btn:hover{color:var(--ground)}
+.btn{
+  display:inline-flex; align-items:center; gap:10px; padding:12px 20px; border-radius:999px; border:1.5px solid var(--ink);
+  background:var(--ink); color:var(--ground); text-decoration:none; font-weight:500; font-size:.95rem; cursor:pointer;
+  transition:transform .35s var(--ease), background .3s, color .3s, box-shadow .35s;
+}
+.btn:hover{transform:translateY(-1px); box-shadow:0 10px 30px -12px rgba(20,48,44,.5)}
+.btn.ghost{background:transparent; color:var(--ink)}
+.btn.ghost:hover{background:rgba(20,48,44,.06)}
+.btn.small{padding:9px 16px; font-size:.86rem}
+.btn:disabled{opacity:.55; cursor:default; transform:none; box-shadow:none}
+@media (max-width:640px){ .nav-links .hide-sm{display:none} }
+
+/* ---------- hero ---------- */
+.hero{
+  display:grid; grid-template-columns:1.1fr .9fr; gap:clamp(24px, 4vw, 64px); align-items:center;
+  padding:clamp(40px, 8vh, 96px) var(--gutter) clamp(48px, 8vh, 96px); min-height:calc(100svh - 62px);
+}
+.hero-copy{display:flex; flex-direction:column; gap:26px}
+.hero-copy .eyebrow{display:flex; gap:14px; flex-wrap:wrap}
+.hero-copy .eyebrow span + span::before{content:"·"; margin-right:14px; color:var(--ink-mute)}
+.hero p.lede{font-size:clamp(1.05rem, 1.5vw, 1.25rem); color:var(--ink-soft); max-width:30rem}
+.hero-actions{display:flex; gap:12px; flex-wrap:wrap; align-items:center}
+.breath{position:relative; aspect-ratio:1; max-width:520px; width:100%; margin-inline:auto; display:grid; place-items:center}
+.breath .ring{position:absolute; inset:0; border-radius:50%; border:1px solid rgba(20,48,44,.28)}
+.breath .ring.r2{inset:11%; border-color:rgba(20,48,44,.22)}
+.breath .ring.r3{inset:22%; border-color:rgba(20,48,44,.16)}
+.breath .core{position:absolute; inset:31%; border-radius:50%; background:radial-gradient(circle at 42% 38%, #fff 0, var(--glass) 30%, rgba(124,58,78,.22) 70%, rgba(124,58,78,.45) 100%); box-shadow:inset 0 0 40px rgba(255,255,255,.7), 0 30px 60px -30px rgba(124,58,78,.6)}
+.breath .label{position:relative; z-index:2; font-family:var(--display); font-size:clamp(1.1rem, 2vw, 1.5rem); font-weight:300; color:var(--ink); font-variation-settings:"SOFT" 100, "opsz" 48; display:grid}
+.breath .label span{grid-area:1/1; text-align:center; opacity:0}
+.breath .label .in{animation:labelIn 8s infinite}
+.breath .label .out{animation:labelOut 8s infinite}
+.breath .ring, .breath .core{animation:breathe 8s var(--ease) infinite}
+.breath .ring.r2{animation-delay:.15s}
+.breath .ring.r3{animation-delay:.3s}
+.breath .core{animation-delay:.4s}
+@keyframes breathe{0%{transform:scale(.94)} 50%{transform:scale(1.04)} 100%{transform:scale(.94)}}
+@keyframes labelIn{0%{opacity:0} 10%{opacity:1} 45%{opacity:1} 55%{opacity:0} 100%{opacity:0}}
+@keyframes labelOut{0%{opacity:0} 50%{opacity:0} 60%{opacity:1} 95%{opacity:1} 100%{opacity:0}}
+.scroll-hint{position:absolute; left:50%; bottom:22px; transform:translateX(-50%); font-family:var(--mono); font-size:.7rem; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-mute); display:flex; flex-direction:column; align-items:center; gap:8px}
+.scroll-hint i{display:block; width:1px; height:34px; background:linear-gradient(var(--ink-mute), transparent); animation:drip 2.4s infinite}
+@keyframes drip{0%{transform:scaleY(0); transform-origin:top} 50%{transform:scaleY(1); transform-origin:top} 51%{transform-origin:bottom} 100%{transform:scaleY(0); transform-origin:bottom}}
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr; min-height:auto; padding-top:32px}
+  .breath{max-width:300px}
+  .scroll-hint{display:none}
+}
+
+/* ---------- explainer ---------- */
+.explain{background:var(--ink); color:var(--ground)}
+.explain .eyebrow{color:var(--mark-soft)}
+.explain-head{padding:clamp(56px, 10vh, 120px) var(--gutter) 0; display:grid; gap:18px; max-width:56rem}
+.explain-head p{color:rgba(231,237,232,.72); font-size:1.08rem; max-width:34rem}
+.explain-grid{display:grid; grid-template-columns:1fr 1fr; gap:var(--gutter); padding:0 var(--gutter)}
+.figure{position:sticky; top:0; height:100svh; display:grid; place-items:center}
+.figure svg{width:min(100%, 520px); height:auto; overflow:visible}
+.steps{padding-bottom:20vh}
+.step{min-height:88svh; display:flex; flex-direction:column; justify-content:center; gap:16px; max-width:30rem; transition:opacity .5s var(--ease)}
+.has-gsap .step{opacity:.32}
+.has-gsap .step.active{opacity:1}
+.step .eyebrow{display:flex; align-items:center; gap:12px}
+.step .eyebrow::before{content:""; width:28px; height:1px; background:var(--mark-soft)}
+.step h3{font-size:clamp(1.6rem, 3vw, 2.4rem); font-variation-settings:"SOFT" 70, "opsz" 48}
+.step p{color:rgba(231,237,232,.78); font-size:1.02rem}
+@media (max-width:860px){
+  .explain-grid{grid-template-columns:1fr; gap:0}
+  .figure{top:calc(var(--banner-h, 0px) + 58px); height:42svh; z-index:2; background:linear-gradient(var(--ink) 78%, transparent)}
+  .figure svg{width:min(78%, 300px)}
+  .step{min-height:64svh; justify-content:flex-start; padding-top:8px}
+}
+
+/* ---------- methods ---------- */
+.methods{padding:clamp(56px, 10vh, 120px) var(--gutter)}
+.methods-head{display:grid; gap:14px; max-width:44rem; margin-bottom:40px}
+.methods-head p{color:var(--ink-soft)}
+.method-list{display:grid; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr)); gap:1px; background:var(--line); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden}
+.method{background:var(--ground); padding:26px 24px 28px; display:grid; gap:12px; align-content:start; transition:background .3s}
+.method:hover{background:var(--ground-3)}
+.method .glyph{width:44px; height:44px}
+.method h3{font-size:1.25rem}
+.method p{font-size:.95rem; color:var(--ink-soft)}
+.method .for{font-family:var(--mono); font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--mark)}
+
+/* ---------- good to know ---------- */
+.know{background:var(--ground-2); padding:clamp(56px, 10vh, 110px) var(--gutter)}
+.know-grid{display:grid; grid-template-columns:1fr 1fr; gap:clamp(24px, 5vw, 72px); align-items:start}
+.know h2{margin-bottom:16px}
+.know .intro{color:var(--ink-soft); max-width:30rem}
+.know dl{margin:0; display:grid; gap:0}
+.know .row{display:grid; grid-template-columns:120px 1fr; gap:18px; padding:18px 0; border-top:1px solid var(--line)}
+.know .row:last-child{border-bottom:1px solid var(--line)}
+.know dt{font-family:var(--mono); font-size:.74rem; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-soft); padding-top:4px}
+.know dd{margin:0; font-size:.98rem}
+.know .caution{margin-top:22px; padding:16px 18px; border-left:2px solid var(--mark); background:var(--ground-3); font-size:.92rem; color:var(--ink-soft); border-radius:0 12px 12px 0}
+@media (max-width:860px){ .know-grid{grid-template-columns:1fr} .know .row{grid-template-columns:96px 1fr} }
+
+/* ---------- places ---------- */
+.places{padding:clamp(56px, 10vh, 120px) 0 0}
+.places-head{padding:0 var(--gutter); display:grid; gap:14px; max-width:44rem; margin-bottom:36px}
+.places-head p{color:var(--ink-soft)}
+.panels{display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; padding:0 6px}
+.panel{
+  position:relative; aspect-ratio:3/4; border-radius:18px; overflow:hidden; cursor:pointer; text-align:left; padding:0; border:0;
+  background:var(--ink); color:#fff; isolation:isolate; transition:transform .6s var(--ease), filter .6s var(--ease), opacity .6s;
+}
+.panel .art{position:absolute; inset:0; z-index:0}
+.panel .art svg{width:100%; height:100%; display:block; transition:transform 1.6s var(--ease)}
+.panel .photo{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:1; transition:transform 1.6s var(--ease)}
+.panel:hover .art svg, .panel:hover .photo{transform:scale(1.05)}
+.panel .veil{position:absolute; inset:0; z-index:2; background:linear-gradient(180deg, rgba(20,48,44,0) 40%, rgba(20,48,44,.72) 100%)}
+.panel .text{position:absolute; inset:auto 0 0 0; z-index:3; padding:26px; display:grid; gap:8px}
+.panel .city{font-family:var(--display); font-size:clamp(2rem, 4vw, 3.4rem); font-weight:300; line-height:1; font-variation-settings:"SOFT" 100, "opsz" 72}
+.panel .where{font-size:.9rem; opacity:.85}
+.panel .choose{display:inline-flex; align-items:center; gap:8px; margin-top:6px; font-family:var(--mono); font-size:.72rem; letter-spacing:.12em; text-transform:uppercase; opacity:.9}
+.panel .choose::after{content:"→"; transition:transform .3s}
+.panel:hover .choose::after{transform:translateX(4px)}
+.panel .tick{position:absolute; top:18px; right:18px; z-index:3; width:34px; height:34px; border-radius:50%; border:1.5px solid rgba(255,255,255,.7); display:grid; place-items:center; background:rgba(20,48,44,.35); backdrop-filter:blur(6px); opacity:0; transform:scale(.6); transition:opacity .4s, transform .5s var(--ease)}
+.panel[aria-pressed="true"] .tick{opacity:1; transform:scale(1); background:var(--mark); border-color:var(--mark)}
+.panels.has-choice .panel:not([aria-pressed="true"]){filter:saturate(.35) brightness(.72); transform:scale(.985)}
+.panels.has-choice .panel[aria-pressed="true"]{transform:scale(1.01)}
+.panel .flag{position:absolute; top:18px; left:18px; z-index:3; font-family:var(--mono); font-size:.68rem; letter-spacing:.12em; text-transform:uppercase; padding:6px 10px; border-radius:999px; background:rgba(20,48,44,.35); backdrop-filter:blur(6px); border:1px solid rgba(255,255,255,.25)}
+@media (max-width:760px){
+  .panels{grid-template-columns:1fr; gap:8px; padding:0 8px}
+  .panel{aspect-ratio:16/10}
+}
+
+/* ---------- booking ---------- */
+.book{padding:clamp(48px, 8vh, 96px) var(--gutter) clamp(72px, 12vh, 140px)}
+.book-shell{display:grid; grid-template-columns:.9fr 1.1fr; gap:clamp(28px, 5vw, 80px); align-items:start}
+.book-intro{position:sticky; top:96px; display:grid; gap:18px}
+.book-intro .place-name{font-family:var(--display); font-weight:300; font-size:clamp(2.2rem, 5vw, 4rem); line-height:1; font-variation-settings:"SOFT" 100, "opsz" 96}
+.book-intro .addr{color:var(--ink-soft); display:grid; gap:4px; font-size:.98rem}
+.book-intro .addr b{font-weight:500; color:var(--ink)}
+.book-intro .team{display:flex; gap:12px; align-items:center; margin-top:10px; padding-top:18px; border-top:1px solid var(--line); font-size:.9rem; color:var(--ink-soft)}
+.book-intro .team .dots{display:flex}
+.book-intro .team .dots i{width:30px; height:30px; border-radius:50%; border:2px solid var(--ground); background:linear-gradient(135deg, var(--mark-soft), var(--mark)); margin-left:-8px}
+.book-intro .team .dots i:first-child{margin-left:0}
+.book-empty{display:grid; gap:12px; color:var(--ink-soft); padding:40px 0}
+.book-empty[hidden], #book-place[hidden]{display:none}
+.book-empty .arrow{font-family:var(--display); font-size:2.4rem; line-height:1; color:var(--mark)}
+form.booking{display:grid; gap:34px}
+form.booking[hidden]{display:none}
+fieldset{border:0; padding:0; margin:0; display:grid; gap:14px; min-width:0}
+legend{font-family:var(--mono); font-size:.74rem; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:12px; padding:0}
+.services{display:grid; gap:10px}
+.service{position:relative}
+.service input{position:absolute; opacity:0; inset:0; pointer-events:none}
+.service label{
+  display:grid; grid-template-columns:1fr auto; gap:6px 18px; align-items:start; padding:18px 20px; border-radius:16px; cursor:pointer;
+  background:var(--ground-3); border:1.5px solid var(--line); transition:border-color .3s, transform .3s var(--ease), box-shadow .3s;
+}
+.service label:hover{transform:translateY(-1px)}
+.service input:focus-visible + label{outline:2px solid var(--mark); outline-offset:2px}
+.service input:checked + label{border-color:var(--mark); box-shadow:0 0 0 3px var(--mark-glow)}
+.service .name{font-family:var(--display); font-size:1.28rem; font-weight:400; font-variation-settings:"SOFT" 60, "opsz" 24}
+.service .price{font-family:var(--mono); font-size:1rem; font-variant-numeric:tabular-nums; white-space:nowrap}
+.service .desc{grid-column:1/-1; font-size:.92rem; color:var(--ink-soft)}
+.service .dur{font-family:var(--mono); font-size:.72rem; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-mute)}
+.field{display:grid; gap:8px; min-width:0}
+.field label{font-size:.9rem; font-weight:500}
+.field input, .field select, .field textarea{
+  width:100%; font:inherit; font-size:1rem; color:var(--ink); background:var(--ground-3); border:1.5px solid var(--line); border-radius:12px; padding:13px 14px; transition:border-color .3s, box-shadow .3s;
+}
+.field input:focus, .field select:focus, .field textarea:focus{outline:none; border-color:var(--mark); box-shadow:0 0 0 3px var(--mark-glow)}
+.field textarea{min-height:90px; resize:vertical}
+.two{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+.slots{display:flex; flex-wrap:wrap; gap:8px}
+.slot{position:relative}
+.slot input{position:absolute; opacity:0; inset:0; pointer-events:none}
+.slot label{display:inline-block; padding:10px 14px; border-radius:999px; border:1.5px solid var(--line); background:var(--ground-3); font-family:var(--mono); font-size:.86rem; cursor:pointer; transition:all .25s}
+.slot input:checked + label{background:var(--ink); color:var(--ground); border-color:var(--ink)}
+.slot input:focus-visible + label{outline:2px solid var(--mark); outline-offset:2px}
+.summary{display:grid; gap:10px; padding:20px 22px; border-radius:16px; background:var(--ground-2); font-size:.95rem}
+.summary .line{display:flex; justify-content:space-between; gap:16px}
+.summary .line.total{font-weight:600; border-top:1px solid var(--line); padding-top:10px; margin-top:4px}
+.summary .num{font-family:var(--mono); font-variant-numeric:tabular-nums}
+.book-actions{display:grid; gap:12px}
+.book-actions .fine{font-size:.82rem; color:var(--ink-mute)}
+.book-actions .fine a{color:var(--ink-soft)}
+.err{color:var(--mark); font-size:.9rem}
+.err[hidden]{display:none}
+@media (max-width:860px){
+  .book-shell{grid-template-columns:1fr}
+  .book-intro{position:static}
+  .two{grid-template-columns:1fr}
+}
+
+/* ---------- confirm dialog ---------- */
+dialog{border:0; border-radius:22px; padding:0; max-width:min(92vw, 460px); background:var(--ground); color:var(--ink); box-shadow:0 40px 80px -30px rgba(20,48,44,.6)}
+dialog::backdrop{background:rgba(20,48,44,.55); backdrop-filter:blur(4px)}
+dialog .inner{padding:32px 30px; display:grid; gap:14px}
+dialog h3{font-size:1.7rem}
+dialog p{color:var(--ink-soft); font-size:.96rem}
+dialog .row{display:flex; gap:10px; justify-content:flex-end; margin-top:8px}
+
+/* ---------- footer ---------- */
+footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40px}
+.foot-grid{display:grid; grid-template-columns:1.4fr 1fr 1fr; gap:32px; align-items:start}
+.foot-grid .brand-name{font-size:2.2rem}
+.foot-grid p{color:rgba(231,237,232,.7); font-size:.95rem; max-width:24rem; margin-top:10px}
+.foot-grid ul{list-style:none; padding:0; margin:0; display:grid; gap:8px; font-size:.95rem}
+.foot-grid a{color:rgba(231,237,232,.85); text-decoration:none}
+.foot-grid a:hover{color:#fff}
+.foot-grid .eyebrow{color:var(--mark-soft); margin-bottom:12px}
+.foot-bottom{margin-top:44px; padding-top:20px; border-top:1px solid rgba(231,237,232,.15); font-size:.8rem; color:rgba(231,237,232,.55); display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px}
+@media (max-width:760px){ .foot-grid{grid-template-columns:1fr} }
+
+/* ---------- reveal ---------- */
+.reveal{opacity:1}
+.js .reveal{opacity:0; transform:translateY(22px); transition:opacity .9s var(--ease), transform .9s var(--ease)}
+.js .reveal.in{opacity:1; transform:none}
+
+@media (prefers-reduced-motion:reduce){
+  *, *::before, *::after{animation:none !important; transition:none !important; scroll-behavior:auto !important}
+  .js .reveal{opacity:1; transform:none}
+  .step{opacity:1}
+}
+</style>
+</head>
+<body>
+
+<div class="preview" id="preview">
+  Preview build — photos, prices and addresses are placeholders until Zen confirms them. Payments switch on once a Stripe account is connected.
+</div>
+
+<nav class="nav" id="nav" aria-label="Main">
+  <a class="brand" href="#top" aria-label="Zen, home"><span class="brand-mark" aria-hidden="true"></span><span class="brand-name">zen</span></a>
+  <div class="nav-links">
+    <a href="#how" class="hide-sm">How it works</a>
+    <a href="#methods" class="hide-sm">Methods</a>
+    <a href="#places" class="hide-sm">Cities</a>
+    <a href="#places" class="btn small">Book a session</a>
+  </div>
+</nav>
+
+<main id="top">
+
+<!-- ================= HERO ================= -->
+<section class="hero" aria-labelledby="hero-title">
+  <div class="hero-copy">
+    <p class="eyebrow"><span>Cupping therapy</span><span>Cairo</span><span>Dahab</span><span>Florence</span></p>
+    <h1 id="hero-title">Tension has a way out.</h1>
+    <p class="lede">Cupping is one of the oldest ways of asking the body to let go. Scroll and we'll show you exactly what happens under the cup. Then tell us which city you're in.</p>
+    <div class="hero-actions">
+      <a class="btn" href="#how">See how it works</a>
+      <a class="btn ghost" href="#places">I know, take me to booking</a>
+    </div>
+  </div>
+  <div class="breath" aria-hidden="true">
+    <span class="ring"></span><span class="ring r2"></span><span class="ring r3"></span>
+    <span class="core"></span>
+    <span class="label"><span class="in">breathe in</span><span class="out">breathe out</span></span>
+  </div>
+  <div class="scroll-hint" aria-hidden="true"><i></i>scroll</div>
+</section>
+
+<!-- ================= HOW IT WORKS ================= -->
+<section class="explain" id="how" aria-labelledby="how-title">
+  <div class="explain-head">
+    <p class="eyebrow">What happens under the cup</p>
+    <h2 id="how-title">Massage pushes in. Cupping lifts.</h2>
+    <p>Five things happen in a session, in this order. Keep scrolling and watch each one.</p>
+  </div>
+  <div class="explain-grid">
+    <div class="figure" aria-hidden="true">
+      <svg viewBox="0 0 520 520" id="cupfig" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="skinG" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#E9D6C5"/><stop offset="1" stop-color="#D5BBA6"/>
+          </linearGradient>
+          <radialGradient id="bloomG" cx=".5" cy=".9" r=".7">
+            <stop offset="0" stop-color="#B85C76" stop-opacity=".95"/><stop offset=".55" stop-color="#C98A9B" stop-opacity=".55"/><stop offset="1" stop-color="#C98A9B" stop-opacity="0"/>
+          </radialGradient>
+          <linearGradient id="glassG" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset=".45" stop-color="#fff" stop-opacity=".08"/><stop offset="1" stop-color="#fff" stop-opacity=".25"/>
+          </linearGradient>
+          <radialGradient id="vacG" cx=".5" cy=".55" r=".6">
+            <stop offset="0" stop-color="#C98A9B" stop-opacity=".0"/><stop offset="1" stop-color="#7C3A4E" stop-opacity=".0"/>
+          </radialGradient>
+          <clipPath id="cupClip"><path d="M150 380 C150 250 190 175 260 175 C330 175 370 250 370 380 Z"/></clipPath>
+          <clipPath id="skinClip"><rect x="0" y="380" width="520" height="140" rx="30"/></clipPath>
+        </defs>
+
+        <!-- skin -->
+        <rect id="skin" x="20" y="380" width="480" height="120" rx="28" fill="url(#skinG)"/>
+        <!-- marks left on the skin (step 5) -->
+        <g id="marks" opacity="0">
+          <circle cx="110" cy="420" r="30" fill="#7C3A4E" opacity=".55"/>
+          <circle cx="410" cy="420" r="30" fill="#7C3A4E" opacity=".55"/>
+        </g>
+
+        <!-- cup group: translates down to land on skin -->
+        <g id="cup" transform="translate(0,-140)">
+          <!-- skin dome inside cup (rises) -->
+          <g clip-path="url(#cupClip)">
+            <ellipse id="dome" cx="260" cy="470" rx="110" ry="90" fill="url(#skinG)"/>
+            <ellipse id="bloom" cx="260" cy="470" rx="110" ry="90" fill="url(#bloomG)" opacity="0"/>
+          </g>
+          <!-- vacuum haze -->
+          <path id="vac" d="M150 380 C150 250 190 175 260 175 C330 175 370 250 370 380 Z" fill="#7C3A4E" opacity="0"/>
+          <!-- arrows showing lift -->
+          <g id="arrows" opacity="0" stroke="#E7EDE8" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M260 330 V270 M248 282 L260 270 L272 282"/>
+            <path d="M215 345 V300 M205 310 L215 300 L225 310" opacity=".6"/>
+            <path d="M305 345 V300 M295 310 L305 300 L315 310" opacity=".6"/>
+          </g>
+          <!-- glass body -->
+          <path d="M150 380 C150 250 190 175 260 175 C330 175 370 250 370 380 Z" fill="url(#glassG)" stroke="#E7EDE8" stroke-opacity=".85" stroke-width="2"/>
+          <!-- rim -->
+          <rect x="140" y="374" width="240" height="12" rx="6" fill="#E7EDE8" opacity=".9"/>
+          <!-- highlight -->
+          <path d="M188 330 C186 270 205 215 240 197" stroke="#fff" stroke-opacity=".7" stroke-width="5" stroke-linecap="round" fill="none"/>
+        </g>
+
+        <!-- timer arc (step 4) -->
+        <g id="timer" opacity="0" transform="translate(440,110)">
+          <circle r="34" fill="none" stroke="#E7EDE8" stroke-opacity=".25" stroke-width="2"/>
+          <circle id="timerArc" r="34" fill="none" stroke="#C98A9B" stroke-width="3" stroke-linecap="round" stroke-dasharray="213.6" stroke-dashoffset="213.6" transform="rotate(-90)"/>
+          <text id="timerText" y="6" text-anchor="middle" font-family="DM Mono, monospace" font-size="15" fill="#E7EDE8">5′</text>
+        </g>
+      </svg>
+    </div>
+    <div class="steps" id="steps">
+      <article class="step" data-step="0">
+        <p class="eyebrow">Step one</p>
+        <h3>The cup rests on the skin.</h3>
+        <p>Glass or soft silicone, warmed in the hand first. Your therapist chooses the spot: the length of a tight back, the top of a shoulder, the outside of a thigh. Nothing has happened yet, except that you've lain down.</p>
+      </article>
+      <article class="step" data-step="1">
+        <p class="eyebrow">Step two</p>
+        <h3>Air is drawn out.</h3>
+        <p>With a pump, or the flash of a flame that's gone before the cup lands. The pressure inside drops. This is the whole idea: instead of pressing down into a muscle, cupping pulls upward. You feel a firm, spreading tug.</p>
+      </article>
+      <article class="step" data-step="2">
+        <p class="eyebrow">Step three</p>
+        <h3>Skin and fascia lift. Blood follows.</h3>
+        <p>The tissue under the cup rises a few millimetres. Fresh blood moves toward the surface and the area warms. The tug settles into something closer to a deep stretch that's being held for you.</p>
+      </article>
+      <article class="step" data-step="3">
+        <p class="eyebrow">Step four</p>
+        <h3>Five to fifteen minutes.</h3>
+        <p>The cups stay put, or glide slowly over oiled skin. Most people go very quiet here. The room is warm, the breathing slows, and you're not asked to do anything at all.</p>
+      </article>
+      <article class="step" data-step="4">
+        <p class="eyebrow">Step five</p>
+        <h3>The marks tell the story.</h3>
+        <p>Round, plum-coloured, sometimes surprising. They're not bruises: nothing struck you. They're the trace of blood the cup drew up, and they fade on their own in three to ten days. Darker usually means the area needed it more.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ================= METHODS ================= -->
+<section class="methods" id="methods" aria-labelledby="methods-title">
+  <div class="methods-head reveal">
+    <p class="eyebrow">Ways we work</p>
+    <h2 id="methods-title">One idea, five hands.</h2>
+    <p>Every session starts with a short conversation about what your body's been doing lately. Then your therapist picks the approach. You can also ask for one by name.</p>
+  </div>
+  <div class="method-list">
+    <div class="method reveal">
+      <svg class="glyph" viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 34c0-14 4-22 10-22s10 8 10 22z"/><line x1="10" y1="34" x2="34" y2="34"/></svg>
+      <h3>Dry cupping</h3>
+      <p>Cups placed and left still. The classic session, and the one to start with if you've never tried it.</p>
+      <p class="for">For · tight back, stiff shoulders, a first visit</p>
+    </div>
+    <div class="method reveal">
+      <svg class="glyph" viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 34c0-14 4-22 10-22s10 8 10 22z"/><path d="M28 22h8m-4-4 4 4-4 4"/><line x1="6" y1="34" x2="38" y2="34"/></svg>
+      <h3>Sliding cupping</h3>
+      <p>Oil on the skin, and the cup glides along the muscle. Closer to a massage, with the lift built in.</p>
+      <p class="for">For · athletes, long desk days, recovery</p>
+    </div>
+    <div class="method reveal">
+      <svg class="glyph" viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 34c0-14 4-22 10-22s10 8 10 22z"/><path d="M22 12c-2-3-1-5 1-7 1 3 3 4 2 7"/><line x1="10" y1="34" x2="34" y2="34"/></svg>
+      <h3>Fire cupping</h3>
+      <p>A flame heats the air inside a glass cup for a second before it lands. The traditional way, warmer and deeper.</p>
+      <p class="for">For · deep, chronic tension</p>
+    </div>
+    <div class="method reveal">
+      <svg class="glyph" viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 34c0-14 4-22 10-22s10 8 10 22z"/><path d="M19 30v-6m6 6v-6"/><line x1="10" y1="34" x2="34" y2="34"/></svg>
+      <h3>Hijama (wet cupping)</h3>
+      <p>Small, shallow incisions before the cup goes back on, drawing a little blood out. Rooted in prophetic medicine and widely practised in Egypt. Done with single-use, sterile equipment only.</p>
+      <p class="for">For · those who ask for it specifically</p>
+    </div>
+    <div class="method reveal">
+      <svg class="glyph" viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="22" cy="22" r="5"/><circle cx="12" cy="30" r="4"/><circle cx="32" cy="30" r="4"/><circle cx="22" cy="10" r="3"/></svg>
+      <h3>Facial cupping</h3>
+      <p>Tiny cups, very light suction, always gliding, never still. No marks. Leaves the skin flushed and the jaw looser.</p>
+      <p class="for">For · puffiness, jaw tension, a lighter session</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= GOOD TO KNOW ================= -->
+<section class="know" id="know" aria-labelledby="know-title">
+  <div class="know-grid">
+    <div class="reveal">
+      <p class="eyebrow">Good to know</p>
+      <h2 id="know-title">Small things that make a session better.</h2>
+      <p class="intro">People come to us for muscle tension, recovery after training, and the simple relief of an hour where nothing is asked of them. Cupping sits comfortably alongside physiotherapy and massage. It doesn't replace a doctor.</p>
+      <div class="caution">
+        Talk to your doctor first if you're pregnant, take blood thinners, have a skin condition where the cups would go, or have a heart or blood-clotting condition. If you're unsure, message us and we'll tell you honestly whether cupping is a good idea for you.
+      </div>
+    </div>
+    <dl class="reveal">
+      <div class="row"><dt>Before</dt><dd>Eat something light a couple of hours before. Drink water. Skip a heavy workout that day.</dd></div>
+      <div class="row"><dt>Wear</dt><dd>Anything easy to move out of the way. For a back session you'll be face down with a towel; for legs, shorts are enough.</dd></div>
+      <div class="row"><dt>Feels like</dt><dd>A firm pull, then warmth. It shouldn't hurt. If it does, say so and the cup comes off.</dd></div>
+      <div class="row"><dt>After</dt><dd>Keep warm and drink more water than usual. No cold showers, saunas or swimming for about six hours. Some people feel tired that evening; sleep well.</dd></div>
+      <div class="row"><dt>Marks</dt><dd>Three to ten days. Fine to show, easy to cover. Photos in daylight are entirely optional.</dd></div>
+      <div class="row"><dt>How often</dt><dd>Once every one to two weeks while something is bothering you, then whenever your body asks.</dd></div>
+    </dl>
+  </div>
+</section>
+
+<!-- ================= PLACES ================= -->
+<section class="places" id="places" aria-labelledby="places-title">
+  <div class="places-head reveal">
+    <p class="eyebrow">Three rooms, one team</p>
+    <h2 id="places-title">Where would you like us?</h2>
+    <p>Zen works from Cairo, Dahab and Florence. Choose your city and we'll show you what's on offer there, in your currency.</p>
+  </div>
+  <div class="panels" id="panels" role="group" aria-label="Choose a city">
+
+    <button class="panel" type="button" data-city="cairo" aria-pressed="false">
+      <span class="art" aria-hidden="true">
+        <svg viewBox="0 0 300 400" preserveAspectRatio="xMidYMid slice">
+          <defs><linearGradient id="cairoSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3B2A3A"/><stop offset=".55" stop-color="#B86A5A"/><stop offset="1" stop-color="#E0B27E"/></linearGradient></defs>
+          <rect width="300" height="400" fill="url(#cairoSky)"/>
+          <circle cx="205" cy="150" r="42" fill="#F3D9A8" opacity=".9"/>
+          <g fill="#2A1E2A">
+            <path d="M0 300 h300 v100 h-300z"/>
+            <path d="M40 300 v-120 l6 -14 l6 14 v120z"/>
+            <path d="M52 300 v-40 h48 v40z"/>
+            <path d="M60 262 a16 16 0 0 1 32 0z"/>
+            <path d="M120 300 v-70 h60 v70z"/>
+            <path d="M130 234 a20 20 0 0 1 40 0z"/>
+            <path d="M210 300 v-160 l5 -12 l5 12 v160z"/>
+            <path d="M232 300 v-80 h50 v80z"/>
+            <path d="M240 224 a17 17 0 0 1 34 0z"/>
+          </g>
+          <g fill="#E0B27E" opacity=".4"><circle cx="70" cy="330" r="2"/><circle cx="150" cy="345" r="2"/><circle cx="250" cy="335" r="2"/></g>
+        </svg>
+      </span>
+      <img class="photo" src="img/cairo.jpg" alt="" onerror="this.remove()">
+      <span class="veil" aria-hidden="true"></span>
+      <span class="flag">Egypt</span>
+      <span class="tick" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2"><path d="M3 8.5l3 3 7-7"/></svg></span>
+      <span class="text">
+        <span class="city">Cairo</span>
+        <span class="where">Maadi · by appointment</span>
+        <span class="choose">Choose Cairo</span>
+      </span>
+    </button>
+
+    <button class="panel" type="button" data-city="dahab" aria-pressed="false">
+      <span class="art" aria-hidden="true">
+        <svg viewBox="0 0 300 400" preserveAspectRatio="xMidYMid slice">
+          <defs>
+            <linearGradient id="dahabSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F0D9B5"/><stop offset=".5" stop-color="#9ED3CF"/><stop offset="1" stop-color="#1C6E73"/></linearGradient>
+            <linearGradient id="dahabSea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2E8C8F"/><stop offset="1" stop-color="#0F4A4E"/></linearGradient>
+          </defs>
+          <rect width="300" height="400" fill="url(#dahabSky)"/>
+          <circle cx="90" cy="120" r="34" fill="#FFF2D6" opacity=".95"/>
+          <path d="M0 250 L60 190 L110 230 L170 170 L230 215 L300 180 V270 H0z" fill="#8C5A4A" opacity=".85"/>
+          <path d="M0 270 L80 240 L150 265 L220 235 L300 255 V300 H0z" fill="#5C3D36" opacity=".9"/>
+          <rect y="290" width="300" height="110" fill="url(#dahabSea)"/>
+          <g stroke="#DFF3F0" stroke-opacity=".5" stroke-width="1.5" fill="none">
+            <path d="M20 320 q15 -6 30 0 t30 0 t30 0"/><path d="M150 350 q15 -6 30 0 t30 0 t30 0"/><path d="M60 380 q15 -6 30 0 t30 0"/>
+          </g>
+        </svg>
+      </span>
+      <img class="photo" src="img/dahab.jpg" alt="" onerror="this.remove()">
+      <span class="veil" aria-hidden="true"></span>
+      <span class="flag">Egypt · Red Sea</span>
+      <span class="tick" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2"><path d="M3 8.5l3 3 7-7"/></svg></span>
+      <span class="text">
+        <span class="city">Dahab</span>
+        <span class="where">Lighthouse · by the sea</span>
+        <span class="choose">Choose Dahab</span>
+      </span>
+    </button>
+
+    <button class="panel" type="button" data-city="florence" aria-pressed="false">
+      <span class="art" aria-hidden="true">
+        <svg viewBox="0 0 300 400" preserveAspectRatio="xMidYMid slice">
+          <defs><linearGradient id="fiSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#C8CFC3"/><stop offset=".5" stop-color="#E7C9A8"/><stop offset="1" stop-color="#B86A5A"/></linearGradient></defs>
+          <rect width="300" height="400" fill="url(#fiSky)"/>
+          <g fill="#3A2A2A">
+            <path d="M0 300 h300 v100 h-300z"/>
+            <path d="M40 300 v-110 h22 v110z"/>
+            <path d="M36 190 h30 v-8 h-30z"/>
+            <path d="M120 300 v-60 h100 v60z"/>
+            <path d="M115 240 a55 55 0 0 1 110 0z" fill="#7A3B3B"/>
+            <path d="M166 186 v-22 h8 v22z"/>
+            <path d="M250 300 v-90 h20 v90z"/>
+          </g>
+          <g fill="#B86A5A" opacity=".55"><path d="M0 330 h300 v10 h-300z"/><path d="M0 355 h300 v10 h-300z"/></g>
+        </svg>
+      </span>
+      <img class="photo" src="img/florence.jpg" alt="" onerror="this.remove()">
+      <span class="veil" aria-hidden="true"></span>
+      <span class="flag">Italy</span>
+      <span class="tick" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2"><path d="M3 8.5l3 3 7-7"/></svg></span>
+      <span class="text">
+        <span class="city">Florence</span>
+        <span class="where">Oltrarno · studio</span>
+        <span class="choose">Choose Florence</span>
+      </span>
+    </button>
+
+  </div>
+</section>
+
+<!-- ================= BOOKING ================= -->
+<section class="book" id="book" aria-labelledby="book-title">
+  <div class="book-shell">
+    <div class="book-intro">
+      <p class="eyebrow">Your session</p>
+      <div id="book-empty" class="book-empty">
+        <span class="arrow" aria-hidden="true">↑</span>
+        <h2 id="book-title">Pick a city first.</h2>
+        <p>Prices, hours and the team change with the room. Choose Cairo, Dahab or Florence above and the booking form appears here.</p>
+      </div>
+      <div id="book-place" hidden>
+        <p class="place-name" id="place-name">Florence</p>
+        <div class="addr" id="place-addr"></div>
+        <div class="team"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span id="place-team"></span></div>
+      </div>
+    </div>
+
+    <form class="booking" id="booking" hidden novalidate>
+      <fieldset>
+        <legend>Choose a session</legend>
+        <div class="services" id="services"></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>When</legend>
+        <div class="two">
+          <div class="field">
+            <label for="date">Day</label>
+            <input type="date" id="date" name="date" required>
+          </div>
+          <div class="field">
+            <label for="slot-any">Preferred time</label>
+            <div class="slots" id="slots">
+              <span class="slot"><input type="radio" name="slot" id="slot-morning" value="morning" checked><label for="slot-morning">Morning</label></span>
+              <span class="slot"><input type="radio" name="slot" id="slot-afternoon" value="afternoon"><label for="slot-afternoon">Afternoon</label></span>
+              <span class="slot"><input type="radio" name="slot" id="slot-evening" value="evening"><label for="slot-evening">Evening</label></span>
+            </div>
+          </div>
+        </div>
+        <p class="book-actions fine">Zen confirms the exact hour with you on WhatsApp within a few hours of booking.</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Who</legend>
+        <div class="two">
+          <div class="field"><label for="name">Name</label><input id="name" name="name" autocomplete="name" required></div>
+          <div class="field"><label for="phone">WhatsApp number</label><input id="phone" name="phone" type="tel" autocomplete="tel" placeholder="+39 …" required></div>
+        </div>
+        <div class="field"><label for="email">Email</label><input id="email" name="email" type="email" autocomplete="email" required></div>
+        <div class="field"><label for="note">Anything we should know? <span style="color:var(--ink-mute);font-weight:400">(optional)</span></label><textarea id="note" name="note" placeholder="An old injury, a spot to avoid, a first time…"></textarea></div>
+      </fieldset>
+
+      <div class="summary" id="summary" aria-live="polite">
+        <div class="line"><span id="sum-service">—</span><span class="num" id="sum-price">—</span></div>
+        <div class="line"><span id="sum-when">—</span><span></span></div>
+        <div class="line total"><span>To pay now</span><span class="num" id="sum-total">—</span></div>
+      </div>
+
+      <div class="book-actions">
+        <p class="err" id="err" hidden></p>
+        <button class="btn" type="submit" id="pay">Reserve and pay</button>
+        <p class="fine">Secure card payment by Stripe. Your card details never touch this site. Need to move the session? Message Zen up to 24 hours before.</p>
+      </div>
+    </form>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="foot-grid">
+    <div>
+      <span class="brand-name">zen</span>
+      <p>Cupping therapy in Cairo, Dahab and Florence. A small team, one way of working: slowly, warmly, and only as deep as your body wants to go.</p>
+    </div>
+    <div>
+      <p class="eyebrow">Find us</p>
+      <ul>
+        <li><a href="#" id="ig-link">Instagram</a></li>
+        <li><a href="#" id="wa-link">WhatsApp</a></li>
+        <li><a href="#places">Cities</a></li>
+      </ul>
+    </div>
+    <div>
+      <p class="eyebrow">Sessions</p>
+      <ul>
+        <li><a href="#how">How cupping works</a></li>
+        <li><a href="#methods">Methods</a></li>
+        <li><a href="#know">Before and after</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot-bottom">
+    <span>© <span id="year"></span> Zen</span>
+    <span>Cupping is a complementary therapy and not a substitute for medical care.</span>
+  </div>
+</footer>
+
+<dialog id="dlg">
+  <div class="inner">
+    <h3 id="dlg-title">Almost there</h3>
+    <p id="dlg-body"></p>
+    <div class="row"><button class="btn small" id="dlg-close" type="button">Got it</button></div>
+  </div>
+</dialog>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script>
+/* ---------- site config (placeholders — see README) ---------- */
+/* Keep the service ids and prices in sync with src/catalog.js (the Worker never trusts the browser's price). */
+const PREVIEW = true;
+const CITIES = {
+  cairo: {
+    name: "Cairo", currency: "EGP", locale: "en-EG", tz: "Africa/Cairo",
+    address: ["Zen · Maadi", "Street and building to confirm", "Cairo, Egypt"],
+    team: "Two therapists in Cairo",
+    services: [
+      { id: "cai-dry",   name: "Dry cupping",       dur: 45, price: 90000,  desc: "Cups placed and left still. The classic session." },
+      { id: "cai-slide", name: "Sliding cupping",   dur: 60, price: 120000, desc: "Oiled skin, gliding cups. Massage with the lift built in." },
+      { id: "cai-fire",  name: "Fire cupping",      dur: 45, price: 100000, desc: "Glass cups, a flash of flame, deeper warmth." },
+      { id: "cai-hij",   name: "Hijama",            dur: 60, price: 110000, desc: "Wet cupping with sterile single-use equipment." },
+      { id: "cai-face",  name: "Facial cupping",    dur: 30, price: 70000,  desc: "Light, gliding, no marks." }
+    ]
+  },
+  dahab: {
+    name: "Dahab", currency: "EGP", locale: "en-EG", tz: "Africa/Cairo",
+    address: ["Zen · Lighthouse area", "Exact spot to confirm", "Dahab, South Sinai"],
+    team: "One therapist in Dahab, seasonal",
+    services: [
+      { id: "dah-dry",   name: "Dry cupping",       dur: 45, price: 90000,  desc: "Cups placed and left still. The classic session." },
+      { id: "dah-slide", name: "Sliding cupping",   dur: 60, price: 120000, desc: "Oiled skin, gliding cups. Good after a day of diving or climbing." },
+      { id: "dah-fire",  name: "Fire cupping",      dur: 45, price: 100000, desc: "Glass cups, a flash of flame, deeper warmth." },
+      { id: "dah-face",  name: "Facial cupping",    dur: 30, price: 70000,  desc: "Light, gliding, no marks." }
+    ]
+  },
+  florence: {
+    name: "Florence", currency: "EUR", locale: "it-IT", tz: "Europe/Rome",
+    address: ["Zen · Oltrarno", "Street and number to confirm", "50125 Firenze"],
+    team: "One therapist in Florence",
+    services: [
+      { id: "flo-dry",   name: "Dry cupping",       dur: 45, price: 5500, desc: "Cups placed and left still. The classic session." },
+      { id: "flo-slide", name: "Sliding cupping",   dur: 60, price: 7000, desc: "Oiled skin, gliding cups. Massage with the lift built in." },
+      { id: "flo-fire",  name: "Fire cupping",      dur: 45, price: 6500, desc: "Glass cups, a flash of flame, deeper warmth." },
+      { id: "flo-face",  name: "Facial cupping",    dur: 30, price: 4500, desc: "Light, gliding, no marks." }
+    ]
+  }
+};
+const SLOT_LABEL = { morning: "Morning (9–12)", afternoon: "Afternoon (12–17)", evening: "Evening (17–20)" };
+
+/* ---------- helpers ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const money = (minor, cur, locale) => new Intl.NumberFormat(locale, { style: "currency", currency: cur, maximumFractionDigits: cur === "EGP" ? 0 : 2 }).format(minor / 100);
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+document.documentElement.classList.add("js");
+$("#year").textContent = new Date().getFullYear();
+$("#preview").hidden = !PREVIEW;
+const setBanner = () => document.documentElement.style.setProperty("--banner-h", (PREVIEW ? $("#preview").offsetHeight : 0) + "px");
+setBanner(); addEventListener("resize", setBanner);
+
+/* ---------- nav shadow ---------- */
+addEventListener("scroll", () => $("#nav").classList.toggle("scrolled", scrollY > 8), { passive: true });
+
+/* ---------- reveal on enter ---------- */
+const io = new IntersectionObserver((es) => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }), { threshold: .15, rootMargin: "0px 0px -8% 0px" });
+$$(".reveal").forEach((el, i) => { el.style.transitionDelay = (i % 5) * 60 + "ms"; io.observe(el); });
+
+/* ---------- scroll-driven cup ---------- */
+(function cup() {
+  const steps = $$(".step");
+  if (!window.gsap || !window.ScrollTrigger) return; // no library: steps stay fully visible, illustration static
+  gsap.registerPlugin(ScrollTrigger);
+  document.documentElement.classList.add("has-gsap");
+  steps[0].classList.add("active");
+
+  // which text step is in view
+  steps.forEach(st => ScrollTrigger.create({
+    trigger: st, start: "top 60%", end: "bottom 40%",
+    onToggle: self => { if (self.isActive) { steps.forEach(s => s.classList.remove("active")); st.classList.add("active"); } }
+  }));
+
+  if (reduced) { // static final-ish frame
+    gsap.set("#cup", { y: 0 }); gsap.set("#dome", { attr: { cy: 420 } }); gsap.set("#bloom", { opacity: .8, attr: { cy: 420 } }); return;
+  }
+
+  const tl = gsap.timeline({
+    scrollTrigger: { trigger: "#steps", start: "top 70%", end: "bottom 70%", scrub: 1.2 },
+    defaults: { ease: "none" }
+  });
+  // step 1: cup lands (0 → 1)
+  tl.to("#cup", { y: 0, duration: 1, ease: "power2.out" }, 0);
+  // step 2: vacuum + arrows (1 → 2)
+  tl.to("#vac", { opacity: .28, duration: .6 }, 1.1);
+  tl.to("#arrows", { opacity: 1, duration: .4 }, 1.2);
+  tl.fromTo("#arrows", { y: 18 }, { y: -10, duration: .8 }, 1.2);
+  tl.to("#arrows", { opacity: 0, duration: .4 }, 2.1);
+  // step 3: dome rises, blood blooms (2 → 3)
+  tl.to("#dome", { attr: { cy: 410, ry: 100 }, duration: 1, ease: "power1.inOut" }, 2);
+  tl.to("#bloom", { attr: { cy: 410, ry: 100 }, opacity: .85, duration: 1, ease: "power1.inOut" }, 2);
+  tl.to("#vac", { opacity: .12, duration: 1 }, 2);
+  // step 4: timer (3 → 4)
+  tl.to("#timer", { opacity: 1, duration: .3 }, 3);
+  tl.to("#timerArc", { strokeDashoffset: 0, duration: 1, onUpdate() { const p = this.progress(); $("#timerText").textContent = Math.round(5 + p * 10) + "′"; } }, 3.1);
+  // step 5: cup lifts away, marks remain and fade (4 → 5)
+  tl.to("#timer", { opacity: 0, duration: .3 }, 4);
+  tl.to("#cup", { y: -160, opacity: 0, duration: .8, ease: "power2.in" }, 4);
+  tl.to("#marks", { opacity: 1, duration: .3 }, 4.3);
+  tl.fromTo("#marks circle", { attr: { r: 30 }, opacity: .6 }, { attr: { r: 26 }, opacity: .18, duration: .9, stagger: .05 }, 4.5);
+  tl.to({}, { duration: .4 }, 5.4);
+})();
+
+/* ---------- city choice + booking ---------- */
+let city = null;
+const panels = $("#panels");
+panels.addEventListener("click", (e) => {
+  const btn = e.target.closest(".panel"); if (!btn) return;
+  choose(btn.dataset.city);
+});
+function choose(key) {
+  city = key;
+  const c = CITIES[key];
+  $$(".panel").forEach(p => p.setAttribute("aria-pressed", String(p.dataset.city === key)));
+  panels.classList.add("has-choice");
+  $("#book-empty").hidden = true;
+  const pl = $("#book-place"); pl.hidden = false;
+  $("#place-name").textContent = c.name;
+  $("#place-addr").innerHTML = c.address.map((l, i) => i === 0 ? `<b>${l}</b>` : `<span>${l}</span>`).join("");
+  $("#place-team").textContent = c.team;
+  const form = $("#booking"); form.hidden = false;
+  $("#services").innerHTML = c.services.map((s, i) => `
+    <div class="service">
+      <input type="radio" name="service" id="svc-${s.id}" value="${s.id}" ${i === 0 ? "checked" : ""}>
+      <label for="svc-${s.id}">
+        <span class="name">${s.name}</span>
+        <span class="price">${money(s.price, c.currency, c.locale)}</span>
+        <span class="desc">${s.desc}</span>
+        <span class="dur">${s.dur} min</span>
+      </label>
+    </div>`).join("");
+  const d = $("#date"); const t = new Date(); t.setDate(t.getDate() + 1);
+  d.min = t.toISOString().slice(0, 10); if (!d.value) d.value = d.min;
+  $("#phone").placeholder = c.currency === "EUR" ? "+39 …" : "+20 …";
+  updateSummary();
+  if (!reduced) window.gsap?.from("#booking > *", { y: 18, opacity: 0, duration: .7, stagger: .07, ease: "power2.out", clearProps: "all" });
+  setTimeout(() => $("#book").scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" }), 120);
+}
+function current() {
+  if (!city) return null;
+  const c = CITIES[city];
+  const sid = $("input[name=service]:checked")?.value;
+  return { c, s: c.services.find(x => x.id === sid) };
+}
+function updateSummary() {
+  const cur = current(); if (!cur || !cur.s) return;
+  const { c, s } = cur;
+  const date = $("#date").value; const slot = $("input[name=slot]:checked").value;
+  $("#sum-service").textContent = `${s.name} · ${s.dur} min · ${c.name}`;
+  $("#sum-price").textContent = money(s.price, c.currency, c.locale);
+  $("#sum-when").textContent = date ? new Date(date + "T12:00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }) + " · " + SLOT_LABEL[slot] : "Pick a day";
+  $("#sum-total").textContent = money(s.price, c.currency, c.locale);
+}
+$("#booking").addEventListener("change", updateSummary);
+$("#booking").addEventListener("input", (e) => { if (e.target.id === "date") updateSummary(); });
+
+const dlg = $("#dlg");
+$("#dlg-close").addEventListener("click", () => dlg.close());
+function tell(title, body) { $("#dlg-title").textContent = title; $("#dlg-body").textContent = body; dlg.showModal(); }
+
+$("#booking").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const form = e.target; const err = $("#err"); err.hidden = true;
+  if (!form.reportValidity()) return;
+  const { c, s } = current();
+  const payload = {
+    city, service: s.id, date: $("#date").value, slot: $("input[name=slot]:checked").value,
+    name: $("#name").value.trim(), phone: $("#phone").value.trim(), email: $("#email").value.trim(), note: $("#note").value.trim()
+  };
+  const btn = $("#pay"); btn.disabled = true; btn.textContent = "One moment…";
+  try {
+    const r = await fetch("/api/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+    const data = await r.json().catch(() => ({}));
+    if (r.ok && data.url) { location.href = data.url; return; }
+    if (data.preview) {
+      tell("Payments aren't switched on yet", `This is the preview build. Once Zen's Stripe account is connected, this button takes you to a secure card page for ${money(s.price, c.currency, c.locale)} and Zen gets your booking by email and WhatsApp.`);
+    } else {
+      err.textContent = data.error || "Something went wrong creating the payment. Try again, or message Zen on WhatsApp.";
+      err.hidden = false;
+    }
+  } catch (_) {
+    tell("Preview only", `Nothing was charged. On the live site this takes you to a secure Stripe card page for ${money(s.price, c.currency, c.locale)}, and Zen confirms the hour on WhatsApp.`);
+  } finally {
+    btn.disabled = false; btn.textContent = "Reserve and pay";
+  }
+});
+</script>
+</body>
+</html>
