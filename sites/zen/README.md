@@ -8,7 +8,7 @@ Status (2026-09-12, 14:05 UTC): **LIVE at https://zenrecovery.club** (Worker `ze
 sites/zen/
   public/index.html     the public site (scroll explainer, cities, rewards, booking)
   public/account.html   client area: rewards + invite link, session history, profile with photo
-  public/admin.html     team area: overview + statistics, bookings, clients, settings, admins (role-scoped)
+  public/admin.html     team area: overview + statistics, bookings, clients, services, calendar, team (linked to sign-ins), packs, review, settings (role-scoped)
   public/app.css        shared styles for the two areas
   public/i18n.js        English / Italian / Arabic dictionary + the apply() that translates the page
   public/guide.js       questionnaire options, nearest-room logic, body map, before/after advice, exercises (shared by all pages)
@@ -172,6 +172,8 @@ Everything from the ideas list below numbered 15–30 is now in the code and dep
 | Apple sign-in | "Continue with Apple" (hidden until configured) | — | Apple Developer account: Services ID → `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID` vars in `wrangler.toml`; `.p8` key contents as the `APPLE_PRIVATE_KEY` GitHub secret; return URL `https://zenrecovery.club/api/auth/apple/callback` |
 | SMS sign-in link | "Prefer a text?" box (hidden until configured); works for accounts that already have a phone | — | Twilio: `TWILIO_FROM` var, `TWILIO_SID` + `TWILIO_TOKEN` secrets |
 | Head Chef line | — | — | Done: the daily rundown now reads Zen's D1 for bookings, ratings and the 2% |
+
+**Team ↔ sign-in accounts (2026-09-12, late).** A therapist profile (Team tab: photo, bio, languages, order) can be linked to the admin account the person signs in with (`therapists.admin_id`, migration 009). The owner does it from the therapist dialog under **Sign-in account**: pick an existing account that can see that city, or **create a new sign-in right there** (username or email + password; the account gets the therapist's name and is locked to their city). One account per profile and vice versa: linking an account elsewhere moves it; removing an account, or narrowing it to another city, unlinks it; the platform account can't be linked. A linked person sees "this is you" on their card, Bookings opens on **Only my sessions**, and Settings → My profile points them to Team for the public photo/bio. "Who can sign in" shows each account's therapist profile. City admins see that a link exists but not the account behind it, and can't change it. Every browser pop-up in the admin (confirm/prompt/alert) was replaced by an in-page dialog the same evening.
 
 **Owner account (2026-09-12 evening).** Zen's owner signs in with username `owner`; the first password was given to Ash in chat, so the owner must change it under Settings → Your password on first sign-in. Ash's own account (fetta.amore.business@gmail.com) is now `platform`: numbers only.
 

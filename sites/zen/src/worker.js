@@ -76,7 +76,7 @@ async function route(req, env, url, ctx) {
     // Platform account (Ash): numbers only. Everything operational belongs to Zen's owner and the city teams.
     if (isPlatform(admin) && !["/api/admin/me", "/api/admin/stats", "/api/admin/platform", "/api/admin/profile", "/api/admin/password"].includes(p)) return json({ error: "Your account sees the numbers, not the operations. Ask Zen's owner for anything else." }, 403);
     if (p === "/api/admin/platform" && m === "GET") return isPlatform(admin) ? platformReport(env, admin) : json({ error: "Only the Amico Mio account sees the platform report." }, 403);
-    if (p === "/api/admin/me") return json({ admin: pub(admin), cities: await cityMeta(env), settings: await settings(env), photos: authFlags(env).photos, live: isLive(env) });
+    if (p === "/api/admin/me") return json({ admin: pub(admin), therapist: await env.DB.prepare("SELECT id, name, city, photo, active FROM therapists WHERE admin_id = ?").bind(admin.id).first(), cities: await cityMeta(env), settings: await settings(env), photos: authFlags(env).photos, live: isLive(env) });
     if (p === "/api/admin/profile" && m === "PUT") return adminProfile(req, env, admin);
     if (p === "/api/admin/stats" && m === "GET") return adminStats(env, admin, url);
     if (p === "/api/admin/bookings" && m === "GET") return adminBookings(env, admin, url);
@@ -618,7 +618,7 @@ async function adminSaveSettings(req, env, admin) {
 }
 async function adminList(env, admin) {
   if (!isOwner(admin)) return json({ error: "Only the owner can see this." }, 403);
-  const r = await env.DB.prepare("SELECT id, email, name, role, photo, phone, notify, created_at, last_login FROM admins ORDER BY created_at").all();
+  const r = await env.DB.prepare("SELECT a.id, a.email, a.name, a.role, a.photo, a.phone, a.notify, a.created_at, a.last_login, t.id therapist_id, t.name therapist_name, t.city therapist_city FROM admins a LEFT JOIN therapists t ON t.admin_id = a.id ORDER BY a.created_at").all();
   return json({ admins: r.results });
 }
 async function adminCreate(req, env, admin) {
@@ -636,7 +636,7 @@ async function adminDelete(env, admin, id) {
   if (id === admin.id) return json({ error: "You can't remove yourself." }, 400);
   const a = await env.DB.prepare("SELECT role FROM admins WHERE id = ?").bind(id).first();
   if (a?.role === "platform") return json({ error: "The platform account is managed by Amico Mio, not from here." }, 403);
-  await env.DB.prepare("DELETE FROM admins WHERE id = ?").bind(id).run();
+  await env.DB.batch([env.DB.prepare("UPDATE therapists SET admin_id = NULL WHERE admin_id = ?").bind(id), env.DB.prepare("DELETE FROM admins WHERE id = ?").bind(id)]);
   return json({ ok: true });
 }
 // Any admin: own name, phone, photo, "email me about bookings"
@@ -658,6 +658,8 @@ async function adminEdit(req, env, admin, id) {
   let hash = a.pass_hash, salt = a.salt;
   if (b.password !== undefined) { if (String(b.password).length < 10) return json({ error: "Use at least 10 characters." }, 400); ({ hash, salt } = await hashPassword(String(b.password))); }
   await env.DB.prepare("UPDATE admins SET name = ?, role = ?, pass_hash = ?, salt = ? WHERE id = ?").bind(clean(b.name, 80) || a.name, role, hash, salt, id).run();
+  // an account narrowed to one city can't stay linked to a therapist profile in another
+  if (role !== "all") await env.DB.prepare("UPDATE therapists SET admin_id = NULL WHERE admin_id = ? AND city != ?").bind(id, role).run();
   return json({ ok: true });
 }
 async function adminPassword(req, env, admin) {

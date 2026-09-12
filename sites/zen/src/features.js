@@ -3,7 +3,7 @@
 // Public routes come through featureRoute(); admin routes through adminFeatureRoute() (the caller has already
 // checked the admin cookie). Everything money-related goes through stripeCheckout() in lib.js (2% platform fee).
 import { CITIES } from "./catalog.js";
-import { randomId, referralCode, signPayload, verifyPayload, getCookie, clearCookie } from "./auth.js";
+import { randomId, referralCode, signPayload, verifyPayload, getCookie, clearCookie, hashPassword } from "./auth.js";
 import { CITY_KEYS, json, clean, normEmail, isDate, isTime, fmt, now, today, addDays, feeOn, body, isLive, currentUser, scope, sendEmail, stripeCheckout, slotsFor, healthFlags, parseIntake, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, isOwner } from "./lib.js";
 
 const b64u = (s) => btoa(typeof s === "string" ? unescape(encodeURIComponent(s)) : String.fromCharCode(...new Uint8Array(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -242,7 +242,7 @@ export async function adminFeatureRoute(req, env, url, admin) {
   if (p === "/api/admin/blocked" && m === "GET") return listRows(env, admin, url, "blocked", "ORDER BY date, start", "AND date >= date('now','-7 days')");
   if (p === "/api/admin/blocked" && m === "POST") return addBlocked(req, env, admin);
   if ((mm = p.match(/^\/api\/admin\/blocked\/([a-z0-9]+)$/)) && m === "DELETE") return deleteRow(env, admin, "blocked", mm[1]);
-  if (p === "/api/admin/therapists" && m === "GET") return listRows(env, admin, url, "therapists", "ORDER BY city, sort, name");
+  if (p === "/api/admin/therapists" && m === "GET") return listTherapists(env, admin, url);
   if (p === "/api/admin/therapists" && m === "POST") return saveTherapist(req, env, admin, null);
   if ((mm = p.match(/^\/api\/admin\/therapists\/([a-z0-9]+)$/)) && m === "PATCH") return saveTherapist(req, env, admin, mm[1]);
   if (mm && m === "DELETE") return deleteRow(env, admin, "therapists", mm[1]);
@@ -344,6 +344,31 @@ async function addBlocked(req, env, admin) {
   await env.DB.batch(stmts);
   return json({ ok: true, days: stmts.length });
 }
+// Team list with the sign-in account each person is linked to (email/username shown to the owner only).
+async function listTherapists(env, admin, url) {
+  const city = cityFilter(admin, url);
+  const r = await env.DB.prepare("SELECT t.*, a.email admin_email, a.name admin_name, a.role admin_role FROM therapists t LEFT JOIN admins a ON a.id = t.admin_id WHERE 1=1" + (city ? " AND t.city = ?" : "") + " ORDER BY t.city, t.sort, t.name").bind(...(city ? [city] : [])).all();
+  return json({ rows: r.results.map((t) => (isOwner(admin) ? t : { ...t, admin_email: t.admin_id ? "linked" : null })), city });
+}
+// Owner links a therapist to the account they sign in with: an existing admin (role "all" or this city), a brand-new
+// account created here (name = therapist, role = city), or null to unlink. One account per therapist and vice versa.
+async function linkAccount(env, admin, b, city, name, curAdminId) {
+  if (!isOwner(admin)) return { admin_id: curAdminId };
+  if (b.new_account) {
+    const email = normEmail(b.new_account.email), password = String(b.new_account.password || "");
+    if (!email || password.length < 10) return { error: "The new sign-in needs an email or username and a password of at least 10 characters." };
+    const id = randomId(), { hash, salt } = await hashPassword(password);
+    try { await env.DB.prepare("INSERT INTO admins (id, email, name, role, pass_hash, salt) VALUES (?,?,?,?,?,?)").bind(id, email, name, city, hash, salt).run(); }
+    catch { return { error: "That email or username already has admin access. Pick it from the list instead." }; }
+    return { admin_id: id, created: email };
+  }
+  if (b.admin_id === undefined) return { admin_id: curAdminId };
+  if (b.admin_id === null || b.admin_id === "") return { admin_id: null };
+  const a = await env.DB.prepare("SELECT id, role FROM admins WHERE id = ?").bind(String(b.admin_id)).first();
+  if (!a || a.role === "platform") return { error: "That sign-in account doesn't exist." };
+  if (a.role !== "all" && a.role !== city) return { error: `That account only sees ${CITIES[a.role]?.name || a.role}. Change what it sees under Settings first, or pick another.` };
+  return { admin_id: a.id };
+}
 async function saveTherapist(req, env, admin, id) {
   const b = await body(req);
   const cur = id ? await env.DB.prepare("SELECT * FROM therapists WHERE id = ?").bind(id).first() : null;
@@ -352,10 +377,14 @@ async function saveTherapist(req, env, admin, id) {
   const city = cur ? cur.city : cityFor(admin, b.city), name = clean(b.name, 80) || cur?.name;
   if (!city || !name) return json({ error: "City and name." }, 400);
   const photo = b.photo === undefined ? cur?.photo || null : b.photo === null ? null : validPhoto(b.photo) || cur?.photo || null;
-  const vals = [name, b.bio === undefined ? cur?.bio || "" : clean(b.bio, 400), photo, b.languages === undefined ? cur?.languages || "" : clean(b.languages, 60), b.active === undefined ? cur?.active ?? 1 : b.active ? 1 : 0, Number.isInteger(b.sort) ? b.sort : cur?.sort || 0];
-  if (cur) await env.DB.prepare("UPDATE therapists SET name = ?, bio = ?, photo = ?, languages = ?, active = ?, sort = ? WHERE id = ?").bind(...vals, id).run();
-  else await env.DB.prepare("INSERT INTO therapists (id, city, name, bio, photo, languages, active, sort) VALUES (?,?,?,?,?,?,?,?)").bind(randomId(), city, ...vals).run();
-  return json({ ok: true });
+  const link = await linkAccount(env, admin, b, city, name, cur?.admin_id || null);
+  if (link.error) return json({ error: link.error }, 400);
+  const tid = id || randomId();
+  if (link.admin_id) await env.DB.prepare("UPDATE therapists SET admin_id = NULL WHERE admin_id = ? AND id != ?").bind(link.admin_id, tid).run();
+  const vals = [name, b.bio === undefined ? cur?.bio || "" : clean(b.bio, 400), photo, b.languages === undefined ? cur?.languages || "" : clean(b.languages, 60), b.active === undefined ? cur?.active ?? 1 : b.active ? 1 : 0, Number.isInteger(b.sort) ? b.sort : cur?.sort || 0, link.admin_id];
+  if (cur) await env.DB.prepare("UPDATE therapists SET name = ?, bio = ?, photo = ?, languages = ?, active = ?, sort = ?, admin_id = ? WHERE id = ?").bind(...vals, id).run();
+  else await env.DB.prepare("INSERT INTO therapists (id, city, name, bio, photo, languages, active, sort, admin_id) VALUES (?,?,?,?,?,?,?,?,?)").bind(tid, city, ...vals).run();
+  return json({ ok: true, id: tid, created: link.created || null });
 }
 async function savePackage(req, env, id) {
   const b = await body(req);
