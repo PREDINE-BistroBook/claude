@@ -147,12 +147,14 @@ window.ZenGuide = (function () {
       "While something is bothering you: once every 1–2 weeks.",
       "For maintenance and training recovery: every 3–4 weeks.",
       "Hijama: not more than once a month, and not in the same spots back to back.",
-      "Every 10th session with us is free; your account keeps the tally.",
+      "Every {nth} session with us is free; your account keeps the tally.",
     ],
   };
+  const SETTINGS = { loyalty_every: 10, referral_pct: 40 }; // refreshed from /api/status by each page
+  function fill(text) { const I = window.ZenI18n; const nth = I ? I.ordinal(SETTINGS.loyalty_every) : SETTINGS.loyalty_every + "th"; return (I ? I.t(text) : text).split("{nth}").join(nth).split("{pct}").join(SETTINGS.referral_pct); }
   function list(kind, key) {
     const items = kind === "before" || kind === "after" ? [...ADVICE[kind].general, ...(ADVICE[kind][key] || [])] : ADVICE[kind];
-    return `<ul class="advice">${items.map((t) => `<li>${t}</li>`).join("")}</ul>`;
+    return `<ul class="advice">${items.map((t) => `<li>${fill(t)}</li>`).join("")}</ul>`;
   }
   const SERVICE_LABEL = { hijama: "Hijama", fire: "Fire cupping", facial: "Facial cupping", manual: "Manual therapy", cupping: "Cupping" };
 
@@ -175,5 +177,5 @@ window.ZenGuide = (function () {
   };
   function exercisesFor(pain = []) { const seen = new Set(); const out = []; pain.forEach((p) => (EXERCISES[p] || []).forEach((e) => { if (!seen.has(e)) { seen.add(e); out.push({ area: p, text: e }); } })); return out; }
 
-  return { CITY_NAME, EGYPT_SUGGEST, ITALY_SUGGEST, recommend, OPTIONS, label, flagged, bodyMap, PARTS, serviceKey, SERVICE_LABEL, ADVICE, list, EXERCISES, exercisesFor };
+  return { CITY_NAME, EGYPT_SUGGEST, ITALY_SUGGEST, recommend, OPTIONS, label, flagged, bodyMap, PARTS, serviceKey, SERVICE_LABEL, ADVICE, list, fill, EXERCISES, exercisesFor, SETTINGS };
 })();

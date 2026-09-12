@@ -78,7 +78,7 @@
     handle(method, path, body) {
       const url = new URL(path, location.origin); path = url.pathname; const qp = url.searchParams;
       // ----- client -----
-      if (path === "/api/status") return { live: false, preview: true, google: false, demo: true };
+      if (path === "/api/status") return { live: false, preview: true, google: false, demo: true, settings: { loyalty_every: settings.loyalty_every, referral_pct: settings.referral_pct } };
       if (path === "/api/me/checkins") { const u = users.find((x) => x.id === S.user); if (!u) err("Sign in first.", 401); u.checkins ||= [{ date: iso(new Date(today - 21 * 86400e3)), pain: 7, energy: 2, sleep: 2, note: "" }, { date: iso(new Date(today - 14 * 86400e3)), pain: 5, energy: 3, sleep: 3, note: "after first session" }, { date: iso(new Date(today - 7 * 86400e3)), pain: 4, energy: 3, sleep: 4, note: "" }];
         if (method === "POST") { const d = iso(today); u.checkins = u.checkins.filter((c) => c.date !== d); u.checkins.push({ date: d, pain: body.pain, energy: body.energy, sleep: body.sleep, note: body.note || "" }); u.checkins.sort((a, b) => (a.date > b.date ? 1 : -1)); }
         return { checkins: u.checkins }; }
