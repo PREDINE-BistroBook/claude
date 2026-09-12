@@ -157,7 +157,7 @@ Everything from the ideas list below numbered 15–30 is now in the code and dep
 | Session packs | Packs tab in the account, "Use my pack" at booking | Packs & partners tab: create packs (owner), see what's sold | Stripe live (packs are paid by card; the 2% is taken once on the pack) |
 | Gift a session | New section on the site; code by email; `?gift=CODE` prefills the booking form | Gift vouchers list | Stripe live |
 | Partner / gym codes | "Partner or promo code" box in the booking form | Codes per partner (all cities or one), report: bookings, this month, revenue, last booking | Nothing |
-| Birthday reward | Card on the site and in Rewards; credit appears in the birthday month | Birthday % in Settings → Rewards rules | Nothing (cron does it) |
+| Birthday reward | 50% off one session, issued by itself 10 days before the birthday, valid until 5 days after, once a year (credit expires after) | Birthday % in Settings → Rewards rules | Nothing (cron does it) |
 | Reminders + follow-ups | WhatsApp message (once templates are approved) or email the day before, "how do you feel?" two days after | Message log in each client's drawer | WhatsApp Cloud API: `WA_PHONE_ID` var, `WA_TOKEN` secret, approved templates `zen_reminder` / `zen_followup` in Meta Business. Until then: email |
 | Waitlist | "Tell me if a slot opens" on a full day; list in Sessions | Waiting list in the Calendar tab | Nothing (cron emails when a time frees up) |
 | Health-flag review | Flagged clients (questionnaire) or anyone who ticks the safety box book without paying; they pay at the session after a therapist's OK | "Needs review" tab with a red counter: approve or cancel; approve a client once and they book normally after | Nothing |

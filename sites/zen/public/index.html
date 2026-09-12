@@ -167,9 +167,11 @@ footer .wm b{color:#fff}
 .step p{color:rgba(231,237,232,.78); font-size:1.02rem}
 @media (max-width:860px){
   .explain-grid{grid-template-columns:1fr; gap:0}
-  .figure{top:calc(var(--banner-h, 0px) + 58px); height:42svh; z-index:2; background:linear-gradient(var(--ink) 78%, transparent)}
+  /* phones: the explanation reads above the illustration, which stays pinned to the bottom of the screen while you scroll the steps */
+  .figure{order:2; top:auto; bottom:0; height:40svh; z-index:2; background:linear-gradient(transparent, var(--ink) 22%); padding-top:12px}
+  .steps{order:1; padding-bottom:6vh}
   .figure svg{width:min(78%, 300px)}
-  .step{min-height:64svh; justify-content:flex-start; padding-top:8px}
+  .step{min-height:60svh; justify-content:flex-start; padding-top:12px}
 }
 
 /* ---------- methods ---------- */
@@ -609,9 +611,9 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
       <p>Share your link. Your friend gets the discount on their first session. You get yours the moment they book.</p>
     </div>
     <div class="reward-card reveal small">
-      <div class="reward-num no-i18n"><span id="rw-bday">20</span><small>%</small></div>
-      <h3 id="rw-bday-title">Your birthday month: 20% off.</h3>
-      <p>Add your birthday to your profile and a discount appears by itself when the month comes. Packs of sessions and gift codes live here too.</p>
+      <div class="reward-num no-i18n"><span id="rw-bday">50</span><small>%</small></div>
+      <h3 id="rw-bday-title">Your birthday: 50% off one session.</h3>
+      <p>Add your birthday to your profile. The discount appears by itself 10 days before the day and lasts until 5 days after it, once a year.</p>
     </div>
   </div>
   <div class="reward-cta reveal">
@@ -982,7 +984,7 @@ function applySettings(st) {
   $("#rw-every").textContent = n; $("#rw-suffix").textContent = I.ordSuffix(n); $("#rw-pct").textContent = pct;
   $("#rw-loyalty-title").textContent = t("Every {nth} session is free.", { nth: I.ordinal(n) });
   $("#rw-invite-title").textContent = t("Invite a friend: {pct}% off, for both of you.", { pct });
-  const bd = ZenGuide.SETTINGS.birthday_pct || 20; $("#rw-bday").textContent = bd; $("#rw-bday-title").textContent = t("Your birthday month: {pct}% off.", { pct: bd });
+  const bd = ZenGuide.SETTINGS.birthday_pct || 50; $("#rw-bday").textContent = bd; $("#rw-bday-title").textContent = t("Your birthday: {pct}% off one session.", { pct: bd });
 }
 let ST = { settings: {}, gmaps: {}, whatsapp: {}, review: {} };
 // Services, prices, addresses and team lines come from the admin (D1). The CITIES above is the fallback for the preview build.

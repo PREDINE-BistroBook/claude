@@ -47,19 +47,35 @@ async function followups(env) {
   return n;
 }
 
+// Birthday reward: issued once per year, in a window from 10 days before the birthday to 5 days after it; the credit expires when the window closes.
+const BDAY_BEFORE = 10, BDAY_AFTER = 5;
+export function birthdayWindow(birthday, onDate) { // → { year, start, end } of the occurrence whose window contains onDate, else null
+  const mmdd = birthday.slice(5), y = Number(onDate.slice(0, 4));
+  for (const year of [y - 1, y, y + 1]) {
+    let bd = `${year}-${mmdd}`; if (mmdd === "02-29" && new Date(bd + "T12:00:00Z").getUTCDate() !== 29) bd = `${year}-02-28`;
+    const start = addDays(bd, -BDAY_BEFORE), end = addDays(bd, BDAY_AFTER);
+    if (onDate >= start && onDate <= end) return { year, start, end, birthday: bd };
+  }
+  return null;
+}
 async function birthdays(env) {
   const s = await settings(env);
-  const month = today().slice(5, 7), year = Number(today().slice(0, 4));
-  const rows = (await env.DB.prepare("SELECT id, name, email FROM users WHERE birthday IS NOT NULL AND substr(birthday, 6, 2) = ? AND (birthday_reward_year IS NULL OR birthday_reward_year < ?) LIMIT 50").bind(month, year).all()).results;
+  const t = today();
+  await env.DB.prepare("UPDATE credits SET status = 'expired' WHERE status = 'available' AND expires_at IS NOT NULL AND expires_at < ?").bind(t).run();
+  const rows = (await env.DB.prepare("SELECT id, name, email, birthday, birthday_reward_year FROM users WHERE birthday IS NOT NULL AND length(birthday) = 10 LIMIT 2000").all()).results;
+  let n = 0;
   for (const u of rows) {
+    const w = birthdayWindow(u.birthday, t);
+    if (!w || (u.birthday_reward_year && u.birthday_reward_year >= w.year)) continue;
     await env.DB.batch([
-      env.DB.prepare("INSERT INTO credits (id, user_id, kind, pct, reason) VALUES (?,?,?,?,?)").bind(crypto.randomUUID().replace(/-/g, "").slice(0, 24), u.id, "birthday", s.birthday_pct, `Birthday month ${year}`),
-      env.DB.prepare("UPDATE users SET birthday_reward_year = ? WHERE id = ?").bind(year, u.id),
+      env.DB.prepare("INSERT INTO credits (id, user_id, kind, pct, reason, expires_at) VALUES (?,?,?,?,?,?)").bind(crypto.randomUUID().replace(/-/g, "").slice(0, 24), u.id, "birthday", s.birthday_pct, `Birthday ${w.year}`, w.end),
+      env.DB.prepare("UPDATE users SET birthday_reward_year = ? WHERE id = ?").bind(w.year, u.id),
     ]);
-    const ok = await sendEmail(env, { to: u.email, subject: `Happy birthday month — ${s.birthday_pct}% off a session`, text: [`Hi ${u.name.split(" ")[0]},`, ``, `It's your birthday month. There's ${s.birthday_pct}% off one session waiting in your account, any city, any time this month or next.`, ``, `${env.SITE_URL}/account.html`, ``, `Zen Recovery`].join("\n") });
+    const ok = await sendEmail(env, { to: u.email, subject: `Happy birthday — ${s.birthday_pct}% off a session, until ${w.end}`, text: [`Hi ${u.name.split(" ")[0]},`, ``, `Your birthday is close. There's ${s.birthday_pct}% off one session in your account, any city, valid until ${w.end} (five days after your birthday). After that it's gone until next year.`, ``, `Book it: ${env.SITE_URL}/#places`, ``, `Zen Recovery`].join("\n") });
     await logMessage(env, { user_id: u.id, kind: "birthday", channel: "email", status: ok ? "sent" : "failed" });
+    n++;
   }
-  return rows.length;
+  return n;
 }
 
 async function waitlist(env) {
