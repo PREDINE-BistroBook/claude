@@ -30,10 +30,22 @@ export async function catalog(env, { all = false } = {}) {
 export async function serviceOf(env, city, id) { if (!CITY_KEYS.includes(city) || !id) return null; const c = await catalog(env); return c[city].services[id] || null; }
 // Who hears about a new booking / gift / pack in a city: ZEN_NOTIFY_EMAIL (if set) plus every admin with a real email who asked for it
 // (owner: every city; city admin: their city). The platform account (Amico Mio) never gets operational mail.
-export async function notifyList(env, city) {
-  const rows = (await env.DB.prepare("SELECT email FROM admins WHERE notify = 1 AND email LIKE '%@%' AND role != 'platform' AND (role = 'all' OR role = ?)").bind(city || "").all()).results;
+// With a therapistId: the owner(s) plus the account linked to that therapist only — the client chose them, the rest of the city needn't know.
+// Without: every admin of the city, so someone can accept the unassigned booking.
+export async function notifyList(env, city, therapistId) {
+  const rows = therapistId
+    ? (await env.DB.prepare("SELECT a.email FROM admins a LEFT JOIN therapists t ON t.admin_id = a.id WHERE a.notify = 1 AND a.email LIKE '%@%' AND a.role != 'platform' AND (a.role = 'all' OR t.id = ?)").bind(therapistId).all()).results
+    : (await env.DB.prepare("SELECT email FROM admins WHERE notify = 1 AND email LIKE '%@%' AND role != 'platform' AND (role = 'all' OR role = ?)").bind(city || "").all()).results;
   return [...new Set([env.ZEN_NOTIFY_EMAIL, ...rows.map((r) => r.email)].filter(Boolean))];
 }
+// The therapist profile an admin account is linked to (null for the owner unless linked, and for unlinked city accounts).
+export async function therapistOf(env, admin) { return env.DB.prepare("SELECT id, name, city FROM therapists WHERE admin_id = ?").bind(admin.id).first(); }
+// Which bookings a signed-in admin may see: the owner everything; anyone else only the ones assigned to them or not assigned to anyone yet.
+export function visibleWhere(admin, th, col = "therapist_id") {
+  if (isOwner(admin)) return { sql: "", args: [] };
+  return th ? { sql: ` AND (${col} IS NULL OR ${col} = ?)`, args: [th.id] } : { sql: ` AND ${col} IS NULL`, args: [] };
+}
+export const canSeeBooking = (admin, th, bk) => isOwner(admin) || bk.therapist_id === null || bk.therapist_id === undefined || (th && bk.therapist_id === th.id);
 // Photos are stored as data URLs. Only a clean base64 image is accepted, so nothing can break out of an <img src="…"> in the admin.
 export function validPhoto(v, max = 160000) { return typeof v === "string" && v.length < max && /^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/]+=*$/.test(v) ? v : null; }
 // "Now" in a city's own time zone: the local date and minutes since midnight (slots for today, "that day has passed").

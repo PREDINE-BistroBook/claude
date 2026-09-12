@@ -30,7 +30,7 @@
 
 import { CITIES, SLOTS } from "./catalog.js";
 import { randomId, signPayload, verifyPayload, getCookie, setCookie, clearCookie, hashPassword, verifyPassword } from "./auth.js";
-import { CITY_KEYS, USER_COOKIE, ADMIN_COOKIE, json, clean, normEmail, isDate, isTime, fmt, now, today, feeOn, body, isLive, parseIntake, healthFlags, settings, currentUser, currentAdmin, scope, sendEmail, sendSms, stripeCheckout, slotsFor, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, maybeRewardLoyalty, isPlatform, isOwner, seesAll } from "./lib.js";
+import { CITY_KEYS, USER_COOKIE, ADMIN_COOKIE, json, clean, normEmail, isDate, isTime, fmt, now, today, feeOn, body, isLive, parseIntake, healthFlags, settings, currentUser, currentAdmin, scope, sendEmail, sendSms, stripeCheckout, slotsFor, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, maybeRewardLoyalty, isPlatform, isOwner, seesAll, therapistOf, visibleWhere, canSeeBooking } from "./lib.js";
 import { featureRoute, adminFeatureRoute, giftPaid, packagePaid, authFlags } from "./features.js";
 import { runCron } from "./cron.js";
 
@@ -81,6 +81,7 @@ async function route(req, env, url, ctx) {
     if (p === "/api/admin/stats" && m === "GET") return adminStats(env, admin, url);
     if (p === "/api/admin/bookings" && m === "GET") return adminBookings(env, admin, url);
     if (p === "/api/admin/bookings" && m === "POST") return adminCreateBooking(req, env, admin);
+    const acc = p.match(/^\/api\/admin\/bookings\/([a-z0-9]+)\/accept$/); if (acc && m === "POST") return acceptBooking(env, admin, acc[1]);
     let mm = p.match(/^\/api\/admin\/bookings\/([a-z0-9]+)$/);
     if (mm && m === "PATCH") return adminUpdateBooking(req, env, admin, mm[1]);
     if (p === "/api/admin/clients" && m === "GET") return adminClients(env, admin, url);
@@ -418,7 +419,7 @@ async function afterPaid(env, bk) {
   const city = CITIES[bk.city], exact = isTime(bk.slot), th = await therapistName(env, bk.therapist_id), where = await whereLine(env, bk);
   await Promise.all([
     sendEmail(env, {
-      to: await notifyList(env, bk.city),
+      to: await notifyList(env, bk.city, bk.therapist_id),
       subject: `New booking · ${city.name} · ${bk.service_name} · ${bk.date} ${slotLabel(bk.slot)}`,
       text: [`New booking through the website.`, ``, `City:     ${city.name}`, `Session:  ${bk.service_name}`, `Day:      ${bk.date}`, `Time:     ${slotLabel(bk.slot)}`, th ? `Therapist: ${th}` : null, ``,
         `Client:   ${bk.name}`, `WhatsApp: ${bk.phone}`, `Email:    ${bk.email}`, `Note:     ${bk.note || "—"}`, bk.partner_code ? `Partner:  ${bk.partner_code}` : null, ``, `Paid:     ${paidLine(bk)}`, ``,
@@ -437,7 +438,7 @@ async function afterPaid(env, bk) {
 async function afterReview(env, bk) {
   const city = CITIES[bk.city];
   await Promise.all([
-    sendEmail(env, { to: await notifyList(env, bk.city), subject: `Needs a therapist's OK · ${city.name} · ${bk.name} · ${bk.date}`, text: [`${bk.name} booked ${bk.service_name} for ${bk.date} ${slotLabel(bk.slot)} but ticked a health red flag (pregnancy, blood thinners, bleeding/heart condition, recent surgery…).`, ``, `Nothing was charged. Read their answers and approve or cancel in the admin → Needs review: ${env.SITE_URL}/admin`, ``, `WhatsApp: ${bk.phone} · Email: ${bk.email}`, `Note: ${bk.note || "—"}`].join("\n") }),
+    sendEmail(env, { to: await notifyList(env, bk.city, bk.therapist_id), subject: `Needs a therapist's OK · ${city.name} · ${bk.name} · ${bk.date}`, text: [`${bk.name} booked ${bk.service_name} for ${bk.date} ${slotLabel(bk.slot)} but ticked a health red flag (pregnancy, blood thinners, bleeding/heart condition, recent surgery…).`, ``, `Nothing was charged. Read their answers and approve or cancel in the admin → Needs review: ${env.SITE_URL}/admin`, ``, `WhatsApp: ${bk.phone} · Email: ${bk.email}`, `Note: ${bk.note || "—"}`].join("\n") }),
     sendEmail(env, { to: bk.email, subject: `Zen Recovery — one quick check before ${bk.date}`, text: [`Hi ${bk.name},`, ``, `Thanks for booking ${bk.service_name} in ${city.name} on ${bk.date} (${slotLabel(bk.slot)}).`, ``, `Because of what you told us about your health, a therapist looks at your answers first — that's normal and usually quick. Nothing has been charged. You'll get a confirmation (and a WhatsApp) once it's approved, and you pay at the session.`, ``, `Zen Recovery`].join("\n") }),
   ]);
 }
@@ -468,20 +469,22 @@ async function adminStats(env, admin, url) {
   const w = cityWhere(city);
   const live = "status IN ('paid','confirmed','done')";
   const q = (sql, ...args) => env.DB.prepare(sql).bind(...args, ...w.args);
+  const v = visibleWhere(admin, isOwner(admin) ? null : await therapistOf(env, admin)), wb = { sql: w.sql + v.sql, args: [...w.args, ...v.args] };   // bookings only: what this account may see
+  const qb = (sql, ...args) => env.DB.prepare(sql).bind(...args, ...wb.args);
   const [months, thisMonth, lastMonth, byService, byStatus, clients, upcoming, todayRows, byCity, rewards, review, ratings, packs, gifts] = await Promise.all([
-    q(`SELECT strftime('%Y-%m', date) m, currency, COUNT(*) n, SUM(amount) rev, SUM(platform_fee) fee, SUM(status='done') done, COUNT(DISTINCT COALESCE(user_id, email)) clients
-       FROM bookings WHERE ${live} AND date >= date('now','-11 months','start of month') AND date < date('now','+1 month','start of month')${w.sql} GROUP BY m, currency ORDER BY m`).all(),
-    q(`SELECT currency, COUNT(*) n, SUM(amount) rev, SUM(platform_fee) fee, SUM(status='done') done FROM bookings WHERE ${live} AND date >= date('now','start of month') AND date < date('now','+1 month','start of month')${w.sql} GROUP BY currency`).all(),
-    q(`SELECT currency, COUNT(*) n, SUM(amount) rev FROM bookings WHERE ${live} AND date >= date('now','-1 month','start of month') AND date < date('now','start of month')${w.sql} GROUP BY currency`).all(),
-    q(`SELECT service_name name, COUNT(*) n, SUM(amount) rev, currency FROM bookings WHERE ${live}${w.sql} GROUP BY service_name, currency ORDER BY n DESC LIMIT 8`).all(),
-    q(`SELECT status, COUNT(*) n FROM bookings WHERE status != 'pending'${w.sql} GROUP BY status`).all(),
-    q(`SELECT COUNT(DISTINCT COALESCE(user_id, email)) total, COUNT(DISTINCT CASE WHEN created_at >= date('now','start of month') THEN COALESCE(user_id, email) END) new_this_month FROM bookings WHERE ${live}${w.sql}`).first(),
-    q(`SELECT COUNT(*) n FROM bookings WHERE status IN ('paid','confirmed') AND date >= date('now')${w.sql}`).first(),
-    q(`SELECT b.id, b.name, b.service_name, b.slot, b.status, b.city, t.name therapist FROM bookings b LEFT JOIN therapists t ON t.id = b.therapist_id WHERE b.status IN ('paid','confirmed') AND b.date = date('now')${w.sql.replace(" city = ?", " b.city = ?")} ORDER BY b.slot`).all(),
+    qb(`SELECT strftime('%Y-%m', date) m, currency, COUNT(*) n, SUM(amount) rev, SUM(platform_fee) fee, SUM(status='done') done, COUNT(DISTINCT COALESCE(user_id, email)) clients
+       FROM bookings WHERE ${live} AND date >= date('now','-11 months','start of month') AND date < date('now','+1 month','start of month')${wb.sql} GROUP BY m, currency ORDER BY m`).all(),
+    qb(`SELECT currency, COUNT(*) n, SUM(amount) rev, SUM(platform_fee) fee, SUM(status='done') done FROM bookings WHERE ${live} AND date >= date('now','start of month') AND date < date('now','+1 month','start of month')${wb.sql} GROUP BY currency`).all(),
+    qb(`SELECT currency, COUNT(*) n, SUM(amount) rev FROM bookings WHERE ${live} AND date >= date('now','-1 month','start of month') AND date < date('now','start of month')${wb.sql} GROUP BY currency`).all(),
+    qb(`SELECT service_name name, COUNT(*) n, SUM(amount) rev, currency FROM bookings WHERE ${live}${wb.sql} GROUP BY service_name, currency ORDER BY n DESC LIMIT 8`).all(),
+    qb(`SELECT status, COUNT(*) n FROM bookings WHERE status != 'pending'${wb.sql} GROUP BY status`).all(),
+    qb(`SELECT COUNT(DISTINCT COALESCE(user_id, email)) total, COUNT(DISTINCT CASE WHEN created_at >= date('now','start of month') THEN COALESCE(user_id, email) END) new_this_month FROM bookings WHERE ${live}${wb.sql}`).first(),
+    qb(`SELECT COUNT(*) n FROM bookings WHERE status IN ('paid','confirmed') AND date >= date('now')${wb.sql}`).first(),
+    qb(`SELECT b.id, b.name, b.service_name, b.slot, b.status, b.city, t.name therapist FROM bookings b LEFT JOIN therapists t ON t.id = b.therapist_id WHERE b.status IN ('paid','confirmed') AND b.date = date('now')${wb.sql.replace(" city = ?", " b.city = ?").replace(/\(therapist_id/g, "(b.therapist_id").replace(/OR therapist_id/g, "OR b.therapist_id").replace(/AND therapist_id/g, "AND b.therapist_id")} ORDER BY b.slot`).all(),
     seesAll(admin) && !city ? env.DB.prepare(`SELECT city, currency, COUNT(*) n, SUM(amount) rev, SUM(platform_fee) fee FROM bookings WHERE ${live} AND date >= date('now','start of month') GROUP BY city, currency`).all() : { results: [] },
-    q(`SELECT kind, status, COUNT(*) n FROM credits WHERE user_id IN (SELECT DISTINCT user_id FROM bookings WHERE user_id IS NOT NULL${w.sql}) GROUP BY kind, status`).all(),
-    q(`SELECT COUNT(*) n FROM bookings WHERE status = 'review'${w.sql}`).first(),
-    q(`SELECT AVG(rating) avg, COUNT(rating) n, SUM(rating = 5) five FROM bookings WHERE rating IS NOT NULL${w.sql}`).first(),
+    qb(`SELECT kind, status, COUNT(*) n FROM credits WHERE user_id IN (SELECT DISTINCT user_id FROM bookings WHERE user_id IS NOT NULL${wb.sql}) GROUP BY kind, status`).all(),
+    qb(`SELECT COUNT(*) n FROM bookings WHERE status = 'review'${wb.sql}`).first(),
+    qb(`SELECT AVG(rating) avg, COUNT(rating) n, SUM(rating = 5) five FROM bookings WHERE rating IS NOT NULL${wb.sql}`).first(),
     q(`SELECT currency, COUNT(*) n, SUM(amount) rev, SUM(platform_fee) fee, SUM(remaining) remaining FROM client_packages WHERE status = 'paid'${w.sql} GROUP BY currency`).all(),
     q(`SELECT currency, COUNT(*) n, SUM(amount) rev, SUM(platform_fee) fee, SUM(status = 'paid') unused FROM gifts WHERE status IN ('paid','redeemed')${w.sql} GROUP BY currency`).all(),
   ]);
@@ -518,6 +521,7 @@ async function adminBookings(env, admin, url) {
   let sql = `SELECT b.id, b.user_id, b.name, b.email, b.phone, b.city, b.service_name, b.date, b.slot, b.amount, b.list_amount, b.currency, b.discount_kind, b.platform_fee, b.status, b.source, b.note, b.created_at, b.rating, b.feedback, b.therapist_note, b.therapist_id, b.gift_code, b.partner_code, b.package_id, t.name therapist, u.intake AS user_intake, u.notes AS user_notes, u.nearest_city AS user_nearest, u.lang AS user_lang, u.approved AS user_approved
     FROM bookings b LEFT JOIN users u ON u.id = b.user_id LEFT JOIN therapists t ON t.id = b.therapist_id WHERE b.status != 'pending'${w.sql.replace(" city = ?", " b.city = ?")}`;
   const args = [...w.args];
+  const v = visibleWhere(admin, await therapistOf(env, admin), "b.therapist_id"); sql += v.sql; args.push(...v.args);
   if (status) { sql += " AND b.status = ?"; args.push(status); }
   if (isDate(from)) { sql += " AND b.date >= ?"; args.push(from); }
   if (isDate(to)) { sql += " AND b.date <= ?"; args.push(to); }
@@ -550,6 +554,10 @@ async function adminUpdateBooking(req, env, admin, id) {
   const b = await body(req);
   const bk = await env.DB.prepare("SELECT * FROM bookings WHERE id = ?").bind(id).first();
   if (!bk || (!isOwner(admin) && bk.city !== admin.role)) return json({ error: "Not found" }, 404);
+  const mine = isOwner(admin) ? null : await therapistOf(env, admin);
+  if (!canSeeBooking(admin, mine, bk)) return json({ error: "Not found" }, 404);
+  // Only the owner assigns a booking to someone. A city account may take an unassigned one for itself (see acceptBooking) and nothing else.
+  if (b.therapist_id !== undefined && !isOwner(admin)) { const want = clean(b.therapist_id, 40) || null; const same = want === bk.therapist_id, accept = bk.therapist_id === null && mine && want === mine.id; if (!same && !accept) return json({ error: "Only the owner can assign a booking to someone else." }, 403); }
   const status = ["paid", "confirmed", "done", "cancelled", "no_show"].includes(b.status) ? b.status : null;
   const slot = b.slot !== undefined ? clean(b.slot, 20) : bk.slot;
   const note = b.note !== undefined ? clean(b.note, 500) : bk.note;
@@ -561,6 +569,19 @@ async function adminUpdateBooking(req, env, admin, id) {
   if (status === "done" && bk.status !== "done") await maybeRewardLoyalty(env, bk.user_id);
   if (status === "cancelled" && bk.status !== "cancelled") await restore(env, bk);
   return json({ ok: true });
+}
+
+// A therapist takes an unassigned booking in their city. First come, first served; the owner can still reassign.
+async function acceptBooking(env, admin, id) {
+  const th = await therapistOf(env, admin);
+  if (!th) return json({ error: "Your account isn't linked to a therapist profile. Ask the owner to link it under Team." }, 400);
+  const bk = await env.DB.prepare("SELECT id, city, therapist_id, status FROM bookings WHERE id = ?").bind(id).first();
+  if (!bk || (!isOwner(admin) && bk.city !== admin.role) || !canSeeBooking(admin, th, bk)) return json({ error: "Not found" }, 404);
+  if (bk.city !== th.city) return json({ error: `That booking is in ${CITIES[bk.city]?.name || bk.city}; your profile is in ${CITIES[th.city]?.name || th.city}.` }, 400);
+  if (bk.therapist_id && bk.therapist_id !== th.id) return json({ error: "Someone else already took this booking." }, 409);
+  if (["cancelled", "no_show"].includes(bk.status)) return json({ error: "This booking is closed." }, 400);
+  await env.DB.prepare("UPDATE bookings SET therapist_id = ? WHERE id = ? AND (therapist_id IS NULL OR therapist_id = ?)").bind(th.id, id, th.id).run();
+  return json({ ok: true, therapist: th.name });
 }
 
 async function adminClients(env, admin, url) {
