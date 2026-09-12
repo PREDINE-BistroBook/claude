@@ -1,8 +1,8 @@
-# Zen — cupping therapy site (Cairo · Dahab · Florence)
+# Zen Recovery — cupping therapy site (Cairo · Dahab · Florence)
 
-A Locali & Ordinazioni build for Ash's friend's team, **Zen**. One page: a scroll-driven explanation of what cupping does, then "which city are you in?", then a booking form that takes card payment. **Every booking pays a 2% platform fee to us automatically**, inside Stripe, with no invoicing.
+A Locali & Ordinazioni build for Ash's friend's team, **Zen Recovery** (brand: bold red italic ZEN + wide-set RECOVERY, as on the studio banner). One page: a scroll-driven explanation of what cupping does, then "which city are you in?", then a booking form that takes card payment. **Every booking pays a 2% platform fee to us automatically**, inside Stripe, with no invoicing.
 
-Status (2026-09-12): **preview build**. Photos, prices, addresses and team lines are placeholders. Payments are off until Zen's Stripe account is connected (see below). Nothing here is deployed yet.
+Status (2026-09-12): **preview build**. Prices, addresses and team lines are placeholders. Photos are real (from Zen's Instagram, supplied by Ash) but which photo belongs to which city is a guess — see `public/img/README.md`. Payments are off until Zen's Stripe account is connected (see below). Nothing here is deployed yet.
 
 ```
 sites/zen/
@@ -76,4 +76,4 @@ Test before real money: create Zen's connected account in **test mode** first, d
 - **Emails go through Resend.** `FROM_EMAIL` must be on a verified domain. Today the only verified domain on the account is `amicomioflorence.com`, which is the Tours agency's brand. Either accept that for now or verify a Zen domain.
 - **Availability is not live.** The client picks a day and a morning/afternoon/evening window; Zen confirms the exact hour on WhatsApp. This matches how the team already works via Instagram DMs and avoids building a calendar nobody maintains. A real calendar (Cal.com embed, or a small KV-backed slot table) is a follow-up if Zen wants it.
 - **Motion**: one scroll-scrubbed illustration (GSAP ScrollTrigger), a breathing ring in the hero, soft reveals. Everything respects `prefers-reduced-motion`.
-- **Photos**: the city panels are drawn placeholders; real photos dropped into `public/img/` take over automatically.
+- **Photos**: real ones are in `public/img/`. Replace any file with the same name and the page picks it up; if a city photo is missing the page falls back to a drawn skyline.

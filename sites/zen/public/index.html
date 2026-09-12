@@ -3,27 +3,28 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Zen Cupping</title>
-<meta name="description" content="Zen — cupping therapy in Cairo, Dahab and Florence. See how cupping works, choose your city, book a session.">
+<title>Zen Recovery</title>
+<meta name="description" content="Zen Recovery — cupping therapy in Cairo, Dahab and Florence. See how cupping works, choose your city, book a session.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,300..600,0..100&family=Figtree:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira:ital,wght@0,300;0,400;1,800&family=Michroma&family=Figtree:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap">
 <style>
 /* ---------- tokens ---------- */
 :root{
-  --ground:#E7EDE8;        /* mist sage — the treatment room at dusk */
-  --ground-2:#DBE3DD;      /* deeper mist for alternating bands */
-  --ground-3:#F3F6F3;      /* raised surfaces (form fields, cards) */
-  --ink:#14302C;           /* deep pine */
-  --ink-soft:#42605A;      /* secondary text */
-  --ink-mute:#7C948F;      /* captions, rules */
-  --line:rgba(20,48,44,.14);
-  --mark:#7C3A4E;          /* cup-mark plum — the colour a cup leaves */
-  --mark-soft:#C98A9B;
-  --mark-glow:rgba(124,58,78,.18);
-  --sand:#D3B98C;          /* Red Sea coast, Cairo stone */
+  --ground:#EDEEEA;        /* the grey of the studio banner */
+  --ground-2:#E2E4DF;      /* alternating bands */
+  --ground-3:#F7F7F5;      /* raised surfaces (form fields, cards) */
+  --ink:#1B1E1D;           /* charcoal */
+  --ink-soft:#4B5250;      /* secondary text */
+  --ink-mute:#8B928F;      /* captions, rules */
+  --line:rgba(27,30,29,.14);
+  --mark:#C43A2F;          /* Zen Recovery red — the wordmark, and close to the colour a cup leaves */
+  --mark-soft:#E0857C;
+  --mark-glow:rgba(196,58,47,.18);
+  --sand:#D3B98C;
   --glass:rgba(255,255,255,.62);
-  --display:"Fraunces", "Iowan Old Style", Georgia, serif;
+  --display:"Saira", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --label:"Michroma", "Eurostile", "DM Mono", monospace;
   --body:"Figtree", "Segoe UI", system-ui, sans-serif;
   --mono:"DM Mono", "SFMono-Regular", Menlo, monospace;
   --gutter:clamp(16px, 5vw, 64px);
@@ -38,14 +39,13 @@ body{
   font-family:var(--body); font-size:17px; line-height:1.55;
   -webkit-font-smoothing:antialiased; overflow-x:hidden;
 }
-h1,h2,h3{font-family:var(--display); font-weight:300; letter-spacing:-.01em; line-height:1.05; margin:0; text-wrap:balance; font-variation-settings:"SOFT" 70, "opsz" 96}
-h1{font-size:clamp(2.6rem, 7vw, 6rem)}
-h2{font-size:clamp(2rem, 4.6vw, 3.6rem)}
-h3{font-size:clamp(1.35rem, 2.2vw, 1.8rem); font-variation-settings:"SOFT" 50, "opsz" 24}
+h1,h2,h3{font-family:var(--display); font-weight:300; letter-spacing:-.015em; line-height:1.06; margin:0; text-wrap:balance}
+h1{font-size:clamp(2.4rem, 6vw, 5rem)}
+h2{font-size:clamp(1.8rem, 4vw, 3.2rem)}
+h3{font-size:clamp(1.3rem, 2vw, 1.7rem); font-weight:400}
 p{margin:0}
 a{color:inherit}
-em{font-style:italic; font-family:var(--display); font-weight:400; font-size:1.06em}
-.eyebrow{font-family:var(--mono); font-size:.74rem; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-soft)}
+.eyebrow{font-family:var(--label); font-size:.62rem; letter-spacing:.2em; text-transform:uppercase; color:var(--ink-soft)}
 .measure{max-width:34rem}
 .wrap{padding-inline:var(--gutter)}
 section{position:relative}
@@ -71,9 +71,11 @@ button{font:inherit; color:inherit}
 .nav{top:var(--banner-h, 0px)}
 .nav.scrolled{border-color:var(--line)}
 .brand{display:flex; align-items:center; gap:10px; text-decoration:none}
-.brand-mark{width:26px; height:26px; border-radius:50%; border:1.5px solid var(--ink); position:relative}
-.brand-mark::after{content:""; position:absolute; inset:5px; border-radius:50%; background:var(--mark)}
-.brand-name{font-family:var(--display); font-size:1.35rem; font-weight:400; letter-spacing:.02em; font-variation-settings:"SOFT" 100, "opsz" 24}
+.wm{display:inline-flex; flex-direction:column; line-height:1; gap:3px}
+.wm b{font-family:var(--display); font-weight:800; font-style:italic; color:var(--mark); font-size:1.5rem; letter-spacing:-.03em}
+.wm small{font-family:var(--label); font-size:.42rem; letter-spacing:.34em; color:var(--ink); padding-left:2px}
+.wm.lg b{font-size:3rem}
+.wm.lg small{font-size:.8rem; letter-spacing:.34em}
 .nav-links{display:flex; gap:22px; align-items:center; font-size:.92rem}
 .nav-links a{text-decoration:none; color:var(--ink-soft)}
 .nav-links a:hover{color:var(--ink)}
@@ -100,12 +102,16 @@ button{font:inherit; color:inherit}
 .hero-copy .eyebrow span + span::before{content:"·"; margin-right:14px; color:var(--ink-mute)}
 .hero p.lede{font-size:clamp(1.05rem, 1.5vw, 1.25rem); color:var(--ink-soft); max-width:30rem}
 .hero-actions{display:flex; gap:12px; flex-wrap:wrap; align-items:center}
-.breath{position:relative; aspect-ratio:1; max-width:520px; width:100%; margin-inline:auto; display:grid; place-items:center}
+.hero-visual{position:relative; max-width:520px; width:100%; margin-inline:auto}
+.hero-visual .photo{display:block; width:100%; aspect-ratio:4/5; object-fit:cover; border-radius:var(--radius); filter:grayscale(1) contrast(1.05); max-width:100%}
+.hero-visual .cap{position:absolute; top:16px; left:16px; font-family:var(--label); font-size:.58rem; letter-spacing:.2em; text-transform:uppercase; color:#fff; padding:7px 10px; border-radius:999px; background:rgba(27,30,29,.45); backdrop-filter:blur(6px)}
+.breath{position:absolute; left:-22px; bottom:-22px; width:min(44%, 210px); aspect-ratio:1; display:grid; place-items:center}
 .breath .ring{position:absolute; inset:0; border-radius:50%; border:1px solid rgba(20,48,44,.28)}
 .breath .ring.r2{inset:11%; border-color:rgba(20,48,44,.22)}
 .breath .ring.r3{inset:22%; border-color:rgba(20,48,44,.16)}
 .breath .core{position:absolute; inset:31%; border-radius:50%; background:radial-gradient(circle at 42% 38%, #fff 0, var(--glass) 30%, rgba(124,58,78,.22) 70%, rgba(124,58,78,.45) 100%); box-shadow:inset 0 0 40px rgba(255,255,255,.7), 0 30px 60px -30px rgba(124,58,78,.6)}
-.breath .label{position:relative; z-index:2; font-family:var(--display); font-size:clamp(1.1rem, 2vw, 1.5rem); font-weight:300; color:var(--ink); font-variation-settings:"SOFT" 100, "opsz" 48; display:grid}
+.breath .ring{background:var(--ground)}
+.breath .label{position:relative; z-index:2; font-family:var(--display); font-size:clamp(.8rem, 1.4vw, 1rem); font-weight:400; color:var(--ink); display:grid}
 .breath .label span{grid-area:1/1; text-align:center; opacity:0}
 .breath .label .in{animation:labelIn 8s infinite}
 .breath .label .out{animation:labelOut 8s infinite}
@@ -121,7 +127,8 @@ button{font:inherit; color:inherit}
 @keyframes drip{0%{transform:scaleY(0); transform-origin:top} 50%{transform:scaleY(1); transform-origin:top} 51%{transform-origin:bottom} 100%{transform:scaleY(0); transform-origin:bottom}}
 @media (max-width:860px){
   .hero{grid-template-columns:1fr; min-height:auto; padding-top:32px}
-  .breath{max-width:300px}
+  .breath{width:130px; left:-8px; bottom:-14px}
+  .hero-visual{max-width:none}
   .scroll-hint{display:none}
 }
 
@@ -139,7 +146,7 @@ button{font:inherit; color:inherit}
 .has-gsap .step.active{opacity:1}
 .step .eyebrow{display:flex; align-items:center; gap:12px}
 .step .eyebrow::before{content:""; width:28px; height:1px; background:var(--mark-soft)}
-.step h3{font-size:clamp(1.6rem, 3vw, 2.4rem); font-variation-settings:"SOFT" 70, "opsz" 48}
+.step h3{font-size:clamp(1.5rem, 2.8vw, 2.2rem); font-weight:300}
 .step p{color:rgba(231,237,232,.78); font-size:1.02rem}
 @media (max-width:860px){
   .explain-grid{grid-template-columns:1fr; gap:0}
@@ -149,7 +156,7 @@ button{font:inherit; color:inherit}
 }
 
 /* ---------- methods ---------- */
-.methods{padding:clamp(56px, 10vh, 120px) var(--gutter)}
+.methods{padding:clamp(56px, 10vh, 120px) var(--gutter) clamp(40px, 6vh, 72px)}
 .methods-head{display:grid; gap:14px; max-width:44rem; margin-bottom:40px}
 .methods-head p{color:var(--ink-soft)}
 .method-list{display:grid; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr)); gap:1px; background:var(--line); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden}
@@ -158,7 +165,16 @@ button{font:inherit; color:inherit}
 .method .glyph{width:44px; height:44px}
 .method h3{font-size:1.25rem}
 .method p{font-size:.95rem; color:var(--ink-soft)}
-.method .for{font-family:var(--mono); font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--mark)}
+.method .for{font-family:var(--mono); font-size:.74rem; letter-spacing:.06em; text-transform:uppercase; color:var(--mark)}
+
+/* ---------- in the room ---------- */
+.room{padding:0 var(--gutter) clamp(56px, 10vh, 120px)}
+.room-head{display:grid; gap:14px; max-width:44rem; margin-bottom:28px}
+.room-strip{display:grid; grid-template-columns:repeat(3, 1fr); gap:14px}
+.room-strip figure{margin:0; display:grid; gap:10px}
+.room-strip img{width:100%; max-width:100%; aspect-ratio:4/3; object-fit:cover; border-radius:16px; display:block}
+.room-strip figcaption{font-size:.86rem; color:var(--ink-soft)}
+@media (max-width:760px){ .room-strip{grid-template-columns:1fr} }
 
 /* ---------- good to know ---------- */
 .know{background:var(--ground-2); padding:clamp(56px, 10vh, 110px) var(--gutter)}
@@ -168,7 +184,7 @@ button{font:inherit; color:inherit}
 .know dl{margin:0; display:grid; gap:0}
 .know .row{display:grid; grid-template-columns:120px 1fr; gap:18px; padding:18px 0; border-top:1px solid var(--line)}
 .know .row:last-child{border-bottom:1px solid var(--line)}
-.know dt{font-family:var(--mono); font-size:.74rem; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-soft); padding-top:4px}
+.know dt{font-family:var(--label); font-size:.6rem; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-soft); padding-top:4px}
 .know dd{margin:0; font-size:.98rem}
 .know .caution{margin-top:22px; padding:16px 18px; border-left:2px solid var(--mark); background:var(--ground-3); font-size:.92rem; color:var(--ink-soft); border-radius:0 12px 12px 0}
 @media (max-width:860px){ .know-grid{grid-template-columns:1fr} .know .row{grid-template-columns:96px 1fr} }
@@ -188,16 +204,16 @@ button{font:inherit; color:inherit}
 .panel:hover .art svg, .panel:hover .photo{transform:scale(1.05)}
 .panel .veil{position:absolute; inset:0; z-index:2; background:linear-gradient(180deg, rgba(20,48,44,0) 40%, rgba(20,48,44,.72) 100%)}
 .panel .text{position:absolute; inset:auto 0 0 0; z-index:3; padding:26px; display:grid; gap:8px}
-.panel .city{font-family:var(--display); font-size:clamp(2rem, 4vw, 3.4rem); font-weight:300; line-height:1; font-variation-settings:"SOFT" 100, "opsz" 72}
+.panel .city{font-family:var(--display); font-size:clamp(2rem, 4vw, 3.2rem); font-weight:300; line-height:1}
 .panel .where{font-size:.9rem; opacity:.85}
-.panel .choose{display:inline-flex; align-items:center; gap:8px; margin-top:6px; font-family:var(--mono); font-size:.72rem; letter-spacing:.12em; text-transform:uppercase; opacity:.9}
+.panel .choose{display:inline-flex; align-items:center; gap:8px; margin-top:6px; font-family:var(--label); font-size:.72rem; letter-spacing:.12em; text-transform:uppercase; opacity:.9}
 .panel .choose::after{content:"→"; transition:transform .3s}
 .panel:hover .choose::after{transform:translateX(4px)}
 .panel .tick{position:absolute; top:18px; right:18px; z-index:3; width:34px; height:34px; border-radius:50%; border:1.5px solid rgba(255,255,255,.7); display:grid; place-items:center; background:rgba(20,48,44,.35); backdrop-filter:blur(6px); opacity:0; transform:scale(.6); transition:opacity .4s, transform .5s var(--ease)}
 .panel[aria-pressed="true"] .tick{opacity:1; transform:scale(1); background:var(--mark); border-color:var(--mark)}
 .panels.has-choice .panel:not([aria-pressed="true"]){filter:saturate(.35) brightness(.72); transform:scale(.985)}
 .panels.has-choice .panel[aria-pressed="true"]{transform:scale(1.01)}
-.panel .flag{position:absolute; top:18px; left:18px; z-index:3; font-family:var(--mono); font-size:.68rem; letter-spacing:.12em; text-transform:uppercase; padding:6px 10px; border-radius:999px; background:rgba(20,48,44,.35); backdrop-filter:blur(6px); border:1px solid rgba(255,255,255,.25)}
+.panel .flag{position:absolute; top:18px; left:18px; z-index:3; font-family:var(--label); font-size:.58rem; letter-spacing:.12em; text-transform:uppercase; padding:6px 10px; border-radius:999px; background:rgba(20,48,44,.35); backdrop-filter:blur(6px); border:1px solid rgba(255,255,255,.25)}
 @media (max-width:760px){
   .panels{grid-template-columns:1fr; gap:8px; padding:0 8px}
   .panel{aspect-ratio:16/10}
@@ -207,7 +223,7 @@ button{font:inherit; color:inherit}
 .book{padding:clamp(48px, 8vh, 96px) var(--gutter) clamp(72px, 12vh, 140px)}
 .book-shell{display:grid; grid-template-columns:.9fr 1.1fr; gap:clamp(28px, 5vw, 80px); align-items:start}
 .book-intro{position:sticky; top:96px; display:grid; gap:18px}
-.book-intro .place-name{font-family:var(--display); font-weight:300; font-size:clamp(2.2rem, 5vw, 4rem); line-height:1; font-variation-settings:"SOFT" 100, "opsz" 96}
+.book-intro .place-name{font-family:var(--display); font-weight:300; font-size:clamp(2.2rem, 5vw, 3.6rem); line-height:1}
 .book-intro .addr{color:var(--ink-soft); display:grid; gap:4px; font-size:.98rem}
 .book-intro .addr b{font-weight:500; color:var(--ink)}
 .book-intro .team{display:flex; gap:12px; align-items:center; margin-top:10px; padding-top:18px; border-top:1px solid var(--line); font-size:.9rem; color:var(--ink-soft)}
@@ -220,7 +236,7 @@ button{font:inherit; color:inherit}
 form.booking{display:grid; gap:34px}
 form.booking[hidden]{display:none}
 fieldset{border:0; padding:0; margin:0; display:grid; gap:14px; min-width:0}
-legend{font-family:var(--mono); font-size:.74rem; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:12px; padding:0}
+legend{font-family:var(--label); font-size:.62rem; letter-spacing:.2em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:12px; padding:0}
 .services{display:grid; gap:10px}
 .service{position:relative}
 .service input{position:absolute; opacity:0; inset:0; pointer-events:none}
@@ -231,7 +247,7 @@ legend{font-family:var(--mono); font-size:.74rem; letter-spacing:.14em; text-tra
 .service label:hover{transform:translateY(-1px)}
 .service input:focus-visible + label{outline:2px solid var(--mark); outline-offset:2px}
 .service input:checked + label{border-color:var(--mark); box-shadow:0 0 0 3px var(--mark-glow)}
-.service .name{font-family:var(--display); font-size:1.28rem; font-weight:400; font-variation-settings:"SOFT" 60, "opsz" 24}
+.service .name{font-family:var(--display); font-size:1.2rem; font-weight:400}
 .service .price{font-family:var(--mono); font-size:1rem; font-variant-numeric:tabular-nums; white-space:nowrap}
 .service .desc{grid-column:1/-1; font-size:.92rem; color:var(--ink-soft)}
 .service .dur{font-family:var(--mono); font-size:.72rem; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-mute)}
@@ -275,7 +291,6 @@ dialog .row{display:flex; gap:10px; justify-content:flex-end; margin-top:8px}
 /* ---------- footer ---------- */
 footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40px}
 .foot-grid{display:grid; grid-template-columns:1.4fr 1fr 1fr; gap:32px; align-items:start}
-.foot-grid .brand-name{font-size:2.2rem}
 .foot-grid p{color:rgba(231,237,232,.7); font-size:.95rem; max-width:24rem; margin-top:10px}
 .foot-grid ul{list-style:none; padding:0; margin:0; display:grid; gap:8px; font-size:.95rem}
 .foot-grid a{color:rgba(231,237,232,.85); text-decoration:none}
@@ -303,7 +318,7 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
 </div>
 
 <nav class="nav" id="nav" aria-label="Main">
-  <a class="brand" href="#top" aria-label="Zen, home"><span class="brand-mark" aria-hidden="true"></span><span class="brand-name">zen</span></a>
+  <a class="brand" href="#top" aria-label="Zen Recovery, home"><span class="wm"><b>ZEN</b><small>RECOVERY</small></span></a>
   <div class="nav-links">
     <a href="#how" class="hide-sm">How it works</a>
     <a href="#methods" class="hide-sm">Methods</a>
@@ -319,16 +334,20 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
   <div class="hero-copy">
     <p class="eyebrow"><span>Cupping therapy</span><span>Cairo</span><span>Dahab</span><span>Florence</span></p>
     <h1 id="hero-title">Tension has a way out.</h1>
-    <p class="lede">Cupping is one of the oldest ways of asking the body to let go. Scroll and we'll show you exactly what happens under the cup. Then tell us which city you're in.</p>
+    <p class="lede">Cupping is one of the oldest ways of asking a body to recover: after training, after a long week, after too many hours in one position. Scroll and we'll show you exactly what happens under the cup. Then tell us which city you're in.</p>
     <div class="hero-actions">
       <a class="btn" href="#how">See how it works</a>
       <a class="btn ghost" href="#places">I know, take me to booking</a>
     </div>
   </div>
-  <div class="breath" aria-hidden="true">
-    <span class="ring"></span><span class="ring r2"></span><span class="ring r3"></span>
-    <span class="core"></span>
-    <span class="label"><span class="in">breathe in</span><span class="out">breathe out</span></span>
+  <div class="hero-visual">
+    <img class="photo" src="img/hero.jpg" alt="Glass cups along a client's back in the Zen Recovery studio">
+    <span class="cap">The studio · Florence</span>
+    <div class="breath" aria-hidden="true">
+      <span class="ring"></span><span class="ring r2"></span><span class="ring r3"></span>
+      <span class="core"></span>
+      <span class="label"><span class="in">breathe in</span><span class="out">breathe out</span></span>
+    </div>
   </div>
   <div class="scroll-hint" aria-hidden="true"><i></i>scroll</div>
 </section>
@@ -348,7 +367,7 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
             <stop offset="0" stop-color="#E9D6C5"/><stop offset="1" stop-color="#D5BBA6"/>
           </linearGradient>
           <radialGradient id="bloomG" cx=".5" cy=".9" r=".7">
-            <stop offset="0" stop-color="#B85C76" stop-opacity=".95"/><stop offset=".55" stop-color="#C98A9B" stop-opacity=".55"/><stop offset="1" stop-color="#C98A9B" stop-opacity="0"/>
+            <stop offset="0" stop-color="#B8433A" stop-opacity=".95"/><stop offset=".55" stop-color="#D98079" stop-opacity=".55"/><stop offset="1" stop-color="#D98079" stop-opacity="0"/>
           </radialGradient>
           <linearGradient id="glassG" x1="0" y1="0" x2="1" y2="1">
             <stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset=".45" stop-color="#fff" stop-opacity=".08"/><stop offset="1" stop-color="#fff" stop-opacity=".25"/>
@@ -364,8 +383,8 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
         <rect id="skin" x="20" y="380" width="480" height="120" rx="28" fill="url(#skinG)"/>
         <!-- marks left on the skin (step 5) -->
         <g id="marks" opacity="0">
-          <circle cx="110" cy="420" r="30" fill="#7C3A4E" opacity=".55"/>
-          <circle cx="410" cy="420" r="30" fill="#7C3A4E" opacity=".55"/>
+          <circle cx="110" cy="420" r="30" fill="#8E2F3A" opacity=".55"/>
+          <circle cx="410" cy="420" r="30" fill="#8E2F3A" opacity=".55"/>
         </g>
 
         <!-- cup group: translates down to land on skin -->
@@ -376,7 +395,7 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
             <ellipse id="bloom" cx="260" cy="470" rx="110" ry="90" fill="url(#bloomG)" opacity="0"/>
           </g>
           <!-- vacuum haze -->
-          <path id="vac" d="M150 380 C150 250 190 175 260 175 C330 175 370 250 370 380 Z" fill="#7C3A4E" opacity="0"/>
+          <path id="vac" d="M150 380 C150 250 190 175 260 175 C330 175 370 250 370 380 Z" fill="#C43A2F" opacity="0"/>
           <!-- arrows showing lift -->
           <g id="arrows" opacity="0" stroke="#E7EDE8" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
             <path d="M260 330 V270 M248 282 L260 270 L272 282"/>
@@ -470,6 +489,19 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
   </div>
 </section>
 
+<!-- ================= IN THE ROOM ================= -->
+<section class="room" aria-labelledby="room-title">
+  <div class="room-head reveal">
+    <p class="eyebrow">In the room</p>
+    <h2 id="room-title">Three cities. The same hands, the same quiet.</h2>
+  </div>
+  <div class="room-strip">
+    <figure class="reveal"><img src="img/room-table.jpg" alt="Client face down on the table with glass cups along the spine and silicone cups on the arms" loading="lazy"><figcaption>Dry and sliding cups together · a full-back session</figcaption></figure>
+    <figure class="reveal"><img src="img/room-hijama.jpg" alt="Hijama cups placed along the back" loading="lazy"><figcaption>Hijama · sterile single-use cups, every time</figcaption></figure>
+    <figure class="reveal"><img src="img/room-marks.jpg" alt="Round cupping marks on a client's back, seen from a balcony in Florence" loading="lazy"><figcaption>The morning after · marks fade in three to ten days</figcaption></figure>
+  </div>
+</section>
+
 <!-- ================= GOOD TO KNOW ================= -->
 <section class="know" id="know" aria-labelledby="know-title">
   <div class="know-grid">
@@ -521,7 +553,7 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
           <g fill="#E0B27E" opacity=".4"><circle cx="70" cy="330" r="2"/><circle cx="150" cy="345" r="2"/><circle cx="250" cy="335" r="2"/></g>
         </svg>
       </span>
-      <img class="photo" src="img/cairo.jpg" alt="" onerror="this.remove()">
+      <img class="photo" src="img/cairo.jpg" alt="Cupping session on the treatment table" onerror="this.remove()">
       <span class="veil" aria-hidden="true"></span>
       <span class="flag">Egypt</span>
       <span class="tick" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2"><path d="M3 8.5l3 3 7-7"/></svg></span>
@@ -549,7 +581,7 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
           </g>
         </svg>
       </span>
-      <img class="photo" src="img/dahab.jpg" alt="" onerror="this.remove()">
+      <img class="photo" src="img/dahab.jpg" alt="Silicone and glass cups across shoulders and arms" onerror="this.remove()">
       <span class="veil" aria-hidden="true"></span>
       <span class="flag">Egypt · Red Sea</span>
       <span class="tick" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2"><path d="M3 8.5l3 3 7-7"/></svg></span>
@@ -577,7 +609,7 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
           <g fill="#B86A5A" opacity=".55"><path d="M0 330 h300 v10 h-300z"/><path d="M0 355 h300 v10 h-300z"/></g>
         </svg>
       </span>
-      <img class="photo" src="img/florence.jpg" alt="" onerror="this.remove()">
+      <img class="photo" src="img/florence.jpg" alt="The Zen Recovery studio wall and a fire-cupping session" onerror="this.remove()">
       <span class="veil" aria-hidden="true"></span>
       <span class="flag">Italy</span>
       <span class="tick" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2"><path d="M3 8.5l3 3 7-7"/></svg></span>
@@ -663,7 +695,7 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
 <footer>
   <div class="foot-grid">
     <div>
-      <span class="brand-name">zen</span>
+      <span class="wm lg"><b>ZEN</b><small style="color:var(--ground)">RECOVERY</small></span>
       <p>Cupping therapy in Cairo, Dahab and Florence. A small team, one way of working: slowly, warmly, and only as deep as your body wants to go.</p>
     </div>
     <div>
@@ -684,7 +716,7 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
     </div>
   </div>
   <div class="foot-bottom">
-    <span>© <span id="year"></span> Zen</span>
+    <span>© <span id="year"></span> Zen Recovery</span>
     <span>Cupping is a complementary therapy and not a substitute for medical care.</span>
   </div>
 </footer>
@@ -875,7 +907,7 @@ $("#booking").addEventListener("submit", async (e) => {
     const data = await r.json().catch(() => ({}));
     if (r.ok && data.url) { location.href = data.url; return; }
     if (data.preview) {
-      tell("Payments aren't switched on yet", `This is the preview build. Once Zen's Stripe account is connected, this button takes you to a secure card page for ${money(s.price, c.currency, c.locale)} and Zen gets your booking by email and WhatsApp.`);
+      tell("Payments aren't switched on yet", `This is the preview build. Once Zen's Stripe account is connected, this button takes you to a secure card page for ${money(s.price, c.currency, c.locale)} and Zen Recovery gets your booking by email and WhatsApp.`);
     } else {
       err.textContent = data.error || "Something went wrong creating the payment. Try again, or message Zen on WhatsApp.";
       err.hidden = false;
