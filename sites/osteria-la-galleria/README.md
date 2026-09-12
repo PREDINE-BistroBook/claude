@@ -2,12 +2,13 @@
 
 A Locali & Ordinazioni build for **Osteria La Galleria**, Florence. Started 2026-09-12 from ten photos Ash took on site: seven pages of the paper menu, the happy-hour board, the chalk steak board, and the "leave us a review" sticker on the door. Downscaled copies are in `reference/` so any future edit can check a price or an allergen against the original.
 
-Status: **built, not deployed, not yet shown to the owner.** No domain, no address, no phone on the page yet — see "Before it goes live".
+Status: **built, not deployed, not yet shown to the owner.** Location known (in front of Palazzo Pitti, per Ash 2026-09-12); street number, phone, hours and domain still missing — see "Before it goes live".
 
 ## The idea
 
 "Galleria" in Florence means the Palatina, the Uffizi, the Accademia. So the menu is a museum visit:
 
+- **The entrance is the wine window.** Ash confirmed (2026-09-12) the osteria has a working *buchetta del vino* in the façade. It gets its own section between the hero and room I, on the ochre street wall with the window drawn in it, before the dark rooms begin. It links to the cellar for wine by the glass.
 - **Ten rooms** in course order (Antipasti & Zuppe → Primi → Tartufo → Secondi → Pesce → Bistecche & Carne → Insalatone & Contorni → Pinsa → Dolci → La Cantina). The wall colour changes as you scroll from one room to the next; the paper menu already colour-codes meat burgundy and fish blue, the site extends that to every room.
 - **Every dish is a work with a museum plaque**: Italian name, description in the chosen language, allergen numbers as small catalogue numbers, price. House specialities get a gold frame.
 - **The scale** in the Bistecche room: the fiorentina and the costola are priced per kilo, so a slider shows what a 600 g to 2 kg cut costs and roughly how many people it feeds.
@@ -49,8 +50,8 @@ Everything is transcribed exactly as printed, including a few things that look l
 
 ## Before it goes live
 
-1. **Contact details** — fill `SITE` at the bottom of `menu.js`: address, phone, WhatsApp number, hours, Google Maps link, the Google review link behind the door QR sticker, Instagram, and when happy hour runs. Empty fields show "In arrivo / Coming soon" on the page.
-   The web shows two similarly named places by Palazzo Pitti ("Osteria della Galleria", Piazza de' Pitti, and "Ristorante La Galleria", Via de' Guicciardini). Neither was assumed. Ask the owner.
+1. **Contact details** — fill `SITE` at the bottom of `menu.js`: street number, phone, WhatsApp number, hours, the real Google Maps share link, the Google review link behind the door QR sticker, Instagram, and when happy hour runs. Empty fields show "In arrivo / Coming soon" on the page.
+   Known: it is in front of Palazzo Pitti, so the address line reads "Piazza de' Pitti, Firenze" and the map link is a search query, not the listing. A web listing for an "Osteria della Galleria" gives Piazza de' Pitti 20; not assumed until the owner confirms.
 2. **Domain** — pick one, add it as a zone on the Amico Mio Cloudflare account, uncomment `routes` in `wrangler.toml`.
 3. **Deploy** — `.github/workflows/deploy-osteria.yml` deploys on push to the default branch touching this folder (same token as Zen). Until a domain exists it deploys to `osteria-la-galleria.<account>.workers.dev`.
 4. **Photos** — the page has none yet on purpose: menu photos would fight the plaque idea. When Ash sends dish or room photos, they go in `public/img/` and the natural home is one large photo per room head, not one per dish.

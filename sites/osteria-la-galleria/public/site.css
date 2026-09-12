@@ -75,7 +75,7 @@ button { font: inherit; color: inherit; }
   background: transparent; border: 0; padding: 7px 11px; cursor: pointer;
   font-size: .72rem; font-weight: 600; letter-spacing: .14em; color: var(--muted);
 }
-.lang button[aria-pressed="true"] { background: var(--gold); color: var(--paper-ink); }
+.lang button[aria-pressed="true"] { background: var(--ink); color: var(--wall); }
 
 /* ---------- the picture rail ---------- */
 .rail {
@@ -126,6 +126,15 @@ button { font: inherit; color: inherit; }
 .hero-plaque .pl-title { font-family: var(--display); font-size: 1.15rem; margin: 10px 0 8px; letter-spacing: .01em; }
 .hero-plaque .pl-sub { font-size: .76rem; letter-spacing: .06em; text-transform: uppercase; color: var(--paper-muted); margin: 0 0 14px; line-height: 1.6; }
 .hero-plaque .pl-line { font-family: var(--serif); font-style: italic; font-size: 1.25rem; margin: 0; }
+
+/* ---------- atrio: the wine window, on the street wall ---------- */
+.atrio { position: relative; padding: clamp(64px, 10vh, 110px) var(--gutter); display: grid; grid-template-columns: minmax(180px, 260px) 1fr; gap: clamp(28px, 5vw, 72px); align-items: center; max-width: 1180px; }
+.buchetta svg { display: block; width: 100%; max-width: 240px; }
+.atrio h2 { margin: 0 0 14px; font-family: var(--display); font-weight: 400; line-height: 1.02; font-size: clamp(2rem, 4.5vw, 3.6rem); }
+.atrio-text { margin: 0; font-family: var(--serif); font-size: clamp(1.1rem, 1.6vw, 1.35rem); line-height: 1.4; max-width: 56ch; }
+.atrio-facts { margin: 18px 0 20px; font-size: .74rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.atrio .btn.ghost { border-color: var(--gold); color: var(--ink); }
+.atrio .btn.ghost:hover { background: var(--gold); color: var(--paper); }
 
 /* ---------- route bar ---------- */
 .route {
@@ -273,6 +282,8 @@ button { font: inherit; color: inherit; }
 /* ---------- responsive ---------- */
 @media (max-width: 860px) {
   .hero-row { grid-template-columns: 1fr; }
+  .atrio { grid-template-columns: 1fr; }
+  .buchetta svg { max-width: 150px; }
   .hero-plaque { max-width: 360px; }
   .work.feature { grid-column: auto; }
   .filters-inner { grid-template-columns: 1fr; }

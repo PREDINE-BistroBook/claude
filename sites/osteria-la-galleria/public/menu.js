@@ -254,12 +254,12 @@ window.ROOMS = [
 window.SITE = {
   name: "Osteria La Galleria",
   city: "Firenze",
-  address: "",          // e.g. "Via ..., 50125 Firenze" — confirm with the owner before publishing
+  address: "Piazza de' Pitti, Firenze",   // in front of Palazzo Pitti (Ash, 2026-09-12); street number still to confirm
   phone: "",            // e.g. "+39 055 000 0000"
   whatsapp: "",         // digits only, international format, e.g. "393330000000"
   email: "",
   instagram: "",        // handle without @
-  mapsUrl: "",          // Google Maps share link
+  mapsUrl: "https://www.google.com/maps/search/?api=1&query=Osteria+La+Galleria+Piazza+de'+Pitti+Firenze",   // replace with the share link of the real listing
   reviewUrl: "",        // the Google review link behind the QR sticker on the door
   hours: { it: "", en: "" },   // e.g. "Tutti i giorni 11:30 – 23:00"
   happyHour: { drinks: "Spritz · Hugo", price: 7, when: { it: "", en: "" } },

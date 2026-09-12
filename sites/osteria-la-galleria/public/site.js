@@ -6,8 +6,14 @@
   const T = {
     "skip":                { it: "Vai al menu", en: "Skip to the menu" },
     "nav.reserve":         { it: "Prenota", en: "Reserve" },
-    "hero.eyebrow":        { it: "Firenze · Cucina toscana", en: "Florence · Tuscan kitchen" },
-    "hero.plaque.medium":  { it: "Cucina toscana · Chianina IGP · Tartufo fresco · Pinsa", en: "Tuscan kitchen · Chianina IGP beef · Fresh truffle · Pinsa" },
+    "hero.eyebrow":        { it: "Firenze · Di fronte a Palazzo Pitti", en: "Florence · Opposite Palazzo Pitti" },
+    "hero.plaque.medium":  { it: "Cucina toscana · Chianina IGP · Tartufo fresco · Pinsa · Buchetta del vino", en: "Tuscan kitchen · Chianina IGP beef · Fresh truffle · Pinsa · Wine window" },
+    "atrio.eyebrow":       { it: "Prima di entrare", en: "Before you come in" },
+    "atrio.title":         { it: "La buchetta del vino", en: "The wine window" },
+    "atrio.text":          { it: "Sulla facciata c'è una buchetta: la finestrella da cui, dal Cinquecento, i fiorentini si facevano passare un bicchiere di vino senza entrare. La nostra è ancora aperta. Un bicchiere in piedi, davanti a Palazzo Pitti, e poi si comincia la visita.",
+                             en: "There is a little window in the façade: the hatch through which, since the 1500s, Florentines have been handed a glass of wine without coming in. Ours is still open. A glass standing up, in front of Palazzo Pitti, and then the visit begins." },
+    "atrio.facts":         { it: "Vino al bicchiere da 7 € · Happy hour: Spritz e Hugo 7 €", en: "Wine by the glass from €7 · Happy hour: Spritz & Hugo €7" },
+    "atrio.cta":           { it: "La cantina, sala X", en: "The cellar, room X" },
     "hero.plaque.line":    { it: "Dieci sale. Una cucina.", en: "Ten rooms. One kitchen." },
     "hero.lede":           { it: "Un menu da visitare come una galleria: dieci sale, ognuna col suo colore, ogni piatto con la sua targhetta. Scegli la lingua, spegni la luce sui piatti che non fanno per te, e pesa la tua fiorentina prima ancora di sederti.",
                              en: "A menu you visit like a gallery: ten rooms, each with its own colour, every dish with its own plaque. Pick your language, turn the light off on the dishes that aren't for you, and weigh your fiorentina before you even sit down." },
@@ -40,6 +46,7 @@
     "visit.title":         { it: "Vieni a trovarci", en: "Come and find us" },
     "visit.hours":         { it: "Orari", en: "Hours" },
     "visit.address":       { it: "Indirizzo", en: "Address" },
+    "visit.where":         { it: "Di fronte a Palazzo Pitti", en: "Opposite Palazzo Pitti" },
     "visit.phone":         { it: "Telefono", en: "Phone" },
     "visit.wa":            { it: "Scrivici su WhatsApp", en: "Message us on WhatsApp" },
     "visit.maps":          { it: "Apri in Google Maps", en: "Open in Google Maps" },
@@ -208,24 +215,27 @@
   function observeRooms() {
     if (roomObs) roomObs.disconnect();
     const root = document.documentElement;
-    const setWall = (wall, ink, id) => {
+    const setWall = (wall, ink, gold, id) => {
       root.style.setProperty("--wall", wall);
       root.style.setProperty("--ink", ink);
+      root.style.setProperty("--gold", gold);
+      root.style.setProperty("--gold-soft", "color-mix(in srgb, " + gold + " 45%, transparent)");
+      root.style.setProperty("--muted", "color-mix(in srgb, " + ink + " 64%, transparent)");
       document.querySelector('meta[name="theme-color"]').setAttribute("content", wall);
       document.querySelectorAll(".route-pill").forEach(p => p.classList.toggle("active", p.dataset.room === id));
       const pill = document.querySelector(".route-pill.active");
       if (pill) pill.scrollIntoView({ block: "nearest", inline: "center", behavior: reduced ? "auto" : "smooth" });
     };
-    const HERO = { wall: "#3E1219", ink: "#F2E8D5" };
+    const HERO = { wall: "#3E1219", ink: "#F2E8D5", gold: "#C9A55C" };
     roomObs = new IntersectionObserver(entries => {
       entries.forEach(e => {
         if (!e.isIntersecting) return;
         const el = e.target;
-        if (el.classList.contains("room")) setWall(el.dataset.wall, el.dataset.ink, el.id.replace("room-", ""));
-        else setWall(HERO.wall, HERO.ink, null);
+        if (el.dataset.wall) setWall(el.dataset.wall, el.dataset.ink, el.dataset.gold || HERO.gold, el.id.replace("room-", ""));
+        else setWall(HERO.wall, HERO.ink, HERO.gold, null);
       });
     }, { rootMargin: "-45% 0px -45% 0px", threshold: 0 });
-    document.querySelectorAll(".room, .hero, .visit").forEach(s => roomObs.observe(s));
+    document.querySelectorAll(".hero, .atrio, .room, .visit").forEach(s => roomObs.observe(s));
   }
 
 
@@ -235,7 +245,7 @@
     const hours = SITE.hours && SITE.hours[lang];
     const tel = SITE.phone ? '<a href="tel:' + esc(SITE.phone.replace(/\s+/g, "")) + '">' + esc(SITE.phone) + "</a>" : "";
     const wa = SITE.whatsapp ? '<a href="https://wa.me/' + esc(SITE.whatsapp) + '" rel="noopener">' + esc(t("visit.wa")) + "</a>" : "";
-    const addr = SITE.address ? esc(SITE.address) + (SITE.mapsUrl ? '<br><a href="' + esc(SITE.mapsUrl) + '" rel="noopener" target="_blank">' + esc(t("visit.maps")) + "</a>" : "") : "";
+    const addr = esc(t("visit.where")) + (SITE.address ? "<br>" + esc(SITE.address) : "") + (SITE.mapsUrl ? '<br><a href="' + esc(SITE.mapsUrl) + '" rel="noopener" target="_blank">' + esc(t("visit.maps")) + "</a>" : "");
     const ig = SITE.instagram ? '<a href="https://instagram.com/' + esc(SITE.instagram) + '" rel="noopener" target="_blank">@' + esc(SITE.instagram) + "</a>" : "";
     const hh = SITE.happyHour && SITE.happyHour.price ? esc(SITE.happyHour.drinks) + " · " + (lang === "it" ? SITE.happyHour.price + " €" : "€" + SITE.happyHour.price) + (SITE.happyHour.when[lang] ? "<br>" + esc(SITE.happyHour.when[lang]) : "") : "";
     document.getElementById("visit-grid").innerHTML =
