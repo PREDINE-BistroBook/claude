@@ -42,7 +42,12 @@ export default {
 
 async function route(req, env, url, ctx) {
   const p = url.pathname, m = req.method;
-  if (p === "/api/status") return json({ live: isLive(env), preview: !isLive(env) });
+  if (p === "/api/status") return json({ live: isLive(env), preview: !isLive(env), google: Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) });
+  if (p === "/api/auth/google" && m === "GET") return googleStart(env, url);
+  if (p === "/api/auth/google/callback" && m === "GET") return googleCallback(req, env, url);
+  if (p === "/api/me/checkins" && m === "GET") return myCheckins(req, env);
+  if (p === "/api/me/checkins" && m === "POST") return saveCheckin(req, env);
+  { const fb = p.match(/^\/api\/me\/bookings\/([a-z0-9]+)\/feedback$/); if (fb && m === "POST") return bookingFeedback(req, env, fb[1]); }
   if (p === "/api/checkout" && m === "POST") return checkout(req, env);
   if (p === "/api/stripe-webhook" && m === "POST") return webhook(req, env);
 
@@ -123,20 +128,7 @@ async function requestLink(req, env) {
   if (!user) {
     const name = clean(b.name, 80);
     if (!name) return json({ error: "Tell us your name so we know who's coming.", needName: true }, 400);
-    let referrer = null;
-    if (b.ref) referrer = await env.DB.prepare("SELECT id, name FROM users WHERE referral_code = ?").bind(clean(b.ref, 12).toUpperCase()).first();
-    const id = randomId();
-    const city = CITY_KEYS.includes(b.city) ? b.city : null;
-    await env.DB.prepare("INSERT INTO users (id, email, name, city, referral_code, referred_by) VALUES (?,?,?,?,?,?)")
-      .bind(id, email, name, city, referralCode(), referrer?.id || null).run();
-    // guest bookings made earlier with this email now belong to the account
-    await env.DB.prepare("UPDATE bookings SET user_id = ? WHERE user_id IS NULL AND email = ?").bind(id, email).run();
-    if (referrer) {
-      const s = await settings(env);
-      await env.DB.prepare("INSERT INTO credits (id, user_id, kind, pct, reason) VALUES (?,?,?,?,?)")
-        .bind(randomId(), id, "referral", s.referral_pct, `Invited by ${referrer.name}`).run();
-    }
-    user = await env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(id).first();
+    user = await createUser(env, { email, name, ref: b.ref, city: b.city, lang: b.lang });
     created = true;
   }
   const token = randomId(24);
@@ -150,16 +142,88 @@ async function requestLink(req, env) {
   return json({ ok: true, created, ...(env.DEV_MAGIC_LINK === "1" ? { link } : {}) });
 }
 
+// New account: referral credit for the invitee, adopt guest bookings made with the same email.
+async function createUser(env, { email, name, ref, city, lang, google_sub, photo }) {
+  let referrer = null;
+  if (ref) referrer = await env.DB.prepare("SELECT id, name FROM users WHERE referral_code = ?").bind(clean(ref, 12).toUpperCase()).first();
+  const id = randomId();
+  await env.DB.prepare("INSERT INTO users (id, email, name, city, referral_code, referred_by, lang, google_sub, photo) VALUES (?,?,?,?,?,?,?,?,?)")
+    .bind(id, email, name, CITY_KEYS.includes(city) ? city : null, referralCode(), referrer?.id || null, ["en", "it", "ar"].includes(lang) ? lang : null, google_sub || null, photo || null).run();
+  await env.DB.prepare("UPDATE bookings SET user_id = ? WHERE user_id IS NULL AND email = ?").bind(id, email).run();
+  if (referrer) {
+    const s = await settings(env);
+    await env.DB.prepare("INSERT INTO credits (id, user_id, kind, pct, reason) VALUES (?,?,?,?,?)").bind(randomId(), id, "referral", s.referral_pct, `Invited by ${referrer.name}`).run();
+  }
+  return env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(id).first();
+}
+async function sessionCookieFor(env, userId) {
+  await env.DB.prepare("UPDATE users SET last_login = ? WHERE id = ?").bind(now(), userId).run();
+  return setCookie(USER_COOKIE, await signPayload(env.SESSION_SECRET, { uid: userId, exp: Math.floor(Date.now() / 1000) + 30 * 86400 }), 30 * 86400);
+}
+
+// ---------- Google sign-in (OAuth 2.0 authorization code, server side) ----------
+const GOOGLE_COOKIE = "zen_g";
+async function googleStart(env, url) {
+  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) return json({ error: "Google sign-in isn't set up yet." }, 404);
+  const state = randomId(16);
+  const ref = clean(url.searchParams.get("ref"), 12), lang = clean(url.searchParams.get("lang"), 2);
+  const cookie = await signPayload(env.SESSION_SECRET, { state, ref, lang, exp: Math.floor(Date.now() / 1000) + 600 });
+  const q = new URLSearchParams({ client_id: env.GOOGLE_CLIENT_ID, redirect_uri: `${env.SITE_URL}/api/auth/google/callback`, response_type: "code", scope: "openid email profile", state, prompt: "select_account" });
+  return new Response(null, { status: 302, headers: { location: `https://accounts.google.com/o/oauth2/v2/auth?${q}`, "set-cookie": setCookie(GOOGLE_COOKIE, cookie, 600) } });
+}
+async function googleCallback(req, env, url) {
+  const fail = (why) => { console.error("google sign-in failed:", why); return new Response(null, { status: 302, headers: { location: `${env.SITE_URL}/account.html?error=google`, "set-cookie": clearCookie(GOOGLE_COOKIE) } }); };
+  const st = await verifyPayload(env.SESSION_SECRET, getCookie(req, GOOGLE_COOKIE));
+  const code = url.searchParams.get("code");
+  if (!st || !code || url.searchParams.get("state") !== st.state) return fail("state mismatch");
+  const r = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ code, client_id: env.GOOGLE_CLIENT_ID, client_secret: env.GOOGLE_CLIENT_SECRET, redirect_uri: `${env.SITE_URL}/api/auth/google/callback`, grant_type: "authorization_code" }) });
+  const tok = await r.json();
+  if (!r.ok || !tok.id_token) return fail(tok.error_description || "token exchange");
+  let claims; try { claims = JSON.parse(atob(tok.id_token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))); } catch { return fail("bad id_token"); }
+  // the token came straight from Google over TLS in exchange for our client secret, so its claims are trustworthy
+  if (claims.aud !== env.GOOGLE_CLIENT_ID || !claims.email || claims.email_verified !== true) return fail("claims");
+  const email = normEmail(claims.email);
+  let user = await env.DB.prepare("SELECT * FROM users WHERE google_sub = ? OR email = ?").bind(claims.sub, email).first();
+  if (!user) user = await createUser(env, { email, name: clean(claims.name, 80) || email.split("@")[0], ref: st.ref, lang: st.lang, google_sub: claims.sub });
+  else if (!user.google_sub) await env.DB.prepare("UPDATE users SET google_sub = ? WHERE id = ?").bind(claims.sub, user.id).run();
+  const headers = new Headers({ location: `${env.SITE_URL}/account.html` });
+  headers.append("set-cookie", await sessionCookieFor(env, user.id)); headers.append("set-cookie", clearCookie(GOOGLE_COOKIE));
+  return new Response(null, { status: 302, headers });
+}
+
+// ---------- check-ins (how the client feels between sessions) + session feedback ----------
+async function myCheckins(req, env) {
+  const u = await currentUser(req, env); if (!u) return json({ error: "Sign in first." }, 401);
+  const r = await env.DB.prepare("SELECT id, date, pain, energy, sleep, note FROM checkins WHERE user_id = ? ORDER BY date DESC LIMIT 90").bind(u.id).all();
+  return json({ checkins: r.results.reverse() });
+}
+async function saveCheckin(req, env) {
+  const u = await currentUser(req, env); if (!u) return json({ error: "Sign in first." }, 401);
+  const b = await body(req);
+  const date = isDate(b.date || "") ? b.date : new Date().toISOString().slice(0, 10);
+  const num = (v, lo, hi) => (Number.isInteger(v) && v >= lo && v <= hi ? v : null);
+  const pain = num(b.pain, 0, 10), energy = num(b.energy, 1, 5), sleep = num(b.sleep, 1, 5);
+  if (pain === null) return json({ error: "Pick a pain level from 0 to 10." }, 400);
+  await env.DB.prepare("DELETE FROM checkins WHERE user_id = ? AND date = ?").bind(u.id, date).run();
+  await env.DB.prepare("INSERT INTO checkins (id, user_id, date, pain, energy, sleep, note) VALUES (?,?,?,?,?,?,?)").bind(randomId(), u.id, date, pain, energy, sleep, clean(b.note, 300)).run();
+  return myCheckins(req, env);
+}
+async function bookingFeedback(req, env, id) {
+  const u = await currentUser(req, env); if (!u) return json({ error: "Sign in first." }, 401);
+  const b = await body(req);
+  const rating = Number.isInteger(b.rating) && b.rating >= 1 && b.rating <= 5 ? b.rating : null;
+  if (!rating) return json({ error: "Pick 1 to 5 stars." }, 400);
+  const r = await env.DB.prepare("UPDATE bookings SET rating = ?, feedback = ? WHERE id = ? AND user_id = ? AND status = 'done'").bind(rating, clean(b.feedback, 500), id, u.id).run();
+  if (!r.meta.changes) return json({ error: "You can rate a session once it's marked as done." }, 400);
+  return json({ ok: true });
+}
+
 async function verifyLink(req, env, url) {
   const t = clean(url.searchParams.get("t"), 64);
   const row = await env.DB.prepare("SELECT * FROM login_tokens WHERE token = ? AND used = 0 AND expires_at > ?").bind(t, Math.floor(Date.now() / 1000)).first();
   if (!row) return Response.redirect(`${env.SITE_URL}/account.html?expired=1`, 302);
-  await env.DB.batch([
-    env.DB.prepare("UPDATE login_tokens SET used = 1 WHERE token = ?").bind(t),
-    env.DB.prepare("UPDATE users SET last_login = ? WHERE id = ?").bind(now(), row.user_id),
-  ]);
-  const cookie = await signPayload(env.SESSION_SECRET, { uid: row.user_id, exp: Math.floor(Date.now() / 1000) + 30 * 86400 });
-  return new Response(null, { status: 302, headers: { location: `${env.SITE_URL}/account.html`, "set-cookie": setCookie(USER_COOKIE, cookie, 30 * 86400) } });
+  await env.DB.prepare("UPDATE login_tokens SET used = 1 WHERE token = ?").bind(t).run();
+  return new Response(null, { status: 302, headers: { location: `${env.SITE_URL}/account.html`, "set-cookie": await sessionCookieFor(env, row.user_id) } });
 }
 
 async function me(req, env) {
@@ -188,15 +252,16 @@ async function updateMe(req, env) {
   const country = ["EG", "IT", "other"].includes(b.country) ? b.country : u.country;
   const nearest = CITY_KEYS.includes(b.nearest_city) ? b.nearest_city : b.nearest_city === null ? null : u.nearest_city;
   const intake = b.intake === undefined ? u.intake : cleanIntake(b.intake);
-  await env.DB.prepare("UPDATE users SET name = ?, phone = ?, city = ?, notes = ?, birthday = ?, photo = ?, country = ?, city_text = ?, nearest_city = ?, intake = ? WHERE id = ?")
-    .bind(clean(b.name, 80) || u.name, b.phone === undefined ? u.phone : clean(b.phone, 40), CITY_KEYS.includes(b.city) ? b.city : (nearest || u.city), b.notes === undefined ? u.notes : clean(b.notes, 1000), b.birthday === undefined ? u.birthday : (isDate(b.birthday || "") ? b.birthday : null), photo, country, b.city_text === undefined ? u.city_text : clean(b.city_text, 80), nearest, intake, u.id).run();
+  const lang = ["en", "it", "ar"].includes(b.lang) ? b.lang : u.lang;
+  await env.DB.prepare("UPDATE users SET name = ?, phone = ?, city = ?, notes = ?, birthday = ?, photo = ?, country = ?, city_text = ?, nearest_city = ?, intake = ?, lang = ? WHERE id = ?")
+    .bind(clean(b.name, 80) || u.name, b.phone === undefined ? u.phone : clean(b.phone, 40), CITY_KEYS.includes(b.city) ? b.city : (nearest || u.city), b.notes === undefined ? u.notes : clean(b.notes, 1000), b.birthday === undefined ? u.birthday : (isDate(b.birthday || "") ? b.birthday : null), photo, country, b.city_text === undefined ? u.city_text : clean(b.city_text, 80), nearest, intake, lang, u.id).run();
   return json(await userBundle(env, await env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(u.id).first()));
 }
 
 async function myBookings(req, env) {
   const u = await currentUser(req, env);
   if (!u) return json({ error: "Sign in first." }, 401);
-  const r = await env.DB.prepare("SELECT id, city, service_name, date, slot, amount, list_amount, currency, discount_kind, status, source, note, created_at FROM bookings WHERE user_id = ? AND status != 'pending' ORDER BY date DESC, created_at DESC").bind(u.id).all();
+  const r = await env.DB.prepare("SELECT id, city, service_name, date, slot, amount, list_amount, currency, discount_kind, status, source, created_at, rating, feedback, therapist_note FROM bookings WHERE user_id = ? AND status != 'pending' ORDER BY date DESC, created_at DESC").bind(u.id).all();
   return json({ bookings: r.results });
 }
 
@@ -393,7 +458,7 @@ async function adminBookings(env, admin, url) {
   const city = scope(admin, url.searchParams.get("city"));
   const w = cityWhere(city);
   const status = clean(url.searchParams.get("status"), 20), from = clean(url.searchParams.get("from"), 10), to = clean(url.searchParams.get("to"), 10), qs = clean(url.searchParams.get("q"), 60);
-  let sql = `SELECT b.id, b.user_id, b.name, b.email, b.phone, b.city, b.service_name, b.date, b.slot, b.amount, b.list_amount, b.currency, b.discount_kind, b.platform_fee, b.status, b.source, b.note, b.created_at, u.intake AS user_intake, u.notes AS user_notes, u.nearest_city AS user_nearest
+  let sql = `SELECT b.id, b.user_id, b.name, b.email, b.phone, b.city, b.service_name, b.date, b.slot, b.amount, b.list_amount, b.currency, b.discount_kind, b.platform_fee, b.status, b.source, b.note, b.created_at, b.rating, b.feedback, b.therapist_note, u.intake AS user_intake, u.notes AS user_notes, u.nearest_city AS user_nearest, u.lang AS user_lang
     FROM bookings b LEFT JOIN users u ON u.id = b.user_id WHERE b.status != 'pending'${w.sql.replace(" city = ?", " b.city = ?")}`;
   const args = [...w.args];
   if (status) { sql += " AND b.status = ?"; args.push(status); }
@@ -430,8 +495,9 @@ async function adminUpdateBooking(req, env, admin, id) {
   const status = ["paid", "confirmed", "done", "cancelled", "no_show"].includes(b.status) ? b.status : null;
   const slot = b.slot !== undefined ? clean(b.slot, 20) : bk.slot;
   const note = b.note !== undefined ? clean(b.note, 500) : bk.note;
-  await env.DB.prepare("UPDATE bookings SET status = ?, slot = ?, note = ?, done_at = CASE WHEN ? = 'done' THEN COALESCE(done_at, ?) ELSE done_at END WHERE id = ?")
-    .bind(status || bk.status, slot, note, status || bk.status, now(), id).run();
+  const tnote = b.therapist_note !== undefined ? clean(b.therapist_note, 800) : bk.therapist_note;
+  await env.DB.prepare("UPDATE bookings SET status = ?, slot = ?, note = ?, therapist_note = ?, done_at = CASE WHEN ? = 'done' THEN COALESCE(done_at, ?) ELSE done_at END WHERE id = ?")
+    .bind(status || bk.status, slot, note, tnote, status || bk.status, now(), id).run();
   if (status === "done" && bk.status !== "done") await maybeRewardLoyalty(env, bk.user_id);
   if (status === "cancelled" && bk.credit_id) await env.DB.prepare("UPDATE credits SET status = 'available', booking_id = NULL, used_at = NULL WHERE id = ?").bind(bk.credit_id).run();
   return json({ ok: true });
@@ -457,17 +523,18 @@ async function adminClients(env, admin, url) {
 }
 
 async function adminClient(env, admin, id) {
-  const u = await env.DB.prepare("SELECT id, name, email, phone, city, photo, notes, birthday, referral_code, referred_by, created_at, last_login, country, city_text, nearest_city, intake FROM users WHERE id = ?").bind(id).first();
+  const u = await env.DB.prepare("SELECT id, name, email, phone, city, photo, notes, birthday, referral_code, referred_by, created_at, last_login, country, city_text, nearest_city, intake, lang, google_sub FROM users WHERE id = ?").bind(id).first();
   if (!u) return json({ error: "Not found" }, 404);
   const city = admin.role === "all" ? null : admin.role;
   const w = cityWhere(city);
-  const [bookings, credits, referrer] = await Promise.all([
-    env.DB.prepare(`SELECT id, city, service_name, date, slot, amount, currency, discount_kind, status, source FROM bookings WHERE user_id = ? AND status != 'pending'${w.sql} ORDER BY date DESC`).bind(id, ...w.args).all(),
+  const [bookings, credits, referrer, checkins] = await Promise.all([
+    env.DB.prepare(`SELECT id, city, service_name, date, slot, amount, currency, discount_kind, status, source, rating, feedback, therapist_note FROM bookings WHERE user_id = ? AND status != 'pending'${w.sql} ORDER BY date DESC`).bind(id, ...w.args).all(),
     env.DB.prepare("SELECT kind, pct, status, reason, created_at FROM credits WHERE user_id = ? ORDER BY created_at DESC").bind(id).all(),
     u.referred_by ? env.DB.prepare("SELECT name FROM users WHERE id = ?").bind(u.referred_by).first() : null,
+    env.DB.prepare("SELECT date, pain, energy, sleep, note FROM checkins WHERE user_id = ? ORDER BY date DESC LIMIT 12").bind(id).all(),
   ]);
   if (city && bookings.results.length === 0) return json({ error: "Not found" }, 404); // no sessions in this admin's city: not theirs to see
-  return json({ client: { ...u, intake: parseIntake(u.intake), flags: healthFlags(u.intake), referrer_name: referrer?.name || null }, bookings: bookings.results, credits: credits.results });
+  return json({ client: { ...u, intake: parseIntake(u.intake), flags: healthFlags(u.intake), referrer_name: referrer?.name || null }, bookings: bookings.results, credits: credits.results, checkins: checkins.results });
 }
 
 async function adminSaveSettings(req, env, admin) {

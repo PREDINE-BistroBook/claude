@@ -114,7 +114,7 @@
       <details class="help"><summary>How bookings work</summary>
         <ol>
           <li>A client books online: it appears as <b>Reserved</b>. Message them on WhatsApp, agree the hour, then click <b>Confirm</b> and type the hour in the booking (click the row).</li>
-          <li>After the session, click <b>Done</b>. This is what counts the session for their free-session reward, so don't skip it.</li>
+          <li>After the session, click <b>Done</b>. This is what counts the session for their free-session reward, so don't skip it. Then open the row and write a <b>note to the client</b>: what you did, what to do at home. They see it in their account, and they can rate the session back.</li>
           <li>Didn't show up? <b>Missed</b>. Cancelled in time? <b>Cancel</b> (their reward, if they used one, is given back).</li>
           <li>Walk-ins, WhatsApp bookings and cash: <b>Add a booking</b>. If the email matches an account, it counts for their rewards too.</li>
           <li>A red <b>!</b> next to a name means the client told us about a health condition. Open the row and read it before the session.</li>
@@ -337,13 +337,15 @@ function openBooking(b) {
     ${b.flags?.length ? `<div class="help" style="border-color:var(--bad);background:color-mix(in srgb,var(--bad) 7%,var(--ground-3))"><b>Health: ${b.flags.map((f) => G.label("health", f)).join(", ")}.</b> Adapt the session or ask for a doctor's okay first. Details in the client's notes below.</div>` : ""}
     ${b.user_id ? `<p class="eyebrow">About the client</p><div class="intake-grid">${G.bodyMap(b.pain || [], false)}<div><div class="chips">${(b.goals || []).map((g) => `<span class="chip">${G.label("goals", g)}</span>`).join("")}${(b.health || []).filter((h) => h !== "none").map((h) => `<span class="chip">${G.label("health", h)}</span>`).join("")}${b.experience ? `<span class="chip">${G.label("experience", b.experience)}</span>` : ""}</div>${b.pain?.length ? `<p class="tiny" style="margin-top:8px">Focus: ${b.pain.map((p) => G.label("pain", p)).join(", ")}</p>` : `<p class="tiny" style="margin-top:8px">No focus areas given.</p>`}${b.user_notes ? `<p class="mini" style="margin-top:8px"><b>Client's notes:</b> ${esc(b.user_notes)}</p>` : ""}</div></div>` : `<p class="tiny">Booked without an account, so no questionnaire. Ask on WhatsApp about injuries, medication and pregnancy before the session.</p>`}
     ${(() => { const k = G.serviceKey(b.service_name); return b.status === "confirmed" || b.status === "paid" ? `<details class="help"><summary>What to remind them before a ${G.SERVICE_LABEL[k].toLowerCase()} session</summary>${G.list("before", k)}</details>` : ""; })()}
-    <div class="field"><label for="dr-note">Team note <span class="tiny">(only the team sees this)</span></label><textarea id="dr-note">${esc(b.note || "")}</textarea></div>
-    <div class="row" style="margin-top:10px"><button class="btn small" id="dr-save-note">Save note</button><span class="ok" id="dr-ok" hidden>Saved</span></div>
+    ${b.rating ? `<div class="help" style="background:var(--ground-3)"><b>Client's rating: ${"★".repeat(b.rating)}${"☆".repeat(5 - b.rating)}</b>${b.feedback ? `<span>“${esc(b.feedback)}”</span>` : ""}</div>` : ""}
+    <div class="field"><label for="dr-tnote">Note to the client <span class="tiny">(they see this in their account: what you did, what to do at home)</span></label><textarea id="dr-tnote">${esc(b.therapist_note || "")}</textarea></div>
+    <div class="field" style="margin-top:10px"><label for="dr-note">Team note <span class="tiny">(only the team sees this)</span></label><textarea id="dr-note">${esc(b.note || "")}</textarea></div>
+    <div class="row" style="margin-top:10px"><button class="btn small" id="dr-save-note">Save notes</button><span class="ok" id="dr-ok" hidden>Saved</span></div>
     <div class="actions" style="margin-top:18px">${actionsFor(b)}</div>`;
   d.classList.add("open"); d.setAttribute("aria-hidden", "false");
   $("#dr-close").onclick = closeDrawer;
   $("#dr-save-slot").onclick = async () => { await ZenAPI("PATCH", "/api/admin/bookings/" + b.id, { slot: $("#dr-slot").value }); $("#dr-ok").hidden = false; loadBookings(); };
-  $("#dr-save-note").onclick = async () => { await ZenAPI("PATCH", "/api/admin/bookings/" + b.id, { note: $("#dr-note").value }); $("#dr-ok").hidden = false; };
+  $("#dr-save-note").onclick = async () => { await ZenAPI("PATCH", "/api/admin/bookings/" + b.id, { note: $("#dr-note").value, therapist_note: $("#dr-tnote").value }); $("#dr-ok").hidden = false; };
   d.querySelectorAll("button[data-act]").forEach((btn) => (btn.onclick = async () => { await setStatus(b.id, btn.dataset.act); closeDrawer(); }));
 }
 function closeDrawer() { const d = $("#drawer"); d.classList.remove("open"); d.setAttribute("aria-hidden", "true"); }
@@ -376,7 +378,7 @@ async function loadClients() {
 }
 const initials = (n) => (n || "?").split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 async function openClient(id) {
-  const { client: c, bookings, credits } = await ZenAPI("GET", "/api/admin/clients/" + id);
+  const { client: c, bookings, credits, checkins = [] } = await ZenAPI("GET", "/api/admin/clients/" + id);
   const d = $("#drawer");
   d.innerHTML = `<button class="btn small ghost close" id="dr-close">Close</button><div class="row" style="gap:14px"><span class="avatar">${c.photo ? `<img src="${c.photo}" alt="">` : initials(c.name)}</span><div><h2>${esc(c.name)}</h2><span class="tiny">${c.city ? CITY_NAME[c.city] + " · " : ""}with Zen since ${esc((c.created_at || "").slice(0, 10))}</span></div></div>
     <dl class="kv"><dt>WhatsApp</dt><dd>${esc(c.phone || "—")}${c.phone ? ` · <a href="https://wa.me/${c.phone.replace(/\D/g, "")}" target="_blank" rel="noopener">message</a>` : ""}</dd><dt>Email</dt><dd>${esc(c.email)}</dd><dt>Birthday</dt><dd>${esc(c.birthday || "—")}</dd><dt>Invited by</dt><dd>${esc(c.referrer_name || "—")}</dd><dt>Invite code</dt><dd class="num">${esc(c.referral_code || "")}</dd></dl>
@@ -390,8 +392,9 @@ async function openClient(id) {
       <div><b>Contact:</b> ${c.intake.contact ? G.label("contact", c.intake.contact) : "—"} · prefers ${c.intake.time_pref ? G.label("time", c.intake.time_pref).toLowerCase() : "any time"}</div>
     </div></div>` : `<p class="tiny" style="margin:10px 0">Hasn't filled in the questionnaire yet. Ask about injuries, medication and pregnancy on WhatsApp before the first session.</p>`}
     ${c.notes ? `<div class="card" style="padding:14px;margin-bottom:14px"><p class="eyebrow">Notes from the client</p><p style="margin-top:6px">${esc(c.notes)}</p></div>` : ""}
+    ${checkins.length ? `<p class="eyebrow">How they've been feeling</p><div class="table-wrap" style="margin:6px 0 16px"><table><tbody>${checkins.map((k) => `<tr><td class="num">${fmtDate(k.date)}</td><td class="num">pain ${k.pain}/10</td><td class="tiny">energy ${k.energy ?? "–"} · sleep ${k.sleep ?? "–"}</td><td class="tiny">${esc(k.note || "")}</td></tr>`).join("")}</tbody></table></div>` : ""}
     <p class="eyebrow">Rewards</p><ul class="mini" style="margin:6px 0 16px;padding-left:18px">${credits.length ? credits.map((x) => `<li>${x.pct === 100 ? "Free session" : x.pct + "% off"} · ${esc(x.reason)} · ${x.status}</li>`).join("") : "<li>None yet</li>"}</ul>
-    <p class="eyebrow">Sessions${isOwner() ? "" : " in " + CITY_NAME[A.role]}</p><div class="table-wrap" style="margin-top:6px"><table><tbody>${bookings.map((b) => `<tr><td class="num">${fmtDate(b.date)}</td><td>${esc(b.service_name.split(" · ")[0])}${isOwner() ? " · " + CITY_NAME[b.city] : ""}</td><td class="num">${b.amount === 0 ? "Free" : money(b.amount, b.currency)}</td><td><span class="status ${b.status}">${STATUS[b.status]}</span></td></tr>`).join("") || `<tr><td class="empty">No sessions</td></tr>`}</tbody></table></div>`;
+    <p class="eyebrow">Sessions${isOwner() ? "" : " in " + CITY_NAME[A.role]}</p><div class="table-wrap" style="margin-top:6px"><table><tbody>${bookings.map((b) => `<tr><td class="num">${fmtDate(b.date)}</td><td>${esc(b.service_name.split(" · ")[0])}${isOwner() ? " · " + CITY_NAME[b.city] : ""}${b.rating ? `<div class="tiny">${"★".repeat(b.rating)}${b.feedback ? " “" + esc(b.feedback) + "”" : ""}</div>` : ""}</td><td class="num">${b.amount === 0 ? "Free" : money(b.amount, b.currency)}</td><td><span class="status ${b.status}">${STATUS[b.status]}</span></td></tr>`).join("") || `<tr><td class="empty">No sessions</td></tr>`}</tbody></table></div>`;
   d.classList.add("open"); d.setAttribute("aria-hidden", "false"); $("#dr-close").onclick = closeDrawer;
 }
 let tc; $("#c-q").addEventListener("input", () => { clearTimeout(tc); tc = setTimeout(loadClients, 250); });

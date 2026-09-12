@@ -125,3 +125,14 @@ dialog .inner{padding:26px;display:grid;gap:14px}
 .banner{padding:8px var(--gutter);background:var(--ink);color:var(--ground);font-size:.8rem;text-align:center}
 .empty{padding:36px;text-align:center;color:var(--ink-soft)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* language switch + RTL + Arabic */
+.lang-switch{display:inline-flex;border:1.5px solid var(--line);border-radius:999px;overflow:hidden;background:var(--ground-3)}
+.lang-switch button{background:none;border:0;padding:6px 10px;font-size:.78rem;font-weight:500;color:var(--ink-soft);cursor:pointer;font-family:var(--body)}
+.lang-switch button[aria-pressed="true"]{background:var(--ink);color:var(--ground)}
+[lang="ar"] body,[lang="ar"] h1,[lang="ar"] h2,[lang="ar"] h3,[lang="ar"] .btn,[lang="ar"] input,[lang="ar"] select,[lang="ar"] textarea,[lang="ar"] .eyebrow,[lang="ar"] .badge,[lang="ar"] th,[lang="ar"] legend{font-family:"Cairo","Noto Kufi Arabic","Segoe UI",system-ui,sans-serif;letter-spacing:0}
+[lang="ar"] .eyebrow,[lang="ar"] th,[lang="ar"] .badge,[lang="ar"] legend{letter-spacing:0;text-transform:none;font-size:.78rem}
+[lang="ar"] h1,[lang="ar"] h2{font-weight:600}
+[dir="rtl"] .drawer{inset:0 auto 0 0;border-left:0;border-right:1px solid var(--line);transform:translateX(-100%)} [dir="rtl"] .drawer.open{transform:none}
+[dir="rtl"] .drawer .close{right:auto;left:16px}
+[dir="rtl"] .kv{direction:rtl} [dir="rtl"] th,[dir="rtl"] td{text-align:right}

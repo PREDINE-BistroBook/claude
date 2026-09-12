@@ -10,6 +10,7 @@ name: Deploy Zen Recovery
 #   RESEND_API_KEY            sending key for booking + sign-in emails
 #   ADMIN_BOOTSTRAP_PASSWORD  first owner login (only honoured while no admin exists)
 #   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET   optional until Stripe Connect is set up
+#   GOOGLE_CLIENT_SECRET      optional; pairs with GOOGLE_CLIENT_ID in wrangler.toml for "Continue with Google"
 # SESSION_SECRET is generated on the first run and kept as a Worker secret.
 
 on:
@@ -73,6 +74,7 @@ jobs:
           ADMIN_BOOTSTRAP_PASSWORD: ${{ secrets.ADMIN_BOOTSTRAP_PASSWORD }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           ADMIN_BOOTSTRAP_EMAIL: fetta.amore.business@gmail.com
         run: |
           put() { if [ -n "${!1:-}" ]; then printf '%s' "${!1}" | wrangler secret put "$1"; else echo "  (skip $1 — secret not set)"; fi; }
@@ -81,6 +83,7 @@ jobs:
           put ADMIN_BOOTSTRAP_PASSWORD
           put STRIPE_SECRET_KEY
           put STRIPE_WEBHOOK_SECRET
+          put GOOGLE_CLIENT_SECRET
           if wrangler secret list | grep -q '"SESSION_SECRET"'; then echo "  SESSION_SECRET already set"; else
             openssl rand -hex 32 | tr -d '\n' | wrangler secret put SESSION_SECRET; fi
 

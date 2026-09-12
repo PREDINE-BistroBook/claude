@@ -52,6 +52,7 @@
       bookings.push({ id: "b" + bid++, user_id: u.id, name: u.name, email: u.email, phone: u.phone, city, service_id: svc[0], service_name: svc[1], date: iso(d), slot: pick(["morning", "afternoon", "evening", "10:30", "17:00"]), note: "", list_amount: svc[2], amount, currency: CITY[city].currency, discount_kind: disc, platform_fee: Math.round(amount * .02), status, source: rnd() < .15 ? "manual" : "web", created_at: iso(d) + " 09:12:00" });
     }
   }
+  bookings.forEach((b, i) => { if (b.status === "done" && i % 4 === 0) { b.therapist_note = "Worked the upper back and right shoulder. At home: doorway stretch morning and evening, and no heavy pressing this week."; } if (b.status === "done" && i % 3 === 0) { b.rating = 4 + (i % 2); b.feedback = i % 2 ? "Slept like a baby." : ""; } });
   bookings.sort((a, b) => (a.date < b.date ? 1 : -1));
   const credits = [];
   users.forEach((u, i) => { if (i % 4 === 1) credits.push({ id: "c" + i, user_id: u.id, kind: "referral", pct: 40, status: "available", reason: "Invited by " + NAMES[(i + 3) % NAMES.length], created_at: iso(today) }); if (i % 9 === 2) credits.push({ id: "cl" + i, user_id: u.id, kind: "loyalty", pct: 100, status: "available", reason: "Session 10 — every 10th is free", created_at: iso(today) }); });
@@ -77,7 +78,11 @@
     handle(method, path, body) {
       const url = new URL(path, location.origin); path = url.pathname; const qp = url.searchParams;
       // ----- client -----
-      if (path === "/api/status") return { live: false, preview: true, demo: true };
+      if (path === "/api/status") return { live: false, preview: true, google: false, demo: true };
+      if (path === "/api/me/checkins") { const u = users.find((x) => x.id === S.user); if (!u) err("Sign in first.", 401); u.checkins ||= [{ date: iso(new Date(today - 21 * 86400e3)), pain: 7, energy: 2, sleep: 2, note: "" }, { date: iso(new Date(today - 14 * 86400e3)), pain: 5, energy: 3, sleep: 3, note: "after first session" }, { date: iso(new Date(today - 7 * 86400e3)), pain: 4, energy: 3, sleep: 4, note: "" }];
+        if (method === "POST") { const d = iso(today); u.checkins = u.checkins.filter((c) => c.date !== d); u.checkins.push({ date: d, pain: body.pain, energy: body.energy, sleep: body.sleep, note: body.note || "" }); u.checkins.sort((a, b) => (a.date > b.date ? 1 : -1)); }
+        return { checkins: u.checkins }; }
+      { const fb = path.match(/^\/api\/me\/bookings\/(\w+)\/feedback$/); if (fb) { const b = bookings.find((x) => x.id === fb[1] && x.user_id === S.user); if (!b || b.status !== "done") err("You can rate a session once it's marked as done."); b.rating = body.rating; b.feedback = body.feedback || ""; return { ok: true }; } }
       if (path === "/api/auth/request-link") { if (!body.email) err("That email doesn't look right."); if (!body.name && !users.find((u) => u.email === body.email)) err("Tell us your name so we know who's coming."); return { ok: true, demo: true }; }
       if (path === "/api/auth/demo-login") { if (body.fresh) { const u = users.find((x) => !x.intake) || users[4]; u.intake = null; S.user = u.id; return bundle(u); } S.user = "u4"; return bundle(users[3]); }
       if (path === "/api/auth/logout") { S.user = null; return {}; }
@@ -123,7 +128,7 @@
           return { ok: true };
         }
         let mm = path.match(/^\/api\/admin\/bookings\/(\w+)$/);
-        if (mm && method === "PATCH") { const b = bookings.find((x) => x.id === mm[1] && inScope(x)); if (!b) err("Not found", 404); if (body.status) b.status = body.status; if (body.slot !== undefined) b.slot = body.slot; if (body.note !== undefined) b.note = body.note; return { ok: true }; }
+        if (mm && method === "PATCH") { const b = bookings.find((x) => x.id === mm[1] && inScope(x)); if (!b) err("Not found", 404); if (body.status) b.status = body.status; if (body.slot !== undefined) b.slot = body.slot; if (body.note !== undefined) b.note = body.note; if (body.therapist_note !== undefined) b.therapist_note = body.therapist_note; return { ok: true }; }
         if (path === "/api/admin/clients") {
           const q = (qp.get("q") || "").toLowerCase();
           const list = users.filter((u) => (!city || bookings.some((b) => b.user_id === u.id && b.city === city)) && (!q || (u.name + u.email + u.phone).toLowerCase().includes(q))).map((u) => { const mine = bookings.filter((b) => b.user_id === u.id && live(b) && inScope(b)); return { ...u, referrer_name: users.find((x) => x.id === u.referred_by)?.name || null, sessions: mine.length, done: mine.filter((b) => b.status === "done").length, last_visit: mine[0]?.date || null, credits: credits.filter((c) => c.user_id === u.id && c.status === "available").length }; }).sort((x, y) => ((y.last_visit || "") > (x.last_visit || "") ? 1 : -1));
@@ -132,7 +137,7 @@
           return { clients: list, city };
         }
         mm = path.match(/^\/api\/admin\/clients\/(\w+)$/);
-        if (mm) { const u = users.find((x) => x.id === mm[1]); const bl = bookings.filter((b) => b.user_id === u?.id && inScope(b)); if (!u || (city && !bl.length)) err("Not found", 404); return { client: { ...u, flags: (u.intake?.health || []).filter((h) => ["pregnant", "anticoagulant", "bleeding", "heart", "diabetes", "skin", "surgery"].includes(h)), referrer_name: users.find((x) => x.id === u.referred_by)?.name || null }, bookings: bl, credits: credits.filter((c) => c.user_id === u.id) }; }
+        if (mm) { const u = users.find((x) => x.id === mm[1]); const bl = bookings.filter((b) => b.user_id === u?.id && inScope(b)); if (!u || (city && !bl.length)) err("Not found", 404); return { checkins: (u.checkins || []).slice().reverse(), client: { ...u, flags: (u.intake?.health || []).filter((h) => ["pregnant", "anticoagulant", "bleeding", "heart", "diabetes", "skin", "surgery"].includes(h)), referrer_name: users.find((x) => x.id === u.referred_by)?.name || null }, bookings: bl, credits: credits.filter((c) => c.user_id === u.id) }; }
         if (path === "/api/admin/settings") { if (method === "PUT") { if (a.role !== "all") err("Only the owner can change this.", 403); settings.loyalty_every = Number(body.loyalty_every) || 10; settings.referral_pct = Number(body.referral_pct) || 40; } return settings; }
         if (path === "/api/admin/admins" && method === "GET") { if (a.role !== "all") err("Only the owner can see this.", 403); return { admins }; }
         if (path === "/api/admin/admins" && method === "POST") { if (a.role !== "all") err("Only the owner can add admins.", 403); if (!body.email || !body.name || (body.password || "").length < 10) err("Name, email, role and a password of at least 10 characters."); admins.push({ id: "a" + (admins.length + 1), email: body.email, name: body.name, role: body.role, created_at: iso(today), last_login: null }); return { ok: true }; }

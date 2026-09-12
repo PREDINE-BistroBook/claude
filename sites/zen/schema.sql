@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS users (
   city_text     TEXT,                      -- where they live, as typed
   nearest_city  TEXT,                      -- recommended centre: cairo | dahab | florence
   intake        TEXT,                      -- JSON: goals, pain areas, activity, experience, health flags, preferences
+  lang          TEXT,                      -- en | it | ar
+  google_sub    TEXT,                      -- Google account id when they signed in with Google
   created_at    TEXT DEFAULT (datetime('now')),
   last_login    TEXT
 );
@@ -45,6 +47,9 @@ CREATE TABLE IF NOT EXISTS bookings (
   credit_id      TEXT,
   platform_fee   INTEGER DEFAULT 0,        -- 2% collected by the platform through Stripe
   status         TEXT DEFAULT 'pending',   -- pending | paid | confirmed | done | cancelled | no_show
+  rating         INTEGER,                  -- 1-5, left by the client after a done session
+  feedback       TEXT,                     -- client's words for the therapist
+  therapist_note TEXT,                     -- what we did / homework, visible to the client
   source         TEXT DEFAULT 'web',       -- web | manual (entered by an admin: cash, walk-in)
   stripe_session TEXT,
   payment_intent TEXT,
@@ -83,3 +88,16 @@ CREATE TABLE IF NOT EXISTS admins (
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
 INSERT OR IGNORE INTO settings VALUES ('loyalty_every', '10');   -- every Nth completed session is free
 INSERT OR IGNORE INTO settings VALUES ('referral_pct', '40');    -- both people get this % off one session
+
+CREATE TABLE IF NOT EXISTS checkins (            -- "how do you feel today" between sessions
+  id         TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL,
+  date       TEXT NOT NULL,
+  pain       INTEGER,                      -- 0-10
+  energy     INTEGER,                      -- 1-5
+  sleep      INTEGER,                      -- 1-5
+  note       TEXT,
+  booking_id TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS checkins_user ON checkins(user_id, date);

@@ -22,7 +22,7 @@ database_id = "35c5461a-9065-4552-a6bf-bac39d1ec8f8"   # created 2026-09-12 (WEU
 
 # Secrets (never committed) — set each with `npx wrangler secret put NAME`:
 #   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, RESEND_API_KEY,
-#   SESSION_SECRET (any long random string, signs login cookies),
+#   SESSION_SECRET (any long random string, signs login cookies), GOOGLE_CLIENT_SECRET (optional, Google sign-in),
 #   ADMIN_BOOTSTRAP_EMAIL + ADMIN_BOOTSTRAP_PASSWORD (first owner login; only honoured while no admin exists yet)
 
 [vars]
@@ -30,4 +30,5 @@ SITE_URL = "https://zenrecovery.club"
 ZEN_STRIPE_ACCOUNT = ""          # acct_... of Zen's connected account. Empty = preview mode (no card payments).
 ZEN_NOTIFY_EMAIL = ""            # where Zen receives bookings
 FROM_EMAIL = "Zen Recovery <booking@amicomioflorence.com>"   # TEMPORARY: verified domain. Switch to booking@zenrecovery.club once Resend shows it verified.
+GOOGLE_CLIENT_ID = ""           # OAuth 2.0 Web client id from Google Cloud Console; empty = Google button hidden. Secret: GOOGLE_CLIENT_SECRET
 DEV_MAGIC_LINK = "0"             # "1" only on a local dev run: returns the sign-in link in the API response instead of relying on email

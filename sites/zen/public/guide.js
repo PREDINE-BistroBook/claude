@@ -156,5 +156,24 @@ window.ZenGuide = (function () {
   }
   const SERVICE_LABEL = { hijama: "Hijama", fire: "Fire cupping", facial: "Facial cupping", manual: "Manual therapy", cupping: "Cupping" };
 
-  return { CITY_NAME, EGYPT_SUGGEST, ITALY_SUGGEST, recommend, OPTIONS, label, flagged, bodyMap, PARTS, serviceKey, SERVICE_LABEL, ADVICE, list };
+  /* ---------- simple exercises per focus area (between sessions) ---------- */
+  const EXERCISES = {
+    neck: ["Chin tucks: sit tall, draw the chin straight back (make a double chin), hold 5 seconds. 10 times.", "Slow neck circles, half circles only, front side to side. 5 each way."],
+    shoulder_l: ["Doorway chest stretch: forearms on the frame, step through until you feel the front of the shoulders. 30 seconds, 3 times.", "Shoulder rolls, backwards, slow and big. 10."],
+    shoulder_r: ["Doorway chest stretch: forearms on the frame, step through until you feel the front of the shoulders. 30 seconds, 3 times.", "Shoulder rolls, backwards, slow and big. 10."],
+    upper_back: ["Cat-cow on hands and knees: round the back, then let it sag, breathing with it. 10 slow rounds.", "Thread the needle: on all fours, slide one arm under the other and rest the shoulder down. 30 seconds each side."],
+    mid_back: ["Cat-cow on hands and knees: round the back, then let it sag, breathing with it. 10 slow rounds.", "Thread the needle: on all fours, slide one arm under the other and rest the shoulder down. 30 seconds each side."],
+    lower_back: ["Knees to chest, lying on your back, one at a time then both. 30 seconds each.", "Glute bridge: feet flat, lift the hips, squeeze at the top, lower slowly. 12, twice."],
+    hips: ["Figure-four stretch: ankle on the opposite knee, pull the leg toward you. 30 seconds each side.", "Hip flexor lunge: back knee down, tuck the pelvis, lean forward gently. 30 seconds each side."],
+    thigh_l: ["Standing quad stretch: heel to glute, knees together. 30 seconds each side.", "Hamstring stretch: heel on a low step, hinge forward with a flat back. 30 seconds each side."],
+    thigh_r: ["Standing quad stretch: heel to glute, knees together. 30 seconds each side.", "Hamstring stretch: heel on a low step, hinge forward with a flat back. 30 seconds each side."],
+    calf_l: ["Calf stretch against a wall, back leg straight then slightly bent. 30 seconds each, both legs.", "Slow calf raises on a step, pause at the top, lower below the step. 15, twice."],
+    calf_r: ["Calf stretch against a wall, back leg straight then slightly bent. 30 seconds each, both legs.", "Slow calf raises on a step, pause at the top, lower below the step. 15, twice."],
+    arm_l: ["Wrist and forearm stretch: arm straight, palm up, gently pull the fingers back. 20 seconds each."],
+    arm_r: ["Wrist and forearm stretch: arm straight, palm up, gently pull the fingers back. 20 seconds each."],
+    face: ["Jaw release: tongue on the roof of the mouth, let the jaw hang, breathe through the nose for a minute."],
+  };
+  function exercisesFor(pain = []) { const seen = new Set(); const out = []; pain.forEach((p) => (EXERCISES[p] || []).forEach((e) => { if (!seen.has(e)) { seen.add(e); out.push({ area: p, text: e }); } })); return out; }
+
+  return { CITY_NAME, EGYPT_SUGGEST, ITALY_SUGGEST, recommend, OPTIONS, label, flagged, bodyMap, PARTS, serviceKey, SERVICE_LABEL, ADVICE, list, EXERCISES, exercisesFor };
 })();

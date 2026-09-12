@@ -7,7 +7,10 @@
 <meta name="description" content="Zen Recovery — cupping therapy in Cairo, Dahab and Florence. See how cupping works, choose your city, book a session.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira:ital,wght@0,300;0,400;1,800&family=Michroma&family=Figtree:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira:ital,wght@0,300;0,400;1,800&family=Michroma&family=Figtree:wght@400;500;600&family=DM+Mono:wght@400;500&family=Cairo:wght@300;400;600;800&display=swap">
+<meta name="theme-color" content="#1B1E1D">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="img/icon-192.png">
 <style>
 /* ---------- tokens ---------- */
 :root{
@@ -81,6 +84,19 @@ footer .wm b{color:#fff}
 .nav-links a{text-decoration:none; color:var(--ink-soft)}
 .nav-links a:hover{color:var(--ink)}
 .nav-links a.btn, .nav-links a.btn:hover{color:var(--ground)}
+.nav-links .signin{display:inline-flex;align-items:center;gap:7px;padding:7px 12px;border-radius:999px;border:1.5px solid var(--line);color:var(--ink);background:var(--ground-3)}
+.nav-links .signin.user{padding:4px 12px 4px 4px}
+.nav-links .signin .av{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,var(--mark-soft),var(--mark));color:#fff;display:grid;place-items:center;font-family:var(--display);font-weight:800;font-style:italic;font-size:.7rem;overflow:hidden}
+.nav-links .signin .av img{width:100%;height:100%;object-fit:cover}
+.lang-switch{display:inline-flex;border:1.5px solid var(--line);border-radius:999px;overflow:hidden;background:var(--ground-3)}
+.lang-switch button{background:none;border:0;padding:6px 9px;font-size:.74rem;font-weight:500;color:var(--ink-soft);cursor:pointer;font-family:var(--body)}
+.lang-switch button[aria-pressed="true"]{background:var(--ink);color:var(--ground)}
+[lang="ar"] body,[lang="ar"] h1,[lang="ar"] h2,[lang="ar"] h3,[lang="ar"] .btn,[lang="ar"] input,[lang="ar"] select,[lang="ar"] textarea,[lang="ar"] .eyebrow,[lang="ar"] legend,[lang="ar"] .panel .city,[lang="ar"] .step .eyebrow{font-family:"Cairo","Noto Kufi Arabic","Segoe UI",system-ui,sans-serif;letter-spacing:0}
+[lang="ar"] .eyebrow,[lang="ar"] legend,[lang="ar"] .know dt,[lang="ar"] .method .for,[lang="ar"] .panel .flag,[lang="ar"] .panel .choose,[lang="ar"] .scroll-hint{letter-spacing:0;text-transform:none;font-size:.82rem}
+[lang="ar"] h1,[lang="ar"] h2{font-weight:600} [lang="ar"] .reward-num{font-style:normal}
+[dir="rtl"] .breath{left:auto;right:-22px} [dir="rtl"] .hero-visual .cap{left:auto;right:16px} [dir="rtl"] .panel .tick{right:auto;left:18px} [dir="rtl"] .panel .flag{left:auto;right:18px}
+[dir="rtl"] .hero-copy .eyebrow span + span::before{margin-right:0;margin-left:14px} [dir="rtl"] .panel .choose::after{content:"←"}
+@media (max-width:640px){ .nav-links{gap:10px} .nav-links .signin span{display:none} .nav-links .signin.user span{display:inline} }
 .btn{
   display:inline-flex; align-items:center; gap:10px; padding:12px 20px; border-radius:999px; border:1.5px solid var(--ink);
   background:var(--ink); color:var(--ground); text-decoration:none; font-weight:500; font-size:.95rem; cursor:pointer;
@@ -344,12 +360,13 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
 </div>
 
 <nav class="nav" id="nav" aria-label="Main">
-  <a class="brand" href="#top" aria-label="Zen Recovery, home"><span class="wm"><b>ZEN</b><small>RECOVERY</small></span></a>
+  <a class="brand no-i18n" href="#top" aria-label="Zen Recovery, home"><span class="wm"><b>ZEN</b><small>RECOVERY</small></span></a>
   <div class="nav-links">
     <a href="#how" class="hide-sm">How it works</a>
     <a href="#methods" class="hide-sm">Methods</a>
     <a href="#places" class="hide-sm">Cities</a>
-    <a href="account.html" id="nav-account">Account</a>
+    <span id="lang-slot"></span>
+    <a href="account.html" id="nav-account" class="signin"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg><span>Sign in</span></a>
     <a href="#places" class="btn small">Book a session</a>
   </div>
 </nav>
@@ -802,6 +819,7 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
   </div>
 </dialog>
 
+<script src="i18n.js"></script>
 <script src="guide.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
@@ -856,7 +874,11 @@ const SLOT_LABEL = { morning: "Morning (9–12)", afternoon: "Afternoon (12–17
 /* ---------- helpers ---------- */
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-const money = (minor, cur, locale) => new Intl.NumberFormat(locale, { style: "currency", currency: cur, maximumFractionDigits: cur === "EGP" ? 0 : 2 }).format(minor / 100);
+const I = window.ZenI18n, t = (s, v) => I.t(s, v);
+const LOCALE = () => ({ en: "en-GB", it: "it-IT", ar: "ar-EG" }[I.lang]);
+const money = (minor, cur) => new Intl.NumberFormat(LOCALE(), { style: "currency", currency: cur, maximumFractionDigits: cur === "EGP" ? 0 : 2 }).format(minor / 100);
+$("#lang-slot").innerHTML = I.switcher();
+document.addEventListener("zen:lang", () => { if (city) { renderServices(); updateSummary(); renderPrep(); } });
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 document.documentElement.classList.add("js");
 $("#year").textContent = new Date().getFullYear();
@@ -919,14 +941,16 @@ $$(".reveal").forEach((el, i) => { el.style.transitionDelay = (i % 5) * 60 + "ms
 let ME = null;
 fetch("/api/me", { credentials: "same-origin" }).then(r => (r.headers.get("content-type") || "").includes("json") ? r.json() : { user: null }).then(d => {
   if (!d.user) return; ME = d;
-  $("#nav-account").textContent = d.user.name.split(" ")[0];
+  const first = d.user.name.split(" ")[0];
+  $("#nav-account").classList.add("user"); $("#nav-account").innerHTML = `<span class="av">${d.user.photo ? `<img src="${d.user.photo}" alt="">` : first.slice(0, 2).toUpperCase()}</span><span>${first}</span>`; $("#nav-account").title = t("Your sessions, rewards and guide");
+  if (d.user.lang && d.user.lang !== I.lang && !new URLSearchParams(location.search).get("lang")) I.set(d.user.lang);
   $("#rw-every").textContent = d.settings.loyalty_every; $("#rw-pct").textContent = d.settings.referral_pct;
   $("#name").value = d.user.name || ""; $("#email").value = d.user.email || ""; $("#phone").value = d.user.phone || "";
   $("#rewards-guest").hidden = true; $("#rewards-user").hidden = false;
   const cr = d.credits.filter(c => c.status === "available");
-  $("#rewards-who").textContent = `Signed in as ${d.user.name}. ${cr.length ? "Pick a reward to use on this session:" : `${d.stats.done % d.settings.loyalty_every}/${d.settings.loyalty_every} toward your free session.`}`;
+  $("#rewards-who").textContent = cr.length ? t("Signed in as {name}. Pick a reward to use on this session:", { name: d.user.name }) : t("Signed in as {name}. {n}/{every} toward your free session.", { name: d.user.name, n: d.stats.done % d.settings.loyalty_every, every: d.settings.loyalty_every });
   if (d.user.nearest_city && !city) choose(d.user.nearest_city, true);
-  $("#credit-options").innerHTML = cr.length ? [`<span class="slot"><input type="radio" name="credit" id="cr-none" value="" checked><label for="cr-none">No reward</label></span>`, ...cr.map(c => `<span class="slot"><input type="radio" name="credit" id="cr-${c.id}" value="${c.id}" data-pct="${c.pct}"><label for="cr-${c.id}">${c.pct === 100 ? "Free session" : c.pct + "% off"}</label></span>`)].join("") : "";
+  $("#credit-options").innerHTML = cr.length ? [`<span class="slot"><input type="radio" name="credit" id="cr-none" value="" checked><label for="cr-none">${t("No reward")}</label></span>`, ...cr.map(c => `<span class="slot"><input type="radio" name="credit" id="cr-${c.id}" value="${c.id}" data-pct="${c.pct}"><label for="cr-${c.id}">${c.pct === 100 ? t("Free session") : t("{pct}% off", { pct: c.pct })}</label></span>`)].join("") : "";
   if (cr.length) { $("#cr-" + cr[0].id).checked = true; }
   updateSummary();
 }).catch(() => {});
@@ -945,21 +969,9 @@ function choose(key, quiet) {
   panels.classList.add("has-choice");
   $("#book-empty").hidden = true;
   const pl = $("#book-place"); pl.hidden = false;
-  $("#place-name").textContent = c.name;
-  $("#place-addr").innerHTML = c.address.map((l, i) => i === 0 ? `<b>${l}</b>` : `<span>${l}</span>`).join("");
-  $("#place-team").textContent = c.team;
   $("#place-wa").hidden = !c.whatsapp; if (c.whatsapp) $("#place-wa-link").href = "https://wa.me/" + c.whatsapp;
   const form = $("#booking"); form.hidden = false;
-  $("#services").innerHTML = c.services.map((s, i) => `
-    <div class="service">
-      <input type="radio" name="service" id="svc-${s.id}" value="${s.id}" ${i === 0 ? "checked" : ""}>
-      <label for="svc-${s.id}">
-        <span class="name">${s.name}</span>
-        <span class="price">${money(s.price, c.currency, c.locale)}</span>
-        <span class="desc">${s.desc}</span>
-        <span class="dur">${s.dur} min</span>
-      </label>
-    </div>`).join("");
+  renderServices();
   const d = $("#date"); const t = new Date(); t.setDate(t.getDate() + 1);
   d.min = t.toISOString().slice(0, 10); if (!d.value) d.value = d.min;
   $("#phone").placeholder = c.currency === "EUR" ? "+39 …" : "+20 …";
@@ -972,10 +984,27 @@ function renderPrep() {
   const cur = current(); if (!cur || !cur.s) return;
   const k = ZenGuide.serviceKey(cur.s.name);
   const items = [...ZenGuide.ADVICE.before.general.slice(0, 3), ...(ZenGuide.ADVICE.before[k] || []).slice(0, 2)];
-  $("#prep-box").innerHTML = `<p class="fine"><b>Before a ${ZenGuide.SERVICE_LABEL[k].toLowerCase()} session</b></p><ul class="prep-list">${items.map((t) => `<li>${t}</li>`).join("")}</ul><p class="fine">Full guide, before and after, in <a href="account.html#guide">your account</a>.</p>`;
+  $("#prep-box").innerHTML = `<p class="fine"><b>${t("Before a {service} session", { service: t(ZenGuide.SERVICE_LABEL[k]).toLowerCase() })}</b></p><ul class="prep-list">${items.map((x) => `<li>${t(x)}</li>`).join("")}</ul><p class="fine">${t("Full guide, before and after, in")} <a href="account.html#guide">${t("your account")}</a>.</p>`;
 }
 // ?city=… from the account area preselects a room
 { const pre = new URLSearchParams(location.search).get("city"); if (pre && CITIES[pre]) setTimeout(() => choose(pre, true), 50); }
+function renderServices() {
+  const c = CITIES[city]; const keep = $("input[name=service]:checked")?.value;
+  $("#place-name").textContent = t(c.name);
+  $("#place-addr").innerHTML = c.address.map((l, i) => i === 0 ? `<b>${t(l)}</b>` : `<span>${t(l)}</span>`).join("");
+  $("#place-team").textContent = t(c.team);
+  $("#services").innerHTML = c.services.map((s, i) => `
+    <div class="service">
+      <input type="radio" name="service" id="svc-${s.id}" value="${s.id}" ${(keep ? keep === s.id : i === 0) ? "checked" : ""}>
+      <label for="svc-${s.id}">
+        <span class="name">${t(s.name)}</span>
+        <span class="price num">${money(s.price, c.currency)}</span>
+        <span class="desc">${t(s.desc)}</span>
+        <span class="dur">${s.dur} ${t("min")}</span>
+      </label>
+    </div>`).join("");
+  I.apply($("#book"));
+}
 function current() {
   if (!city) return null;
   const c = CITIES[city];
@@ -986,14 +1015,14 @@ function updateSummary() {
   const cur = current(); if (!cur || !cur.s) return;
   const { c, s } = cur;
   const date = $("#date").value; const slot = $("input[name=slot]:checked").value;
-  $("#sum-service").textContent = `${s.name} · ${s.dur} min · ${c.name}`;
-  $("#sum-price").textContent = money(s.price, c.currency, c.locale);
-  $("#sum-when").textContent = date ? new Date(date + "T12:00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }) + " · " + SLOT_LABEL[slot] : "Pick a day";
+  $("#sum-service").textContent = `${t(s.name)} · ${s.dur} ${t("min")} · ${t(c.name)}`;
+  $("#sum-price").textContent = money(s.price, c.currency);
+  $("#sum-when").textContent = date ? new Date(date + "T12:00:00").toLocaleDateString(LOCALE(), { weekday: "long", day: "numeric", month: "long" }) + " · " + t(SLOT_LABEL[slot]) : t("Pick a day");
   const cr = $("input[name=credit]:checked"); const pct = cr && cr.value ? Number(cr.dataset.pct) : 0;
   const total = Math.round(s.price * (100 - pct) / 100);
-  $("#sum-discount-line").hidden = !pct; if (pct) { $("#sum-discount").textContent = pct === 100 ? "Free session reward" : `Invite reward · ${pct}% off`; $("#sum-discount-amt").textContent = "− " + money(s.price - total, c.currency, c.locale); }
-  $("#sum-total").textContent = total === 0 ? "Nothing to pay" : money(total, c.currency, c.locale);
-  $("#pay").textContent = total === 0 ? "Reserve my free session" : "Reserve and pay";
+  $("#sum-discount-line").hidden = !pct; if (pct) { $("#sum-discount").textContent = pct === 100 ? t("Free session reward") : t("Invite reward · {pct}% off", { pct }); $("#sum-discount-amt").textContent = "− " + money(s.price - total, c.currency); }
+  $("#sum-total").textContent = total === 0 ? t("Nothing to pay") : money(total, c.currency);
+  $("#pay").textContent = total === 0 ? t("Reserve my free session") : t("Reserve and pay");
 }
 $("#booking").addEventListener("change", (e) => { updateSummary(); if (e.target.name === "service") renderPrep(); });
 $("#booking").addEventListener("input", (e) => { if (e.target.id === "date") updateSummary(); });
@@ -1012,19 +1041,19 @@ $("#booking").addEventListener("submit", async (e) => {
     name: $("#name").value.trim(), phone: $("#phone").value.trim(), email: $("#email").value.trim(), note: $("#note").value.trim(),
     credit_id: $("input[name=credit]:checked")?.value || undefined
   };
-  const btn = $("#pay"); btn.disabled = true; btn.textContent = "One moment…";
+  const btn = $("#pay"); btn.disabled = true; btn.textContent = t("One moment…");
   try {
     const r = await fetch("/api/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
     const data = await r.json().catch(() => ({}));
     if (r.ok && data.url) { location.href = data.url; return; }
     if (data.preview) {
-      tell("Payments aren't switched on yet", `This is the preview build. Once Zen's Stripe account is connected, this button takes you to a secure card page for ${money(s.price, c.currency, c.locale)} and Zen Recovery gets your booking by email and WhatsApp.`);
+      tell(t("Payments aren't switched on yet"), t("This is the preview build. Once Zen's Stripe account is connected, this button takes you to a secure card page for {amount} and Zen Recovery gets your booking by email and WhatsApp.", { amount: money(s.price, c.currency) }));
     } else {
-      err.textContent = data.error || "Something went wrong creating the payment. Try again, or message Zen on WhatsApp.";
+      err.textContent = data.error || t("Something went wrong creating the payment. Try again, or message Zen on WhatsApp.");
       err.hidden = false;
     }
   } catch (_) {
-    tell("Preview only", `Nothing was charged. On the live site this takes you to a secure Stripe card page for ${money(s.price, c.currency, c.locale)}, and Zen confirms the hour on WhatsApp.`);
+    tell(t("Preview only"), t("Nothing was charged. On the live site this takes you to a secure Stripe card page for {amount}, and Zen confirms the hour on WhatsApp.", { amount: money(s.price, c.currency) }));
   } finally {
     btn.disabled = false; updateSummary();
   }
