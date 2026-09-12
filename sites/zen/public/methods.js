@@ -9,7 +9,7 @@ window.ZenMethods = (function () {
     <radialGradient id="warmG" cx=".5" cy=".9" r=".7"><stop offset="0" stop-color="#E2703A" stop-opacity=".85"/><stop offset=".6" stop-color="#E8A07A" stop-opacity=".4"/><stop offset="1" stop-color="#E8A07A" stop-opacity="0"/></radialGradient>
     <linearGradient id="glassG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset=".45" stop-color="#fff" stop-opacity=".08"/><stop offset="1" stop-color="#fff" stop-opacity=".25"/></linearGradient>
     <linearGradient id="oilG" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
-    <linearGradient id="trailG" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#D98079" stop-opacity="0"/><stop offset=".5" stop-color="#C95A50" stop-opacity=".55"/><stop offset="1" stop-color="#D98079" stop-opacity="0"/></linearGradient>
+    <linearGradient id="trailG" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#E08A7A" stop-opacity="0"/><stop offset=".5" stop-color="#D4614F" stop-opacity=".75"/><stop offset="1" stop-color="#E08A7A" stop-opacity="0"/></linearGradient>
     <clipPath id="cupClip"><path d="M150 380 C150 250 190 175 260 175 C330 175 370 250 370 380 Z"/></clipPath>
     <clipPath id="skinClip"><rect x="20" y="380" width="480" height="120" rx="28"/></clipPath>
   </defs>`;
@@ -70,7 +70,7 @@ window.ZenMethods = (function () {
         { h: "Warmth spreads.", p: "Blood follows the cup. The whole strip of skin goes pink and warm, not just one round spot. Muscles that were guarding start to let go." },
         { h: "No round marks.", p: "Because the cup keeps moving, you get a soft flush along the path instead of circles. It fades in a day or two. Drink water and keep warm afterwards." },
       ],
-      scene: scene(SKIN + `<path id="trail" d="M120 386 H400" stroke="url(#trailG)" stroke-width="70" stroke-linecap="round" opacity="0" clip-path="url(#skinClip)"/><rect id="oil" x="40" y="382" width="440" height="30" rx="14" fill="url(#oilG)" opacity="0"/>` + CUP()),
+      scene: scene(SKIN + `<path id="trail" d="M130 404 H390" stroke="url(#trailG)" stroke-width="44" stroke-linecap="round" opacity="0" clip-path="url(#skinClip)"/><rect id="oil" x="40" y="382" width="440" height="30" rx="14" fill="url(#oilG)" opacity="0"/>` + CUP()),
       animate(gsap, tl) {
         tl.to("#oil", { opacity: 1, duration: .8 }, 0); tl.fromTo("#oil", { x: -140 }, { x: 140, duration: 1, ease: "power1.inOut" }, 0);
         tl.to("#cup", { y: 0, duration: .8, ease: "power2.out" }, 1); tl.to("#vac", { opacity: .2, duration: .5 }, 1.5); tl.to("#dome", { attr: { cy: 458, ry: 94 }, duration: .5 }, 1.6);
