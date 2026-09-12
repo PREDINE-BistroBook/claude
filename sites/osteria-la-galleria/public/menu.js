@@ -120,7 +120,7 @@ window.ROOMS = [
         { it: "Bistecca nella costola", en: "Ribeye steak, on the bone", dit: "Costata con l'osso", price: 60, a: [], perKg: true },
       ]},
       { title: { it: "Alla griglia", en: "From the grill" }, items: [
-        { it: "Filetto alla griglia", en: "Grilled fillet", dit: "Filetto di manzo", price: 32, a: [] },
+        { it: "Filetto alla griglia", en: "Grilled Chianina IGP beef tenderloin", dit: "Filetto di Chianina IGP", price: 32, a: [] },
         { it: "Tagliata di manzo con rucola e grana", en: "Thickly-sliced beef with rocket and grana, 300 g", dit: "300 g, rucola e scaglie di grana", price: 30, a: [7] },
         { it: "Tagliata di manzo con funghi porcini", en: "Sliced beef with porcini mushrooms", dit: "Con funghi porcini", price: 34, a: [] },
         { it: "Costolette d'agnello con patate al forno", en: "Lamb chops with roast potatoes", dit: "Con patate al forno", price: 28, a: [] },
