@@ -518,7 +518,7 @@ function show(data) {
   $("#ring").style.setProperty("--p", (into / every) * 100); $("#ring-n").textContent = `${into}/${every}`;
   $("#loyalty-text").textContent = done === 0 ? t("Your first session starts the count. After {every} you get one on us.", { every }) : left === every ? t("You just earned a free session. It's waiting below.") : t("{done} sessions so far. {left} more and the next one is on us.", { done, left });
   const cr = data.credits.filter((c) => c.status === "available");
-  $("#credits").innerHTML = cr.length ? cr.map((c) => `<div class="reward"><b>${c.pct === 100 ? t("Free session") : t("{pct}% off", { pct: c.pct })}</b><span class="muted" style="flex:1;font-size:.9rem">${esc(c.reason)}</span><a class="btn small" href="index.html${room ? "?city=" + room : ""}#book">${t("Use it")}</a></div>`).join("") : `<p class="tiny">${t("No rewards waiting right now.")}</p>`;
+  $("#credits").innerHTML = cr.length ? cr.map((c) => `<div class="reward"><b>${c.pct === 100 ? t("Free session") : t("{pct}% off", { pct: c.pct })}</b><span class="muted" style="flex:1;font-size:.9rem">${esc(c.reason)}${c.expires_at ? ` · ${t("until {date}", { date: fmtDate(c.expires_at) })}` : ""}</span><a class="btn small" href="index.html${room ? "?city=" + room : ""}#book">${t("Use it")}</a></div>`).join("") : `<p class="tiny">${t("No rewards waiting right now.")}</p>`;
   $("#invite-title").textContent = t("{pct}% off, for both of you", { pct: data.settings.referral_pct });
   $("#ref-code").textContent = u.referral_code; $("#share-url").textContent = data.share_url;
   $("#share-wa").href = "https://wa.me/?text=" + encodeURIComponent(t("Try Zen Recovery with me — cupping and recovery in Cairo, Dahab and Florence. We both get {pct}% off with this link: {url}", { pct: data.settings.referral_pct, url: data.share_url }));
@@ -528,8 +528,8 @@ function show(data) {
   $("#p-country").value = u.country || ""; $("#p-city-text").value = u.city_text || ""; $("#p-city").value = room || ""; $("#p-notes").value = u.notes || ""; $("#p-lang").value = u.lang || I.lang;
   const f = G.flagged(i.health || []);
   $("#p-intake").innerHTML = [...(i.goals || []).map((g) => `<span class="chip">${t(G.label("goals", g))}</span>`), ...(i.pain || []).map((p) => `<span class="chip">${t(G.label("pain", p))}</span>`), ...(i.health || []).filter((h) => h !== "none").map((h) => `<span class="chip${f.includes(h) ? " flag" : ""}">${t(G.label("health", h))}</span>`), i.activity ? `<span class="chip">${t(G.label("activity", i.activity))}</span>` : "", i.experience ? `<span class="chip">${t(G.label("experience", i.experience))}</span>` : ""].join("") || `<span class="tiny">${t("Not answered yet.")}</span>`;
-  const bp = data.settings.birthday_pct || 20;
-  $("#bday-line").textContent = u.birthday ? t("Birthday month: {pct}% off one session, added by itself.", { pct: bp }) : t("Add your birthday in your profile: {pct}% off in your birthday month.", { pct: bp });
+  const bp = data.settings.birthday_pct || 50;
+  $("#bday-line").textContent = u.birthday ? t("Birthday: {pct}% off one session, from 10 days before to 5 days after, once a year.", { pct: bp }) : t("Add your birthday in your profile: {pct}% off one session around your birthday.", { pct: bp });
   renderGuide("cupping"); renderExercises(); loadSessions(); loadCheckins(); loadPackages(); loadPhotos(); loadWaitlist(); loadTeam(room);
   I.apply($("#app-view"));
 }

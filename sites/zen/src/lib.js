@@ -40,7 +40,7 @@ export function healthFlags(intakeText) { const i = parseIntake(intakeText); ret
 export async function settings(env) {
   const rows = (await env.DB.prepare("SELECT key, value FROM settings").all()).results;
   const s = Object.fromEntries(rows.map((r) => [r.key, r.value]));
-  return { loyalty_every: Number(s.loyalty_every || 10), referral_pct: Number(s.referral_pct || 40), birthday_pct: Number(s.birthday_pct || 20), package_pct: Number(s.package_pct || 15),
+  return { loyalty_every: Number(s.loyalty_every || 10), referral_pct: Number(s.referral_pct || 40), birthday_pct: Number(s.birthday_pct || 50), package_pct: Number(s.package_pct || 15),
     platform_fee_pct: PLATFORM_FEE_BPS / 100, gmaps: { cairo: s.gmaps_cairo || "", dahab: s.gmaps_dahab || "", florence: s.gmaps_florence || "" }, whatsapp: { cairo: s.wa_cairo || "", dahab: s.wa_dahab || "", florence: s.wa_florence || "" },
     review: { cairo: s.review_cairo || "", dahab: s.review_dahab || "", florence: s.review_florence || "" },
     address: { cairo: s.addr_cairo || "", dahab: s.addr_dahab || "", florence: s.addr_florence || "" }, team: { cairo: s.team_cairo || "", dahab: s.team_dahab || "", florence: s.team_florence || "" } };

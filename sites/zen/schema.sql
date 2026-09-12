@@ -80,6 +80,7 @@ CREATE TABLE IF NOT EXISTS credits (
   status     TEXT DEFAULT 'available',     -- available | reserved | used | expired
   reason     TEXT,                         -- e.g. "10th session" / "invited Sara" / "invited by Omar"
   booking_id TEXT,
+  expires_at TEXT,                         -- birthday reward: 5 days after the birthday; NULL = no expiry
   created_at TEXT DEFAULT (datetime('now')),
   used_at    TEXT
 );
@@ -126,7 +127,7 @@ CREATE TABLE IF NOT EXISTS waitlist (id TEXT PRIMARY KEY, user_id TEXT NOT NULL,
 CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, user_id TEXT, booking_id TEXT, kind TEXT NOT NULL, channel TEXT NOT NULL, status TEXT, detail TEXT, created_at TEXT DEFAULT (datetime('now')));
 CREATE TABLE IF NOT EXISTS photos (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, booking_id TEXT, kind TEXT, r2_key TEXT NOT NULL, content_type TEXT, note TEXT, consent INTEGER DEFAULT 0, uploaded_by TEXT, created_at TEXT DEFAULT (datetime('now')), data TEXT);
 CREATE INDEX IF NOT EXISTS bookings_city_date_slot ON bookings(city, date, slot);
-INSERT OR IGNORE INTO settings VALUES ('birthday_pct', '20');
+INSERT OR IGNORE INTO settings VALUES ('birthday_pct', '50');
 INSERT OR IGNORE INTO settings VALUES ('package_pct', '15');
 INSERT OR IGNORE INTO settings VALUES ('review_cairo', '');
 INSERT OR IGNORE INTO settings VALUES ('review_dahab', '');

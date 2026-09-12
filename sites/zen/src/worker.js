@@ -236,7 +236,7 @@ async function me(req, env) {
 async function userBundle(env, u) {
   const s = await settings(env);
   const [credits, stats, referrer, invited, packages] = await Promise.all([
-    env.DB.prepare("SELECT id, kind, pct, status, reason, created_at FROM credits WHERE user_id = ? AND status IN ('available','reserved') ORDER BY created_at").bind(u.id).all(),
+    env.DB.prepare("SELECT id, kind, pct, status, reason, created_at, expires_at FROM credits WHERE user_id = ? AND status IN ('available','reserved') AND (expires_at IS NULL OR expires_at >= date('now')) ORDER BY created_at").bind(u.id).all(),
     env.DB.prepare("SELECT SUM(status='done') done, SUM(status IN ('paid','confirmed')) upcoming, COUNT(*) total FROM bookings WHERE user_id = ? AND status IN ('paid','confirmed','done')").bind(u.id).first(),
     u.referred_by ? env.DB.prepare("SELECT name FROM users WHERE id = ?").bind(u.referred_by).first() : null,
     env.DB.prepare("SELECT name, created_at, (SELECT COUNT(*) FROM bookings b WHERE b.user_id = users.id AND b.status IN ('paid','confirmed','done')) sessions FROM users WHERE referred_by = ? ORDER BY created_at DESC").bind(u.id).all(),
@@ -310,7 +310,7 @@ async function checkout(req, env) {
     amount = Math.max(0, list - gift.amount); discount_kind = "gift";
   } else if (b.credit_id) {
     if (!user) return json({ error: "Sign in to use a reward." }, 401);
-    credit = await env.DB.prepare("SELECT * FROM credits WHERE id = ? AND user_id = ? AND status = 'available'").bind(clean(b.credit_id, 40), user.id).first();
+    credit = await env.DB.prepare("SELECT * FROM credits WHERE id = ? AND user_id = ? AND status = 'available' AND (expires_at IS NULL OR expires_at >= date('now'))").bind(clean(b.credit_id, 40), user.id).first();
     if (!credit) return json({ error: "That reward isn't available any more." }, 400);
     amount = Math.round((list * (100 - credit.pct)) / 100); discount_kind = credit.kind;
   } else if (b.partner_code) {

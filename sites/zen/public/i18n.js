@@ -7,7 +7,9 @@ window.ZenI18n = (function () {
   const IT = {
     "Change city": "Cambia città", "You're booking in {city}.": "Stai prenotando a {city}.",
     // 2026-09-12 batch: slots, gifts, packs, partners, review, Apple/SMS, photos, export
-    "Your birthday month: {pct}% off.": "Il mese del tuo compleanno: {pct}% di sconto.",
+    "Your birthday month: {pct}% off.": "Il mese del tuo compleanno: {pct}% di sconto.", "Your birthday: {pct}% off one session.": "Il tuo compleanno: {pct}% di sconto su una seduta.",
+    "Add your birthday to your profile. The discount appears by itself 10 days before the day and lasts until 5 days after it, once a year.": "Aggiungi la data di nascita al profilo. Lo sconto compare da solo 10 giorni prima e dura fino a 5 giorni dopo, una volta l'anno.",
+    "Birthday: {pct}% off one session, from 10 days before to 5 days after, once a year.": "Compleanno: {pct}% di sconto su una seduta, da 10 giorni prima a 5 giorni dopo, una volta l'anno.", "Add your birthday in your profile: {pct}% off one session around your birthday.": "Aggiungi la data di nascita nel profilo: {pct}% di sconto su una seduta intorno al tuo compleanno.", "until {date}": "fino al {date}",
     "Add your birthday to your profile and a discount appears by itself when the month comes. Packs of sessions and gift codes live here too.": "Aggiungi la data di nascita al profilo e lo sconto compare da solo quando arriva il mese. Qui trovi anche i pacchetti di sedute e i codici regalo.",
     "Gift a session": "Regala una seduta", "Give someone an hour of quiet.": "Regala a qualcuno un'ora di quiete.",
     "Pick a city and a session. You pay now; they get a code by email and book whenever they like. Valid in that city, no expiry.": "Scegli una città e una seduta. Paghi ora; chi lo riceve ha un codice via email e prenota quando vuole. Valido in quella città, senza scadenza.",
@@ -292,7 +294,9 @@ window.ZenI18n = (function () {
   const AR = {
     "Change city": "غيّر المدينة", "You're booking in {city}.": "أنت تحجز في {city}.",
     // 2026-09-12 batch
-    "Your birthday month: {pct}% off.": "شهر عيد ميلادك: خصم {pct}%.",
+    "Your birthday month: {pct}% off.": "شهر عيد ميلادك: خصم {pct}%.", "Your birthday: {pct}% off one session.": "عيد ميلادك: خصم {pct}% على جلسة.",
+    "Add your birthday to your profile. The discount appears by itself 10 days before the day and lasts until 5 days after it, once a year.": "أضف تاريخ ميلادك في ملفك. يظهر الخصم تلقائيًا قبل اليوم بعشرة أيام ويستمر حتى خمسة أيام بعده، مرة في السنة.",
+    "Birthday: {pct}% off one session, from 10 days before to 5 days after, once a year.": "عيد الميلاد: خصم {pct}% على جلسة، من 10 أيام قبله إلى 5 أيام بعده، مرة في السنة.", "Add your birthday in your profile: {pct}% off one session around your birthday.": "أضف تاريخ ميلادك في ملفك: خصم {pct}% على جلسة حول عيد ميلادك.", "until {date}": "حتى {date}",
     "Add your birthday to your profile and a discount appears by itself when the month comes. Packs of sessions and gift codes live here too.": "أضف تاريخ ميلادك في ملفك ويظهر الخصم تلقائيًا عندما يحل الشهر. باقات الجلسات وأكواد الهدايا هنا أيضًا.",
     "Gift a session": "أهدِ جلسة", "Give someone an hour of quiet.": "أهدِ شخصًا ساعة من الهدوء.",
     "Pick a city and a session. You pay now; they get a code by email and book whenever they like. Valid in that city, no expiry.": "اختر مدينة وجلسة. تدفع الآن، ويصلهم كود بالبريد ويحجزون وقتما شاؤوا. صالح في تلك المدينة بلا انتهاء.",
