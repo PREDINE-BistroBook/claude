@@ -184,6 +184,10 @@ footer .wm b{color:#fff}
 .method .glyph{width:44px; height:44px}
 .method h3{font-size:1.25rem}
 .method p{font-size:.95rem; color:var(--ink-soft)}
+a.method{text-decoration:none; color:inherit}
+.method .more{color:var(--mark); font-weight:500; font-size:.9rem; margin-top:auto; padding-top:6px}
+.method .more::after{content:" →"} [dir="rtl"] .method .more::after{content:" ←"}
+.method:hover .more{text-decoration:underline}
 .method .for{font-family:var(--mono); font-size:.74rem; letter-spacing:.06em; text-transform:uppercase; color:var(--mark)}
 
 /* ---------- in the room ---------- */
@@ -306,6 +310,7 @@ legend{font-family:var(--label); font-size:.62rem; letter-spacing:.2em; text-tra
 .service .price{font-family:var(--mono); font-size:1rem; font-variant-numeric:tabular-nums; white-space:nowrap}
 .service .desc{grid-column:1/-1; font-size:.92rem; color:var(--ink-soft)}
 .service .dur{font-family:var(--mono); font-size:.72rem; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-mute)}
+.service .how{color:var(--mark); text-transform:none; letter-spacing:0; font-family:var(--body); font-size:.8rem; font-weight:500; text-decoration:none} .service .how:hover{text-decoration:underline}
 .field{display:grid; gap:8px; min-width:0}
 .field label{font-size:.9rem; font-weight:500}
 .field input, .field select, .field textarea{
@@ -550,42 +555,48 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
     <p>Every session starts with a short conversation about what your body's been doing lately. Then your therapist picks the approach. You can also ask for one by name.</p>
   </div>
   <div class="method-list">
-    <div class="method reveal">
+    <a class="method reveal" href="method.html?m=dry">
       <svg class="glyph" viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 34c0-14 4-22 10-22s10 8 10 22z"/><line x1="10" y1="34" x2="34" y2="34"/></svg>
       <h3>Dry cupping</h3>
       <p>Cups placed and left still. The classic session, and the one to start with if you've never tried it.</p>
       <p class="for">For · tight back, stiff shoulders, a first visit</p>
-    </div>
-    <div class="method reveal">
+      <span class="more">How it works</span>
+    </a>
+    <a class="method reveal" href="method.html?m=sliding">
       <svg class="glyph" viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 34c0-14 4-22 10-22s10 8 10 22z"/><path d="M28 22h8m-4-4 4 4-4 4"/><line x1="6" y1="34" x2="38" y2="34"/></svg>
       <h3>Sliding cupping</h3>
       <p>Oil on the skin, and the cup glides along the muscle. Closer to a massage, with the lift built in.</p>
       <p class="for">For · athletes, long desk days, recovery</p>
-    </div>
-    <div class="method reveal">
+      <span class="more">How it works</span>
+    </a>
+    <a class="method reveal" href="method.html?m=fire">
       <svg class="glyph" viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 34c0-14 4-22 10-22s10 8 10 22z"/><path d="M22 12c-2-3-1-5 1-7 1 3 3 4 2 7"/><line x1="10" y1="34" x2="34" y2="34"/></svg>
       <h3>Fire cupping</h3>
       <p>A flame heats the air inside a glass cup for a second before it lands. The traditional way, warmer and deeper.</p>
       <p class="for">For · deep, chronic tension</p>
-    </div>
-    <div class="method reveal">
+      <span class="more">How it works</span>
+    </a>
+    <a class="method reveal" href="method.html?m=hijama">
       <svg class="glyph" viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 34c0-14 4-22 10-22s10 8 10 22z"/><path d="M19 30v-6m6 6v-6"/><line x1="10" y1="34" x2="34" y2="34"/></svg>
       <h3>Hijama (wet cupping)</h3>
       <p>Small, shallow incisions before the cup goes back on, drawing a little blood out. Rooted in prophetic medicine and widely practised in Egypt. Done with single-use, sterile equipment only.</p>
       <p class="for">For · those who ask for it specifically</p>
-    </div>
-    <div class="method reveal">
+      <span class="more">How it works</span>
+    </a>
+    <a class="method reveal" href="method.html?m=manual">
       <svg class="glyph" viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 30c6-2 10-8 14-12s8-6 14-4"/><path d="M12 34c5-1 8-5 11-8"/><path d="M26 14l4 4"/></svg>
       <h3>Manual therapy</h3>
       <p>Hands only: deep tissue and sports massage, often before the cups go on. This is where every Zen session starts.</p>
       <p class="for">For · recovery between training days, anything that needs hands first</p>
-    </div>
-    <div class="method reveal">
+      <span class="more">How it works</span>
+    </a>
+    <a class="method reveal" href="method.html?m=facial">
       <svg class="glyph" viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="22" cy="22" r="5"/><circle cx="12" cy="30" r="4"/><circle cx="32" cy="30" r="4"/><circle cx="22" cy="10" r="3"/></svg>
       <h3>Facial cupping</h3>
       <p>Tiny cups, very light suction, always gliding, never still. No marks. Leaves the skin flushed and the jaw looser.</p>
       <p class="for">For · puffiness, jaw tension, a lighter session</p>
-    </div>
+      <span class="more">How it works</span>
+    </a>
   </div>
 </section>
 
@@ -930,6 +941,7 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
 
 <script src="i18n.js"></script>
 <script src="guide.js"></script>
+<script src="methods.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
 <script>
@@ -1000,7 +1012,7 @@ let ST = { settings: {}, gmaps: {}, whatsapp: {}, review: {} };
 fetch("/api/catalog").then(r => (r.headers.get("content-type") || "").includes("json") ? r.json() : null).then(d => {
   if (!d?.cities) return;
   for (const [k, c] of Object.entries(d.cities)) { if (!CITIES[k]) continue; if (c.services?.length) CITIES[k].services = c.services; if (c.address?.length) CITIES[k].address = c.address; if (c.team) CITIES[k].team = c.team; if (c.whatsapp) CITIES[k].whatsapp = c.whatsapp; }
-  if (city) { renderServices(); updateSummary(); renderPrep(); } giftServices();
+  if (city) { renderServices(); if (SVC_PRE) preselectService(SVC_PRE); updateSummary(); renderPrep(); } giftServices();
 }).catch(() => {});
 fetch("/api/status").then(r => (r.headers.get("content-type") || "").includes("json") ? r.json() : {}).then(s => { ST = { ...ST, ...s }; applySettings(s.settings); if (city) placeLinks(); }).catch(() => applySettings());
 document.addEventListener("zen:lang", () => { applySettings(); if (city) { renderServices(); updateSummary(); renderPrep(); $("#chosen-text").textContent = t("You're booking in {city}.", { city: t(CITIES[city].name) }); } });
@@ -1232,7 +1244,9 @@ function renderPrep() {
 { const q = new URLSearchParams(location.search); const pre = q.get("city");
   if (q.get("date") && /^\d{4}-\d{2}-\d{2}$/.test(q.get("date"))) $("#date").value = q.get("date");
   if (q.get("gift")) $("#gift-code").value = q.get("gift");
-  if (pre && CITIES[pre]) setTimeout(() => { choose(pre, true); if (q.get("gift")) applyGift(); }, 50); }
+  if (pre && CITIES[pre]) setTimeout(() => { choose(pre, true); if (q.get("gift")) applyGift(); if (q.get("svc")) preselectService(q.get("svc")); }, 50); }
+let SVC_PRE = null;
+function preselectService(method) { SVC_PRE = method; const c = CITIES[city]; const hit = c?.services.find(s => methodOf(s.name) === method); if (hit) { const el = $("#svc-" + hit.id); if (el) { el.checked = true; updateSummary(); renderPrep(); } } }
 
 /* ---------- gift a session ---------- */
 function giftServices() { const c = CITIES[$("#g-city").value]; $("#g-service").innerHTML = c.services.map(s => `<option value="${s.id}">${t(s.name)} · ${s.dur} ${t("min")} — ${money(s.price, c.currency)}</option>`).join(""); giftPrice(); }
@@ -1261,6 +1275,7 @@ const COVER_GLYPH = {
   manual: `<svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 30c6-2 10-8 14-12s8-6 14-4"/><path d="M12 34c5-1 8-5 11-8"/><path d="M26 14l4 4"/></svg>`,
   facial: `<svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="22" cy="22" r="5"/><circle cx="12" cy="30" r="4"/><circle cx="32" cy="30" r="4"/><circle cx="22" cy="10" r="3"/></svg>`,
 };
+const methodOf = (name) => window.ZenMethods ? ZenMethods.methodOf(name) : "dry";
 function coverKey(name) { const n = (name || "").toLowerCase(); if (n.includes("slid") || n.includes("glid") || n.includes("dynamic")) return "sliding"; const k = ZenGuide.serviceKey(name); return COVER_GLYPH[k] ? k : "cupping"; }
 function renderServices() {
   const c = CITIES[city]; const kept = $("input[name=service]:checked")?.value?.split("-")[1];
@@ -1276,7 +1291,7 @@ function renderServices() {
         <span class="name">${t(s.name)}</span>
         <span class="price num">${money(s.price, c.currency)}</span>
         <span class="desc">${t(s.desc)}</span>
-        <span class="dur">${s.dur} ${t("min")}</span>
+        <span class="dur">${s.dur} ${t("min")} · <a class="how" href="method.html?m=${methodOf(s.name)}">${t("How it works")}</a></span>
       </label>
     </div>`).join("");
   I.apply($("#book"));
