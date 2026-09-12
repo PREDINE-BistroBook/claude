@@ -51,6 +51,19 @@
   .team-card.off{opacity:.65} .team-card .actions{flex:none}
   .photo-pick{display:flex;gap:16px;align-items:center} .photo-pick .avatar.lg{cursor:pointer;position:relative;overflow:hidden} .photo-pick .avatar.lg::after{content:"Change";position:absolute;inset:auto 0 0 0;padding:4px 0;text-align:center;font:500 .66rem var(--body);background:rgba(0,0,0,.45);color:#fff;letter-spacing:.04em;text-transform:uppercase} .photo-pick input[type=file]{display:none}
   #dlg-ask .inner{gap:10px} #dlg-ask p{margin:0;color:var(--ink-soft);font-size:.95rem}
+  /* calendar: one week strip per room / therapist, days off as ranges */
+  .hgroup{border:1px solid var(--line);border-radius:14px;padding:12px 14px;background:var(--ground-3)}
+  .hgroup-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px} .hgroup-head b{font-weight:500;display:flex;align-items:center;gap:8px} .hgroup-head .sum{font-size:.82rem;color:var(--ink-soft);flex:1;min-width:0}
+  #hours-card,#off-card{grid-column:1/-1} /* the week strip needs the full width; the two smaller cards share the row below */
+  .week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+  .week .day{border:1px solid var(--line);border-radius:10px;padding:8px;min-height:64px;background:var(--ground);display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0}
+  .week .day.closed{background:transparent;border-style:dashed} .week .day.closed .off{font-size:.78rem;color:var(--ink-mute)}
+  .week .dname{font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft)}
+  .hchip{display:inline-flex;align-items:center;gap:4px;padding:3px 3px 3px 7px;border-radius:8px;background:var(--ground-2);font-family:var(--mono);font-size:.76rem;max-width:100%;flex-wrap:wrap} .hchip small{color:var(--ink-mute);font-family:var(--body);font-size:.68rem}
+  .hchip button{border:0;background:transparent;cursor:pointer;font-size:1.05rem;line-height:1;color:var(--ink-mute);padding:0 3px;border-radius:6px} .hchip button:hover{color:#fff;background:var(--bad)}
+  .off-row{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--ground-3)} .off-row>div{flex:1;min-width:0} .off-row b{font-weight:500} .off-row .tiny{display:block;margin-top:2px}
+  .off-month{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-mute);margin:6px 0 -2px}
+  @media (max-width:700px){.hgroup-head{display:grid;grid-template-columns:1fr auto} .hgroup-head .sum{grid-column:1/-1} .week{grid-template-columns:1fr} .week .day{flex-direction:row;align-items:center;gap:10px;min-height:0;flex-wrap:wrap} .week .dname{width:34px}}
   .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin:8px 0} .gallery figure{margin:0;display:grid;gap:3px;position:relative} .gallery img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;background:var(--ground-2)} .gallery figcaption{font-size:.72rem;color:var(--ink-soft)} .gallery .x{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.6);color:#fff;border:0;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:.8rem}
   .review-item{display:grid;gap:8px;padding:16px;border:1px solid color-mix(in srgb,var(--bad) 40%,transparent);border-radius:14px;background:color-mix(in srgb,var(--bad) 5%,var(--ground-3))}
   .slot-chips{display:flex;gap:6px;flex-wrap:wrap} .slot-chips span{padding:5px 10px;border-radius:999px;background:var(--ground-2);font-family:var(--mono);font-size:.82rem}
@@ -190,7 +203,7 @@
     <!-- calendar: opening hours, days off, waitlist -->
     <div id="tab-calendar" hidden>
       <div class="section-head"><h2>Calendar</h2></div>
-      <details class="help" open><summary>How live time slots work</summary>
+      <details class="help" id="cal-help"><summary>How live time slots work</summary>
         <ul>
           <li>Until you add opening hours for a city, clients pick a rough window (morning / afternoon / evening) and you agree the hour on WhatsApp. That's fine to start with.</li>
           <li>Add <b>opening hours</b> below (for example Mon–Sat 10:00–18:00, one-hour slots) and the website shows exact free times instead. A time disappears the moment someone books it, so no double bookings.</li>
@@ -200,25 +213,15 @@
         </ul>
       </details>
       <div class="settings-grid">
-        <div class="card">
-          <h3>Opening hours</h3>
-          <div class="table-wrap" style="margin-bottom:14px"><table id="avail-table"><thead><tr><th>City</th><th>Day</th><th>Hours</th><th>Slot</th><th>Who</th><th></th></tr></thead><tbody></tbody></table></div>
-          <form id="avail-form" class="grid" style="gap:12px">
-            <div class="row"><div class="field" id="av-city-wrap" style="flex:1"><label for="av-city">City</label><select id="av-city"></select></div><div class="field" style="flex:1"><label for="av-th">Therapist</label><select id="av-th"><option value="">Whole room</option></select></div></div>
-            <div class="field"><label>Days</label><div class="days" id="av-days"><label><input type="checkbox" value="1" checked>Mon</label><label><input type="checkbox" value="2" checked>Tue</label><label><input type="checkbox" value="3" checked>Wed</label><label><input type="checkbox" value="4" checked>Thu</label><label><input type="checkbox" value="5" checked>Fri</label><label><input type="checkbox" value="6" checked>Sat</label><label><input type="checkbox" value="0">Sun</label></div></div>
-            <div class="row"><div class="field" style="flex:1"><label for="av-start">From</label><input id="av-start" type="time" value="10:00"></div><div class="field" style="flex:1"><label for="av-end">To</label><input id="av-end" type="time" value="18:00"></div><div class="field" style="flex:1"><label for="av-min">Slot length</label><select id="av-min"><option value="30">30 min</option><option value="45">45 min</option><option value="60" selected>60 min</option><option value="90">90 min</option></select></div></div>
-            <div class="row"><button class="btn small" type="submit">Add hours</button><span class="err" id="avail-err" hidden></span></div>
-          </form>
+        <div class="card" id="hours-card">
+          <div class="section-head" style="margin:0 0 12px"><h3>Opening hours</h3><button class="btn small" id="add-hours">Add hours</button></div>
+          <p class="tiny" id="hours-empty" hidden>No opening hours yet. Clients pick a morning / afternoon / evening window and you agree the hour on WhatsApp. Add hours and the website shows exact free times instead.</p>
+          <div id="hours-groups" class="grid" style="gap:12px"></div>
         </div>
-        <div class="card">
-          <h3>Days off</h3>
-          <div class="table-wrap" style="margin-bottom:14px"><table id="blocked-table"><thead><tr><th>City</th><th>Day</th><th>Hours</th><th>Who</th><th>Why</th><th></th></tr></thead><tbody></tbody></table></div>
-          <form id="blocked-form" class="grid" style="gap:12px">
-            <div class="row"><div class="field" id="bl-city-wrap" style="flex:1"><label for="bl-city">City</label><select id="bl-city"></select></div><div class="field" style="flex:1"><label for="bl-th">Therapist</label><select id="bl-th"><option value="">Whole room</option></select></div></div>
-            <div class="row"><div class="field" style="flex:1"><label for="bl-from">From day</label><input id="bl-from" type="date" required></div><div class="field" style="flex:1"><label for="bl-to">To day <span class="tiny">(optional)</span></label><input id="bl-to" type="date"></div></div>
-            <div class="row"><div class="field" style="flex:1"><label for="bl-start">From time <span class="tiny">(blank = all day)</span></label><input id="bl-start" type="time"></div><div class="field" style="flex:1"><label for="bl-end">To time</label><input id="bl-end" type="time"></div><div class="field" style="flex:2"><label for="bl-reason">Reason <span class="tiny">(only you see it)</span></label><input id="bl-reason" placeholder="Holiday, dentist…"></div></div>
-            <div class="row"><button class="btn small" type="submit">Block it</button><span class="err" id="blocked-err" hidden></span></div>
-          </form>
+        <div class="card" id="off-card">
+          <div class="section-head" style="margin:0 0 12px"><h3>Days off</h3><button class="btn small" id="add-off">Add days off</button></div>
+          <p class="tiny" id="off-empty" hidden>Nothing blocked. Holidays, a dentist appointment, an afternoon off: add them here and those times disappear from the website.</p>
+          <div id="off-list" class="grid" style="gap:8px"></div>
         </div>
         <div class="card">
           <h3>Free times on a day</h3>
@@ -394,6 +397,33 @@
     <label class="row" style="gap:8px;font-size:.92rem"><input type="checkbox" id="sv-active" checked> Shown on the website</label>
     <p class="err" id="sv-err" hidden></p>
     <div class="row" style="justify-content:flex-end"><button class="btn small ghost" type="button" id="sv-cancel">Cancel</button><button class="btn small" type="submit">Save</button></div>
+  </form>
+</dialog>
+
+<!-- opening hours -->
+<dialog id="dlg-hours">
+  <form class="inner" id="avail-form" method="dialog" novalidate>
+    <h3>Add opening hours</h3>
+    <p class="tiny" style="margin:-6px 0 0">Pick the days, the hours and how long a session slot is. Add another block for a different time (a lunch break: 10–13 and 14–18).</p>
+    <div class="row"><div class="field" id="av-city-wrap" style="flex:1"><label for="av-city">City</label><select id="av-city"></select></div><div class="field" style="flex:1"><label for="av-th">Who</label><select id="av-th"><option value="">Whole room</option></select></div></div>
+    <div class="field"><label>Days</label><div class="days" id="av-days"><label><input type="checkbox" value="1" checked>Mon</label><label><input type="checkbox" value="2" checked>Tue</label><label><input type="checkbox" value="3" checked>Wed</label><label><input type="checkbox" value="4" checked>Thu</label><label><input type="checkbox" value="5" checked>Fri</label><label><input type="checkbox" value="6" checked>Sat</label><label><input type="checkbox" value="0">Sun</label></div></div>
+    <div class="row"><div class="field" style="flex:1"><label for="av-start">From</label><input id="av-start" type="time" value="10:00"></div><div class="field" style="flex:1"><label for="av-end">To</label><input id="av-end" type="time" value="18:00"></div><div class="field" style="flex:1"><label for="av-min">Slot length</label><select id="av-min"><option value="30">30 min</option><option value="45">45 min</option><option value="60" selected>60 min</option><option value="90">90 min</option></select></div></div>
+    <p class="err" id="avail-err" hidden></p>
+    <div class="row" style="justify-content:flex-end"><button class="btn small ghost" type="button" id="av-cancel">Cancel</button><button class="btn small" type="submit">Add hours</button></div>
+  </form>
+</dialog>
+
+<!-- days off -->
+<dialog id="dlg-off">
+  <form class="inner" id="blocked-form" method="dialog" novalidate>
+    <h3>Add days off</h3>
+    <p class="tiny" style="margin:-6px 0 0">A whole day, a range of days, or just a few hours. Only the team sees the reason.</p>
+    <div class="row"><div class="field" id="bl-city-wrap" style="flex:1"><label for="bl-city">City</label><select id="bl-city"></select></div><div class="field" style="flex:1"><label for="bl-th">Who</label><select id="bl-th"><option value="">Whole room</option></select></div></div>
+    <div class="row"><div class="field" style="flex:1"><label for="bl-from">From day</label><input id="bl-from" type="date" required></div><div class="field" style="flex:1"><label for="bl-to">To day <span class="tiny">(optional)</span></label><input id="bl-to" type="date"></div></div>
+    <div class="row"><div class="field" style="flex:1"><label for="bl-start">From time <span class="tiny">(blank = all day)</span></label><input id="bl-start" type="time"></div><div class="field" style="flex:1"><label for="bl-end">To time</label><input id="bl-end" type="time"></div></div>
+    <div class="field"><label for="bl-reason">Reason <span class="tiny">(optional)</span></label><input id="bl-reason" placeholder="Holiday, dentist…"></div>
+    <p class="err" id="blocked-err" hidden></p>
+    <div class="row" style="justify-content:flex-end"><button class="btn small ghost" type="button" id="bl-cancel">Cancel</button><button class="btn small" type="submit">Block it</button></div>
   </form>
 </dialog>
 
@@ -713,17 +743,51 @@ async function loadCalendar() {
   const fill = (id) => { $("#" + id).innerHTML = `<option value="">Whole room</option>` + teamIn(isOwner() ? $("#" + (id === "av-th" ? "av-city" : "bl-city")).value : A.role).map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join(""); };
   fill("av-th"); fill("bl-th"); $("#av-city").onchange = () => fill("av-th"); $("#bl-city").onchange = () => fill("bl-th");
   const [av, bl, wl] = await Promise.all([ZenAPI("GET", "/api/admin/availability"), ZenAPI("GET", "/api/admin/blocked"), ZenAPI("GET", "/api/admin/waitlist")]);
-  $("#avail-table tbody").innerHTML = av.rows.length ? av.rows.map((r) => `<tr><td>${CITY_NAME[r.city]}</td><td>${WD[r.weekday]}</td><td class="num">${r.start}–${r.end}</td><td class="num">${r.slot_minutes} min</td><td>${r.therapist_id ? esc(thName(r.therapist_id)) : "room"}</td><td><button class="btn small ghost" data-del="${r.id}">Remove</button></td></tr>`).join("") : `<tr><td colspan="6" class="empty">No opening hours yet: clients pick a morning / afternoon / evening window.</td></tr>`;
-  $("#blocked-table tbody").innerHTML = bl.rows.length ? bl.rows.map((r) => `<tr><td>${CITY_NAME[r.city]}</td><td class="num">${fmtDate(r.date)}</td><td class="num">${r.start ? r.start + "–" + (r.end || "") : "all day"}</td><td>${r.therapist_id ? esc(thName(r.therapist_id)) : "room"}</td><td class="tiny">${esc(r.reason || "")}</td><td><button class="btn small ghost" data-del="${r.id}">Remove</button></td></tr>`).join("") : `<tr><td colspan="6" class="empty">Nothing blocked.</td></tr>`;
+  $("#cal-help").open = !av.rows.length && !bl.rows.length;
+  renderHours(av.rows); renderDaysOff(bl.rows);
   $("#wait-table tbody").innerHTML = wl.rows.length ? wl.rows.map((r) => `<tr><td>${esc(r.name)}<div class="tiny">${esc(r.phone || r.email)}</div></td><td>${CITY_NAME[r.city]}</td><td class="num">${fmtDate(r.date)}</td><td>${r.slot_pref || "any"}</td><td class="tiny">${r.notified_at ? "yes, " + r.notified_at.slice(0, 10) : "not yet"}</td></tr>`).join("") : `<tr><td colspan="5" class="empty">Nobody waiting.</td></tr>`;
-  $$("#avail-table [data-del]").forEach((b) => (b.onclick = async () => { await ZenAPI("DELETE", "/api/admin/availability/" + b.dataset.del); loadCalendar(); }));
-  $$("#blocked-table [data-del]").forEach((b) => (b.onclick = async () => { await ZenAPI("DELETE", "/api/admin/blocked/" + b.dataset.del); loadCalendar(); }));
 }
+const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
+const whoLabel = (tid) => (tid ? esc(thName(tid)) || "therapist" : "Whole room");
+// One strip per room / therapist: seven day cells with the hour blocks, a one-line summary, one "remove all".
+function renderHours(rows) {
+  const groups = new Map();
+  rows.forEach((r) => { const k = r.city + "|" + (r.therapist_id || ""); if (!groups.has(k)) groups.set(k, { city: r.city, tid: r.therapist_id, days: Object.fromEntries(DAY_ORDER.map((d) => [d, []])) }); groups.get(k).days[r.weekday]?.push(r); });
+  $("#hours-empty").hidden = groups.size > 0;
+  $("#hours-groups").innerHTML = [...groups.values()].sort((a, b) => a.city.localeCompare(b.city) || (a.tid ? 1 : 0) - (b.tid ? 1 : 0)).map((g) => {
+    const sig = (d) => g.days[d].slice().sort((x, y) => x.start.localeCompare(y.start)).map((r) => `${r.start}–${r.end} · ${r.slot_minutes} min`).join(", ");
+    const parts = []; let run = null;
+    DAY_ORDER.forEach((d) => { const sg = sig(d); if (sg && run && run.sig === sg) { run.to = d; return; } if (run) parts.push(run); run = sg ? { from: d, to: d, sig: sg } : null; }); if (run) parts.push(run);
+    const summary = parts.map((p) => `${WD[p.from]}${p.to !== p.from ? "–" + WD[p.to] : ""} ${p.sig}`).join(" · ");
+    const ids = Object.values(g.days).flat().map((r) => r.id);
+    return `<div class="hgroup" data-group="${g.city}|${g.tid || ""}"><div class="hgroup-head"><b><i class="dot ${g.city}"></i>${CITY_NAME[g.city]} · ${whoLabel(g.tid)}</b><span class="sum">${summary}</span><button class="btn small ghost" data-clear="${ids.join(",")}" data-label="${esc(CITY_NAME[g.city] + " · " + (g.tid ? thName(g.tid) : "whole room"))}">Remove all</button></div>
+      <div class="week">${DAY_ORDER.map((d) => { const rs = g.days[d].slice().sort((x, y) => x.start.localeCompare(y.start)); return `<div class="day ${rs.length ? "" : "closed"}"><span class="dname">${WD[d]}</span>${rs.length ? rs.map((r) => `<span class="hchip"><span>${r.start}–${r.end}</span><button type="button" data-del="${r.id}" aria-label="Remove ${WD[d]} ${r.start}–${r.end}" title="Remove">×</button></span>`).join("") : `<span class="off">closed</span>`}</div>`; }).join("")}</div></div>`;
+  }).join("");
+  $$("#hours-groups [data-del]").forEach((b) => (b.onclick = async () => { await ZenAPI("DELETE", "/api/admin/availability/" + b.dataset.del); loadCalendar(); }));
+  $$("#hours-groups [data-clear]").forEach((b) => (b.onclick = async () => { if (!(await ask({ title: `Remove all opening hours for ${b.dataset.label}?`, text: "Clients will pick a rough window again until you add new hours. Bookings already made stay as they are.", ok: "Remove all", danger: true }))) return; await ZenAPI("POST", "/api/admin/availability/remove", { ids: b.dataset.clear.split(",") }); loadCalendar(); }));
+}
+// Consecutive days with the same city / who / hours / reason become one line: "23 Dec – 2 Jan · 11 days".
+function renderDaysOff(rows) {
+  const sorted = rows.slice().sort((a, b) => a.city.localeCompare(b.city) || String(a.therapist_id || "").localeCompare(String(b.therapist_id || "")) || a.date.localeCompare(b.date));
+  const ranges = [];
+  sorted.forEach((r) => { const last = ranges[ranges.length - 1]; const same = last && last.city === r.city && (last.tid || "") === (r.therapist_id || "") && (last.start || "") === (r.start || "") && (last.end || "") === (r.end || "") && (last.reason || "") === (r.reason || "") && nextDay(last.to) === r.date; if (same) { last.to = r.date; last.ids.push(r.id); } else ranges.push({ city: r.city, tid: r.therapist_id, start: r.start, end: r.end, reason: r.reason, from: r.date, to: r.date, ids: [r.id] }); });
+  ranges.sort((a, b) => a.from.localeCompare(b.from));
+  $("#off-empty").hidden = ranges.length > 0;
+  let month = ""; const today = new Date().toISOString().slice(0, 10);
+  $("#off-list").innerHTML = ranges.map((g) => { const m = g.from.slice(0, 7); const head = m !== month ? `<div class="off-month">${new Date(g.from + "T12:00:00").toLocaleDateString("en-GB", { month: "long", year: "numeric" })}</div>` : ""; month = m;
+    const n = g.ids.length, when = g.from === g.to ? fmtDate(g.from) : `${fmtDate(g.from)} – ${fmtDate(g.to)}`;
+    return `${head}<div class="off-row ${g.to < today ? "svc-off" : ""}"><div><b>${when}</b> <span class="tiny" style="display:inline">${n > 1 ? n + " days" : g.start ? g.start + "–" + (g.end || "") : "all day"}${n > 1 && g.start ? " · " + g.start + "–" + (g.end || "") : ""}</span><span class="tiny"><i class="dot ${g.city}"></i>${CITY_NAME[g.city]} · ${whoLabel(g.tid).toLowerCase()}${g.reason ? " · " + esc(g.reason) : ""}</span></div><button class="btn small ghost" data-clear="${g.ids.join(",")}" data-n="${n}" data-label="${esc(when)}">Remove</button></div>`; }).join("");
+  $$("#off-list [data-clear]").forEach((b) => (b.onclick = async () => { const ids = b.dataset.clear.split(","); if (ids.length > 1 && !(await ask({ title: `Open ${b.dataset.label} again?`, text: `${ids.length} days come back on the website for booking.`, ok: "Remove days off", danger: true }))) return; await ZenAPI("POST", "/api/admin/blocked/remove", { ids }); loadCalendar(); }));
+}
+const nextDay = (d) => { const x = new Date(d + "T12:00:00"); x.setDate(x.getDate() + 1); return x.toISOString().slice(0, 10); };
+$("#add-hours").addEventListener("click", () => { $("#avail-err").hidden = true; $("#dlg-hours").showModal(); });
+$("#add-off").addEventListener("click", () => { $("#blocked-err").hidden = true; if (!$("#bl-from").value) $("#bl-from").value = new Date().toISOString().slice(0, 10); $("#dlg-off").showModal(); });
+$("#av-cancel").addEventListener("click", () => $("#dlg-hours").close()); $("#bl-cancel").addEventListener("click", () => $("#dlg-off").close());
 $("#avail-form").addEventListener("submit", async (e) => { e.preventDefault(); const err = $("#avail-err"); err.hidden = true;
-  try { await ZenAPI("POST", "/api/admin/availability", { city: $("#av-city").value, therapist_id: $("#av-th").value || undefined, weekdays: $$("#av-days input:checked").map((i) => Number(i.value)), start: $("#av-start").value, end: $("#av-end").value, slot_minutes: Number($("#av-min").value) }); loadCalendar(); }
+  try { await ZenAPI("POST", "/api/admin/availability", { city: $("#av-city").value, therapist_id: $("#av-th").value || undefined, weekdays: $$("#av-days input:checked").map((i) => Number(i.value)), start: $("#av-start").value, end: $("#av-end").value, slot_minutes: Number($("#av-min").value) }); $("#dlg-hours").close(); loadCalendar(); }
   catch (ex) { err.textContent = ex.message; err.hidden = false; } });
 $("#blocked-form").addEventListener("submit", async (e) => { e.preventDefault(); const err = $("#blocked-err"); err.hidden = true;
-  try { await ZenAPI("POST", "/api/admin/blocked", { city: $("#bl-city").value, therapist_id: $("#bl-th").value || undefined, date: $("#bl-from").value, to: $("#bl-to").value || undefined, start: $("#bl-start").value || undefined, end: $("#bl-end").value || undefined, reason: $("#bl-reason").value.trim() }); e.target.reset(); loadCalendar(); }
+  try { await ZenAPI("POST", "/api/admin/blocked", { city: $("#bl-city").value, therapist_id: $("#bl-th").value || undefined, date: $("#bl-from").value, to: $("#bl-to").value || undefined, start: $("#bl-start").value || undefined, end: $("#bl-end").value || undefined, reason: $("#bl-reason").value.trim() }); e.target.reset(); $("#dlg-off").close(); loadCalendar(); }
   catch (ex) { err.textContent = ex.message; err.hidden = false; } });
 $("#pv-go").addEventListener("click", async () => { const r = await ZenAPI("GET", `/api/admin/slots?city=${$("#pv-city").value}&date=${$("#pv-date").value}`); $("#pv-out").innerHTML = r.mode === "windows" ? `<span class="tiny">No opening hours for this city yet: clients pick a window.</span>` : r.slots.length ? r.slots.map((s) => `<span>${s.time}${s.therapists.length > 1 ? ` <small>×${s.therapists.length}</small>` : ""}</span>`).join("") : `<span class="tiny">Fully booked or blocked.</span>`; });
 
