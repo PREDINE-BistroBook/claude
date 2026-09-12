@@ -44,7 +44,7 @@ function choose(key, quiet) {
   placeLinks();
   const form = $("#booking"); form.hidden = false;
   renderServices();
-  const d = $("#date"); const tm = new Date(); tm.setDate(tm.getDate() + 1);
+  const d = $("#date"); const tm = new Date(); // same-day booking is allowed: past times are filtered, and in window mode Zen confirms by WhatsApp
   d.min = tm.toISOString().slice(0, 10); if (!d.value || d.value < d.min) d.value = d.min;
   $("#phone").placeholder = c.currency === "EUR" ? "+39 …" : "+20 …";
   renderDiscounts(); loadTeam(); loadSlots(); loadPackHint();
@@ -73,9 +73,9 @@ async function loadTeam() {
   if (k !== city) return;
   const list = TEAM[k], box = $("#place-therapists");
   box.hidden = !list.length;
-  box.innerHTML = list.map(th => `<div class="therapist"><span class="ph">${th.photo ? `<img src="${th.photo}" alt="">` : th.name.slice(0, 1)}</span><div><b>${th.name}</b><span>${[th.bio, th.languages ? t("Speaks {langs}", { langs: th.languages }) : ""].filter(Boolean).join(" · ")}</span></div></div>`).join("");
+  box.innerHTML = list.map(th => `<div class="therapist"><span class="ph">${th.photo ? `<img src="${esc(th.photo)}" alt="">` : esc(th.name.slice(0, 1))}</span><div><b>${esc(th.name)}</b><span>${esc([th.bio, th.languages ? t("Speaks {langs}", { langs: th.languages }) : ""].filter(Boolean).join(" · "))}</span></div></div>`).join("");
   const sel = $("#therapist"); const keep = sel.value;
-  sel.innerHTML = `<option value="">${t("Anyone available")}</option>` + list.map(th => `<option value="${th.id}">${th.name}</option>`).join("");
+  sel.innerHTML = `<option value="">${t("Anyone available")}</option>` + list.map(th => `<option value="${esc(th.id)}">${esc(th.name)}</option>`).join("");
   if ([...sel.options].some(o => o.value === keep)) sel.value = keep; else if (ME?.user?.preferred_therapist && list.some(th => th.id === ME.user.preferred_therapist)) sel.value = ME.user.preferred_therapist;
   $("#therapist-wrap").hidden = list.length < 2 || SLOTMODE !== "slots";
 }
@@ -180,16 +180,16 @@ function renderServices() {
   const c = CITIES[city]; const kept = $("input[name=service]:checked")?.value?.split("-")[1];
   const keepIdx = Math.max(0, c.services.findIndex(s => s.id.split("-")[1] === kept)); // same session type when switching city
   $("#place-name").textContent = t(c.name);
-  $("#place-addr").innerHTML = c.address.map((l, i) => i === 0 ? `<b>${t(l)}</b>` : `<span>${t(l)}</span>`).join("");
+  $("#place-addr").innerHTML = c.address.map((l, i) => i === 0 ? `<b>${esc(t(l))}</b>` : `<span>${esc(t(l))}</span>`).join("");
   $("#place-team").textContent = t(c.team);
   $("#services").innerHTML = c.services.map((s, i) => `
     <div class="service">
       <input type="radio" name="service" id="svc-${s.id}" value="${s.id}" ${i === keepIdx ? "checked" : ""}>
       <label for="svc-${s.id}">
-        <span class="cover ${s.photo ? "" : "k-" + coverKey(s.name)}" aria-hidden="true">${s.photo ? `<img src="${s.photo}" alt="" loading="lazy">` : COVER_GLYPH[coverKey(s.name)]}</span>
-        <span class="name">${t(s.name)}</span>
+        <span class="cover ${s.photo ? "" : "k-" + coverKey(s.name)}" aria-hidden="true">${s.photo ? `<img src="${esc(s.photo)}" alt="" loading="lazy">` : COVER_GLYPH[coverKey(s.name)]}</span>
+        <span class="name">${esc(t(s.name))}</span>
         <span class="price num">${money(s.price, c.currency)}</span>
-        <span class="desc">${t(s.desc)}</span>
+        <span class="desc">${esc(t(s.desc))}</span>
         <span class="dur">${s.dur} ${t("min")} · <a class="how" href="method.html?m=${methodOf(s.name)}">${t("How it works")}</a></span>
       </label>
     </div>`).join("");

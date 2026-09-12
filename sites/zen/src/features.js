@@ -4,7 +4,7 @@
 // checked the admin cookie). Everything money-related goes through stripeCheckout() in lib.js (2% platform fee).
 import { CITIES } from "./catalog.js";
 import { randomId, referralCode, signPayload, verifyPayload, getCookie, clearCookie } from "./auth.js";
-import { CITY_KEYS, json, clean, normEmail, isDate, isTime, fmt, now, today, addDays, feeOn, body, isLive, currentUser, scope, sendEmail, stripeCheckout, slotsFor, healthFlags, parseIntake, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList } from "./lib.js";
+import { CITY_KEYS, json, clean, normEmail, isDate, isTime, fmt, now, today, addDays, feeOn, body, isLive, currentUser, scope, sendEmail, stripeCheckout, slotsFor, healthFlags, parseIntake, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer } from "./lib.js";
 
 const b64u = (s) => btoa(typeof s === "string" ? unescape(encodeURIComponent(s)) : String.fromCharCode(...new Uint8Array(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const cityOf = (k) => (CITY_KEYS.includes(k) ? k : null);
@@ -17,6 +17,7 @@ export async function featureRoute(req, env, url, ctx) {
   const p = url.pathname, m = req.method;
   if (p === "/api/slots" && m === "GET") return slots(env, url);
   if (p === "/api/team" && m === "GET") return team(env, url);
+  { const sp = p.match(/^\/api\/service-photo\/([a-z0-9-]+)$/); if (sp && m === "GET") return servicePhoto(env, sp[1]); }
   if (p === "/api/packages" && m === "GET") return packages(env, url);
   if (p === "/api/packages/checkout" && m === "POST") return packageCheckout(req, env);
   if (p === "/api/gift/checkout" && m === "POST") return giftCheckout(req, env);
@@ -37,10 +38,17 @@ export async function featureRoute(req, env, url, ctx) {
 async function slots(env, url) {
   const city = cityOf(url.searchParams.get("city")), date = clean(url.searchParams.get("date"), 10);
   if (!city || !isDate(date)) return json({ error: "city and date" }, 400);
-  if (date < today()) return json({ mode: "slots", slots: [] });
+  if (date < localNow(CITIES[city].tz).date) return json({ mode: "slots", slots: [] });
   const th = clean(url.searchParams.get("therapist"), 40) || null;
   const r = await slotsFor(env, city, date, th);
   return json(r, 200, { "cache-control": "no-store" });
+}
+// Cover pictures are served as images (cached a day) instead of inline in the catalog, which kept every page load light.
+async function servicePhoto(env, id) {
+  const r = await env.DB.prepare("SELECT photo, updated_at FROM services WHERE id = ?").bind(id).first();
+  if (!r?.photo) return json({ error: "Not found" }, 404);
+  const [meta, b64] = r.photo.split(","); const ct = meta.slice(5, meta.indexOf(";")) || "image/jpeg";
+  return new Response(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)), { headers: { "content-type": ct, "cache-control": "public, max-age=86400", etag: `"${(r.updated_at || "").replace(/\D/g, "")}"` } });
 }
 async function team(env, url) {
   const city = cityOf(url.searchParams.get("city"));
@@ -278,7 +286,7 @@ async function saveService(req, env, admin, id) {
   const minutes = Number.isInteger(b.minutes) && b.minutes >= 10 && b.minutes <= 240 ? b.minutes : cur?.minutes || 60;
   const amount = Number.isInteger(b.amount) && b.amount >= 0 && b.amount < 100000000 ? b.amount : cur?.amount;
   if (!city || !name || amount === undefined || amount === null) return json({ error: "City, a name and a price." }, 400);
-  const photo = typeof b.photo === "string" && b.photo.startsWith("data:image/") && b.photo.length < 260000 ? b.photo : b.photo === null ? null : cur?.photo || null;
+  const photo = b.photo === undefined ? cur?.photo || null : b.photo === null ? null : validPhoto(b.photo, 260000) || cur?.photo || null;
   const vals = [name, minutes, amount, CITIES[city].currency, b.description === undefined ? cur?.description || "" : clean(b.description, 160), b.active === undefined ? cur?.active ?? 1 : b.active ? 1 : 0, Number.isInteger(b.sort) ? b.sort : cur?.sort || 0, now()];
   if (cur) await env.DB.prepare("UPDATE services SET name = ?, minutes = ?, amount = ?, currency = ?, description = ?, active = ?, sort = ?, updated_at = ?, photo = ? WHERE id = ?").bind(...vals, photo, id).run();
   else {
@@ -343,7 +351,7 @@ async function saveTherapist(req, env, admin, id) {
   if (cur && admin.role !== "all" && cur.city !== admin.role) return json({ error: "Not your city." }, 403);
   const city = cur ? cur.city : cityFor(admin, b.city), name = clean(b.name, 80) || cur?.name;
   if (!city || !name) return json({ error: "City and name." }, 400);
-  const photo = typeof b.photo === "string" && b.photo.startsWith("data:image/") && b.photo.length < 160000 ? b.photo : b.photo === null ? null : cur?.photo || null;
+  const photo = b.photo === undefined ? cur?.photo || null : b.photo === null ? null : validPhoto(b.photo) || cur?.photo || null;
   const vals = [name, b.bio === undefined ? cur?.bio || "" : clean(b.bio, 400), photo, b.languages === undefined ? cur?.languages || "" : clean(b.languages, 60), b.active === undefined ? cur?.active ?? 1 : b.active ? 1 : 0, Number.isInteger(b.sort) ? b.sort : cur?.sort || 0];
   if (cur) await env.DB.prepare("UPDATE therapists SET name = ?, bio = ?, photo = ?, languages = ?, active = ?, sort = ? WHERE id = ?").bind(...vals, id).run();
   else await env.DB.prepare("INSERT INTO therapists (id, city, name, bio, photo, languages, active, sort) VALUES (?,?,?,?,?,?,?,?)").bind(randomId(), city, ...vals).run();
@@ -411,6 +419,7 @@ async function approveClient(env, admin, id) {
   const city = admin.role === "all" ? null : admin.role;
   await env.DB.prepare("UPDATE users SET approved = 1 WHERE id = ?").bind(id).run();
   const r = await env.DB.prepare("UPDATE bookings SET status = 'confirmed' WHERE user_id = ? AND status = 'review'" + (city ? " AND city = ?" : "")).bind(id, ...(city ? [city] : [])).run();
+  if (r.meta.changes) await maybeRewardReferrer(env, id);
   await sendEmail(env, { to: u.email, subject: "Zen Recovery — you're cleared to book", text: [`Hi ${u.name.split(" ")[0]},`, ``, `A therapist looked at what you told us about your health and you're good to go.`, r.meta.changes ? `Your pending session is now confirmed — Zen will message you on WhatsApp about the exact hour, and you pay at the session.` : `You can now book online like anyone else.`, ``, `${env.SITE_URL}/account`, ``, `Zen Recovery`].join("\n") });
   return json({ ok: true, confirmed: r.meta.changes });
 }
@@ -424,7 +433,7 @@ async function adminPhotos(env, admin, url) {
 }
 async function uploadPhoto(req, env, admin) {
   const b = await body(req);
-  const uid = clean(b.user_id, 40), data = typeof b.data === "string" && b.data.startsWith("data:image/") ? b.data : null;
+  const uid = clean(b.user_id, 40), data = validPhoto(b.data, 900000);
   if (!uid || !data || data.length > 900000) return json({ error: "A client and an image under ~650 KB (the page resizes it for you)." }, 400);
   if (!(await env.DB.prepare("SELECT 1 FROM users WHERE id = ?").bind(uid).first())) return json({ error: "Unknown client." }, 404);
   const id = randomId(), ct = data.slice(5, data.indexOf(";")) || "image/jpeg";
