@@ -38,7 +38,7 @@ database_id = "35c5461a-9065-4552-a6bf-bac39d1ec8f8"   # created 2026-09-12 (WEU
 [vars]
 SITE_URL = "https://zenrecovery.club"
 ZEN_STRIPE_ACCOUNT = ""          # acct_... of Zen's connected account. Empty = preview mode (no card payments).
-ZEN_NOTIFY_EMAIL = "fetta.amore.business@gmail.com"   # where new bookings / gifts / review requests land; change to a Zen address when they have one
+ZEN_NOTIFY_EMAIL = ""   # optional extra address for new bookings / gifts / review requests. Empty: only admins with "email me about bookings" on get them (Amico Mio never does)
 FROM_EMAIL = "Zen Recovery <booking@zenrecovery.club>"   # domain verified on Resend 2026-09-12
 GOOGLE_CLIENT_ID = "329793656753-nmee0krmfa7h8m4sqcdu59nf9uadgm7e.apps.googleusercontent.com"           # OAuth 2.0 Web client id from Google Cloud Console; empty = Google button hidden. Secret: GOOGLE_CLIENT_SECRET
 APPLE_CLIENT_ID = ""            # Apple "Services ID" (e.g. club.zenrecovery.web); with APPLE_TEAM_ID, APPLE_KEY_ID and the secret APPLE_PRIVATE_KEY (.p8 contents)

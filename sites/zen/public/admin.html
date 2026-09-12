@@ -740,7 +740,7 @@ async function loadSettings() {
     $$("#admins-table [data-role]").forEach((s) => s.addEventListener("change", async () => { await ZenAPI("PATCH", "/api/admin/admins/" + s.dataset.role, { role: s.value }); loadSettings(); }));
     $$("#admins-table [data-pw]").forEach((b) => b.addEventListener("click", async () => { const pw = prompt("New password for this admin (10+ characters). Tell it to them in person, not by email."); if (!pw) return; try { await ZenAPI("PATCH", "/api/admin/admins/" + b.dataset.pw, { password: pw }); alert("Password changed."); } catch (ex) { alert(ex.message); } })); }
   // my profile
-  $("#me-name").value = A.name || ""; $("#me-phone").value = A.phone || ""; $("#me-email").value = A.email; $("#me-notify").checked = A.notify !== 0; $("#me-notify-scope").textContent = isOwner() || isPlatform() ? "(all cities)" : `(${CITY_NAME[A.role]})`; $("#me-notify").closest("label").hidden = !A.email.includes("@");
+  $("#me-name").value = A.name || ""; $("#me-phone").value = A.phone || ""; $("#me-email").value = A.email; $("#me-notify").checked = A.notify !== 0; $("#me-notify-scope").textContent = isOwner() || isPlatform() ? "(all cities)" : `(${CITY_NAME[A.role]})`; $("#me-notify").closest("label").hidden = !A.email.includes("@") || isPlatform();
   renderMeAvatar();
 }
 $("#rules-form").addEventListener("submit", async (e) => { e.preventDefault(); $("#rules-ok").hidden = true; $("#rules-err").hidden = true; try { SETTINGS = await ZenAPI("PUT", "/api/admin/settings", { loyalty_every: +$("#s-every").value, referral_pct: +$("#s-pct").value, birthday_pct: +$("#s-bday").value }); $("#rules-ok").hidden = false; } catch (ex) { $("#rules-err").textContent = ex.message; $("#rules-err").hidden = false; } });

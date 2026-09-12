@@ -28,9 +28,10 @@ export async function catalog(env, { all = false } = {}) {
   return out;
 }
 export async function serviceOf(env, city, id) { if (!CITY_KEYS.includes(city) || !id) return null; const c = await catalog(env); return c[city].services[id] || null; }
-// Who hears about a new booking / gift / pack in a city: ZEN_NOTIFY_EMAIL plus every admin who asked for it (owner: everything).
+// Who hears about a new booking / gift / pack in a city: ZEN_NOTIFY_EMAIL (if set) plus every admin with a real email who asked for it
+// (owner: every city; city admin: their city). The platform account (Amico Mio) never gets operational mail.
 export async function notifyList(env, city) {
-  const rows = (await env.DB.prepare("SELECT email FROM admins WHERE notify = 1 AND email LIKE '%@%' AND (role IN ('all','platform') OR role = ?)").bind(city || "").all()).results;
+  const rows = (await env.DB.prepare("SELECT email FROM admins WHERE notify = 1 AND email LIKE '%@%' AND role != 'platform' AND (role = 'all' OR role = ?)").bind(city || "").all()).results;
   return [...new Set([env.ZEN_NOTIFY_EMAIL, ...rows.map((r) => r.email)].filter(Boolean))];
 }
 // Photos are stored as data URLs. Only a clean base64 image is accepted, so nothing can break out of an <img src="…"> in the admin.
