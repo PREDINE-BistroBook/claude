@@ -1,0 +1,47 @@
+name: Deploy Osteria La Galleria
+
+# Deploys sites/osteria-la-galleria (static assets, no Worker code) to Cloudflare from GitHub's runners.
+# Trigger by hand from the Actions tab, or automatically on a push to the default branch that touches the site.
+# Needs the same repository secret as Zen: CLOUDFLARE_API_TOKEN (Workers Scripts:Edit; plus Workers Routes:Edit,
+# Zone:Read and DNS:Edit on the osteria's zone once a custom domain is set in wrangler.toml).
+# CLOUDFLARE_ACCOUNT_ID is optional — read from the token when absent.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/ai-agent-company-automation-i3l9vx, main]
+    paths: ["sites/osteria-la-galleria/**", ".github/workflows/deploy-osteria.yml"]
+
+concurrency: deploy-osteria
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sites/osteria-la-galleria
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install -g wrangler@4
+
+      - name: Account id (from the token, unless given as a secret)
+        run: |
+          if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            ID=$(curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts" | jq -r '.result[0].id // empty')
+            [ -n "$ID" ] || { echo "::error::could not determine the Cloudflare account id from the token"; exit 1; }
+            echo "CLOUDFLARE_ACCOUNT_ID=$ID" >> "$GITHUB_ENV"
+          fi
+
+      - name: Deploy
+        run: wrangler deploy
+
+      - name: Where it is
+        run: |
+          SUB=$(curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain" | jq -r '.result.subdomain // empty')
+          echo "::notice::deployed — https://osteria-la-galleria.${SUB:-<account>}.workers.dev (custom domain once routes are set in wrangler.toml)"

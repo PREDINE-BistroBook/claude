@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Osteria La Galleria</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Osteria La Galleria, Firenze. Cucina toscana, bistecca alla fiorentina di Chianina IGP, tartufo fresco, pinsa. Il menu completo, in italiano e in inglese, con allergeni.">
+<meta name="theme-color" content="#3E1219">
+<meta property="og:title" content="Osteria La Galleria — Firenze">
+<meta property="og:description" content="Dieci sale, una cucina. Il menu da visitare come una galleria.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%233E1219'/%3E%3Crect x='11' y='11' width='42' height='42' fill='none' stroke='%23C9A55C' stroke-width='3'/%3E%3Crect x='18' y='18' width='28' height='28' fill='%23F6EFE1'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,500;1,6..96,400;1,6..96,500&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=Work+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+
+<a class="skip" href="#rooms" data-i18n="skip">Vai al menu</a>
+
+<header class="nav" id="nav">
+  <a class="brand" href="#top" aria-label="Osteria La Galleria, inizio pagina"><span class="brand-a">Osteria</span><span class="brand-b">La Galleria</span></a>
+  <div class="nav-right">
+    <div class="lang" role="group" aria-label="Lingua / Language">
+      <button type="button" data-lang="it" aria-pressed="true">IT</button>
+      <button type="button" data-lang="en" aria-pressed="false">EN</button>
+    </div>
+    <a class="btn small" href="#visita" data-i18n="nav.reserve">Prenota</a>
+  </div>
+</header>
+
+<main id="top">
+
+<section class="hero" aria-labelledby="hero-title">
+  <div class="rail" aria-hidden="true"></div>
+  <p class="eyebrow" data-i18n="hero.eyebrow">Firenze · Cucina toscana</p>
+  <h1 id="hero-title"><span class="h1-a">Osteria</span><span class="h1-b">La Galleria</span></h1>
+
+  <div class="hero-row">
+    <div class="plaque hero-plaque" role="note">
+      <p class="pl-title">Osteria La Galleria</p>
+      <p class="pl-sub" data-i18n="hero.plaque.medium">Cucina toscana · Chianina IGP · Tartufo fresco · Pinsa</p>
+      <p class="pl-line" data-i18n="hero.plaque.line">Dieci sale. Una cucina.</p>
+    </div>
+    <div class="hero-copy">
+      <p class="lede" data-i18n="hero.lede">Un menu da visitare come una galleria: dieci sale, ognuna col suo colore, ogni piatto con la sua targhetta. Scegli la lingua, spegni la luce sui piatti che non fanno per te, e pesa la tua fiorentina prima ancora di sederti.</p>
+      <div class="hero-actions">
+        <a class="btn" href="#rooms" data-i18n="hero.cta">Inizia la visita</a>
+        <a class="btn ghost" href="#room-bistecche" data-i18n="hero.cta2">Dritto alla bistecca</a>
+      </div>
+      <p class="hh" id="hh"><span class="hh-mark" aria-hidden="true">✦</span><span data-i18n="hh">Happy hour · Spritz e Hugo · 7 €</span></p>
+    </div>
+  </div>
+  <div class="scroll-hint" aria-hidden="true"><i></i></div>
+</section>
+
+<div class="route" id="route" aria-label="Percorso di visita">
+  <span class="route-label" data-i18n="route.label">Percorso</span>
+  <div class="route-scroll" id="route-pills"></div>
+  <button type="button" class="route-filter" id="filter-toggle" aria-expanded="false" aria-controls="filters">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 5h18M6 12h12M10 19h4"/></svg>
+    <span data-i18n="filter.button">Cosa non mangi?</span>
+    <span class="filter-count" id="filter-count" hidden></span>
+  </button>
+</div>
+
+<div class="filters" id="filters" hidden>
+  <div class="filters-inner">
+    <div class="chips" id="chips"></div>
+    <p class="filters-note" data-i18n="filter.note">I piatti che non fanno per te restano appesi, ma con la luce spenta. Per gli allergeni chiedi sempre in sala: la cucina è una sola.</p>
+    <p class="filters-tally" id="tally"></p>
+  </div>
+</div>
+
+<div id="rooms"></div>
+
+<section class="visit" id="visita" aria-labelledby="visit-title">
+  <div class="rail" aria-hidden="true"></div>
+  <p class="eyebrow" data-i18n="visit.eyebrow">Fine della visita</p>
+  <h2 id="visit-title" data-i18n="visit.title">Vieni a trovarci</h2>
+  <div class="visit-grid" id="visit-grid"></div>
+  <div class="review plaque" id="review"></div>
+</section>
+
+<footer class="foot">
+  <div class="legend" id="legend"></div>
+  <p class="foot-line"><span data-i18n="footer.prices">Prezzi in euro.</span> <span data-i18n="star.note">* Prodotto che può essere surgelato all'origine.</span> <span class="vmark">V</span> <span data-i18n="v.note">piatto vegetariano.</span></p>
+  <p class="foot-credit"><span class="brand-foot">Osteria La Galleria</span> · Firenze · <span data-i18n="footer.credit">un sito Locali &amp; Ordinazioni</span></p>
+</footer>
+
+</main>
+
+<script src="menu.js"></script>
+<script src="site.js"></script>
+</body>
+</html>

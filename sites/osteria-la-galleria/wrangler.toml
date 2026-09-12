@@ -1,0 +1,14 @@
+name = "osteria-la-galleria"
+compatibility_date = "2025-06-01"
+
+# Static site only for now: no Worker code, no database. Cloudflare serves ./public as-is.
+# When the ordering system is added, set `main = "src/worker.js"` and bind D1 here, as in sites/zen.
+[assets]
+directory = "./public"
+not_found_handling = "single-page-application"
+
+# Custom domain — uncomment once the owner has picked a domain and it is a zone on this Cloudflare account.
+# routes = [
+#   { pattern = "osterialagalleria.it", custom_domain = true },
+#   { pattern = "www.osterialagalleria.it", custom_domain = true },
+# ]
