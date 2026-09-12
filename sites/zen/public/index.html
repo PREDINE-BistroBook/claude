@@ -18,9 +18,9 @@
   --ink-soft:#4B5250;      /* secondary text */
   --ink-mute:#8B928F;      /* captions, rules */
   --line:rgba(27,30,29,.14);
-  --mark:#C43A2F;          /* Zen Recovery red — the wordmark, and close to the colour a cup leaves */
-  --mark-soft:#E0857C;
-  --mark-glow:rgba(196,58,47,.18);
+  --mark:#2F7BEA;          /* Zen Recovery blue — the RECOVERY in the logo, the accent on their Instagram */
+  --mark-soft:#8FB8F5;
+  --mark-glow:rgba(47,123,234,.18);
   --sand:#D3B98C;
   --glass:rgba(255,255,255,.62);
   --display:"Saira", "Avenir Next", "Segoe UI", system-ui, sans-serif;
@@ -72,8 +72,9 @@ button{font:inherit; color:inherit}
 .nav.scrolled{border-color:var(--line)}
 .brand{display:flex; align-items:center; gap:10px; text-decoration:none}
 .wm{display:inline-flex; flex-direction:column; line-height:1; gap:3px}
-.wm b{font-family:var(--display); font-weight:800; font-style:italic; color:var(--mark); font-size:1.5rem; letter-spacing:-.03em}
-.wm small{font-family:var(--label); font-size:.42rem; letter-spacing:.34em; color:var(--ink); padding-left:2px}
+.wm b{font-family:var(--display); font-weight:800; font-style:italic; color:var(--ink); font-size:1.5rem; letter-spacing:-.03em}
+.wm small{font-family:var(--label); font-size:.42rem; letter-spacing:.34em; color:var(--mark); padding-left:2px}
+footer .wm b{color:#fff}
 .wm.lg b{font-size:3rem}
 .wm.lg small{font-size:.8rem; letter-spacing:.34em}
 .nav-links{display:flex; gap:22px; align-items:center; font-size:.92rem}
@@ -229,7 +230,12 @@ button{font:inherit; color:inherit}
 .book-intro .team{display:flex; gap:12px; align-items:center; margin-top:10px; padding-top:18px; border-top:1px solid var(--line); font-size:.9rem; color:var(--ink-soft)}
 .book-intro .team .dots{display:flex}
 .book-intro .team .dots i{width:30px; height:30px; border-radius:50%; border:2px solid var(--ground); background:linear-gradient(135deg, var(--mark-soft), var(--mark)); margin-left:-8px}
+.book-intro .team .dots i:nth-child(2){background:linear-gradient(135deg, #3a3f3d, var(--ink))}
+.book-intro .team .dots i:nth-child(3){background:linear-gradient(135deg, #cfd3ce, #9aa09d)}
 .book-intro .team .dots i:first-child{margin-left:0}
+.book-intro .wa{font-size:.9rem; margin-top:12px}
+.book-intro .wa a{color:var(--mark); text-decoration:none; font-weight:500}
+.book-intro .wa[hidden]{display:none}
 .book-empty{display:grid; gap:12px; color:var(--ink-soft); padding:40px 0}
 .book-empty[hidden], #book-place[hidden]{display:none}
 .book-empty .arrow{font-family:var(--display); font-size:2.4rem; line-height:1; color:var(--mark)}
@@ -332,7 +338,7 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
 <!-- ================= HERO ================= -->
 <section class="hero" aria-labelledby="hero-title">
   <div class="hero-copy">
-    <p class="eyebrow"><span>Cupping therapy</span><span>Cairo</span><span>Dahab</span><span>Florence</span></p>
+    <p class="eyebrow"><span>Cupping · manual therapy · recovery</span><span>Cairo</span><span>Dahab</span><span>Florence</span></p>
     <h1 id="hero-title">Tension has a way out.</h1>
     <p class="lede">Cupping is one of the oldest ways of asking a body to recover: after training, after a long week, after too many hours in one position. Scroll and we'll show you exactly what happens under the cup. Then tell us which city you're in.</p>
     <div class="hero-actions">
@@ -395,7 +401,7 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
             <ellipse id="bloom" cx="260" cy="470" rx="110" ry="90" fill="url(#bloomG)" opacity="0"/>
           </g>
           <!-- vacuum haze -->
-          <path id="vac" d="M150 380 C150 250 190 175 260 175 C330 175 370 250 370 380 Z" fill="#C43A2F" opacity="0"/>
+          <path id="vac" d="M150 380 C150 250 190 175 260 175 C330 175 370 250 370 380 Z" fill="#2F7BEA" opacity="0"/>
           <!-- arrows showing lift -->
           <g id="arrows" opacity="0" stroke="#E7EDE8" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
             <path d="M260 330 V270 M248 282 L260 270 L272 282"/>
@@ -413,7 +419,7 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
         <!-- timer arc (step 4) -->
         <g id="timer" opacity="0" transform="translate(440,110)">
           <circle r="34" fill="none" stroke="#E7EDE8" stroke-opacity=".25" stroke-width="2"/>
-          <circle id="timerArc" r="34" fill="none" stroke="#C98A9B" stroke-width="3" stroke-linecap="round" stroke-dasharray="213.6" stroke-dashoffset="213.6" transform="rotate(-90)"/>
+          <circle id="timerArc" r="34" fill="none" stroke="#8FB8F5" stroke-width="3" stroke-linecap="round" stroke-dasharray="213.6" stroke-dashoffset="213.6" transform="rotate(-90)"/>
           <text id="timerText" y="6" text-anchor="middle" font-family="DM Mono, monospace" font-size="15" fill="#E7EDE8">5′</text>
         </g>
       </svg>
@@ -452,7 +458,7 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
 <section class="methods" id="methods" aria-labelledby="methods-title">
   <div class="methods-head reveal">
     <p class="eyebrow">Ways we work</p>
-    <h2 id="methods-title">One idea, five hands.</h2>
+    <h2 id="methods-title">One idea, six ways in.</h2>
     <p>Every session starts with a short conversation about what your body's been doing lately. Then your therapist picks the approach. You can also ask for one by name.</p>
   </div>
   <div class="method-list">
@@ -481,6 +487,12 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
       <p class="for">For · those who ask for it specifically</p>
     </div>
     <div class="method reveal">
+      <svg class="glyph" viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 30c6-2 10-8 14-12s8-6 14-4"/><path d="M12 34c5-1 8-5 11-8"/><path d="M26 14l4 4"/></svg>
+      <h3>Manual therapy</h3>
+      <p>Hands only: deep tissue and sports massage, often before the cups go on. This is where every Zen session starts.</p>
+      <p class="for">For · recovery between training days, anything that needs hands first</p>
+    </div>
+    <div class="method reveal">
       <svg class="glyph" viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="22" cy="22" r="5"/><circle cx="12" cy="30" r="4"/><circle cx="32" cy="30" r="4"/><circle cx="22" cy="10" r="3"/></svg>
       <h3>Facial cupping</h3>
       <p>Tiny cups, very light suction, always gliding, never still. No marks. Leaves the skin flushed and the jaw looser.</p>
@@ -497,7 +509,7 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
   </div>
   <div class="room-strip">
     <figure class="reveal"><img src="img/room-table.jpg" alt="Client face down on the table with glass cups along the spine and silicone cups on the arms" loading="lazy"><figcaption>Dry and sliding cups together · a full-back session</figcaption></figure>
-    <figure class="reveal"><img src="img/room-hijama.jpg" alt="Hijama cups placed along the back" loading="lazy"><figcaption>Hijama · sterile single-use cups, every time</figcaption></figure>
+    <figure class="reveal"><img src="img/room-hijama.jpg" alt="Hijama cups along the spine, the studio banner reflected in the mirror" loading="lazy"><figcaption>Hijama · sterile single-use cups, every time</figcaption></figure>
     <figure class="reveal"><img src="img/room-marks.jpg" alt="Round cupping marks on a client's back, seen from a balcony in Florence" loading="lazy"><figcaption>The morning after · marks fade in three to ten days</figcaption></figure>
   </div>
 </section>
@@ -559,7 +571,7 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
       <span class="tick" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2"><path d="M3 8.5l3 3 7-7"/></svg></span>
       <span class="text">
         <span class="city">Cairo</span>
-        <span class="where">Maadi · by appointment</span>
+        <span class="where">With Shaarawy · by appointment</span>
         <span class="choose">Choose Cairo</span>
       </span>
     </button>
@@ -581,13 +593,13 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
           </g>
         </svg>
       </span>
-      <img class="photo" src="img/dahab.jpg" alt="Silicone and glass cups across shoulders and arms" onerror="this.remove()">
+      <img class="photo" src="img/dahab.jpg" alt="Blue silicone and glass cups across the back and arm" onerror="this.remove()">
       <span class="veil" aria-hidden="true"></span>
       <span class="flag">Egypt · Red Sea</span>
       <span class="tick" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2"><path d="M3 8.5l3 3 7-7"/></svg></span>
       <span class="text">
         <span class="city">Dahab</span>
-        <span class="where">Lighthouse · by the sea</span>
+        <span class="where">With Shaarawy · by the sea</span>
         <span class="choose">Choose Dahab</span>
       </span>
     </button>
@@ -615,7 +627,7 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
       <span class="tick" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2"><path d="M3 8.5l3 3 7-7"/></svg></span>
       <span class="text">
         <span class="city">Florence</span>
-        <span class="where">Oltrarno · studio</span>
+        <span class="where">The studio</span>
         <span class="choose">Choose Florence</span>
       </span>
     </button>
@@ -637,6 +649,7 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
         <p class="place-name" id="place-name">Florence</p>
         <div class="addr" id="place-addr"></div>
         <div class="team"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span id="place-team"></span></div>
+        <p class="wa" id="place-wa" hidden>Questions first? <a id="place-wa-link" href="#" target="_blank" rel="noopener">Message on WhatsApp</a></p>
       </div>
     </div>
 
@@ -695,14 +708,15 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
 <footer>
   <div class="foot-grid">
     <div>
-      <span class="wm lg"><b>ZEN</b><small style="color:var(--ground)">RECOVERY</small></span>
-      <p>Cupping therapy in Cairo, Dahab and Florence. A small team, one way of working: slowly, warmly, and only as deep as your body wants to go.</p>
+      <span class="wm lg"><b>ZEN</b><small>RECOVERY</small></span>
+      <p>Manual techniques, cupping, muscle recovery. Cairo, Dahab and Florence. Recovery = growth.</p>
     </div>
     <div>
       <p class="eyebrow">Find us</p>
       <ul>
-        <li><a href="#" id="ig-link">Instagram</a></li>
-        <li><a href="#" id="wa-link">WhatsApp</a></li>
+        <li><a href="https://instagram.com/zen_recovery10" target="_blank" rel="noopener">Instagram · @zen_recovery10</a></li>
+        <li><a href="https://instagram.com/recoverywithshaarawy" target="_blank" rel="noopener">Instagram · @recoverywithshaarawy (Cairo & Dahab)</a></li>
+        <li><a href="https://wa.me/201145638166" target="_blank" rel="noopener">WhatsApp · Cairo & Dahab</a></li>
         <li><a href="#places">Cities</a></li>
       </ul>
     </div>
@@ -738,9 +752,11 @@ const PREVIEW = true;
 const CITIES = {
   cairo: {
     name: "Cairo", currency: "EGP", locale: "en-EG", tz: "Africa/Cairo",
-    address: ["Zen · Maadi", "Street and building to confirm", "Cairo, Egypt"],
-    team: "Two therapists in Cairo",
+    address: ["Zen Recovery · Cairo", "Studio address to confirm", "Cairo, Egypt"],
+    team: "Shaarawy — manual therapy & cupping",
+    whatsapp: "201145638166",
     services: [
+      { id: "cai-man",   name: "Manual therapy",    dur: 60, price: 100000, desc: "Deep tissue and sports massage, hands only." },
       { id: "cai-dry",   name: "Dry cupping",       dur: 45, price: 90000,  desc: "Cups placed and left still. The classic session." },
       { id: "cai-slide", name: "Sliding cupping",   dur: 60, price: 120000, desc: "Oiled skin, gliding cups. Massage with the lift built in." },
       { id: "cai-fire",  name: "Fire cupping",      dur: 45, price: 100000, desc: "Glass cups, a flash of flame, deeper warmth." },
@@ -750,9 +766,11 @@ const CITIES = {
   },
   dahab: {
     name: "Dahab", currency: "EGP", locale: "en-EG", tz: "Africa/Cairo",
-    address: ["Zen · Lighthouse area", "Exact spot to confirm", "Dahab, South Sinai"],
-    team: "One therapist in Dahab, seasonal",
+    address: ["Zen Recovery · Dahab", "Exact spot to confirm", "Dahab, South Sinai"],
+    team: "Shaarawy — manual therapy & cupping",
+    whatsapp: "201145638166",
     services: [
+      { id: "dah-man",   name: "Manual therapy",    dur: 60, price: 100000, desc: "Deep tissue and sports massage, hands only." },
       { id: "dah-dry",   name: "Dry cupping",       dur: 45, price: 90000,  desc: "Cups placed and left still. The classic session." },
       { id: "dah-slide", name: "Sliding cupping",   dur: 60, price: 120000, desc: "Oiled skin, gliding cups. Good after a day of diving or climbing." },
       { id: "dah-fire",  name: "Fire cupping",      dur: 45, price: 100000, desc: "Glass cups, a flash of flame, deeper warmth." },
@@ -761,9 +779,11 @@ const CITIES = {
   },
   florence: {
     name: "Florence", currency: "EUR", locale: "it-IT", tz: "Europe/Rome",
-    address: ["Zen · Oltrarno", "Street and number to confirm", "50125 Firenze"],
-    team: "One therapist in Florence",
+    address: ["Zen Recovery · Florence", "Street and number to confirm", "Firenze"],
+    team: "Zen Recovery Florence — name to confirm",
+    whatsapp: "",
     services: [
+      { id: "flo-man",   name: "Manual therapy",    dur: 60, price: 6000, desc: "Deep tissue and sports massage, hands only." },
       { id: "flo-dry",   name: "Dry cupping",       dur: 45, price: 5500, desc: "Cups placed and left still. The classic session." },
       { id: "flo-slide", name: "Sliding cupping",   dur: 60, price: 7000, desc: "Oiled skin, gliding cups. Massage with the lift built in." },
       { id: "flo-fire",  name: "Fire cupping",      dur: 45, price: 6500, desc: "Glass cups, a flash of flame, deeper warmth." },
@@ -852,6 +872,7 @@ function choose(key) {
   $("#place-name").textContent = c.name;
   $("#place-addr").innerHTML = c.address.map((l, i) => i === 0 ? `<b>${l}</b>` : `<span>${l}</span>`).join("");
   $("#place-team").textContent = c.team;
+  $("#place-wa").hidden = !c.whatsapp; if (c.whatsapp) $("#place-wa-link").href = "https://wa.me/" + c.whatsapp;
   const form = $("#booking"); form.hidden = false;
   $("#services").innerHTML = c.services.map((s, i) => `
     <div class="service">

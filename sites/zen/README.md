@@ -1,6 +1,6 @@
 # Zen Recovery — cupping therapy site (Cairo · Dahab · Florence)
 
-A Locali & Ordinazioni build for Ash's friend's team, **Zen Recovery** (brand: bold red italic ZEN + wide-set RECOVERY, as on the studio banner). One page: a scroll-driven explanation of what cupping does, then "which city are you in?", then a booking form that takes card payment. **Every booking pays a 2% platform fee to us automatically**, inside Stripe, with no invoicing.
+A Locali & Ordinazioni build for Ash's friend's team, **Zen Recovery** (Instagram `@zen_recovery10`; brand: italic ZEN, wide-set RECOVERY in electric blue, on black or off-white). Cairo and Dahab are run by Shaarawy (`@recoverywithshaarawy`, bio phone 01145638166, used as the Egypt WhatsApp on the site).. One page: a scroll-driven explanation of what cupping does, then "which city are you in?", then a booking form that takes card payment. **Every booking pays a 2% platform fee to us automatically**, inside Stripe, with no invoicing.
 
 Status (2026-09-12): **preview build**. Prices, addresses and team lines are placeholders. Photos are real (from Zen's Instagram, supplied by Ash) but which photo belongs to which city is a guess — see `public/img/README.md`. Payments are off until Zen's Stripe account is connected (see below). Nothing here is deployed yet.
 
@@ -51,7 +51,8 @@ Ash's side (Stripe dashboard, one-time):
 
 Zen's side:
 - [ ] Finish Stripe onboarding (ID + bank account).
-- [ ] Confirm prices, durations, which methods each room offers (Hijama is currently listed only for Cairo).
+- [ ] Confirm prices, durations, which methods each room offers (Hijama is currently listed only for Cairo; Manual therapy is listed everywhere because both Instagram bios lead with it).
+- [ ] Florence WhatsApp number + the Florence therapist's name (Egypt uses Shaarawy's public number).
 - [ ] Confirm addresses / meeting points, opening hours per room, team lines.
 - [ ] Send photos (three portrait shots) + Instagram handle + WhatsApp number.
 - [ ] Domain: buy `zen…` or point a subdomain. Until then the workers.dev URL works.

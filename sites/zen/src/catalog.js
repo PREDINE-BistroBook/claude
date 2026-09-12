@@ -9,6 +9,7 @@ export const CITIES = {
   cairo: {
     name: "Cairo", currency: "egp", tz: "Africa/Cairo",
     services: {
+      "cai-man":   { name: "Manual therapy · 60 min · Cairo",       amount: 100000 },
       "cai-dry":   { name: "Dry cupping · 45 min · Cairo",     amount: 90000 },
       "cai-slide": { name: "Sliding cupping · 60 min · Cairo", amount: 120000 },
       "cai-fire":  { name: "Fire cupping · 45 min · Cairo",    amount: 100000 },
@@ -19,6 +20,7 @@ export const CITIES = {
   dahab: {
     name: "Dahab", currency: "egp", tz: "Africa/Cairo",
     services: {
+      "dah-man":   { name: "Manual therapy · 60 min · Dahab",       amount: 100000 },
       "dah-dry":   { name: "Dry cupping · 45 min · Dahab",     amount: 90000 },
       "dah-slide": { name: "Sliding cupping · 60 min · Dahab", amount: 120000 },
       "dah-fire":  { name: "Fire cupping · 45 min · Dahab",    amount: 100000 },
@@ -28,6 +30,7 @@ export const CITIES = {
   florence: {
     name: "Florence", currency: "eur", tz: "Europe/Rome",
     services: {
+      "flo-man":   { name: "Manual therapy · 60 min · Florence",    amount: 6000 },
       "flo-dry":   { name: "Dry cupping · 45 min · Florence",     amount: 5500 },
       "flo-slide": { name: "Sliding cupping · 60 min · Florence", amount: 7000 },
       "flo-fire":  { name: "Fire cupping · 45 min · Florence",    amount: 6500 },
