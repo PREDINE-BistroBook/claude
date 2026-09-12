@@ -6,7 +6,7 @@ name: Deploy Zen Recovery
 #
 # Repository secrets (Settings → Secrets and variables → Actions):
 #   CLOUDFLARE_API_TOKEN      Workers Scripts:Edit, D1:Edit, Workers Routes:Edit, Zone:Read, DNS:Edit on zenrecovery.club
-#   CLOUDFLARE_ACCOUNT_ID
+#   CLOUDFLARE_ACCOUNT_ID     optional — read from the token when absent
 #   RESEND_API_KEY            sending key for booking + sign-in emails
 #   ADMIN_BOOTSTRAP_PASSWORD  first owner login (only honoured while no admin exists)
 #   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET   optional until Stripe Connect is set up
@@ -37,6 +37,13 @@ jobs:
           node-version: 22
       - run: npm install -g wrangler@4
 
+      - name: Account id (from the token, unless given as a secret)
+        run: |
+          if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            ID=$(curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts" | jq -r '.result[0].id // empty')
+            [ -n "$ID" ] || { echo "::error::could not determine the Cloudflare account id from the token"; exit 1; }
+            echo "CLOUDFLARE_ACCOUNT_ID=$ID" >> "$GITHUB_ENV"
+          fi
       - name: Who am I
         run: wrangler whoami
 
