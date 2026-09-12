@@ -138,7 +138,7 @@ Keep the domain in Ash's GoDaddy/Cloudflare accounts, not Zen's: it's the one pi
 
 - **D1 is used** (accounts, bookings, rewards, admins, calendar, packs, gifts, partners, photos). Ash upgraded the Cloudflare account to the paid Workers plan on 2026-09-12, so the old free-tier daily read cap that the demo sites used to hit is gone; nothing to watch here.
 - **Prices are enforced server-side** (`src/catalog.js`). The browser sends a service id; if someone edits the page they still pay the catalog price.
-- **Emails go through Resend.** `FROM_EMAIL` must be on a verified domain. Today the only verified domain on the account is `amicomioflorence.com`, which is the Tours agency's brand. Either accept that for now or verify a Zen domain.
+- **Emails go through Resend** from `booking@zenrecovery.club` (domain verified 2026-09-12). Booking notifications, gift and pack sales and review requests go to `ZEN_NOTIFY_EMAIL` (Ash's address for now; change it in `wrangler.toml` when Zen has its own). Clients who sign up with Google or Apple get a welcome email, since no magic link was sent to them.
 - **Availability: two modes.** Until the admin adds opening hours for a city (Calendar tab), the client picks a day and a morning/afternoon/evening window and Zen confirms the hour on WhatsApp. Once hours exist, the site shows exact free times, per therapist if the team is set up, and a time disappears the moment it's booked (`slotsFor` in `src/lib.js`, checked again server-side at checkout).
 - **Motion**: one scroll-scrubbed illustration (GSAP ScrollTrigger), a breathing ring in the hero, soft reveals. Everything respects `prefers-reduced-motion`.
 - **Photos**: real ones are in `public/img/`. Replace any file with the same name and the page picks it up; if a city photo is missing the page falls back to a drawn skyline.
@@ -168,7 +168,7 @@ Everything from the ideas list below numbered 15–30 is now in the code and dep
 | SMS sign-in link | "Prefer a text?" box (hidden until configured); works for accounts that already have a phone | — | Twilio: `TWILIO_FROM` var, `TWILIO_SID` + `TWILIO_TOKEN` secrets |
 | Head Chef line | — | — | Done: the daily rundown now reads Zen's D1 for bookings, ratings and the 2% |
 
-**Still open from before:** roll the Cloudflare API token that was pasted in chat (Cloudflare → My Profile → API Tokens → roll, then update the `CLOUDFLARE_API_TOKEN` GitHub secret); change the owner's admin password (Settings → Your password); finish Resend verification for `zenrecovery.club` and switch `FROM_EMAIL` back to `booking@zenrecovery.club`; decide the Stripe Connect entity for Egypt (see above) and set `ZEN_STRIPE_ACCOUNT` + the Stripe secrets to switch payments on; add Google OAuth client id/secret for the Google button.
+**Still open from before:** roll the Cloudflare API token that was pasted in chat (Cloudflare → My Profile → API Tokens → roll, then update the `CLOUDFLARE_API_TOKEN` GitHub secret); change the owner's admin password (Settings → Your password); decide the Stripe Connect entity for Egypt (see above) and set `ZEN_STRIPE_ACCOUNT` + the Stripe secrets to switch payments on; add Google OAuth client id/secret for the Google button.
 
 ## Ideas for later (not built — Ash decides)
 
