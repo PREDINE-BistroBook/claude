@@ -12,22 +12,23 @@ not_found_handling = "404-page"
 [[d1_databases]]
 binding = "DB"
 database_name = "zen-recovery"
-database_id = "REPLACE_WITH_ID_FROM_wrangler_d1_create"
+database_id = "35c5461a-9065-4552-a6bf-bac39d1ec8f8"   # created 2026-09-12 (WEUR)
 
 # Secrets (never committed) — set each with `npx wrangler secret put NAME`:
 #   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, RESEND_API_KEY,
 #   SESSION_SECRET (any long random string, signs login cookies),
 #   ADMIN_BOOTSTRAP_EMAIL + ADMIN_BOOTSTRAP_PASSWORD (first owner login; only honoured while no admin exists yet)
 
-# Custom domain — uncomment once zenrecovery.com is in this Cloudflare account (see README "Domain").
-# routes = [
-#   { pattern = "zenrecovery.com", custom_domain = true },
-#   { pattern = "www.zenrecovery.com", custom_domain = true },
-# ]
+# Custom domain. Requires zenrecovery.club to be a zone in this Cloudflare account (README "Domain").
+# If deploying before the nameservers have moved, comment these four lines out and use the workers.dev URL.
+routes = [
+  { pattern = "zenrecovery.club", custom_domain = true },
+  { pattern = "www.zenrecovery.club", custom_domain = true },
+]
 
 [vars]
-SITE_URL = "https://zen-recovery.fetta-amore-business.workers.dev"   # -> "https://zenrecovery.com" once the domain is live
+SITE_URL = "https://zenrecovery.club"
 ZEN_STRIPE_ACCOUNT = ""          # acct_... of Zen's connected account. Empty = preview mode (no card payments).
 ZEN_NOTIFY_EMAIL = ""            # where Zen receives bookings
-FROM_EMAIL = "Zen Recovery <booking@amicomioflorence.com>"   # -> "Zen Recovery <booking@zenrecovery.com>" once the domain is verified in Resend
+FROM_EMAIL = "Zen Recovery <booking@zenrecovery.club>"   # domain added to Resend 2026-09-12; verify DNS records before first send
 DEV_MAGIC_LINK = "0"             # "1" only on a local dev run: returns the sign-in link in the API response instead of relying on email

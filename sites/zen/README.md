@@ -2,7 +2,7 @@
 
 A Locali & Ordinazioni build for Ash's friend's team, **Zen Recovery** (Instagram `@zen_recovery10`; brand: italic ZEN, wide-set RECOVERY in electric blue, on black or off-white). Cairo and Dahab are run by Shaarawy (`@recoverywithshaarawy`, bio phone 01145638166, used as the Egypt WhatsApp on the site).. One page: a scroll-driven explanation of what cupping does, then "which city are you in?", then a booking form that takes card payment. **Every booking pays a 2% platform fee to us automatically**, inside Stripe, with no invoicing.
 
-Status (2026-09-12): **preview build**. Prices, addresses and team lines are placeholders. Photos are real (from Zen's Instagram, supplied by Ash) but which photo belongs to which city is a guess — see `public/img/README.md`. Payments are off until Zen's Stripe account is connected (see below). Nothing here is deployed yet.
+Status (2026-09-12): **ready to deploy to zenrecovery.club** — see Deploy. Prices, addresses and team lines are still placeholders. Photos are real (from Zen's Instagram, supplied by Ash) but which photo belongs to which city is a guess — see `public/img/README.md`. Payments are off until Zen's Stripe account is connected (see below).
 
 ```
 sites/zen/
@@ -83,35 +83,45 @@ Zen's side:
 - [ ] Send photos (three portrait shots) + Instagram handle + WhatsApp number.
 - [ ] Domain: **zenrecovery.com** (Ash, 2026-09-12: buying it). See "Domain" below.
 
-Deploy:
+Deploy — what exists already (done from a Claude session on 2026-09-12): the D1 database `zen-recovery` (`35c5461a-9065-4552-a6bf-bac39d1ec8f8`, WEUR) with the schema applied, the Resend domain, `wrangler.toml` pointing at zenrecovery.club.
+
+What still needs a machine with Cloudflare access — the Claude web sessions in this repo **cannot** reach `api.cloudflare.com` (org egress policy returns 403) and have no `CLOUDFLARE_API_TOKEN`, so `wrangler deploy` has to run either on Ash's laptop or in a Claude environment where both are configured (Environment settings → variables `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`; network policy allowing `api.cloudflare.com`):
+
 ```bash
 cd sites/zen
-npx wrangler d1 create zen-recovery                      # paste the id into wrangler.toml
-npx wrangler d1 execute zen-recovery --remote --file=schema.sql
-npx wrangler secret put STRIPE_SECRET_KEY      # platform (AmicoMioFlorence) secret key
-npx wrangler secret put STRIPE_WEBHOOK_SECRET  # from the Connect webhook above (add checkout.session.expired too)
-npx wrangler secret put RESEND_API_KEY
-npx wrangler secret put SESSION_SECRET         # any long random string
-npx wrangler secret put ADMIN_BOOTSTRAP_EMAIL
-npx wrangler secret put ADMIN_BOOTSTRAP_PASSWORD
-# fill ZEN_STRIPE_ACCOUNT, ZEN_NOTIFY_EMAIL, FROM_EMAIL, SITE_URL in wrangler.toml
-npx wrangler deploy
+export CLOUDFLARE_API_TOKEN=...            # Workers Scripts:Edit, D1:Edit, Workers Routes:Edit, Zone:Read (zenrecovery.club)
+export RESEND_API_KEY=...                  # Resend → API keys → create "zen-recovery" (sending access)
+export ADMIN_BOOTSTRAP_EMAIL=fetta.amore.business@gmail.com
+export ADMIN_BOOTSTRAP_PASSWORD='...'      # first owner login; change it in Settings after
+# later, when Stripe Connect is set up:  export STRIPE_SECRET_KEY=... STRIPE_WEBHOOK_SECRET=...
+./deploy.sh
 ```
+`deploy.sh` is idempotent: it re-applies the schema (no-op if present), sets whichever secrets are exported, generates `SESSION_SECRET` if missing, and deploys. Payments stay off until `ZEN_STRIPE_ACCOUNT` is filled in `wrangler.toml`; accounts, rewards and the admin work without Stripe.
+
 Local run: `npx wrangler dev` with `DEV_MAGIC_LINK = "1"` returns the sign-in link in the API response, so accounts can be tested without email.
-Then set `PREVIEW = false` in `public/index.html` to drop the banner, and redeploy.
+The preview banner on the public page is already off (`PREVIEW = false`); the account/admin pages show a banner only while no API answers.
 
 Test before real money: create Zen's connected account in **test mode** first, deploy with test keys, book with card `4242 4242 4242 4242`, and check that Connect → Collected fees shows 2% of the amount.
 
-## Domain: zenrecovery.com
+## Domain: zenrecovery.club (bought by Ash on GoDaddy, 2026-09-12)
 
-Workers custom domains need the zone in the same Cloudflare account as the Worker, so:
+Workers custom domains need the zone in the same Cloudflare account as the Worker:
 
-1. **Buy on Cloudflare Registrar** (Dashboard → Domain Registration → Register) — lands in the account already, wholesale price, done. Or, if bought on GoDaddy: Cloudflare Dashboard → Add a site → `zenrecovery.com` (Free plan) → copy the two nameservers → GoDaddy → Domain → Nameservers → Change → paste. Propagates in minutes to a few hours.
-2. Uncomment the `routes` block in `wrangler.toml`, set `SITE_URL = "https://zenrecovery.com"`, run `npx wrangler deploy`. Cloudflare creates the DNS records and the TLS certificate itself. Add a redirect rule from `www` to the apex if wanted (Rules → Redirect Rules, or leave both routes serving the site).
-3. **Email from the same domain**: Resend → Domains → Add `zenrecovery.com` → it lists DKIM/SPF (and MX for receiving) records → add them in Cloudflare DNS → Verify. Then `FROM_EMAIL = "Zen Recovery <booking@zenrecovery.com>"`. Until then booking emails go out from `booking@amicomioflorence.com`, which works but shows the Tours brand.
-4. Update the Stripe Connect webhook URL and the Instagram bio link to the new domain.
+1. Cloudflare Dashboard → **Add a site** → `zenrecovery.club` → Free plan → it shows two nameservers (`xxx.ns.cloudflare.com`).
+2. GoDaddy → My products → zenrecovery.club → **DNS** → Nameservers → Change → "I'll use my own nameservers" → paste the two → Save. Takes minutes to a few hours. Ignore GoDaddy's warnings about losing its own features.
+3. In Cloudflare DNS for the zone, add the **Resend records** below (email from `booking@zenrecovery.club`). Then Resend → Domains → zenrecovery.club → Verify.
+4. `deploy.sh` (see Deploy) — the `routes` block in `wrangler.toml` creates the DNS records and certificate for the site itself.
 
-Keep the domain in Ash's Cloudflare account, not Zen's: it's the one piece of the deal that keeps the site (and the 2%) under Locali & Ordinazioni's control.
+Resend domain already created (region eu-west-1, id `d484efd0-30e7-4633-a220-dfaeec6327df`). Records to add in Cloudflare DNS (all "DNS only", grey cloud):
+
+| Type | Name | Value | Extra |
+|---|---|---|---|
+| TXT | `resend._domainkey` | `p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDdmP/M+5vUYIsIjAbtJYbTKGONyOaz+PoIL8HKZMXdmFBUzmC5mwqI1VgkdWHEgtgTncephAlSAttrEiA4k56p5WC4/ufvlfuttRaSYoa8Ul4H+2R2BhaSiYi7FeFCW1nBk19prver1sHuPH3LPLBikAGtcqrNnCJcMXYfvC5nUQIDAQAB` | |
+| MX | `send` | `feedback-smtp.eu-west-1.amazonses.com` | priority 10 |
+| TXT | `send` | `v=spf1 include:amazonses.com ~all` | |
+| CNAME | `rsend` | `send.forge.rmta.net` | |
+
+Keep the domain in Ash's GoDaddy/Cloudflare accounts, not Zen's: it's the one piece of the deal that keeps the site (and the 2%) under Locali & Ordinazioni's control.
 
 ## Things to know about the build
 
