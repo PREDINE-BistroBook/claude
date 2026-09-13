@@ -122,6 +122,13 @@ jobs:
           upsert TXT   send "v=spf1 include:amazonses.com ~all"
           upsert CNAME rsend "send.forge.rmta.net"
 
+      - name: Live check (the routes a visitor actually hits; prints status + redirect target, never fails the deploy)
+        run: |
+          BASE=$([ -n "${{ steps.zone.outputs.id }}" ] && echo "https://zenrecovery.club" || echo "https://zen-recovery.fetta-amore-business.workers.dev")
+          for path in / /account /account.html /booking /find /team /nope-404 "/api/status" "/api/team" "/api/providers?lat=30.02&lng=31.44" "/api/auth/google?lang=en" "/api/auth/google/callback?state=x&code=y"; do
+            printf '%-45s ' "$path"; curl -sS -o /dev/null -m 20 -w '%{http_code}  ->  %{redirect_url}\n' "$BASE$path" || echo "curl failed"
+          done
+
       - name: Where it lives
         run: |
           if [ -n "${{ steps.zone.outputs.id }}" ]; then echo "https://zenrecovery.club  ·  admin: https://zenrecovery.club/admin.html";
