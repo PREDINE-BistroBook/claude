@@ -14,6 +14,8 @@ let LIST = [], cityFilter = "";
 const rank = (th) => (/founder|fondat|مؤسس/i.test(th.title || "") ? -1 : 0);
 const order = (list) => list.slice().sort((a, b) => rank(a) - rank(b) || (a.sort || 0) - (b.sort || 0) || a.name.localeCompare(b.name));
 
+let LOC = null; try { const s = JSON.parse(localStorage.getItem("zen:loc") || "null"); if (s && Number.isFinite(s.lat) && Number.isFinite(s.lng)) LOC = s; } catch (_) {}
+const kmOf = (th) => (LOC && Number.isFinite(th.lat) && Number.isFinite(th.lng)) ? (() => { const R = 6371, toR = (x) => (x * Math.PI) / 180, dLat = toR(th.lat - LOC.lat), dLng = toR(th.lng - LOC.lng), h = Math.sin(dLat / 2) ** 2 + Math.cos(toR(LOC.lat)) * Math.cos(toR(th.lat)) * Math.sin(dLng / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); })() : null;
 function card(th, i) {
   const book = `booking.html?city=${encodeURIComponent(th.city)}&therapist=${encodeURIComponent(th.id)}`;
   const first = th.name.split(" ")[0];
@@ -25,6 +27,7 @@ function card(th, i) {
       <p class="eyebrow tm-role">${esc(LF(th, "title") || t("Therapist"))}</p>
       <h2 class="tm-name" dir="auto">${words(th.name)}</h2>
       <svg class="tm-line" viewBox="0 0 160 14" aria-hidden="true"><path d="M2 9 C 30 2, 60 13, 90 7 S 140 3, 158 8" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+      ${kmOf(th) !== null ? `<p class="tm-km"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>${t("{km} km from you", { km: kmOf(th) < 10 ? kmOf(th).toFixed(1) : Math.round(kmOf(th)) })}</p>` : ""}
       <p class="tm-meta">${LF(th, "languages") ? `<span>${t("Speaks {langs}", { langs: esc(LF(th, "languages")) })}</span>` : ""}${LF(th, "area") ? `<span>${t("Works in {area}", { area: esc(LF(th, "area")) })}${th.maps_url ? ` · <a href="${esc(th.maps_url)}" target="_blank" rel="noopener">${t("Map")}</a>` : ""}</span>` : ""}</p>
       <div class="tm-text">${text.map((p) => `<p class="tm-story">${esc(p)}</p>`).join("")}</div>
       ${LF(th, "certs") ? `<h3 class="tm-h">${t("Certifications")}</h3><ul class="tm-certs">${lines(LF(th, "certs")).map((c) => `<li><i></i><span>${esc(c)}</span></li>`).join("")}</ul>` : ""}

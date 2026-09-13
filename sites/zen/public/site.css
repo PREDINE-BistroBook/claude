@@ -128,7 +128,7 @@ footer .wm b{color:#fff}
 .hero p.lede{font-size:clamp(1.05rem, 1.5vw, 1.25rem); color:var(--ink-soft); max-width:30rem}
 .hero-actions{display:flex; gap:12px; flex-wrap:wrap; align-items:center}
 .hero-visual{position:relative; max-width:520px; width:100%; margin-inline:auto}
-.hero-visual .photo{display:block; width:100%; aspect-ratio:4/5; object-fit:cover; border-radius:var(--radius); filter:grayscale(1) contrast(1.05); max-width:100%}
+.hero-visual .photo{display:block; width:100%; height:auto; aspect-ratio:4/5; object-fit:cover; border-radius:var(--radius); filter:grayscale(1) contrast(1.05); max-width:100%}
 .hero-visual .cap{position:absolute; top:16px; left:16px; font-family:var(--label); font-size:.58rem; letter-spacing:.2em; text-transform:uppercase; color:#fff; padding:7px 10px; border-radius:999px; background:rgba(27,30,29,.45); backdrop-filter:blur(6px)}
 .breath{position:absolute; left:-22px; bottom:-22px; width:min(44%, 210px); aspect-ratio:1; display:grid; place-items:center}
 .breath .ring{position:absolute; inset:0; border-radius:50%; border:1px solid rgba(20,48,44,.28)}
@@ -203,7 +203,7 @@ a.method{text-decoration:none; color:inherit}
 .room-head{display:grid; gap:14px; max-width:44rem; margin-bottom:28px}
 .room-strip{display:grid; grid-template-columns:repeat(3, 1fr); gap:14px}
 .room-strip figure{margin:0; display:grid; gap:10px}
-.room-strip img{width:100%; max-width:100%; aspect-ratio:4/3; object-fit:cover; border-radius:16px; display:block}
+.room-strip img{width:100%; max-width:100%; height:auto; aspect-ratio:4/3; object-fit:cover; border-radius:16px; display:block}
 .room-strip figcaption{font-size:.86rem; color:var(--ink-soft)}
 @media (max-width:760px){ .room-strip{grid-template-columns:1fr} }
 
@@ -459,3 +459,23 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
 .tm-actions{display:flex; gap:10px; flex-wrap:wrap; margin-top:8px}
 @media (max-width:820px){.tm-feature,.tm-feature.flip{grid-template-columns:1fr; gap:20px} .tm-feature.flip .tm-photo{order:0} .tm-photo{aspect-ratio:1; max-width:100%} .tm-name{font-size:clamp(2rem,9vw,2.8rem)}}
 @media (prefers-reduced-motion:reduce){.tm-photo,.tm-photo-in img{will-change:auto}}
+
+/* ---------- near you (find.html) ---------- */
+.find{padding:26px var(--gutter) 60px; max-width:56rem}
+.find-bar{display:flex; gap:10px; flex-wrap:wrap; align-items:stretch} .find-bar .btn{flex:none} .find-bar .btn.on{background:var(--mark); border-color:var(--mark)}
+.find-q{flex:1; min-width:220px; margin:0} .find-q input{height:100%; min-height:44px}
+.find-hint{margin-top:8px} .find-status{margin-top:14px; font-size:.92rem; color:var(--ink-soft)} .find-status.ok{color:var(--mark); font-weight:500} .find-status.warn{color:#c2410c}
+.find-cities{margin-top:16px} .find-list{display:grid; gap:14px; margin-top:20px}
+.find-card{display:flex; gap:16px; padding:18px; border:1px solid var(--line); border-radius:18px; background:var(--ground-3); align-items:flex-start}
+.find-card .ph{width:72px; height:72px; border-radius:50%; flex:none; overflow:hidden; display:grid; place-items:center; background:linear-gradient(135deg, var(--mark-soft), var(--mark)); color:#fff; font-family:var(--display); font-weight:800; font-size:1.6rem}
+.find-card .ph img{width:100%; height:100%; object-fit:cover; display:block}
+.find-body{display:grid; gap:6px; min-width:0} .find-body h2{font-family:var(--display); font-weight:300; font-size:1.5rem; line-height:1.05; margin:0}
+.find-body .eyebrow{display:flex; gap:8px; align-items:center; flex-wrap:wrap} .find-body .eyebrow .dot{display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--mark)}
+.find-km{font-size:.9rem; color:var(--ink-soft)} .find-km b{color:var(--mark); font-weight:600} .find-km.mute{color:var(--ink-mute)}
+.find-meta{display:flex; gap:6px 14px; flex-wrap:wrap; font-size:.86rem; color:var(--ink-soft); margin:0} .find-meta a{color:var(--mark)}
+.find-bio{font-size:.92rem; color:var(--ink-soft); margin:0} .find-card .row{gap:14px; align-items:center; margin-top:4px}
+.find-note{margin-top:18px}
+.sr-only{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}
+.therapist .km{display:block; font-size:.8rem; color:var(--mark); font-weight:500}
+.tm-km{display:inline-flex; align-items:center; gap:6px; font-size:.82rem; color:var(--mark); font-weight:500}
+@media (max-width:520px){ .find-card{padding:14px} .find-card .ph{width:56px; height:56px; font-size:1.3rem} }

@@ -18,6 +18,7 @@ export async function featureRoute(req, env, url, ctx) {
   const p = url.pathname, m = req.method;
   if (p === "/api/slots" && m === "GET") return slots(env, url);
   if (p === "/api/team" && m === "GET") return team(env, url);
+  if (p === "/api/providers" && m === "GET") return providers(env, url);
   { const sp = p.match(/^\/api\/service-photo\/([a-z0-9-]+)$/); if (sp && m === "GET") return servicePhoto(env, sp[1]); }
   if (p === "/api/packages" && m === "GET") return packages(env, url);
   if (p === "/api/packages/checkout" && m === "POST") return packageCheckout(req, env);
@@ -51,9 +52,34 @@ async function servicePhoto(env, id) {
   const [meta, b64] = r.photo.split(","); const ct = meta.slice(5, meta.indexOf(";")) || "image/jpeg";
   return new Response(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)), { headers: { "content-type": ct, "cache-control": "public, max-age=86400", etag: `"${(r.updated_at || "").replace(/\D/g, "")}"` } });
 }
+/* ---------- providers near a place (2026-09-13: the site is the connection between therapists and clients) ---------- */
+// city centres, for "nearest city" when nobody is pinned close by
+export const CITY_CENTRES = { cairo: [30.0444, 31.2357], dahab: [28.5091, 34.5136], florence: [43.7696, 11.2558] };
+export const distanceKm = (a, b, c, d) => { const R = 6371, toR = (x) => (x * Math.PI) / 180, dLat = toR(c - a), dLng = toR(d - b), h = Math.sin(dLat / 2) ** 2 + Math.cos(toR(a)) * Math.cos(toR(c)) * Math.sin(dLng / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); };
+const coord = (v, max) => { if (v === null || v === undefined || String(v).trim() === "") return null; const n = Number(v); return Number.isFinite(n) && Math.abs(n) <= max ? Math.round(n * 1e6) / 1e6 : null; };
+// "…/@30.01,31.2,15z" or "?q=30.01,31.2" or "…!3d30.01!4d31.2" in a Google Maps link
+export const coordsFromMaps = (url) => { const s = String(url || ""); const m = s.match(/@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/) || s.match(/[?&]q=(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/) || s.match(/!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)/); return m ? [coord(m[1], 90), coord(m[2], 180)] : null; };
+async function providers(env, url) {
+  const lat = coord(url.searchParams.get("lat"), 90), lng = coord(url.searchParams.get("lng"), 180), q = clean(url.searchParams.get("q") || "", 60).toLowerCase();
+  const r = await env.DB.prepare("SELECT id, city, name, bio, photo, languages, area, maps_url, title, instagram, i18n, sort, lat, lng, radius_km FROM therapists WHERE active = 1 ORDER BY city, sort, name").all();
+  const pr = await env.DB.prepare("SELECT city, MIN(amount) amount, currency, COUNT(*) n FROM services WHERE active = 1 GROUP BY city").all().catch(() => ({ results: [] }));
+  const price = Object.fromEntries(pr.results.map((x) => [x.city, { from: x.amount, currency: x.currency, services: x.n }]));
+  const has = lat !== null && lng !== null;
+  const cities = Object.entries(CITY_CENTRES).map(([k, [a, b]]) => ({ city: k, km: has ? Math.round(distanceKm(lat, lng, a, b)) : null, ...(price[k] || {}) }));
+  let list = r.results.map((t) => {
+    const i18n = parseI18n(t.i18n), pinned = t.lat !== null && t.lng !== null;
+    const km = has && pinned ? Math.round(distanceKm(lat, lng, t.lat, t.lng) * 10) / 10 : null;
+    const hay = [t.name, t.area, t.title, t.city, ...(i18n ? Object.values(i18n).flatMap((v) => [v.area, v.title]) : [])].filter(Boolean).join(" ").toLowerCase();
+    return { ...t, i18n, pinned, km, comes_to_you: km !== null && Number(t.radius_km) > 0 && km <= Number(t.radius_km), match: !q || hay.includes(q), ...(price[t.city] || {}) };
+  });
+  if (q) list = list.filter((t) => t.match);
+  if (has) list.sort((a, b) => (a.km ?? 1e9) - (b.km ?? 1e9) || a.sort - b.sort); // nearest first; unpinned last
+  const nearest = has ? cities.slice().sort((a, b) => a.km - b.km)[0] : null;
+  return json({ providers: list.map(({ match, ...t }) => t), cities, nearest, located: has });
+}
 async function team(env, url) {
   const city = cityOf(url.searchParams.get("city"));
-  const r = await env.DB.prepare("SELECT id, city, name, bio, photo, languages, area, maps_url, title, story, certs, instagram, i18n, sort FROM therapists WHERE active = 1" + (city ? " AND city = ?" : "") + " ORDER BY city, sort, name").bind(...(city ? [city] : [])).all();
+  const r = await env.DB.prepare("SELECT id, city, name, bio, photo, languages, area, maps_url, title, story, certs, instagram, i18n, sort, lat, lng, radius_km FROM therapists WHERE active = 1" + (city ? " AND city = ?" : "") + " ORDER BY city, sort, name").bind(...(city ? [city] : [])).all();
   return json({ therapists: r.results.map((t) => ({ ...t, i18n: parseI18n(t.i18n) })) });
 }
 async function packages(env, url) {
@@ -407,9 +433,15 @@ async function saveTherapist(req, env, admin, id) {
   const keepML = (k, max) => (b[k] === undefined ? cur?.[k] || "" : String(b[k] ?? "").replace(/\r/g, "").replace(/[\u0000-\u0009\u000b-\u001f]/g, " ").replace(/\n{3,}/g, "\n\n").trim().slice(0, max)); // story and certificates keep their line breaks
   const maps = b.maps_url === undefined ? cur?.maps_url || "" : /^https:\/\/[^\s"<>]{6,300}$/.test(String(b.maps_url || "").trim()) ? String(b.maps_url).trim() : "";
   const insta = (b.instagram === undefined ? cur?.instagram || "" : String(b.instagram || "")).trim().replace(/^@|^https?:\/\/(www\.)?instagram\.com\//i, "").replace(/\/.*$/, "").slice(0, 40);
+  // the pin: explicit lat/lng win; a Google Maps link with coordinates in it fills them in; null clears; radius_km = how far they travel to clients
+  let lat = b.lat === undefined ? cur?.lat ?? null : b.lat === null ? null : coord(b.lat, 90), lng = b.lng === undefined ? cur?.lng ?? null : b.lng === null ? null : coord(b.lng, 180);
+  if ((lat === null || lng === null) && b.lat === undefined && b.lng === undefined) { const c = coordsFromMaps(maps); if (c && c[0] !== null && c[1] !== null && maps !== (cur?.maps_url || "")) [lat, lng] = c; }
+  if (lat === null || lng === null) lat = lng = null;
+  const radius = b.radius_km === undefined ? Number(cur?.radius_km) || 0 : Math.min(100, Math.max(0, Number(b.radius_km) || 0));
   const vals = [name, keep("bio", 400), photo, keep("languages", 60), b.active === undefined ? cur?.active ?? 1 : b.active ? 1 : 0, Number.isInteger(b.sort) ? b.sort : cur?.sort || 0, link.admin_id, keep("area", 80), keep("address", 200), maps, keep("title", 80), keepML("story", 2000), keepML("certs", 1200), /^[A-Za-z0-9._]*$/.test(insta) ? insta : ""];
   if (cur) await env.DB.prepare("UPDATE therapists SET name = ?, bio = ?, photo = ?, languages = ?, active = ?, sort = ?, admin_id = ?, area = ?, address = ?, maps_url = ?, title = ?, story = ?, certs = ?, instagram = ? WHERE id = ?").bind(...vals, id).run();
   else await env.DB.prepare("INSERT INTO therapists (id, city, name, bio, photo, languages, active, sort, admin_id, area, address, maps_url, title, story, certs, instagram) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(tid, city, ...vals).run();
+  await env.DB.prepare("UPDATE therapists SET lat = ?, lng = ?, radius_km = ? WHERE id = ?").bind(lat, lng, radius, tid).run();
   // texts changed → Italian and Arabic versions again (Workers AI); if it fails now, the hourly cron fills them in
   const textsChanged = !cur || ["title", "bio", "story", "certs", "languages", "area"].some((k) => (b[k] !== undefined && String(b[k] ?? "").trim() !== String(cur[k] || "").trim()));
   if (textsChanged) { let i18n = null; try { i18n = await translateProfile(env, { title: vals[10], bio: vals[1], story: vals[11], certs: vals[12], languages: vals[3], area: vals[7] }); } catch (e) { console.error("translate", e.message); } await env.DB.prepare("UPDATE therapists SET i18n = ? WHERE id = ?").bind(i18n ? JSON.stringify(i18n) : null, tid).run(); }
