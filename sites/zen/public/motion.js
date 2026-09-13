@@ -39,7 +39,8 @@
   if (nav) { gsap.from(nav, { y: -24, opacity: 0, duration: .8, ease: "power3.out", delay: .5 }); ScrollTrigger.create({ start: 40, onUpdate: (s) => nav.classList.toggle("scrolled", s.scroll() > 40) }); }
 
   /* ---------- reveals ---------- */
-  const words = (el) => { if (el.dataset.split) return; el.dataset.split = "1"; const walk = (n) => { [...n.childNodes].forEach((c) => { if (c.nodeType === 3 && c.textContent.trim()) { const f = document.createDocumentFragment(); c.textContent.split(/(\s+)/).forEach((w) => { if (!w) return; if (/^\s+$/.test(w)) f.append(document.createTextNode(w)); else { const s = document.createElement("span"); s.className = "w"; s.innerHTML = `<span>${w.replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[ch]))}</span>`; f.append(s); } }); c.replaceWith(f); } else if (c.nodeType === 1 && !c.classList.contains("w")) walk(c); }); }; walk(el); };
+  // the translator swaps whole sentences in text nodes, so a heading is translated BEFORE it is split into words, and re-split when the language changes
+  const words = (el) => { if (el.dataset.split) return; if (el.__orig === undefined) el.__orig = el.innerHTML; if (window.ZenI18n?.apply) ZenI18n.apply(el); el.dataset.split = "1"; const walk = (n) => { [...n.childNodes].forEach((c) => { if (c.nodeType === 3 && c.textContent.trim()) { const f = document.createDocumentFragment(); c.textContent.split(/(\s+)/).forEach((w) => { if (!w) return; if (/^\s+$/.test(w)) f.append(document.createTextNode(w)); else { const s = document.createElement("span"); s.className = "w"; s.innerHTML = `<span>${w.replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[ch]))}</span>`; f.append(s); } }); c.replaceWith(f); } else if (c.nodeType === 1 && !c.classList.contains("w")) walk(c); }); }; walk(el); };
   const HEAD = "h1, h2", ITEMS = "p, li, .card, .btn, dt, dd, .method, .therapist, .svc, .step, .kpi, .reward, .place, .tm-feature, .field, .row, blockquote, figure, table, img, svg.cupfig, .links-grid a, .hero-visual, details";
   const seen = new WeakSet();
   function scan(root = document) {
@@ -56,7 +57,10 @@
     });
     groups.forEach((els) => { gsap.set(els, { opacity: 0, y: 26 }); ScrollTrigger.batch(els, { start: "top 90%", once: true, onEnter: (batch) => gsap.to(batch, { opacity: 1, y: 0, duration: .9, ease: "power3.out", stagger: .07, overwrite: true }) }); });
     // photos drift while they cross the screen
-    $$("main img", root).forEach((img) => { if (img.dataset.par || img.closest(".tm-photo, .therapist, .nav, .top, .mveil, .logo, #steps") || img.width < 120) return; img.dataset.par = "1"; found++; const wrap = img.parentElement; if (getComputedStyle(wrap).overflow === "visible") wrap.style.overflow = "hidden"; gsap.fromTo(img, { yPercent: -5, scale: 1.08 }, { yPercent: 5, scale: 1.08, ease: "none", scrollTrigger: { trigger: wrap, start: "top bottom", end: "bottom top", scrub: true } }); });
+    $$("main img", root).forEach((img) => { if (img.dataset.par || img.closest(".tm-photo, .therapist, .nav, .top, .mveil, .logo, #steps") || img.width < 120) return; img.dataset.par = "1"; found++;
+      // the photo drifts inside its own clipped box, so a caption or text next to it in the same frame is never covered
+      let wrap = img.parentElement; if (!wrap.classList.contains("par-box")) { if (wrap.children.length === 1 && !wrap.textContent.trim()) { wrap.classList.add("par-box"); } else { const box = document.createElement("span"); box.className = "par-box"; img.replaceWith(box); box.append(img); wrap = box; } }
+      gsap.fromTo(img, { yPercent: -5, scale: 1.08 }, { yPercent: 5, scale: 1.08, ease: "none", scrollTrigger: { trigger: wrap, start: "top bottom", end: "bottom top", scrub: true } }); });
     // numbers count up
     $$("[data-count]", root).forEach((el) => { if (el.dataset.counted) return; el.dataset.counted = "1"; found++; const to = Number(el.dataset.count), o = { v: 0 }; ScrollTrigger.create({ trigger: el, start: "top 90%", once: true, onEnter: () => gsap.to(o, { v: to, duration: 1.4, ease: "power2.out", onUpdate: () => { el.textContent = Math.round(o.v).toLocaleString(); } }) }); });
     if (found) ScrollTrigger.refresh();   // only when something new was tagged: a refresh cancels any smooth scroll in progress (anchor links, the cup story)
@@ -71,7 +75,10 @@
     const real = muts.some((m) => [...m.addedNodes].some((n) => n.nodeType === 1 && !n.closest(".mveil, .aura") && !n.classList.contains("w")));
     if (!real) return; clearTimeout(t); t = setTimeout(() => scan(), 80);
   }).observe(document.body, { childList: true, subtree: true });
-  document.addEventListener("zen:lang", () => setTimeout(scan, 120));
+  document.addEventListener("zen:lang", () => {
+    $$("[data-split]").forEach((h) => { h.innerHTML = h.__orig; delete h.dataset.split; words(h); gsap.set($$(".w > span", h), { yPercent: 0, rotate: 0 }); });   // fresh text in the new language, already in place (no replay)
+    setTimeout(scan, 120);
+  });
 
   /* ---------- buttons lean toward the pointer ---------- */
   if (matchMedia("(pointer: fine)").matches) {

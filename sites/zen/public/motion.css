@@ -6,7 +6,7 @@
 .aura{position:fixed; left:0; top:0; width:420px; height:420px; margin:-210px 0 0 -210px; border-radius:50%; pointer-events:none; z-index:0; opacity:0; transition:opacity .6s;
   background:radial-gradient(closest-side, color-mix(in srgb, var(--mark) 18%, transparent), transparent 70%); mix-blend-mode:multiply}
 .motion main{position:relative; z-index:1}
-.motion .w{display:inline-block; overflow:hidden; vertical-align:bottom; padding:0 .02em .08em; margin:0 -.02em -.08em} .motion .w > span{display:inline-block; will-change:transform}
+.motion .w{display:inline-block; overflow:hidden; vertical-align:bottom; padding:0 .02em .08em; margin:0 -.02em -.08em} .motion h1[data-split],.motion h2[data-split]{unicode-bidi:plaintext} .motion .w > span{display:inline-block; will-change:transform}
 .motion .rv{will-change:transform, opacity}
 .motion .btn{will-change:transform}
 /* marquee strip */
@@ -24,3 +24,4 @@
 .motion .card,.motion .method,.motion .svc,.motion .links-grid a,.motion .place,.motion .therapist{transition:transform .35s var(--ease), box-shadow .35s var(--ease), border-color .35s}
 .motion .card:hover,.motion .method:hover,.motion .svc:hover,.motion .links-grid a:hover,.motion .therapist:hover{transform:translateY(-3px); box-shadow:0 24px 40px -28px rgba(27,30,29,.45)}
 @media (prefers-reduced-motion:reduce){.hero::before{animation:none}}
+.par-box{display:block; overflow:hidden; border-radius:inherit; max-width:100%} .par-box > img{display:block; width:100%; height:auto}
