@@ -6,6 +6,7 @@ import { CITIES } from "./catalog.js";
 import { randomId, referralCode, signPayload, verifyPayload, getCookie, clearCookie, hashPassword } from "./auth.js";
 import { CITY_KEYS, json, clean, normEmail, isDate, isTime, fmt, now, today, addDays, feeOn, body, isLive, currentUser, scope, sendEmail, stripeCheckout, slotsFor, healthFlags, parseIntake, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, isOwner, therapistOf, visibleWhere, isPartner, isEmployee, managesCity, pickLang, translateProfile, parseI18n } from "./lib.js";
 import { M } from "./mail.js";
+import { translateService, therapistPrices } from "./lib.js";
 
 const b64u = (s) => btoa(typeof s === "string" ? unescape(encodeURIComponent(s)) : String.fromCharCode(...new Uint8Array(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const cityOf = (k) => (CITY_KEYS.includes(k) ? k : null);
@@ -64,13 +65,16 @@ async function providers(env, url) {
   const r = await env.DB.prepare("SELECT id, city, name, bio, photo, languages, area, maps_url, title, instagram, i18n, sort, lat, lng, radius_km FROM therapists WHERE active = 1 ORDER BY city, sort, name").all();
   const pr = await env.DB.prepare("SELECT city, MIN(amount) amount, currency, COUNT(*) n FROM services WHERE active = 1 GROUP BY city").all().catch(() => ({ results: [] }));
   const price = Object.fromEntries(pr.results.map((x) => [x.city, { from: x.amount, currency: x.currency, services: x.n }]));
+  const tp = await therapistPrices(env, null);
+  const svcRows = (await env.DB.prepare("SELECT id, city, amount FROM services WHERE active = 1").all()).results;
+  const fromFor = (t) => { const mine = svcRows.filter((s) => s.city === t.city).map((s) => tp[s.id]?.[t.id] ?? s.amount); return mine.length ? Math.min(...mine) : price[t.city]?.from; };
   const has = lat !== null && lng !== null;
   const cities = Object.entries(CITY_CENTRES).map(([k, [a, b]]) => ({ city: k, km: has ? Math.round(distanceKm(lat, lng, a, b)) : null, ...(price[k] || {}) }));
   let list = r.results.map((t) => {
     const i18n = parseI18n(t.i18n), pinned = t.lat !== null && t.lng !== null;
     const km = has && pinned ? Math.round(distanceKm(lat, lng, t.lat, t.lng) * 10) / 10 : null;
     const hay = [t.name, t.area, t.title, t.city, ...(i18n ? Object.values(i18n).flatMap((v) => [v.area, v.title]) : [])].filter(Boolean).join(" ").toLowerCase();
-    return { ...t, i18n, pinned, km, comes_to_you: km !== null && Number(t.radius_km) > 0 && km <= Number(t.radius_km), match: !q || hay.includes(q), ...(price[t.city] || {}) };
+    return { ...t, i18n, pinned, km, comes_to_you: km !== null && Number(t.radius_km) > 0 && km <= Number(t.radius_km), match: !q || hay.includes(q), ...(price[t.city] || {}), from: fromFor(t) };
   });
   if (q) list = list.filter((t) => t.match);
   if (has) list.sort((a, b) => (a.km ?? 1e9) - (b.km ?? 1e9) || a.sort - b.sort); // nearest first; unpinned last
@@ -263,6 +267,7 @@ export async function adminFeatureRoute(req, env, url, admin) {
   if (p === "/api/admin/services" && m === "POST") return saveService(req, env, admin, null);
   if ((mm = p.match(/^\/api\/admin\/services\/([a-z0-9-]+)$/)) && m === "PATCH") return saveService(req, env, admin, mm[1]);
   if (mm && m === "DELETE") return deleteService(env, admin, mm[1]);
+  { const pr = p.match(/^\/api\/admin\/therapists\/([a-z0-9]+)\/prices$/); if (pr && m === "GET") return therapistPriceList(env, admin, pr[1]); if (pr && m === "PUT") return therapistPriceSave(req, env, admin, pr[1]); }
   if (p === "/api/admin/availability" && m === "GET") return listRows(env, admin, url, "availability", "ORDER BY city, weekday, start");
   if (p === "/api/admin/availability" && m === "POST") return addAvailability(req, env, admin);
   if ((mm = p.match(/^\/api\/admin\/availability\/([a-z0-9]+)$/)) && m === "DELETE") return deleteRow(env, admin, "availability", mm[1]);
@@ -317,15 +322,19 @@ async function saveService(req, env, admin, id) {
   if (!city || !name || amount === undefined || amount === null) return json({ error: "City, a name and a price." }, 400);
   const photo = b.photo === undefined ? cur?.photo || null : b.photo === null ? null : validPhoto(b.photo, 260000) || cur?.photo || null;
   const vals = [name, minutes, amount, CITIES[city].currency, b.description === undefined ? cur?.description || "" : clean(b.description, 160), b.active === undefined ? cur?.active ?? 1 : b.active ? 1 : 0, Number.isInteger(b.sort) ? b.sort : cur?.sort || 0, now()];
+  let nid = null;
   if (cur) await env.DB.prepare("UPDATE services SET name = ?, minutes = ?, amount = ?, currency = ?, description = ?, active = ?, sort = ?, updated_at = ?, photo = ? WHERE id = ?").bind(...vals, photo, id).run();
   else {
     const base = city.slice(0, 3) + "-" + name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 20);
-    let nid = base, n = 2; while (await env.DB.prepare("SELECT 1 FROM services WHERE id = ?").bind(nid).first()) nid = `${base}-${n++}`;
+    nid = base; let n = 2; while (await env.DB.prepare("SELECT 1 FROM services WHERE id = ?").bind(nid).first()) nid = `${base}-${n++}`;
     const maxSort = (await env.DB.prepare("SELECT MAX(sort) m FROM services WHERE city = ?").bind(city).first()).m;
     if (!Number.isInteger(b.sort)) vals[6] = (maxSort ?? -1) + 1;
     await env.DB.prepare("INSERT INTO services (id, city, name, minutes, amount, currency, description, active, sort, updated_at, photo) VALUES (?,?,?,?,?,?,?,?,?,?,?)").bind(nid, city, ...vals, photo).run();
     id = nid;
   }
+  { const sid = cur ? id : nid, textsChanged = !cur || [["name", vals[0]], ["description", vals[4]]].some(([kk, v]) => String(v || "").trim() !== String(cur[kk] || "").trim());
+    if (textsChanged) { let i18n = null; try { i18n = await translateService(env, { name: vals[0], description: vals[4] }); } catch (e) { console.error("translate service", e.message); } await env.DB.prepare("UPDATE services SET i18n = ? WHERE id = ?").bind(i18n ? JSON.stringify(i18n) : null, sid).run(); } }
+
   return json({ ok: true, id });
 }
 // Remove a service: gone for good if nobody ever booked it, otherwise just taken off the website (bookings keep their history).
@@ -446,6 +455,28 @@ async function saveTherapist(req, env, admin, id) {
   const textsChanged = !cur || ["title", "bio", "story", "certs", "languages", "area"].some((k) => (b[k] !== undefined && String(b[k] ?? "").trim() !== String(cur[k] || "").trim()));
   if (textsChanged) { let i18n = null; try { i18n = await translateProfile(env, { title: vals[10], bio: vals[1], story: vals[11], certs: vals[12], languages: vals[3], area: vals[7] }); } catch (e) { console.error("translate", e.message); } await env.DB.prepare("UPDATE therapists SET i18n = ? WHERE id = ?").bind(i18n ? JSON.stringify(i18n) : null, tid).run(); }
   return json({ ok: true, id: tid, created: link.created || null, admin_id: link.admin_id || null });
+}
+/* ---------- a therapist's own prices (2026-09-13): owner or the city's partner set them; the therapist sees theirs ---------- */
+async function therapistPriceList(env, admin, id) {
+  const th = await env.DB.prepare("SELECT id, city, name FROM therapists WHERE id = ?").bind(id).first();
+  if (!th || (!isOwner(admin) && th.city !== admin.role)) return json({ error: "Not found" }, 404);
+  if (isEmployee(admin)) { const me = await therapistOf(env, admin); if (!me || me.id !== id) return json({ error: "Not found" }, 404); }
+  const services = (await env.DB.prepare("SELECT id, name, minutes, amount, currency FROM services WHERE city = ? AND active = 1 ORDER BY sort, name").bind(th.city).all()).results;
+  const own = Object.fromEntries((await env.DB.prepare("SELECT service_id, amount FROM therapist_prices WHERE therapist_id = ?").bind(id).all()).results.map((r) => [r.service_id, r.amount]));
+  return json({ therapist: th, can_edit: managesCity(admin), rows: services.map((s) => ({ ...s, own: own[s.id] ?? null })) });
+}
+async function therapistPriceSave(req, env, admin, id) {
+  const th = await env.DB.prepare("SELECT id, city FROM therapists WHERE id = ?").bind(id).first();
+  if (!th || (!isOwner(admin) && th.city !== admin.role)) return json({ error: "Not found" }, 404);
+  if (!managesCity(admin)) return json({ error: "The owner or your city's partner sets prices." }, 403);
+  const b = await body(req), prices = b && typeof b.prices === "object" && b.prices ? b.prices : {};
+  const ids = new Set((await env.DB.prepare("SELECT id FROM services WHERE city = ?").bind(th.city).all()).results.map((r) => r.id));
+  for (const [sid, v] of Object.entries(prices)) {
+    if (!ids.has(sid)) continue;
+    if (v === null || v === "" || v === undefined) await env.DB.prepare("DELETE FROM therapist_prices WHERE therapist_id = ? AND service_id = ?").bind(id, sid).run();
+    else { const n = Number(v); if (!Number.isInteger(n) || n < 0 || n > 100000000) return json({ error: "Prices are whole numbers in minor units (piastres / cents)." }, 400); await env.DB.prepare("INSERT INTO therapist_prices (therapist_id, service_id, amount) VALUES (?,?,?) ON CONFLICT(therapist_id, service_id) DO UPDATE SET amount = excluded.amount").bind(id, sid, n).run(); }
+  }
+  return json({ ok: true });
 }
 async function savePackage(req, env, id) {
   const b = await body(req);

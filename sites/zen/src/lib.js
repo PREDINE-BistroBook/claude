@@ -25,9 +25,17 @@ export async function catalog(env, { all = false } = {}) {
   let rows = [];
   try { rows = (await env.DB.prepare("SELECT * FROM services" + (all ? "" : " WHERE active = 1") + " ORDER BY city, sort, name").all()).results; } catch (e) { console.error("services table missing, using static catalog", e.message); }
   if (!rows.length) { for (const k of CITY_KEYS) for (const [id, s] of Object.entries(CITIES[k].services)) out[k].services[id] = { id, name: s.name, amount: s.amount, minutes: 60, description: "", active: 1, sort: 0, short: s.name.split(" · ")[0] }; return out; }
-  for (const r of rows) { if (!out[r.city]) continue; out[r.city].services[r.id] = { id: r.id, name: `${r.name} · ${r.minutes} min · ${CITIES[r.city].name}`, short: r.name, amount: r.amount, minutes: r.minutes, description: r.description || "", active: r.active, sort: r.sort, photo: r.photo || null, updated_at: r.updated_at || "" }; }
+  for (const r of rows) { if (!out[r.city]) continue; out[r.city].services[r.id] = { id: r.id, name: `${r.name} · ${r.minutes} min · ${CITIES[r.city].name}`, short: r.name, amount: r.amount, minutes: r.minutes, description: r.description || "", active: r.active, sort: r.sort, photo: r.photo || null, i18n: parseI18n(r.i18n), updated_at: r.updated_at || "" }; }
   return out;
 }
+// { service_id: { therapist_id: amount } } for a city's active therapists — a therapist's own price beats the city price when the client chose them
+export async function therapistPrices(env, city) {
+  const out = {}; let rows = [];
+  try { rows = (await env.DB.prepare("SELECT p.therapist_id, p.service_id, p.amount FROM therapist_prices p JOIN therapists t ON t.id = p.therapist_id WHERE t.active = 1" + (city ? " AND t.city = ?" : "")).bind(...(city ? [city] : [])).all()).results; } catch (e) { console.error("therapist_prices", e.message); }
+  for (const r of rows) (out[r.service_id] ||= {})[r.therapist_id] = r.amount;
+  return out;
+}
+export const nameIn = (svc, lang, cityName) => { const n = (lang !== "en" && svc?.i18n?.[lang]?.name) || svc?.short || ""; return n ? `${n} · ${svc.minutes} min · ${cityName}` : svc?.name || ""; };
 export async function serviceOf(env, city, id) { if (!CITY_KEYS.includes(city) || !id) return null; const c = await catalog(env); return c[city].services[id] || null; }
 // Who hears about a new booking / gift / pack in a city: ZEN_NOTIFY_EMAIL (if set) plus every admin with a real email who asked for it
 // (owner: every city; city admin: their city). The platform account (Amico Mio) never gets operational mail.
@@ -42,10 +50,12 @@ export async function notifyList(env, city, therapistId) {
 // Profile texts in Italian and Arabic, by Workers AI (m2m100). Called after a therapist is saved and hourly for anything missing.
 // Returns { it: {...}, ar: {...} } or null when the binding is missing / the model fails; the site then falls back to the original text.
 const PROFILE_FIELDS = ["title", "bio", "story", "certs", "languages", "area"];
-export async function translateProfile(env, row) {
+export const translateProfile = (env, row) => translateFields(env, row, PROFILE_FIELDS);
+export const translateService = (env, row) => translateFields(env, row, ["name", "description"]);
+export async function translateFields(env, row, fields) {
   if (!env.AI) return null;
   const out = { it: {}, ar: {} };
-  for (const lang of ["it", "ar"]) for (const k of PROFILE_FIELDS) {
+  for (const lang of ["it", "ar"]) for (const k of fields) {
     const src = String(row[k] || "").trim(); if (!src) { out[lang][k] = ""; continue; }
     const parts = src.split("\n"), done = [];
     for (const p of parts) { if (!p.trim()) { done.push(""); continue; } const r = await env.AI.run("@cf/meta/m2m100-1.2b", { text: p, source_lang: "english", target_lang: lang === "it" ? "italian" : "arabic" }); done.push(String(r?.translated_text || p).trim()); }

@@ -483,6 +483,10 @@
       <div class="row" style="align-items:flex-end;flex-wrap:wrap"><button type="button" class="btn small ghost" id="th-locate">Use my current position</button><div class="field" style="flex:1;min-width:120px"><label for="th-lat">Latitude</label><input id="th-lat" inputmode="decimal" placeholder="30.0116"></div><div class="field" style="flex:1;min-width:120px"><label for="th-lng">Longitude</label><input id="th-lng" inputmode="decimal" placeholder="30.9760"></div></div>
       <div class="row" style="align-items:flex-end;flex-wrap:wrap"><div class="field" style="flex:1;min-width:160px"><label for="th-radius">Also travels to clients within (km) <span class="tiny">0 = at their place only</span></label><input id="th-radius" type="number" min="0" max="100" step="1" placeholder="0"></div><span class="tiny" id="th-pin-status" style="flex:2"></span></div>
     </div>
+    <div class="grid" id="th-prices-box" style="gap:8px;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--ground-3)" hidden>
+      <div><b style="font-size:.92rem">Their own prices</b><div class="tiny" id="th-prices-note">Leave a field empty to charge the city price. A client who picks this therapist pays these; "Anyone available" pays the city price.</div></div>
+      <div id="th-prices" class="grid" style="gap:6px"></div>
+    </div>
     <label class="row" style="gap:8px;font-size:.92rem"><input type="checkbox" id="th-active" checked> Shown on the website and bookable</label>
     <div class="grid" id="th-account" style="gap:8px;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--ground-3)">
       <div><b style="font-size:.92rem">Sign-in account</b><div class="tiny">The account this person uses to open the admin and see their own sessions. One account per person.</div></div>
@@ -939,7 +943,7 @@ function openTherapist(t) {
   $("#th-title").textContent = t ? "Edit " + t.name : "Add a therapist";
   $("#th-city").innerHTML = cityKeys.map((k) => `<option value="${k}" ${t?.city === k ? "selected" : ""}>${CITY_NAME[k]}</option>`).join(""); $("#th-city").disabled = Boolean(t); $("#th-city-wrap").hidden = !isOwner() && !t;
   $("#th-name").value = t?.name || ""; $("#th-bio").value = t?.bio || ""; $("#th-langs").value = t?.languages || ""; $("#th-sort").value = t ? (t.sort || 0) + 1 : TEAM.filter((x) => x.city === cityKeys[0]).length + 1; $("#th-active").checked = t ? t.active === 1 : true;
-  $("#th-area").value = t?.area || ""; $("#th-address").value = t?.address || ""; $("#th-maps").value = t?.maps_url || ""; $("#th-lat").value = t?.lat ?? ""; $("#th-lng").value = t?.lng ?? ""; $("#th-radius").value = t?.radius_km || ""; pinStatus();
+  $("#th-area").value = t?.area || ""; $("#th-address").value = t?.address || ""; $("#th-maps").value = t?.maps_url || ""; $("#th-lat").value = t?.lat ?? ""; $("#th-lng").value = t?.lng ?? ""; $("#th-radius").value = t?.radius_km || ""; pinStatus(); loadPrices(t?.id);
   $("#th-role").value = t?.title || ""; $("#th-insta").value = t?.instagram || ""; $("#th-story").value = t?.story || ""; $("#th-certs").value = t?.certs || "";
   $("#th-remove").hidden = !t || isEmployee(); $("#th-active").closest("label").hidden = isEmployee(); $("#th-sort").closest(".field").hidden = isEmployee(); $("#th-err").hidden = true; d.dataset.id = t?.id || ""; thPhoto = undefined; $("#th-photo").value = ""; renderThPreview(t); fillAccount(t); d.showModal();
 }
@@ -969,7 +973,7 @@ $("#th-form").addEventListener("submit", async (e) => { e.preventDefault(); cons
   const body = { city: $("#th-city").value, name: $("#th-name").value.trim(), bio: $("#th-bio").value.trim(), languages: $("#th-langs").value.trim(), sort: Math.max(0, (Number($("#th-sort").value) || 1) - 1), active: $("#th-active").checked, area: $("#th-area").value.trim(), address: $("#th-address").value.trim(), maps_url: $("#th-maps").value.trim(), title: $("#th-role").value.trim(), instagram: $("#th-insta").value.trim(), story: $("#th-story").value.trim(), certs: $("#th-certs").value.trim(), radius_km: Number($("#th-radius").value) || 0 }; if (thPhoto !== undefined) body.photo = thPhoto;
   { const la = $("#th-lat").value.trim(), ln = $("#th-lng").value.trim(); if (la === "" && ln === "") { body.lat = null; body.lng = null; } else { const a = Number(la), b = Number(ln); if (!Number.isFinite(a) || !Number.isFinite(b) || Math.abs(a) > 90 || Math.abs(b) > 180) { await ask({ title: "Check the pin", text: "Latitude is between -90 and 90, longitude between -180 and 180 (for example 30.0116 and 30.9760).", ok: "OK" }); return; } body.lat = a; body.lng = b; } }
   if (isOwner()) { const v = $("#th-admin").value; if (v === "new") body.new_account = { email: $("#th-new-email").value.trim(), password: $("#th-new-pass").value }; else body.admin_id = v || null; }
-  try { if (!body.name) throw new Error("Give them a name."); const r = d.dataset.id ? await ZenAPI("PATCH", "/api/admin/therapists/" + d.dataset.id, body) : await ZenAPI("POST", "/api/admin/therapists", body); d.close(); loadTeamTab();
+  try { if (!body.name) throw new Error("Give them a name."); const r = d.dataset.id ? await ZenAPI("PATCH", "/api/admin/therapists/" + d.dataset.id, body) : await ZenAPI("POST", "/api/admin/therapists", body); await savePrices(d.dataset.id || r.id); d.close(); loadTeamTab();
     if (r.created) await showCredentials({ id: r.admin_id, name: body.name, signin: r.created, password: body.new_account.password, email: r.created }); }
   catch (ex) { err.textContent = ex.message; err.hidden = false; } finally { $("#th-save").disabled = false; } });
 
@@ -1072,6 +1076,19 @@ $("#svc-form").addEventListener("submit", async (e) => { e.preventDefault(); con
 /* ---------- tabs, login ---------- */
 $$(".tabs button").forEach((b) => b.addEventListener("click", () => { $$(".tabs button").forEach((x) => x.setAttribute("aria-selected", x === b)); ["overview", "bookings", "clients", "services", "calendar", "team", "offers", "review", "platform", "settings"].forEach((t) => ($("#tab-" + t).hidden = t !== b.dataset.tab)); closeDrawer(); ({ overview: loadOverview, platform: loadPlatform, bookings: loadBookings, clients: loadClients, services: loadServices, calendar: loadCalendar, team: loadTeamTab, offers: loadOffers, review: loadReview, settings: loadSettings })[b.dataset.tab](); }));
 $("#login-form").addEventListener("submit", async (e) => { e.preventDefault(); const err = $("#login-err"); err.hidden = true; $("#login-btn").disabled = true; try { await ZenAPI("POST", "/api/admin/login", { email: $("#a-email").value.trim(), password: $("#a-pass").value }); start(await ZenAPI("GET", "/api/admin/me")); } catch (ex) { err.textContent = ex.message; err.hidden = false; } finally { $("#login-btn").disabled = false; } });
+let PRICE_ROWS = [];
+async function loadPrices(id) {
+  const box = $("#th-prices-box"); PRICE_ROWS = []; box.hidden = true; if (!id) return;
+  try { const r = await ZenAPI("GET", "/api/admin/therapists/" + id + "/prices"); PRICE_ROWS = r.rows; box.hidden = !r.rows.length;
+    $("#th-prices").innerHTML = r.rows.map((s) => `<div class="row" style="align-items:center;gap:10px"><span style="flex:1;font-size:.9rem">${esc(s.name)} <span class="tiny">· ${s.minutes} min · city price ${money(s.amount, s.currency)}</span></span><input data-price="${s.id}" inputmode="numeric" placeholder="${(s.amount / 100).toFixed(0)}" value="${s.own !== null ? (s.own / 100).toFixed(0) : ""}" style="width:110px" ${r.can_edit ? "" : "disabled"}></div>`).join("");
+    $("#th-prices-note").textContent = r.can_edit ? `Leave a field empty to charge the city price. Amounts in ${(r.rows[0]?.currency || "").toUpperCase()}. A client who picks this therapist pays these; "Anyone available" pays the city price.` : "Set by the owner or your city's partner.";
+  } catch (_) { box.hidden = true; }
+}
+async function savePrices(id) {
+  if (!id || !PRICE_ROWS.length || !managesCity()) return;
+  const prices = {}; $$("#th-prices [data-price]").forEach((i) => { const v = i.value.trim(); prices[i.dataset.price] = v === "" ? null : Math.round(Number(v) * 100); });
+  await ZenAPI("PUT", "/api/admin/therapists/" + id + "/prices", { prices });
+}
 function pinStatus() { const a = $("#th-lat").value.trim(), b = $("#th-lng").value.trim(); $("#th-pin-status").textContent = a && b ? `Pinned at ${a}, ${b}` : "Not pinned yet: clients can't find them by distance."; }
 ["#th-lat", "#th-lng"].forEach((k) => $(k).addEventListener("input", pinStatus));
 $("#th-locate").addEventListener("click", () => { const b = $("#th-locate"); if (!navigator.geolocation) { $("#th-pin-status").textContent = "This browser can't share a position. Paste the coordinates instead."; return; } b.disabled = true; b.textContent = "Finding…"; navigator.geolocation.getCurrentPosition((p) => { $("#th-lat").value = (Math.round(p.coords.latitude * 1e5) / 1e5).toString(); $("#th-lng").value = (Math.round(p.coords.longitude * 1e5) / 1e5).toString(); b.disabled = false; b.textContent = "Use my current position"; pinStatus(); }, () => { b.disabled = false; b.textContent = "Use my current position"; $("#th-pin-status").textContent = "Couldn't get the position. Allow location for this site, or paste the coordinates."; }, { timeout: 9000, maximumAge: 60000 }); });

@@ -87,7 +87,8 @@ async function loadTeam() {
   const want = new URLSearchParams(location.search).get("therapist"); // "Book with Mazen" from the team page
   if (want && !keep && list.some(th => th.id === want)) sel.value = want;
   else if ([...sel.options].some(o => o.value === keep)) sel.value = keep; else if (ME?.user?.preferred_therapist && list.some(th => th.id === ME.user.preferred_therapist)) sel.value = ME.user.preferred_therapist;
-  $("#therapist-wrap").hidden = list.length < 2 || SLOTMODE !== "slots";
+  $("#therapist-wrap").hidden = list.length < 2;   // the choice counts in window mode too (their own price, and the booking goes to them)
+  if (sel.value !== keep && CITIES[k]) { renderServices(); updateSummary(); }   // the chosen therapist's own prices show on the cards
 }
 /* ---------- live time slots (when the admin has set opening hours for the city) ---------- */
 let SLOTMODE = "windows", SLOTREQ = 0;
@@ -117,10 +118,10 @@ async function loadSlots() {
       });
     }
   }
-  $("#therapist-wrap").hidden = (TEAM[k] || []).length < 2 || SLOTMODE !== "slots";
+  $("#therapist-wrap").hidden = (TEAM[k] || []).length < 2;
   updateSummary();
 }
-$("#date").addEventListener("change", loadSlots); $("#therapist").addEventListener("change", loadSlots);
+$("#date").addEventListener("change", loadSlots); $("#therapist").addEventListener("change", () => { loadSlots(); renderServices(); updateSummary(); });
 async function loadPackHint() {
   const k = city; const hint = $("#pack-hint"); hint.hidden = true;
   try { const r = await fetch("/api/packages?city=" + k); if (!(r.headers.get("content-type") || "").includes("json")) return; const { packages } = await r.json(); if (k !== city || !packages?.length) return;
@@ -184,6 +185,8 @@ const COVER_GLYPH = {
   manual: `<svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 30c6-2 10-8 14-12s8-6 14-4"/><path d="M12 34c5-1 8-5 11-8"/><path d="M26 14l4 4"/></svg>`,
   facial: `<svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="22" cy="22" r="5"/><circle cx="12" cy="30" r="4"/><circle cx="32" cy="30" r="4"/><circle cx="22" cy="10" r="3"/></svg>`,
 };
+const LFS = (o, k) => (I.lang !== "en" && o.i18n && o.i18n[I.lang] && o.i18n[I.lang][k]) || "";   // a service field in the visitor's language (from the admin's translations)
+const priceOf = (s) => { const th = $("#therapist")?.value; return th && s.prices && s.prices[th] !== undefined && s.prices[th] !== null ? s.prices[th] : s.price; };
 const methodOf = (name) => window.ZenMethods ? ZenMethods.methodOf(name) : "dry";
 function coverKey(name) { const n = (name || "").toLowerCase(); if (n.includes("slid") || n.includes("glid") || n.includes("dynamic")) return "sliding"; const k = ZenGuide.serviceKey(name); return COVER_GLYPH[k] ? k : "cupping"; }
 function renderServices() {
@@ -197,9 +200,9 @@ function renderServices() {
       <input type="radio" name="service" id="svc-${s.id}" value="${s.id}" ${i === keepIdx ? "checked" : ""}>
       <label for="svc-${s.id}">
         <span class="cover ${s.photo ? "" : "k-" + coverKey(s.name)}" aria-hidden="true">${s.photo ? `<img src="${esc(s.photo)}" alt="" loading="lazy">` : COVER_GLYPH[coverKey(s.name)]}</span>
-        <span class="name">${esc(t(s.name))}</span>
-        <span class="price num">${money(s.price, c.currency)}</span>
-        <span class="desc">${esc(t(s.desc))}</span>
+        <span class="name">${esc(LFS(s, "name") || t(s.name))}</span>
+        <span class="price num">${money(priceOf(s), c.currency)}</span>
+        <span class="desc">${esc(LFS(s, "description") || t(s.desc))}</span>
         <span class="dur">${s.dur} ${t("min")} · <a class="how" href="method.html?m=${methodOf(s.name)}">${t("How it works")}</a></span>
       </label>
     </div>`).join("");
@@ -215,11 +218,11 @@ function updateSummary() {
   const cur = current(); if (!cur || !cur.s) return;
   const { c, s } = cur;
   const date = $("#date").value; const slot = $("input[name=slot]:checked")?.value || "";
-  $("#sum-service").textContent = `${t(s.name)} · ${s.dur} ${t("min")} · ${t(c.name)}`;
-  $("#sum-price").textContent = money(s.price, c.currency);
+  $("#sum-service").textContent = `${LFS(s, "name") || t(s.name)} · ${s.dur} ${t("min")} · ${t(c.name)}`;
+  $("#sum-price").textContent = money(priceOf(s), c.currency);
   const slotTxt = slot ? (SLOT_LABEL[slot] ? t(SLOT_LABEL[slot]) : slot) : t("no time picked");
   $("#sum-when").textContent = date ? new Date(date + "T12:00:00").toLocaleDateString(LOCALE(), { weekday: "long", day: "numeric", month: "long" }) + " · " + slotTxt : t("Pick a day");
-  const dc = discount(s.price); const total = s.price - (dc ? dc.off : 0);
+  const dc = discount(priceOf(s)); const total = priceOf(s) - (dc ? dc.off : 0);
   $("#sum-discount-line").hidden = !dc; if (dc) { $("#sum-discount").textContent = dc.label; $("#sum-discount-amt").textContent = "− " + money(dc.off, c.currency); }
   const review = $("#flagged").checked || !$("#review-note").hidden;
   $("#sum-total").textContent = review ? t("Pay at the session") : total === 0 ? t("Nothing to pay") : money(total, c.currency);
@@ -237,7 +240,7 @@ $("#booking").addEventListener("submit", async (e) => {
   const { c, s } = current();
   const slot = $("input[name=slot]:checked")?.value;
   if (!slot) { err.textContent = t("Pick a time first."); err.hidden = false; return; }
-  const dc = discount(s.price);
+  const dc = discount(priceOf(s));
   const payload = { lang: I.lang,
     city, service: s.id, date: $("#date").value, slot, therapist_id: $("#therapist").value || undefined,
     name: $("#name").value.trim(), phone: $("#phone").value.trim(), email: $("#email").value.trim(), note: $("#note").value.trim(),
@@ -251,13 +254,13 @@ $("#booking").addEventListener("submit", async (e) => {
     if (r.ok && data.url) { location.href = data.url; return; }
     if (r.status === 409 && data.slots) { loadSlots(); }
     if (data.preview) {
-      tell(t("Payments aren't switched on yet"), t("This is the preview build. Once Zen's Stripe account is connected, this button takes you to a secure card page for {amount} and Zen Recovery gets your booking by email and WhatsApp.", { amount: money(s.price, c.currency) }));
+      tell(t("Payments aren't switched on yet"), t("This is the preview build. Once Zen's Stripe account is connected, this button takes you to a secure card page for {amount} and Zen Recovery gets your booking by email and WhatsApp.", { amount: money(priceOf(s), c.currency) }));
     } else {
       err.textContent = data.error || t("Something went wrong creating the payment. Try again, or message Zen on WhatsApp.");
       err.hidden = false;
     }
   } catch (_) {
-    tell(t("Preview only"), t("Nothing was charged. On the live site this takes you to a secure Stripe card page for {amount}, and Zen confirms the hour on WhatsApp.", { amount: money(s.price, c.currency) }));
+    tell(t("Preview only"), t("Nothing was charged. On the live site this takes you to a secure Stripe card page for {amount}, and Zen confirms the hour on WhatsApp.", { amount: money(priceOf(s), c.currency) }));
   } finally {
     btn.disabled = false; updateSummary();
   }

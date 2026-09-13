@@ -5,6 +5,7 @@
 window.ZenI18n = (function () {
   const LANGS = { en: "English", it: "Italiano", ar: "العربية" };
   const IT = {
+    "Prices can differ by therapist.": "I prezzi possono variare in base al terapista.",
     // near you (2026-09-13)
     "Near you": "Vicino a te", "Find a therapist near you": "Trova un terapista vicino a te", "Find a therapist near you.": "Trova un terapista vicino a te.",
     "Every Zen therapist works from their own place, in Cairo, Dahab or Florence. Tell us where you are and we'll show you who's closest, how far, and from what price.": "Ogni terapista Zen lavora dal proprio posto, al Cairo, a Dahab o a Firenze. Dicci dove sei e ti mostriamo chi è più vicino, a che distanza e da che prezzo.",
@@ -355,6 +356,7 @@ window.ZenI18n = (function () {
     "January": "gennaio", "February": "febbraio", "March": "marzo", "April": "aprile", "May": "maggio", "June": "giugno", "July": "luglio", "August": "agosto", "September": "settembre", "October": "ottobre", "November": "novembre", "December": "dicembre",
   };
   const AR = {
+    "Prices can differ by therapist.": "قد تختلف الأسعار حسب المعالج.",
     // near you (2026-09-13)
     "Near you": "بالقرب منك", "Find a therapist near you": "ابحث عن معالج بالقرب منك", "Find a therapist near you.": "ابحث عن معالج بالقرب منك.",
     "Every Zen therapist works from their own place, in Cairo, Dahab or Florence. Tell us where you are and we'll show you who's closest, how far, and from what price.": "كل معالج في زن يعمل من مكانه الخاص، في القاهرة أو دهب أو فلورنسا. أخبرنا أين أنت وسنعرض لك الأقرب إليك، وكم يبعد، وبأي سعر يبدأ.",
