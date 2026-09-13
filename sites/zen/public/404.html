@@ -14,7 +14,9 @@
   <p class="eyebrow">404</p>
   <h1>That page isn't here.</h1>
   <p class="muted">The link may be old, or the address has a typo. Everything we have is one tap away:</p>
-  <div class="row"><a class="btn small" href="/">Home</a><a class="btn small ghost" href="/booking">Book a session</a><a class="btn small ghost" href="/giftcard">Gift a session</a><a class="btn small ghost" href="/rewards">Rewards</a><a class="btn small ghost" href="/account">My account</a></div>
+  <p class="muted" style="font-size:.85rem"><span>Address:</span> <code id="where"></code></p>
+  <script>document.getElementById("where").textContent = location.host + location.pathname + location.search;</script>
+  <div class="row"><a class="btn small" href="/">Home</a><a class="btn small ghost" href="/find">Near you</a><a class="btn small ghost" href="/booking">Book a session</a><a class="btn small ghost" href="/giftcard">Gift a session</a><a class="btn small ghost" href="/rewards">Rewards</a><a class="btn small ghost" href="/account">My account</a></div>
 </main>
 </body>
 </html>
