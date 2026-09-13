@@ -12,6 +12,7 @@ routes = [
 directory = "./public"
 binding = "ASSETS"
 not_found_handling = "404-page"
+run_worker_first = ["/api/*"]   # 2026-09-13: a browser NAVIGATION to /api/auth/google (Sign in with Google) was answered by the asset layer with 404.html and never reached the Worker; API paths now always run the Worker first
 
 # Database. Create once with:  npx wrangler d1 create zen-recovery   → paste the id below,
 # then:  npx wrangler d1 execute zen-recovery --remote --file=schema.sql
