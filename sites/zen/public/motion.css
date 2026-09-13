@@ -24,3 +24,4 @@
 .motion .card,.motion .method,.motion .svc,.motion .links-grid a,.motion .place,.motion .therapist{transition:transform .35s var(--ease), box-shadow .35s var(--ease), border-color .35s}
 .motion .card:hover,.motion .method:hover,.motion .svc:hover,.motion .links-grid a:hover,.motion .therapist:hover{transform:translateY(-3px); box-shadow:0 24px 40px -28px rgba(27,30,29,.45)}
 @media (prefers-reduced-motion:reduce){.hero::before{animation:none}}
+.par-box{display:block; overflow:hidden; border-radius:inherit; max-width:100%} .par-box > img{display:block; width:100%; height:auto}

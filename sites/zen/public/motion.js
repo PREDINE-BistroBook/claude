@@ -56,7 +56,10 @@
     });
     groups.forEach((els) => { gsap.set(els, { opacity: 0, y: 26 }); ScrollTrigger.batch(els, { start: "top 90%", once: true, onEnter: (batch) => gsap.to(batch, { opacity: 1, y: 0, duration: .9, ease: "power3.out", stagger: .07, overwrite: true }) }); });
     // photos drift while they cross the screen
-    $$("main img", root).forEach((img) => { if (img.dataset.par || img.closest(".tm-photo, .therapist, .nav, .top, .mveil, .logo, #steps") || img.width < 120) return; img.dataset.par = "1"; found++; const wrap = img.parentElement; if (getComputedStyle(wrap).overflow === "visible") wrap.style.overflow = "hidden"; gsap.fromTo(img, { yPercent: -5, scale: 1.08 }, { yPercent: 5, scale: 1.08, ease: "none", scrollTrigger: { trigger: wrap, start: "top bottom", end: "bottom top", scrub: true } }); });
+    $$("main img", root).forEach((img) => { if (img.dataset.par || img.closest(".tm-photo, .therapist, .nav, .top, .mveil, .logo, #steps") || img.width < 120) return; img.dataset.par = "1"; found++;
+      // the photo drifts inside its own clipped box, so a caption or text next to it in the same frame is never covered
+      let wrap = img.parentElement; if (!wrap.classList.contains("par-box")) { if (wrap.children.length === 1 && !wrap.textContent.trim()) { wrap.classList.add("par-box"); } else { const box = document.createElement("span"); box.className = "par-box"; img.replaceWith(box); box.append(img); wrap = box; } }
+      gsap.fromTo(img, { yPercent: -5, scale: 1.08 }, { yPercent: 5, scale: 1.08, ease: "none", scrollTrigger: { trigger: wrap, start: "top bottom", end: "bottom top", scrub: true } }); });
     // numbers count up
     $$("[data-count]", root).forEach((el) => { if (el.dataset.counted) return; el.dataset.counted = "1"; found++; const to = Number(el.dataset.count), o = { v: 0 }; ScrollTrigger.create({ trigger: el, start: "top 90%", once: true, onEnter: () => gsap.to(o, { v: to, duration: 1.4, ease: "power2.out", onUpdate: () => { el.textContent = Math.round(o.v).toLocaleString(); } }) }); });
     if (found) ScrollTrigger.refresh();   // only when something new was tagged: a refresh cancels any smooth scroll in progress (anchor links, the cup story)
