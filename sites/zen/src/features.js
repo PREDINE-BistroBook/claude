@@ -53,7 +53,7 @@ async function servicePhoto(env, id) {
 }
 async function team(env, url) {
   const city = cityOf(url.searchParams.get("city"));
-  const r = await env.DB.prepare("SELECT id, city, name, bio, photo, languages, area, maps_url, title, story, certs, instagram, i18n FROM therapists WHERE active = 1" + (city ? " AND city = ?" : "") + " ORDER BY city, sort, name").bind(...(city ? [city] : [])).all();
+  const r = await env.DB.prepare("SELECT id, city, name, bio, photo, languages, area, maps_url, title, story, certs, instagram, i18n, sort FROM therapists WHERE active = 1" + (city ? " AND city = ?" : "") + " ORDER BY city, sort, name").bind(...(city ? [city] : [])).all();
   return json({ therapists: r.results.map((t) => ({ ...t, i18n: parseI18n(t.i18n) })) });
 }
 async function packages(env, url) {
