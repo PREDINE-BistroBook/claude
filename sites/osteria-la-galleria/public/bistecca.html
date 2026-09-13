@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>La bilancia — Osteria La Galleria</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="La bistecca alla fiorentina si paga al chilo: pesa la tua e scopri prezzo e porzioni prima di sederti. Scottona italiana e Chianina IGP, Osteria La Galleria, Firenze.">
+<meta name="theme-color" content="#5A1420">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%233E1219'/%3E%3Crect x='11' y='11' width='42' height='42' fill='none' stroke='%23C9A55C' stroke-width='3'/%3E%3Crect x='18' y='18' width='28' height='28' fill='%23F6EFE1'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,500;1,6..96,400;1,6..96,500&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=Work+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="site.css">
+</head>
+<body data-page="steak">
+<div id="shell-top"></div>
+
+<main id="main" class="steak-page">
+  <header class="steak-head">
+    <div class="rail" aria-hidden="true"></div>
+    <p class="eyebrow" data-i18n="steak.eyebrow">Sala VI · La bilancia</p>
+    <h1 data-i18n="steak.h1">Una bistecca non si ordina. Si pesa.</h1>
+    <p class="lede" data-i18n="steak.lede"></p>
+  </header>
+
+  <section class="scale" id="scale" aria-label="La bilancia"></section>
+
+  <section class="anatomy" aria-labelledby="anatomy-title">
+    <div class="rail" aria-hidden="true"></div>
+    <div class="anatomy-fig" aria-hidden="true">
+      <svg viewBox="0 0 360 300" xmlns="http://www.w3.org/2000/svg">
+        <!-- striploin -->
+        <path class="meat loin" d="M52 74c30-28 82-40 130-30 26 5 40 18 44 40 3 24-6 52-26 80-22 30-46 52-78 60-38 9-70-8-84-40-16-36-14-84 14-110z"/>
+        <path class="fat" d="M60 70c28-24 70-36 116-28" />
+        <!-- tenderloin -->
+        <path class="meat fillet" d="M236 112c26-8 54 2 66 26 12 26 4 56-18 72-24 18-58 12-72-12-14-26-6-76 24-86z"/>
+        <!-- T bone -->
+        <path class="bone" d="M204 40c8-2 14 4 14 12l-2 190c0 8-6 14-14 14s-14-6-13-14l3-190c0-8 4-12 12-12z"/>
+        <path class="bone" d="M150 88c-2-10 4-16 12-18l96 6c8 1 12 8 10 16s-8 12-16 11l-90-4c-8-1-11-5-12-11z"/>
+        <!-- leaders -->
+        <g class="lead">
+          <path d="M110 150l-70 60"/><text x="14" y="228">1</text>
+          <path d="M270 170l60 40"/><text x="334" y="228">2</text>
+          <path d="M208 60l60-30"/><text x="272" y="28">3</text>
+        </g>
+      </svg>
+    </div>
+    <div class="anatomy-copy">
+      <p class="eyebrow" data-i18n="steak.anatomy.eyebrow">Il taglio</p>
+      <h2 id="anatomy-title" data-i18n="steak.anatomy.title">Cosa c'è in una fiorentina</h2>
+      <p class="blurb" data-i18n="steak.anatomy.text"></p>
+      <ol class="parts">
+        <li><b>1</b><span data-i18n="steak.part.loin">Controfiletto</span></li>
+        <li><b>2</b><span data-i18n="steak.part.fillet">Filetto</span></li>
+        <li><b>3</b><span data-i18n="steak.part.bone">L'osso a T</span></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="rules" aria-label="Tradizione">
+    <div class="rail" aria-hidden="true"></div>
+    <div class="rule plaque"><h3 data-i18n="steak.rule1.t"></h3><p data-i18n="steak.rule1.d"></p></div>
+    <div class="rule plaque"><h3 data-i18n="steak.rule2.t"></h3><p data-i18n="steak.rule2.d"></p></div>
+    <div class="rule plaque"><h3 data-i18n="steak.rule3.t"></h3><p data-i18n="steak.rule3.d"></p></div>
+    <p class="source"><span data-i18n="steak.source"></span> · <a href="menu.html#bistecche" data-i18n="steak.room"></a></p>
+  </section>
+</main>
+
+<div id="shell-foot"></div>
+<script src="menu.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

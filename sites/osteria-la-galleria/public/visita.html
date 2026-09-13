@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Vieni a trovarci — Osteria La Galleria</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Osteria La Galleria, di fronte a Palazzo Pitti, Firenze: orari, indirizzo, contatti, happy hour.">
+<meta name="theme-color" content="#3E1219">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%233E1219'/%3E%3Crect x='11' y='11' width='42' height='42' fill='none' stroke='%23C9A55C' stroke-width='3'/%3E%3Crect x='18' y='18' width='28' height='28' fill='%23F6EFE1'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,500;1,6..96,400;1,6..96,500&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=Work+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="site.css">
+</head>
+<body data-page="visit">
+<div id="shell-top"></div>
+
+<main id="main" class="visit">
+  <div class="rail" aria-hidden="true"></div>
+  <p class="eyebrow" data-i18n="visit.eyebrow">Fine della visita</p>
+  <h1 data-i18n="visit.h1">Vieni a trovarci</h1>
+  <div class="visit-photos">
+    <figure class="veduta">
+      <picture><source srcset="img/sala.webp" type="image/webp"><img src="img/sala.jpg" alt="The dining room: plaster walls, wine racks, red gingham tablecloths" width="1400" height="1050"></picture>
+      <figcaption class="plaque"><span class="cap-n">2</span><span data-i18n="cap.sala">La sala</span></figcaption>
+    </figure>
+    <figure class="veduta">
+      <picture><source srcset="img/banco.webp" type="image/webp"><img src="img/banco.jpg" alt="The corridor towards the counter and the bar" width="1400" height="1050"></picture>
+      <figcaption class="plaque"><span class="cap-n">3</span><span data-i18n="cap.banco">Verso il banco</span></figcaption>
+    </figure>
+  </div>
+  <div class="visit-grid" id="visit-grid"></div>
+  <div class="review plaque" id="review"></div>
+</main>
+
+<div id="shell-foot"></div>
+<script src="menu.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

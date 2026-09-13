@@ -4,6 +4,19 @@ A Locali & Ordinazioni build for **Osteria La Galleria**, Florence. Started 2026
 
 Status: **built, not deployed, not yet shown to the owner.** Location known (in front of Palazzo Pitti, per Ash 2026-09-12); street number, phone, hours and domain still missing — see "Before it goes live".
 
+## The pages (restructured 2026-09-13)
+
+Ash asked for the site to be organised and easy to interact with rather than one long scroll, with The Fat Duck's storytelling as the reference (the meal as a journey, an illustrated map of the stops, chapters, a narrator's voice). Four pages, one shell (`app.js` renders the header, the phone tab bar and the footer on every page):
+
+| Page | File | What it does |
+|---|---|---|
+| Galleria | `index.html` | The palace view, the wine window as *Prologo*, the illustrated floor plan (ten rooms around a courtyard, clockwise from the entrance), the steak teaser with a small dial, the two room photos |
+| Il menu | `menu.html` | One room at a time. The floor plan is the navigator with a "Sei qui" pin; filters are always visible beside it; previous/next room at the bottom; arrow keys work; `#antipasti` … `#cantina` deep-link a room |
+| La bistecca | `bistecca.html` | The scale as a butcher's dial with a swinging needle: cut, weight (kilos and Tuscan *etti*), price, people, price a head; a drawn T-bone cutaway; three tradition plaques |
+| Visita | `visita.html` | Photos, hours, address, phone, review card |
+
+On phones the top nav collapses to a four-tab bar at the bottom (Galleria · Il menu · La bistecca · Visita) with the paper menu's engraved-style icons redrawn as line icons.
+
 ## The idea
 
 "Galleria" in Florence means the Palatina, the Uffizi, the Accademia. So the menu is a museum visit:
@@ -21,9 +34,12 @@ Quality floor (checked 2026-09-12 with a scripted audit at 1440 px and 375 px): 
 
 ```
 sites/osteria-la-galleria/
-  public/index.html     the page shell (hero, route bar, filters, visit info, footer)
-  public/site.css       the gallery: rooms, plaques, the scale, responsive + reduced-motion
-  public/site.js        renders the rooms from menu.js; language, filters, wall-colour walk, the scale
+  public/index.html     Galleria (home)
+  public/menu.html      Il menu, one room at a time
+  public/bistecca.html  La bistecca: the dial
+  public/visita.html    Visita: photos + contacts
+  public/app.js         shared shell, language, floor plan, icons, dial, the four page modules
+  public/site.css       the gallery: shell, plan, plaques, dial, responsive + reduced-motion
   public/menu.js        THE MENU. Every dish, price, allergen list, and the contact details (SITE)
   reference/            downscaled photos of the paper menu and the boards (the source of truth for prices)
   wrangler.toml         Cloudflare static-assets deploy, no Worker code yet

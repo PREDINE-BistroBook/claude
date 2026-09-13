@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <title>Osteria La Galleria</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Osteria La Galleria, di fronte a Palazzo Pitti, Firenze. Cucina toscana, bistecca alla fiorentina di Chianina IGP, tartufo fresco, pinsa, e una buchetta del vino sulla facciata. Il menu completo, in italiano e in inglese, con allergeni.">
+<meta name="description" content="Osteria La Galleria, di fronte a Palazzo Pitti, Firenze. Cucina toscana, bistecca alla fiorentina di Chianina IGP, tartufo fresco, pinsa, e una buchetta del vino sulla facciata.">
 <meta name="theme-color" content="#3E1219">
 <meta property="og:title" content="Osteria La Galleria — Firenze">
 <meta property="og:image" content="img/pitti-terrace.jpg">
-<meta property="og:description" content="Di fronte a Palazzo Pitti. Dieci sale, una cucina, una buchetta del vino.">
+<meta property="og:description" content="Di fronte a Palazzo Pitti. Una galleria dove le opere si mangiano.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%233E1219'/%3E%3Crect x='11' y='11' width='42' height='42' fill='none' stroke='%23C9A55C' stroke-width='3'/%3E%3Crect x='18' y='18' width='28' height='28' fill='%23F6EFE1'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,53 +16,30 @@
 <link rel="preload" as="image" href="img/pitti-terrace.webp" type="image/webp" fetchpriority="high">
 <link rel="stylesheet" href="site.css">
 </head>
-<body>
+<body data-page="home">
+<div id="shell-top"></div>
 
-<a class="skip" href="#rooms" data-i18n="skip">Vai al menu</a>
-
-<header class="nav" id="nav">
-  <a class="brand" href="#top" aria-label="Osteria La Galleria, inizio pagina"><span class="brand-a">Osteria</span><span class="brand-b">La Galleria</span></a>
-  <div class="nav-right">
-    <div class="lang" role="group" aria-label="Lingua / Language">
-      <button type="button" data-lang="it" aria-pressed="true">IT</button>
-      <button type="button" data-lang="en" aria-pressed="false">EN</button>
-    </div>
-    <a class="btn small" href="#visita" id="nav-cta">Dove siamo</a>
-  </div>
-</header>
-
-<main id="top">
+<main id="main">
 
 <section class="hero" aria-labelledby="hero-title">
   <div class="rail" aria-hidden="true"></div>
   <p class="eyebrow" data-i18n="hero.eyebrow">Firenze · Di fronte a Palazzo Pitti</p>
   <h1 id="hero-title"><span class="h1-a">Osteria</span><span class="h1-b">La Galleria</span></h1>
-
   <figure class="veduta hero-veduta">
     <picture><source srcset="img/pitti-terrace.webp" type="image/webp"><img src="img/pitti-terrace.jpg" alt="Palazzo Pitti seen from the osteria's terrace, under the umbrellas" width="2000" height="539" fetchpriority="high"></picture>
     <figcaption class="plaque"><span class="cap-n">1</span><span data-i18n="cap.pitti">Veduta di Palazzo Pitti dai nostri tavoli</span></figcaption>
   </figure>
-
   <div class="hero-row">
-    <div class="plaque hero-plaque" role="note">
-      <p class="pl-title">Osteria La Galleria</p>
-      <p class="pl-sub" data-i18n="hero.plaque.medium">Cucina toscana · Chianina IGP · Tartufo fresco · Pinsa · Buchetta del vino</p>
-      <p class="pl-line" data-i18n="hero.plaque.line">Dieci sale. Una cucina.</p>
-    </div>
-    <div class="hero-copy">
-      <p class="lede" data-i18n="hero.lede">Un menu da visitare come una galleria: dieci sale, ognuna col suo colore, ogni piatto con la sua targhetta. Scegli la lingua, spegni la luce sui piatti che non fanno per te, e pesa la tua fiorentina prima ancora di sederti.</p>
-      <div class="hero-actions">
-        <a class="btn" href="#rooms" data-i18n="hero.cta">Inizia la visita</a>
-        <a class="btn ghost" href="#room-bistecche" data-i18n="hero.cta2">Dritto alla bistecca</a>
-      </div>
+    <p class="lede" data-i18n="hero.lede">Una galleria dove le opere si mangiano.</p>
+    <div class="hero-actions">
+      <a class="btn" href="menu.html" data-i18n="hero.cta">Visita il menu</a>
+      <a class="btn ghost" href="bistecca.html" data-i18n="hero.cta2">Pesa la bistecca</a>
       <p class="hh" id="hh"><svg class="hh-mark" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.6 7.4L22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6z"/></svg><span data-i18n="hh">Happy hour · Spritz e Hugo · 7 €</span></p>
     </div>
   </div>
-  <div class="scroll-hint" aria-hidden="true"><i></i></div>
 </section>
 
-
-<section class="atrio" id="atrio" data-wall="#B98A4E" data-ink="#2A1A12" data-gold="#5A1420" aria-labelledby="atrio-title">
+<section class="atrio" id="prologo" aria-labelledby="atrio-title">
   <div class="rail" aria-hidden="true"></div>
   <div class="buchetta" aria-hidden="true">
     <svg viewBox="0 0 200 250" xmlns="http://www.w3.org/2000/svg">
@@ -77,38 +54,45 @@
     </svg>
   </div>
   <div class="atrio-copy">
-    <p class="eyebrow" data-i18n="atrio.eyebrow">Prima di entrare</p>
+    <p class="eyebrow" data-i18n="atrio.eyebrow">Prologo</p>
     <h2 id="atrio-title" data-i18n="atrio.title">La buchetta del vino</h2>
-    <p class="atrio-text" data-i18n="atrio.text">Sulla facciata c'è una buchetta: la finestrella da cui, dal Cinquecento, i fiorentini si facevano passare un bicchiere di vino senza entrare. La nostra è ancora aperta. Un bicchiere in piedi, davanti a Palazzo Pitti, e poi si comincia la visita.</p>
-    <p class="atrio-facts" data-i18n="atrio.facts">Vino al bicchiere da 7 € · Happy hour: Spritz e Hugo 7 €</p>
-    <a class="btn ghost" href="#room-cantina" data-i18n="atrio.cta">La cantina, sala X</a>
+    <p class="atrio-text" data-i18n="atrio.text"></p>
+    <p class="atrio-facts" data-i18n="atrio.facts"></p>
+    <a class="btn ghost" href="menu.html#cantina" data-i18n="nav.menu">Il menu</a>
   </div>
 </section>
 
-<div class="route" id="route" aria-label="Percorso di visita">
-  <span class="route-label" data-i18n="route.label">Percorso</span>
-  <div class="route-scroll" id="route-pills"></div>
-  <button type="button" class="route-filter" id="filter-toggle" aria-expanded="false" aria-controls="filters">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 5h18M6 12h12M10 19h4"/></svg>
-    <span data-i18n="filter.button">Cosa non mangi?</span>
-    <span class="filter-count" id="filter-count" hidden></span>
-  </button>
-</div>
-
-<div class="filters" id="filters" hidden>
-  <div class="filters-inner">
-    <div class="chips" id="chips"></div>
-    <p class="filters-note" data-i18n="filter.note">I piatti che non fanno per te restano appesi, ma con la luce spenta. Per gli allergeni chiedi sempre in sala: la cucina è una sola.</p>
-    <p class="filters-tally" id="tally" aria-live="polite" aria-atomic="true"></p>
-  </div>
-</div>
-
-<div id="rooms"></div>
-
-<section class="visit" id="visita" aria-labelledby="visit-title">
+<section class="plan-section" id="percorso" aria-labelledby="plan-title">
   <div class="rail" aria-hidden="true"></div>
-  <p class="eyebrow" data-i18n="visit.eyebrow">Fine della visita</p>
-  <h2 id="visit-title" data-i18n="visit.title">Vieni a trovarci</h2>
+  <div class="plan-copy">
+    <p class="eyebrow" data-i18n="plan.eyebrow">Il percorso</p>
+    <h2 id="plan-title" data-i18n="plan.title">Dieci sale intorno a un cortile</h2>
+    <p class="blurb" data-i18n="plan.text"></p>
+    <a class="btn" href="menu.html" data-i18n="hero.cta">Visita il menu</a>
+  </div>
+  <div class="plan-wrap big" id="plan-home"></div>
+</section>
+
+<section class="teaser" aria-labelledby="teaser-title">
+  <div class="rail" aria-hidden="true"></div>
+  <a class="teaser-card" href="bistecca.html">
+    <div class="teaser-dial" id="teaser-dial"></div>
+    <div>
+      <p class="eyebrow" data-i18n="teaser.eyebrow">Sala VI</p>
+      <h2 id="teaser-title" data-i18n="teaser.title">Una bistecca non si ordina. Si pesa.</h2>
+      <p class="blurb" data-i18n="teaser.text"></p>
+      <span class="btn ghost" data-i18n="teaser.cta">Vai alla bilancia</span>
+    </div>
+  </a>
+</section>
+
+<section class="rooms-strip" aria-labelledby="rooms-title">
+  <div class="rail" aria-hidden="true"></div>
+  <div class="rooms-copy">
+    <p class="eyebrow" data-i18n="rooms.eyebrow">Le sale</p>
+    <h2 id="rooms-title" data-i18n="rooms.title">Dove si mangia</h2>
+    <a class="btn ghost" href="visita.html" data-i18n="rooms.cta">Orari, indirizzo, recensioni</a>
+  </div>
   <div class="visit-photos">
     <figure class="veduta">
       <picture><source srcset="img/sala.webp" type="image/webp"><img src="img/sala.jpg" alt="The dining room: plaster walls, wine racks, red gingham tablecloths" width="1400" height="1050" loading="lazy"></picture>
@@ -119,19 +103,11 @@
       <figcaption class="plaque"><span class="cap-n">3</span><span data-i18n="cap.banco">Verso il banco</span></figcaption>
     </figure>
   </div>
-  <div class="visit-grid" id="visit-grid"></div>
-  <div class="review plaque" id="review"></div>
 </section>
 
-<footer class="foot">
-  <div class="legend" id="legend"></div>
-  <p class="foot-line"><span data-i18n="footer.prices">Prezzi in euro.</span> <span data-i18n="star.note">* Prodotto che può essere surgelato all'origine.</span> <span class="vmark">V</span> <span data-i18n="v.note">piatto vegetariano.</span></p>
-  <p class="foot-credit"><span class="brand-foot">Osteria La Galleria</span> · Firenze · <span data-i18n="footer.credit">un sito Locali &amp; Ordinazioni</span></p>
-</footer>
-
 </main>
-
+<div id="shell-foot"></div>
 <script src="menu.js"></script>
-<script src="site.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
