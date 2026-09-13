@@ -323,7 +323,7 @@ var STEP = STEP || 1, CODES_WANTED = false;
 function stepOn(n) { return n === 3 ? (typeof CARD_LIST !== "undefined" ? CARD_LIST.length >= 2 : false) : n === 6 ? Boolean(typeof ME !== "undefined" && ME?.user) || CODES_WANTED : true; }   // one therapist → no choosing; guests are asked for codes only if they want to
 function renderSteps() { const on = STEP_DEFS.filter(([n]) => stepOn(n)); $("#wiz-steps").innerHTML = on.map(([n, l], i) => `<li data-step="${n}"${n === STEP ? ' aria-current="step"' : ""} class="${n < STEP ? "done" : ""}"><span>${i + 1}</span>${t(l)}</li>`).join(""); $$("#wiz-steps li.done").forEach((li) => (li.onclick = () => showStep(Number(li.dataset.step)))); }
 function showStep(n, quiet) {
-  STEP = n; $$("#booking .step").forEach((s) => (s.hidden = Number(s.dataset.step) !== n)); renderSteps();
+  STEP = n; $$("#booking .wstep").forEach((s) => (s.hidden = Number(s.dataset.step) !== n)); renderSteps();
   $("#wiz-back").hidden = n === 1; $("#wiz-next").hidden = n === 7; $("#wiz-err").hidden = true; $("#wiz-next").textContent = n === 6 ? t("Continue to confirm") : t("Continue");
   $("#reg-note").hidden = Boolean(ME?.user);
   if (n === 4) loadSlots(); if (n === 7) updateSummary();

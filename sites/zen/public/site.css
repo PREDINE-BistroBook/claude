@@ -202,10 +202,10 @@ a.method{text-decoration:none; color:inherit}
 .room{padding:0 var(--gutter) clamp(56px, 10vh, 120px)}
 .room-head{display:grid; gap:14px; max-width:44rem; margin-bottom:28px}
 .room-strip{display:grid; grid-template-columns:repeat(3, 1fr); gap:14px}
-.room-strip figure{margin:0; display:grid; gap:10px}
+.room-strip figure{margin:0; display:grid; gap:10px} .room-strip img{width:100%; height:auto; aspect-ratio:4/3; object-fit:cover; border-radius:16px; display:block} @media (max-width:760px){ .room-strip img{aspect-ratio:4/5} .room-strip figure{align-content:start} .room-strip figcaption{font-size:.86rem} }   /* one card shape on phones so the captions line up */
 .room-strip img{width:100%; max-width:100%; height:auto; aspect-ratio:4/3; object-fit:cover; border-radius:16px; display:block}
 .room-strip figcaption{font-size:.86rem; color:var(--ink-soft)}
-@media (max-width:760px){ .room-strip{grid-template-columns:1fr} }
+@media (max-width:760px){ .room-strip{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:12px;margin-inline:calc(-1 * var(--gutter));padding-inline:var(--gutter);padding-bottom:6px;scrollbar-width:none} .room-strip::-webkit-scrollbar{display:none} .room-strip figure{flex:0 0 84%;scroll-snap-align:start} }
 
 /* ---------- rewards ---------- */
 .rewards{background:var(--ink);color:var(--ground);padding:clamp(56px, 10vh, 110px) var(--gutter)}
@@ -536,10 +536,29 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
 .wiz-steps li span{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:var(--ground-2);font-size:.72rem;font-weight:600;color:var(--ink-soft)}
 .wiz-steps li[aria-current="step"]{border-color:var(--mark);color:var(--ink);box-shadow:0 0 0 2px var(--mark-glow)} .wiz-steps li[aria-current="step"] span{background:var(--mark);color:#fff}
 .wiz-steps li.done{color:var(--ink-soft);cursor:pointer} .wiz-steps li.done span{background:var(--ink);color:var(--ground)}
-.step{display:grid;gap:22px} .step[hidden]{display:none} .step-title{font-family:var(--display);font-weight:300;font-size:1.7rem;line-height:1.05;margin:0} .step-lead{margin:-10px 0 0;color:var(--ink-soft);font-size:.95rem}
+.wstep{display:grid;gap:22px} .wstep[hidden]{display:none} .step-title{font-family:var(--display);font-weight:300;font-size:1.7rem;line-height:1.05;margin:0} .step-lead{margin:-10px 0 0;color:var(--ink-soft);font-size:.95rem}
 .wiz-nav{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;position:sticky;bottom:0;padding:12px 0 calc(12px + env(safe-area-inset-bottom));background:linear-gradient(180deg,transparent,var(--ground) 30%);z-index:5} .wiz-nav .btn{min-width:150px} .wiz-nav .err{flex:1;margin:0;text-align:center} .wiz-nav #wiz-next{margin-inline-start:auto}
 #codes-link{margin:-8px 0 0} #codes-link a{color:var(--mark)}
 
 .summary .line[hidden]{display:none}
 
 [hidden]{display:none!important}   /* 2026-09-13: the hidden attribute always wins (several blocks set display:flex/grid on elements the JS hides with .hidden) */
+
+/* ---- phone polish (2026-09-13, Ash: "recheck all the sizes on mobile, relaxing for the eye") ---- */
+@media (max-width:640px){
+  .eyebrow{font-size:.7rem; letter-spacing:.16em} .hero-visual .cap{font-size:.62rem} .method .for{font-size:.78rem; letter-spacing:.04em} .tm-num{font-size:.72rem} .tiny{font-size:.8rem} .fine, .book-actions .fine, #rewards-box .fine, .prep-box .fine, .gift-intro .fine{font-size:.88rem} .lang-switch button{font-size:.78rem}
+  body{font-size:1.02rem; line-height:1.55} h1{line-height:1.02} h2{line-height:1.08} p{max-width:60ch}
+  .step-title{font-size:1.55rem} .step-lead{font-size:.95rem}
+  .areas-map{max-width:300px; margin-inline:auto; width:100%} .bodymap-field{text-align:center}
+  #change-city-2{display:none}
+  .find-card .row{gap:14px; align-items:center; flex-wrap:wrap} .find-card .row .plain{padding:6px 0}
+  .th-card{padding:12px 10px} .th-card .ph{width:46px; height:46px}
+  .wiz-nav .btn{min-width:0; flex:1} .wiz-nav #wiz-back{flex:0 0 auto; min-width:110px}
+  .session-card .tools{gap:6px 14px}
+}
+@media (pointer:coarse){
+  a.plain, .find-card .row a, .th-links a, .tools a, .tools button, .foot-grid a, .links-grid a, .rules-box summary, .how{min-height:40px; display:inline-flex; align-items:center}
+  .check input, #j-agree, #agree, #flagged{width:20px; height:20px; flex:none}
+  #place-wa-link, .maps a{display:inline-block; padding:6px 0}
+  .slot label, .timeslots label, .chip, .pill{min-height:42px}
+}

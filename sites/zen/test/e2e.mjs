@@ -8,7 +8,7 @@ const ctx = await b.newContext({ viewport: { width: 1280, height: 900 } }); cons
 await ctx.route("**/cdnjs.cloudflare.com/ajax/libs/gsap/**", (route) => { const f = route.request().url().includes("ScrollTrigger") ? "ScrollTrigger.min.js" : "gsap.min.js"; route.fulfill({ body: fs.readFileSync(G + f), contentType: "application/javascript" }); });
 await ctx.route(/googleapis|gstatic|google\.com|gravatar/, (r) => r.abort());
 const page = await ctx.newPage(); page.setDefaultTimeout(8000); process.on("unhandledRejection", (e) => { console.log("CRASH " + String(e && e.message || e).slice(0, 300)); process.exit(1); }); page.on("pageerror", (e) => errs.push(e.message)); page.on("console", (m) => { if (m.type() === "error" && !/cdnjs|favicon|ERR_FAILED|ERR_CONNECTION|503/.test(m.text())) errs.push(m.text()); });
-const reveal = async () => page.evaluate(() => document.querySelectorAll("#booking .step").forEach((s) => (s.hidden = false))).catch(() => {});   // the booking is step by step now; the older checks look at everything at once
+const reveal = async () => page.evaluate(() => document.querySelectorAll("#booking .wstep").forEach((s) => (s.hidden = false))).catch(() => {});   // the booking is step by step now; the older checks look at everything at once
 const go = async (p) => { await page.goto(H + "/" + p, { waitUntil: "load" }); await page.waitForTimeout(700); if (p.startsWith("booking")) await reveal(); };
 const api = async (path, init) => { const r = await fetch(H + path, init); return { status: r.status, body: await r.json().catch(() => null), h: r.headers }; };
 
@@ -175,7 +175,7 @@ await go("team.html"); ok("team: the brief (ratings / sessions) has a place on t
 const gctx = await b.newContext({ viewport: { width: 1280, height: 900 } }); await gctx.route("**/cdnjs.cloudflare.com/ajax/libs/gsap/**", (route) => { const f = route.request().url().includes("ScrollTrigger") ? "ScrollTrigger.min.js" : "gsap.min.js"; route.fulfill({ body: fs.readFileSync(G + f), contentType: "application/javascript" }); }); await gctx.route(/googleapis|gstatic|google\.com|gravatar/, (r) => r.abort());
 { const page = await gctx.newPage(); page.setDefaultTimeout(8000); page.on("pageerror", (e) => errs.push("guest: " + e.message));   // a fresh, signed-out browser: the guest flow
 await page.goto(H + "/booking.html?city=cairo", { waitUntil: "load" }); await page.waitForTimeout(900);
-{ const vis = async () => page.$$eval("#booking .step", (els) => els.filter((e) => !e.hidden).map((e) => e.dataset.step));
+{ const vis = async () => page.$$eval("#booking .wstep", (els) => els.filter((e) => !e.hidden).map((e) => e.dataset.step));
   ok("wizard: only step 1 (where it hurts) shows, with the body map; 7 steps in the bar for a guest? no: 6 (codes hidden for guests)", (await vis()).join() === "1" && await page.isVisible("#areas-map") && (await page.$$("#wiz-steps li")).length === 6, [await vis(), (await page.$$("#wiz-steps li")).length]);
   await page.click("#wiz-next"); await page.waitForTimeout(400); ok("wizard: step 2 = treatment", (await vis()).join() === "2" && await page.isVisible("#services"));
   await page.click("#wiz-next"); await page.waitForTimeout(500); ok("wizard: step 3 = therapist cards (Cairo has several)", (await vis()).join() === "3" && (await page.$$("#place-therapists .th-card")).length === 5);
