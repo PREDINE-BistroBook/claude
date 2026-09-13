@@ -67,7 +67,13 @@ CREATE TABLE IF NOT EXISTS bookings (
   payment_intent TEXT,
   created_at     TEXT DEFAULT (datetime('now')),
   paid_at        TEXT,
-  done_at        TEXT
+  done_at        TEXT,
+  cancel_fee     INTEGER DEFAULT 0,        -- 2026-09-13: fee kept on a late cancellation / no-show (minor units)
+  cancelled_at   TEXT,
+  cancelled_by   TEXT,                     -- client | admin
+  refund_amount  INTEGER DEFAULT 0,
+  refund_status  TEXT,                     -- done | manual | none
+  agreed_at      TEXT                      -- when the client ticked the booking rules
 );
 CREATE INDEX IF NOT EXISTS bookings_city_date ON bookings(city, date);
 CREATE INDEX IF NOT EXISTS bookings_user ON bookings(user_id);
@@ -133,6 +139,9 @@ CREATE TABLE IF NOT EXISTS photos (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, b
 CREATE INDEX IF NOT EXISTS bookings_city_date_slot ON bookings(city, date, slot);
 INSERT OR IGNORE INTO settings VALUES ('birthday_pct', '50');
 INSERT OR IGNORE INTO settings VALUES ('package_pct', '15');
+INSERT OR IGNORE INTO settings VALUES ('cancel_hours', '24');   -- free cancellation / free move up to this many hours before
+INSERT OR IGNORE INTO settings VALUES ('late_pct', '100');      -- % of the price kept inside the window
+INSERT OR IGNORE INTO settings VALUES ('noshow_pct', '100');
 INSERT OR IGNORE INTO settings VALUES ('review_cairo', '');
 INSERT OR IGNORE INTO settings VALUES ('review_dahab', '');
 INSERT OR IGNORE INTO settings VALUES ('review_florence', '');

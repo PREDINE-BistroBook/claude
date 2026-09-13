@@ -236,6 +236,17 @@ Ash: "all the therapists would be like providers of the service and the clients 
 - **Fixed on the way:** in window mode (no availability calendar) the therapist chosen on the Team page or in the form was dropped at checkout; it is now kept, so "Book with Mazen" reaches Mazen.
 - Tests: smoke +12, e2e +2 (Adham's 1,200 vs the city's 1,000).
 
+## Booking rules, cancellation fees, self-cancel, waitlist fill (2026-09-13, slice 2)
+
+Ash asked for the cancellation rules "from GetYourGuide if they apply". What applies to a one-to-one session, and is now the site's policy: **free cancellation and free moves up to 24 h before**; inside that window **100% is kept**; **no-show 100%**; the therapist cancelling means a full refund or a new time; late arrival shortens the session; a session sent for a therapist's OK is not charged until approved; refunds go back to the card within 5–10 days. The numbers are settings (`cancel_hours`, `late_pct`, `noshow_pct`, migration 017, applied to production) that the owner edits under Settings → Rules; `/api/status` publishes them as `rules`.
+
+- **Where they show:** a "Booking rules" box on the booking form with a required "I've read the booking rules" tick (`bookings.agreed_at` records it), a "Booking rules" section on the guide, and the cancellation email.
+- **Client self-cancel:** My account → upcoming session → Cancel. `GET /api/me/bookings/:id/cancel` previews the terms (late?, fee, refund); `POST` cancels. The fee is computed from the city's local time to the start of the slot (exact HH:MM, or 9:00 / 12:00 / 17:00 for the morning / afternoon / evening windows). A free cancellation returns the reward, gift or package session; a late one keeps it, like the fee.
+- **Refunds:** `stripeRefund` refunds the remainder on Zen's connected account with the platform fee refunded proportionally, when Stripe is live and the booking was paid online; otherwise `refund_status = manual` and the therapists' email says "TO ARRANGE". No-shows refund nothing.
+- **Admin:** booking drawer → "Cancel (rules)" (with an optional fee % override) and "No-show". The admin list carries `cancel_fee`, `refund_amount`, `refund_status`, `cancelled_by`.
+- **Waitlist fill:** every cancellation (client or admin) emails the first three people waiting for that city and day, once each, with a booking link, and logs it; the hourly cron keeps doing the same for days that free up otherwise.
+- Tests: smoke +15 (rules, owner edits, free vs late, 50% fee + manual refund, no-show 80%, twice refused, waitlist notified), e2e +6 (rules box, pay refused until agreed, Cancel from the account, dialog says no fee, card gone).
+
 ## Ideas for later (not built — Ash decides)
 
 Built on 2026-09-12 (first batch): login bar, Google sign-in, three languages, session rating + therapist note, weekly check-ins with a progress chart, add-to-calendar, reschedule via WhatsApp, exercises per focus area, installable app. Built the same evening (second batch): items 15–30 below, plus 1–4, 7–9 and 13 which they overlap with — see the table above. Still genuinely open: 5 (deposit model), 6 (fee on hand-added bookings — a business decision), 10 (body map in the guest booking form; signed-in clients already have it in the questionnaire), 12 (link-in-bio page). Kept here for the record:

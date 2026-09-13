@@ -5,6 +5,23 @@
 window.ZenI18n = (function () {
   const LANGS = { en: "English", it: "Italiano", ar: "العربية" };
   const IT = {
+    // booking rules (2026-09-13)
+    "Booking rules": "Regole di prenotazione",
+    "Cancel or move your session free of charge up to": "Annulla o sposta la seduta gratuitamente fino a", "hours before it starts, from your account or on WhatsApp.": "ore prima dell'inizio, dal tuo account o su WhatsApp.",
+    "Inside that window,": "Entro quella finestra,", "% of the price is kept, and a reward, gift or package session used for it is not returned.": "% del prezzo viene trattenuto, e un premio, un regalo o una seduta di pacchetto usati per prenotarla non vengono restituiti.",
+    "Not turning up counts as a no-show:": "Non presentarsi conta come no-show:", "% of the price is kept.": "% del prezzo viene trattenuto.",
+    "If the therapist has to cancel, you get a full refund or a new time, your choice.": "Se il terapista deve annullare, ricevi un rimborso completo o un nuovo orario, a tua scelta.",
+    "Arriving late shortens the session; the price stays the same.": "Arrivare in ritardo accorcia la seduta; il prezzo resta lo stesso.",
+    "Sessions sent for a therapist's OK are not charged until approved and can be cancelled free at any time before.": "Le sedute inviate per l'OK del terapista non vengono addebitate finché non sono approvate e si possono annullare gratis in qualsiasi momento prima.",
+    "Refunds go back to the card used, within 5–10 days.": "I rimborsi tornano sulla carta usata, entro 5–10 giorni.",
+    "Free cancellation": "Cancellazione gratuita", "up to": "fino a", "hours before the session, from your account or on WhatsApp. Moving it is free in the same window.": "ore prima della seduta, dal tuo account o su WhatsApp. Spostarla è gratuito nella stessa finestra.",
+    "Late cancellation": "Cancellazione tardiva", ", inside that window:": ", entro quella finestra:", "% of the price is kept. A reward, gift or package session used for it is not returned.": "% del prezzo viene trattenuto. Un premio, un regalo o una seduta di pacchetto usati non vengono restituiti.",
+    "No-show": "No-show", "The therapist cancels": "Il terapista annulla", ": full refund or a new time, your choice.": ": rimborso completo o un nuovo orario, a tua scelta.", "Late arrival": "Ritardo", "shortens the session; the price stays the same.": "accorcia la seduta; il prezzo resta lo stesso.",
+    "Health check first": "Prima il controllo di salute", ": a session sent for a therapist's OK isn't charged until approved and can be cancelled free before that.": ": una seduta inviata per l'OK del terapista non viene addebitata finché non è approvata e si può annullare gratis prima.", "Refunds": "Rimborsi", "go back to the card used, within 5–10 days.": "tornano sulla carta usata, entro 5–10 giorni.",
+ "Clear rules, no surprises.": "Regole chiare, nessuna sorpresa.", "free cancellation up to": "cancellazione gratuita fino a", "I've read the booking rules and I agree to them.": "Ho letto le regole di prenotazione e le accetto.",
+    "Please read and accept the booking rules first.": "Prima leggi e accetta le regole di prenotazione.", "Cancel": "Annulla", "Cancel this session?": "Annullare questa seduta?", "Keep it": "Tienila", "Cancel the session": "Annulla la seduta",
+    "This booking is already closed.": "Questa prenotazione è già chiusa.", "It starts in less than {hours} hours. {pct}% of the price is kept ({fee}).": "Inizia tra meno di {hours} ore. Viene trattenuto il {pct}% del prezzo ({fee}).", "Refund: {amount}.": "Rimborso: {amount}.", "More than {hours} hours ahead: no fee.": "Mancano più di {hours} ore: nessun costo.",
+    "The same rules for every city and every therapist, close to what you know from tour and activity platforms.": "Le stesse regole per ogni città e ogni terapista, vicine a quelle che conosci dalle piattaforme di tour e attività.",
     "Prices can differ by therapist.": "I prezzi possono variare in base al terapista.",
     // near you (2026-09-13)
     "Near you": "Vicino a te", "Find a therapist near you": "Trova un terapista vicino a te", "Find a therapist near you.": "Trova un terapista vicino a te.",
@@ -356,6 +373,23 @@ window.ZenI18n = (function () {
     "January": "gennaio", "February": "febbraio", "March": "marzo", "April": "aprile", "May": "maggio", "June": "giugno", "July": "luglio", "August": "agosto", "September": "settembre", "October": "ottobre", "November": "novembre", "December": "dicembre",
   };
   const AR = {
+    // booking rules (2026-09-13)
+    "Booking rules": "قواعد الحجز",
+    "Cancel or move your session free of charge up to": "يمكنك إلغاء الجلسة أو تغيير موعدها مجانًا حتى", "hours before it starts, from your account or on WhatsApp.": "ساعة قبل بدايتها، من حسابك أو عبر واتساب.",
+    "Inside that window,": "خلال تلك الفترة،", "% of the price is kept, and a reward, gift or package session used for it is not returned.": "% من السعر يُحتفظ به، ولا تُعاد أي مكافأة أو هدية أو جلسة باقة استُخدمت للحجز.",
+    "Not turning up counts as a no-show:": "عدم الحضور يُعدّ تغيّبًا:", "% of the price is kept.": "% من السعر يُحتفظ به.",
+    "If the therapist has to cancel, you get a full refund or a new time, your choice.": "إذا اضطر المعالج للإلغاء، تحصل على استرداد كامل أو موعد جديد، حسب اختيارك.",
+    "Arriving late shortens the session; the price stays the same.": "الوصول متأخرًا يقصّر الجلسة؛ والسعر لا يتغير.",
+    "Sessions sent for a therapist's OK are not charged until approved and can be cancelled free at any time before.": "الجلسات المُرسلة لموافقة المعالج لا يُحصَّل ثمنها حتى تُعتمد، ويمكن إلغاؤها مجانًا في أي وقت قبل ذلك.",
+    "Refunds go back to the card used, within 5–10 days.": "تُعاد المبالغ إلى البطاقة المستخدمة خلال 5–10 أيام.",
+    "Free cancellation": "إلغاء مجاني", "up to": "حتى", "hours before the session, from your account or on WhatsApp. Moving it is free in the same window.": "ساعة قبل الجلسة، من حسابك أو عبر واتساب. تغيير الموعد مجاني في الفترة نفسها.",
+    "Late cancellation": "إلغاء متأخر", ", inside that window:": "، خلال تلك الفترة:", "% of the price is kept. A reward, gift or package session used for it is not returned.": "% من السعر يُحتفظ به. ولا تُعاد أي مكافأة أو هدية أو جلسة باقة استُخدمت.",
+    "No-show": "التغيّب", "The therapist cancels": "المعالج يلغي", ": full refund or a new time, your choice.": ": استرداد كامل أو موعد جديد، حسب اختيارك.", "Late arrival": "الوصول متأخرًا", "shortens the session; the price stays the same.": "يقصّر الجلسة؛ والسعر لا يتغير.",
+    "Health check first": "الفحص الصحي أولًا", ": a session sent for a therapist's OK isn't charged until approved and can be cancelled free before that.": ": الجلسة المُرسلة لموافقة المعالج لا يُحصَّل ثمنها حتى تُعتمد، ويمكن إلغاؤها مجانًا قبل ذلك.", "Refunds": "المبالغ المستردة", "go back to the card used, within 5–10 days.": "تعود إلى البطاقة المستخدمة خلال 5–10 أيام.",
+ "Clear rules, no surprises.": "قواعد واضحة، بلا مفاجآت.", "free cancellation up to": "إلغاء مجاني حتى", "I've read the booking rules and I agree to them.": "قرأت قواعد الحجز وأوافق عليها.",
+    "Please read and accept the booking rules first.": "يرجى قراءة قواعد الحجز والموافقة عليها أولًا.", "Cancel": "إلغاء", "Cancel this session?": "إلغاء هذه الجلسة؟", "Keep it": "احتفظ بها", "Cancel the session": "إلغاء الجلسة",
+    "This booking is already closed.": "هذا الحجز مغلق بالفعل.", "It starts in less than {hours} hours. {pct}% of the price is kept ({fee}).": "تبدأ خلال أقل من {hours} ساعة. يُحتفظ بنسبة {pct}% من السعر ({fee}).", "Refund: {amount}.": "الاسترداد: {amount}.", "More than {hours} hours ahead: no fee.": "يفصلنا أكثر من {hours} ساعة: بدون رسوم.",
+    "The same rules for every city and every therapist, close to what you know from tour and activity platforms.": "القواعد نفسها لكل مدينة وكل معالج، قريبة مما تعرفه من منصات الجولات والأنشطة.",
     "Prices can differ by therapist.": "قد تختلف الأسعار حسب المعالج.",
     // near you (2026-09-13)
     "Near you": "بالقرب منك", "Find a therapist near you": "ابحث عن معالج بالقرب منك", "Find a therapist near you.": "ابحث عن معالج بالقرب منك.",

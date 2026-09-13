@@ -245,8 +245,10 @@ $("#booking").addEventListener("submit", async (e) => {
     city, service: s.id, date: $("#date").value, slot, therapist_id: $("#therapist").value || undefined,
     name: $("#name").value.trim(), phone: $("#phone").value.trim(), email: $("#email").value.trim(), note: $("#note").value.trim(),
     credit_id: dc?.kind === "credit" ? dc.id : undefined, package_id: dc?.kind === "package" ? dc.id : undefined, gift_code: dc?.kind === "gift" ? dc.code : undefined, partner_code: dc?.kind === "partner" ? dc.code : undefined,
-    flagged: $("#flagged").checked || undefined
+    flagged: $("#flagged").checked || undefined,
+    agreed: true
   };
+  if (!$("#agree").checked) { err.textContent = t("Please read and accept the booking rules first."); err.hidden = false; $("#agree").focus(); return; }
   const btn = $("#pay"); btn.disabled = true; btn.textContent = t("One moment…");
   try {
     const r = await fetch("/api/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
@@ -265,3 +267,6 @@ $("#booking").addEventListener("submit", async (e) => {
     btn.disabled = false; updateSummary();
   }
 });
+
+/* booking rules: numbers from the owner's settings */
+fetch("/api/status").then((r) => r.json()).then((s) => { if (!s.rules) return; $$("[data-rule]").forEach((el) => { el.textContent = s.rules[el.dataset.rule]; }); }).catch(() => {});
