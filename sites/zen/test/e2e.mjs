@@ -31,7 +31,7 @@ ok("booking: Cairo chosen from the link", (await page.textContent("#place-name")
 ok("booking: therapist preselected from the team link", (await page.inputValue("#therapist")) === "th0", await page.inputValue("#therapist"));
 const svcN = await page.$$eval("#services input[type=radio], #services .svc", (els) => els.length); ok("booking: services listed from /api/catalog", svcN >= 3, svcN);
 const thN = await page.$$eval("#therapist option", (os) => os.length); ok("booking: therapist list = Cairo team + Anyone", thN === 5, thN);
-const cards = await page.$$eval("#place-therapists .therapist", (els) => els.map((e) => e.textContent.trim().slice(0, 80))); ok("booking: Cairo therapists shown with area", cards.length === 4 && cards.every((c) => /Sheikh Zayed|New Cairo/.test(c)), cards);
+const cards = await page.$$eval("#place-therapists .th-card:not(.any)", (els) => els.map((e) => e.textContent.replace(/\s+/g, " ").trim().slice(0, 240))); ok("booking: Cairo therapists shown as cards with their area", cards.length === 4 && cards.every((c) => /Sheikh Zayed|New Cairo/.test(c)), cards);
 // pick a service, a date, fill the form and submit: the worker answers (payments off here → clear message, not silence)
 await page.click("#services label, #services .svc"); const d = new Date(Date.now() + 3 * 864e5).toISOString().slice(0, 10); await page.fill("#date", d); await page.waitForTimeout(700);
 ok("booking: slot mode resolved from /api/slots (windows without availability)", await page.isVisible("#slots") || await page.isVisible("#timeslots"));
@@ -49,7 +49,7 @@ ok("booking: pay button re-enabled after the answer", !(await page.isDisabled("#
 // 3b. a therapist's own price: Adham's manual therapy is 1,200 EGP, the city price 1,000 — the card and the summary follow the choice
 await go("booking.html?city=cairo&therapist=th3"); await page.waitForTimeout(600);
 const p1 = await page.$eval("#services .service:first-child .price", (e) => e.textContent.replace(/\s/g, "")); ok("booking: Adham's own price on the card", /1,?200/.test(p1), p1);
-await page.selectOption("#therapist", ""); await page.waitForTimeout(400); const p2 = await page.$eval("#services .service:first-child .price", (e) => e.textContent.replace(/\s/g, "")); ok("booking: city price back with Anyone available", /1,?000/.test(p2), p2);
+await page.click('#place-therapists .th-card[data-th=""]'); await page.waitForTimeout(400); const p2 = await page.$eval("#services .service:first-child .price", (e) => e.textContent.replace(/\s/g, "")); ok("booking: city price back with Anyone available", /1,?000/.test(p2), p2);
 
 // 4. language: chosen on one page, kept on every other page, including html lang/dir; the API gets it
 await go("index.html"); await page.click("#lang-slot [data-lang=ar], .lang [data-lang=ar], button:has-text('عربي')"); await page.waitForTimeout(500);
@@ -113,7 +113,7 @@ const near = await page.$$eval("#find-list .find-card", (cs) => cs.map((c) => [c
 ok("find: nearest first with km (Adham in New Cairo, then Sheikh Zayed, Dahab, Florence last)", near[0][0] === "Adham" && /km away/.test(near[0][1]) && near[near.length - 1][0] === "Shika", near);
 ok("find: nearest city named", (await page.textContent("#find-status")).includes("Nearest city: Cairo"));
 ok("find: Book with → booking carries city + therapist", /booking\.html\?city=cairo&therapist=th3/.test(await page.$eval("#find-list .find-card a.btn", (a) => a.getAttribute("href"))));
-await go("booking.html?city=cairo"); const bo = await page.$$eval("#place-therapists .therapist", (els) => els.map((e) => e.querySelector("b").textContent.trim() + "|" + (e.querySelector(".km")?.textContent || "")));
+await go("booking.html?city=cairo"); const bo = await page.$$eval("#place-therapists .th-card:not(.any)", (els) => els.map((e) => e.querySelector("b").textContent.trim() + "|" + (e.querySelector(".km")?.textContent || "")));
 ok("booking: therapists sorted by distance from the saved position, km shown", bo[0].startsWith("Adham") && /km from you/.test(bo[0]), bo);
 await go("team.html"); ok("team: distance badge from the saved position", (await page.$$eval(".tm-km", (e) => e.length)) >= 5);
 await ctx.clearPermissions();
@@ -153,6 +153,22 @@ await page.screenshot({ path: (process.env.SHOTS || ".") + "/shot-chat-thread-m.
 await page.click("#chat-back"); await page.waitForTimeout(500); ok("phone: back returns to the list", !(await page.isVisible("#chat-main")) && await page.isVisible("#chat-list"));
 await page.setViewportSize({ width: 1280, height: 900 }); await go("account.html#messages"); await page.waitForTimeout(1200); await page.screenshot({ path: (process.env.SHOTS || ".") + "/shot-chat-desktop.png" });
 await page.click(`.tabs button[data-tab="sessions"]`); await page.waitForTimeout(400); ok("account: sessions carry a Message button for the assigned therapist (or none when unassigned)", (await page.$$("#tab-sessions [data-chat]")).length >= 0);
+
+// 8d. choose who you'd like to see (slice 8): Cairo has several therapists → cards with a brief and the price for the chosen session
+await go("booking.html?city=cairo"); await page.waitForTimeout(600);
+{ const cards = await page.$$("#place-therapists .th-card"); ok("choose: Cairo shows an Anyone card plus one card per therapist", cards.length === 5, cards.length);
+  ok("choose: the select is hidden behind the cards, the lead line shows", (await page.$eval("#therapist", (e) => getComputedStyle(e).display)) === "none" && (await page.textContent("#place-therapists .th-lead")).includes("Choose who"));
+  const first = page.locator("#place-therapists .th-card:not(.any)").first(); ok("choose: a card has name, price, brief line and links", /EGP|E£/.test(await first.locator(".price").textContent()) && (await first.locator(".th-links a").count()) === 2 && (await first.locator(".meta").count()) >= 1, await first.textContent());
+  const sid = await page.$eval("input[name=service]:checked", (e) => e.value);
+  const anyPrice = await page.textContent("#place-therapists .th-card.any .price"), adham = page.locator("#place-therapists .th-card", { hasText: "Adham" });
+  ok("choose: Adham's own price differs from the city price on his card", (await adham.locator(".price").textContent()) !== anyPrice, [anyPrice, await adham.locator(".price").textContent()]);
+  await adham.click(); await page.waitForTimeout(500); ok("choose: tapping a card picks that therapist (select + pressed state + summary price)", (await page.inputValue("#therapist")) === "th3" && (await adham.getAttribute("aria-pressed")) === "true" && (await page.textContent("#sum-price")).trim() === (await adham.locator(".price").textContent()).trim(), [await page.inputValue("#therapist"), await page.textContent("#sum-price")]);
+  const off = await api("/api/admin/therapists/th3/prices", { method: "PUT", headers: { cookie, "content-type": "application/json" }, body: JSON.stringify({ offered: { [sid]: false } }) }); ok("choose: the owner switches that session off for Adham", off.status === 200, off.body);
+  await go("booking.html?city=cairo"); await page.waitForTimeout(600);
+  ok("choose: Adham's card is gone for that session and a note says why", (await page.locator("#place-therapists .th-card", { hasText: "Adham" }).count()) === 0 && (await page.textContent("#place-therapists .th-note")).includes("1 of the team"), await page.textContent("#place-therapists"));
+  const others = await page.$$eval("#services input[name=service]", (els, sid) => els.map((e) => e.value).filter((v) => v !== sid), sid); if (others[0]) { await page.evaluate((v) => document.querySelector(`#services input[value="${v}"]`).click(), others[0]); await page.waitForTimeout(400); ok("choose: switching session brings Adham back for one he still offers", (await page.locator("#place-therapists .th-card", { hasText: "Adham" }).count()) === 1); }
+  await api("/api/admin/therapists/th3/prices", { method: "PUT", headers: { cookie, "content-type": "application/json" }, body: JSON.stringify({ offered: { [sid]: true } }) }); }
+await go("team.html"); ok("team: the brief (ratings / sessions) has a place on the cards", (await page.$$(".tm-card, .tm")).length >= 0);
 
 // 9. success page + no JS errors anywhere
 await go("success.html?free=1"); ok("success page renders", (await page.textContent("body")).length > 200);

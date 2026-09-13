@@ -30,7 +30,7 @@
 
 import { CITIES, SLOTS, PLATFORM_FEE_BPS } from "./catalog.js";
 import { randomId, signPayload, verifyPayload, getCookie, setCookie, clearCookie, hashPassword, verifyPassword } from "./auth.js";
-import { cityNameIn, therapistPrices, nameIn, hoursUntil, cancelTerms, stripeRefund, fillFromWaitlist, payProvider, fawryOn, fawryCheckout, fawryStatus, fawryNotificationValid, CITY_KEYS, USER_COOKIE, ADMIN_COOKIE, json, clean, normEmail, isDate, isTime, fmt, now, today, feeOn, body, isLive, parseIntake, healthFlags, settings, currentUser, currentAdmin, scope, sendEmail, sendSms, stripeCheckout, slotsFor, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, maybeRewardLoyalty, isPlatform, isOwner, seesAll, therapistOf, visibleWhere, canSeeBooking, isPartner, isEmployee, managesCity, pickLang, userLang } from "./lib.js";
+import { cityNameIn, therapistOffering, offersService, nameIn, hoursUntil, cancelTerms, stripeRefund, fillFromWaitlist, payProvider, fawryOn, fawryCheckout, fawryStatus, fawryNotificationValid, CITY_KEYS, USER_COOKIE, ADMIN_COOKIE, json, clean, normEmail, isDate, isTime, fmt, now, today, feeOn, body, isLive, parseIntake, healthFlags, settings, currentUser, currentAdmin, scope, sendEmail, sendSms, stripeCheckout, slotsFor, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, maybeRewardLoyalty, isPlatform, isOwner, seesAll, therapistOf, visibleWhere, canSeeBooking, isPartner, isEmployee, managesCity, pickLang, userLang } from "./lib.js";
 import { M, paidLineFor } from "./mail.js";
 import { featureRoute, adminFeatureRoute, giftPaid, packagePaid, authFlags } from "./features.js";
 import { runCron } from "./cron.js";
@@ -117,9 +117,9 @@ async function signinTaken(env, names, exceptId) { for (const n of names.filter(
 async function cityMeta(env) { const c = await catalog(env); return Object.fromEntries(CITY_KEYS.map((k) => [k, { name: c[k].name, currency: c[k].currency, services: Object.values(c[k].services).map(({ photo, ...s }) => ({ ...s, has_photo: Boolean(photo) })) }])); }
 // What the website reads on load: services and prices per city (from the admin), address/team/WhatsApp/Maps per city (settings)
 async function publicCatalog(env) {
-  const [c, st, tp] = await Promise.all([catalog(env), settings(env), therapistPrices(env, null)]);
+  const [c, st, off] = await Promise.all([catalog(env), settings(env), therapistOffering(env, null)]); const tp = off.prices;
   return json({ cities: Object.fromEntries(CITY_KEYS.map((k) => [k, { name: c[k].name, currency: c[k].currency.toUpperCase(), address: st.address[k] ? st.address[k].split("\n").map((l) => l.trim()).filter(Boolean) : null, team: st.team[k] || null, whatsapp: st.whatsapp[k] || null, gmaps: st.gmaps[k] || null,
-    services: Object.values(c[k].services).map((s) => ({ id: s.id, name: s.short, dur: s.minutes, price: s.amount, desc: s.description, i18n: s.i18n || null, prices: tp[s.id] || null, photo: s.photo ? `/api/service-photo/${s.id}?v=${encodeURIComponent((s.updated_at || "").replace(/\D/g, ""))}` : null })) }])) }, 200, { "cache-control": "no-store" });
+    services: Object.values(c[k].services).map((s) => ({ id: s.id, name: s.short, dur: s.minutes, price: s.amount, desc: s.description, i18n: s.i18n || null, prices: tp[s.id] || null, not_offered: off.off[s.id] || null, photo: s.photo ? `/api/service-photo/${s.id}?v=${encodeURIComponent((s.updated_at || "").replace(/\D/g, ""))}` : null })) }])) }, 200, { "cache-control": "no-store" });
 }
 const INTAKE_LISTS = ["goals", "pain", "health"], INTAKE_STR = ["activity", "sport", "experience", "health_notes", "contact", "time_pref", "completed_at"];
 function cleanIntake(v) { // whitelist keys, cap sizes; stored as JSON text
@@ -302,8 +302,9 @@ async function checkout(req, env) {
   if (date < localNow(city.tz).date) return json({ error: "That day has already passed." }, 400);
 
   // time: exact slot when the city has an availability calendar, otherwise a morning/afternoon/evening window
-  const avail = await slotsFor(env, cityKey, date, null);
+  const avail = await slotsFor(env, cityKey, date, null, svc.id);
   let slot, therapist_id = null;
+  { const want0 = clean(b.therapist_id, 40) || null; if (want0 && !(await offersService(env, want0, svc.id))) { const tn = await env.DB.prepare("SELECT name FROM therapists WHERE id = ?").bind(want0).first(); return json({ error: `${tn?.name || "That therapist"} doesn't offer this session. Pick another session or another therapist.` }, 400); } }
   if (avail.mode === "slots") {
     slot = clean(b.slot, 5);
     const s = avail.slots.find((x) => x.time === slot);
@@ -313,7 +314,7 @@ async function checkout(req, env) {
     therapist_id = want || s.therapists[0] || null;
   } else { slot = SLOTS[b.slot] ? b.slot : "morning"; const want = clean(b.therapist_id, 40) || null; if (want && (await env.DB.prepare("SELECT 1 FROM therapists WHERE id = ? AND city = ? AND active = 1").bind(want, cityKey).first())) therapist_id = want; }
   const chosen = clean(b.therapist_id, 40) || null;   // the client's own choice (not an automatic assignment) → that therapist's price, if they set one
-  const own = chosen && therapist_id === chosen ? await env.DB.prepare("SELECT amount FROM therapist_prices WHERE therapist_id = ? AND service_id = ?").bind(chosen, svc.id).first() : null;
+  const own = chosen && therapist_id === chosen ? await env.DB.prepare("SELECT amount FROM therapist_prices WHERE therapist_id = ? AND service_id = ? AND offered = 1").bind(chosen, svc.id).first() : null;
 
   const user = await currentUser(req, env);
   const list = own ? own.amount : svc.amount;

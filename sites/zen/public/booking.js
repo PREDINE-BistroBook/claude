@@ -81,14 +81,44 @@ async function loadTeam() {
   const kmTxt = v => (v < 10 ? v.toFixed(1) : String(Math.round(v)));
   const list = TEAM[k].slice().sort((a, b) => { const ka = kmTo(a), kb = kmTo(b); if (ka !== null || kb !== null) return (ka ?? 1e9) - (kb ?? 1e9); return Number(near(b)) - Number(near(a)); }), box = $("#place-therapists");
   box.hidden = !list.length;
-  box.innerHTML = list.map(th => `<div class="therapist${near(th) ? " near" : ""}"><span class="ph">${th.photo ? `<img src="${esc(th.photo)}" alt="">` : esc(th.name.slice(0, 1))}</span><div><b>${esc(th.name)}${near(th) ? ` <em class="near-tag">${t("near you")}</em>` : ""}</b><span>${esc([LF(th, "bio"), LF(th, "languages") ? t("Speaks {langs}", { langs: LF(th, "languages") }) : ""].filter(Boolean).join(" · "))}</span>${LF(th, "area") ? `<span class="where">${t("Works in {area}", { area: esc(LF(th, "area")) })}${th.maps_url ? ` · <a href="${esc(th.maps_url)}" target="_blank" rel="noopener">${t("Map")}</a>` : ""}</span>` : ""}${kmTo(th) !== null ? `<span class="km">${t("{km} km from you", { km: kmTxt(kmTo(th)) })}${Number(th.radius_km) > 0 && kmTo(th) <= Number(th.radius_km) ? ` · ${t("Comes to you")}` : ""}</span>` : ""}</div></div>`).join("");
+  CARD_LIST = list; CARD_KM = kmTo; CARD_KMTXT = kmTxt; CARD_NEAR = near; CARD_LF = LF; renderTherapistCards();
   const sel = $("#therapist"); const keep = sel.value;
   sel.innerHTML = `<option value="">${t("Anyone available")}</option>` + list.map(th => `<option value="${esc(th.id)}">${esc(th.name)}${kmTo(th) !== null ? ` · ${t("{km} km", { km: kmTxt(kmTo(th)) })}` : ""}${LF(th, "area") ? ` · ${esc(LF(th, "area"))}` : ""}${near(th) ? ` · ${t("near you")}` : ""}</option>`).join("");
   const want = new URLSearchParams(location.search).get("therapist"); // "Book with Mazen" from the team page
   if (want && !keep && list.some(th => th.id === want)) sel.value = want;
   else if ([...sel.options].some(o => o.value === keep)) sel.value = keep; else if (ME?.user?.preferred_therapist && list.some(th => th.id === ME.user.preferred_therapist)) sel.value = ME.user.preferred_therapist;
   $("#therapist-wrap").hidden = list.length < 2;   // the choice counts in window mode too (their own price, and the booking goes to them)
+  sel.style.display = list.length >= 2 ? "none" : "";   // with a choice, the cards are the picker; the select stays as the value behind them
   if (sel.value !== keep && CITIES[k]) { renderServices(); updateSummary(); }   // the chosen therapist's own prices show on the cards
+  renderTherapistCards();
+}
+
+/* ---------- choose who you'd like to see (2026-09-13, Ash): a short brief per therapist, only the ones who offer the chosen session ---------- */
+let CARD_LIST = [], CARD_KM = () => null, CARD_KMTXT = (v) => String(v), CARD_NEAR = () => false, CARD_LF = () => "", CARD_SID = null;
+const fmtAmt = (v, cur) => new Intl.NumberFormat({ en: "en-GB", it: "it-IT", ar: "ar-EG" }[I.lang] || "en", { style: "currency", currency: cur, maximumFractionDigits: cur === "EGP" ? 0 : 2 }).format(v / 100);
+function currentService() { const sid = $("input[name=service]:checked")?.value; return sid && CITIES[city] ? CITIES[city].services.find((s) => s.id === sid) || null : null; }
+function renderTherapistCards() {
+  const box = $("#place-therapists"), c = CITIES[city]; if (!box || !c) return;
+  const s = currentService(); CARD_SID = s?.id || null;
+  const list = CARD_LIST.filter((th) => !s || !(s.not_offered || []).includes(th.id));
+  const sel = $("#therapist"), km = CARD_KM;
+  if (sel && sel.value && !list.some((th) => th.id === sel.value) && CARD_LIST.length) { sel.value = ""; sel.dispatchEvent(new Event("change")); return; }
+  const stars = (th) => th.rating_n ? `<span class="stars" title="${t("{n} ratings", { n: th.rating_n })}">★ ${Number(th.rating_avg).toFixed(1)}</span><span>· ${t("{n} ratings", { n: th.rating_n })}</span>` : `<span>${t("New on Zen")}</span>`;
+  const card = (th) => `<button type="button" class="th-card${CARD_NEAR(th) ? " near" : ""}" data-th="${esc(th.id)}" aria-pressed="${sel?.value === th.id}">
+      <span class="ph">${th.photo ? `<img src="${esc(th.photo)}" alt="">` : esc(th.name.slice(0, 1))}</span>
+      <span class="body">
+        <span class="l1"><b>${esc(th.name)}${CARD_NEAR(th) ? ` <em class="near-tag">${t("near you")}</em>` : ""}</b>${s ? `<span class="price">${fmtAmt(s.prices && s.prices[th.id] !== undefined && s.prices[th.id] !== null ? s.prices[th.id] : s.price, c.currency)}</span>` : ""}</span>
+        ${CARD_LF(th, "title") ? `<span class="sub">${esc(CARD_LF(th, "title"))}</span>` : ""}
+        ${CARD_LF(th, "bio") ? `<span class="sub">${esc(CARD_LF(th, "bio"))}</span>` : ""}
+        <span class="meta">${stars(th)}${th.sessions_done ? `<span>· ${t("{n} sessions", { n: th.sessions_done })}</span>` : ""}${CARD_LF(th, "languages") ? `<span>· ${esc(CARD_LF(th, "languages"))}</span>` : ""}</span>
+        <span class="meta">${CARD_LF(th, "area") ? `<span>${t("Works in {area}", { area: esc(CARD_LF(th, "area")) })}</span>` : ""}${km(th) !== null ? `<span class="km">· ${t("{km} km from you", { km: CARD_KMTXT(km(th)) })}${Number(th.radius_km) > 0 && km(th) <= Number(th.radius_km) ? ` · ${t("Comes to you")}` : ""}</span>` : ""}</span>
+        <span class="th-links"><a href="team.html#${esc(th.id)}" target="_blank" rel="noopener">${t("Their story")}</a><a href="account.html?chat=${esc(th.id)}#messages">${t("Message")}</a></span>
+      </span></button>`;
+  const anyone = CARD_LIST.length >= 2 ? `<button type="button" class="th-card any" data-th="" aria-pressed="${!sel?.value}"><span class="ph">✓</span><span class="body"><span class="l1"><b>${t("Anyone available")}</b>${s ? `<span class="price">${fmtAmt(s.price, c.currency)}</span>` : ""}</span><span class="sub">${t("First free slot, city price. The room picks who's on.")}</span></span></button>` : "";
+  const hidden = CARD_LIST.length - list.length;
+  box.innerHTML = (CARD_LIST.length >= 2 ? `<p class="th-lead">${t("Choose who you'd like to see")}</p>` : "") + anyone + list.map(card).join("") + (hidden > 0 && s ? `<p class="tiny th-note">${t("{n} of the team don't offer this session.", { n: hidden })}</p>` : "");
+  box.hidden = !CARD_LIST.length;
+  $$("#place-therapists [data-th]").forEach((b) => (b.onclick = () => { if (!sel) return; sel.value = b.dataset.th; $$("#place-therapists [data-th]").forEach((x) => x.setAttribute("aria-pressed", x === b)); sel.dispatchEvent(new Event("change")); }));
 }
 /* ---------- live time slots (when the admin has set opening hours for the city) ---------- */
 let SLOTMODE = "windows", SLOTREQ = 0;
@@ -96,7 +126,7 @@ async function loadSlots() {
   const k = city, date = $("#date").value, th = $("#therapist").value; if (!k || !date) return;
   const my = ++SLOTREQ;
   let data = { mode: "windows", slots: [] };
-  try { const r = await fetch(`/api/slots?city=${k}&date=${date}${th ? "&therapist=" + th : ""}`); if ((r.headers.get("content-type") || "").includes("json")) data = await r.json(); } catch {}
+  try { const r = await fetch(`/api/slots?city=${k}&date=${date}${th ? "&therapist=" + th : ""}${currentService() ? "&service=" + encodeURIComponent(currentService().id) : ""}`); if ((r.headers.get("content-type") || "").includes("json")) data = await r.json(); } catch {}
   if (my !== SLOTREQ || k !== city) return;
   SLOTMODE = data.mode === "slots" ? "slots" : "windows";
   const windows = $("#slots"), grid = $("#timeslots"), empty = $("#slots-empty");
@@ -215,6 +245,7 @@ function current() {
   return { c, s: c.services.find(x => x.id === sid) };
 }
 function updateSummary() {
+  if ((currentService()?.id || null) !== CARD_SID) renderTherapistCards();
   const cur = current(); if (!cur || !cur.s) return;
   const { c, s } = cur;
   const date = $("#date").value; const slot = $("input[name=slot]:checked")?.value || "";
