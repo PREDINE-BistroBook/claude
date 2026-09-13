@@ -70,7 +70,7 @@
           <g fill="#E0B27E" opacity=".4"><circle cx="70" cy="330" r="2"/><circle cx="150" cy="345" r="2"/><circle cx="250" cy="335" r="2"/></g>
         </svg>
       </span>
-      <img class="photo" src="img/cairo.jpg" alt="Cupping session on the treatment table" onerror="this.remove()" width="1000" height="1334">
+      <img class="photo" src="img/room-cairo.jpg" alt="The Zen Recovery room in Cairo: a client under glass and silicone cups, the logo on the wall" onerror="this.remove()" width="1320" height="1249">
       <span class="veil" aria-hidden="true"></span>
       <span class="flag">Egypt</span>
       <span class="tick" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2"><path d="M3 8.5l3 3 7-7"/></svg></span>
@@ -162,28 +162,28 @@
     <form class="booking wizard no-motion" id="booking" hidden novalidate>
       <ol class="wiz-steps" id="wiz-steps" aria-label="Booking steps"></ol>
 
-      <section class="step" data-step="1">
+      <section class="wstep" data-step="1">
         <h3 class="step-title">Where does it hurt?</h3>
         <p class="step-lead">Tap the body. It reaches your therapist with the booking, so they know before you arrive. Nothing specific? Just continue.</p>
         <div class="field bodymap-field"><div id="areas-map" class="areas-map"></div><div class="chips" id="areas-chips" aria-live="polite"></div></div>
         <div class="field"><label for="note">Anything we should know? <span style="color:var(--ink-mute);font-weight:400">(optional)</span></label><textarea id="note" name="note" placeholder="An old injury, a spot to avoid, a first time…"></textarea></div>
       </section>
 
-      <section class="step" data-step="2" hidden>
+      <section class="wstep" data-step="2" hidden>
         <h3 class="step-title">Choose a treatment</h3>
         <p class="step-lead">This comes before the therapist: not everyone offers every treatment.</p>
         <fieldset><div class="services" id="services"></div></fieldset>
         <div id="prep-box" class="prep-box"></div>
       </section>
 
-      <section class="step" data-step="3" hidden>
+      <section class="wstep" data-step="3" hidden>
         <h3 class="step-title">Choose your therapist</h3>
         <p class="step-lead">A short brief on each: what they do, how clients rate them, where they work and their price for this treatment.</p>
         <div class="therapists" id="place-therapists" hidden></div>
         <div class="field" id="therapist-wrap" hidden><label for="therapist">Therapist</label><select id="therapist"><option value="">Anyone available</option></select><span class="tiny">Prices can differ by therapist.</span></div>
       </section>
 
-      <section class="step" data-step="4" hidden>
+      <section class="wstep" data-step="4" hidden>
         <h3 class="step-title">When</h3>
         <fieldset>
           <div class="field"><label for="date">Day</label><input type="date" id="date" name="date" required></div>
@@ -201,7 +201,7 @@
         </fieldset>
       </section>
 
-      <section class="step" data-step="5" hidden>
+      <section class="wstep" data-step="5" hidden>
         <h3 class="step-title">Your details</h3>
         <p class="step-lead" id="reg-note">We keep these with your booking and open your Zen account from them, so your sessions and rewards are saved. Sign in any time with your email, no password needed.</p>
         <fieldset>
@@ -218,7 +218,7 @@
       </fieldset>
       </section>
 
-      <section class="step" data-step="6" hidden>
+      <section class="wstep" data-step="6" hidden>
         <h3 class="step-title">Rewards and codes</h3>
         <p class="step-lead">A reward, a pack, a gift or a partner code: pick one before you pay.</p>
         <fieldset id="rewards-box">
@@ -235,7 +235,7 @@
         </fieldset>
       </section>
 
-      <section class="step" data-step="7" hidden>
+      <section class="wstep" data-step="7" hidden>
         <h3 class="step-title">Check and confirm</h3>
         <div class="summary" id="summary" aria-live="polite">
         <div class="line"><span id="sum-service">—</span><span class="num" id="sum-price">—</span></div>
