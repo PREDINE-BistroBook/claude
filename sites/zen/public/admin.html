@@ -302,12 +302,12 @@
       <div class="section-head"><h2 id="money-title">Statements</h2><div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><input type="month" id="st-month" aria-label="Month" style="padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--ground-3);font:inherit"><a class="btn small ghost" id="st-csv" href="#" download>Download CSV</a></div></div>
       <details class="help"><summary>How to read a statement</summary>
         <ul>
-          <li><b>Card</b>: paid on the site with Stripe. The money lands on Zen's Stripe account; Amico Mio's 2% is already taken by Stripe at checkout.</li>
-          <li><b>Fawry</b>: paid on the site with FawryPay. The money lands on the Egyptian settlement account; the 2% is recorded here and settled once a month.</li>
+          <li><b>Card</b>: paid on the site with Stripe. The money lands on Zen's Stripe account; Amico Mio's 10% is already taken by Stripe at checkout.</li>
+          <li><b>Fawry</b>: paid on the site with FawryPay. The money lands on the Egyptian settlement account; the 10% is recorded here and settled once a month.</li>
           <li><b>Cash</b>: sessions the team entered by hand (cash, walk-in, bank transfer). The therapist collected it directly; no platform fee.</li>
           <li><b>Free</b>: paid with a pack, a gift or a reward. Counted, no money that day.</li>
           <li><b>Kept</b>: late cancellations and no-shows under the booking rules, counted with the fee that was kept.</li>
-          <li><b>To pay the therapist</b> = card + Fawry takings minus the 2%. Cash they already have. Sessions still to come are included so the month reads the same before and after.</li>
+          <li><b>To pay the therapist</b> = card + Fawry takings minus the 10%. Cash they already have. Sessions still to come are included so the month reads the same before and after.</li>
         </ul>
       </details>
       <div class="scope" id="st-city-pills"></div>
@@ -389,11 +389,11 @@
     </div>
 
     <!-- settings -->
-    <!-- platform (Amico Mio: the 2% and how the site is doing; no client data) -->
+    <!-- platform (Amico Mio: the platform fee and how the site is doing; no client data) -->
     <div id="tab-platform" hidden>
       <details class="help"><summary>What this page is</summary>
         <ul>
-          <li><b>Platform fee</b> is Amico Mio's share of every card payment (2%), taken by Stripe at checkout and paid out to Amico Mio directly. Sessions the team enters by hand carry no fee.</li>
+          <li><b>Platform fee</b> is Amico Mio's share of every card payment (10% since 2026-09-13; 2% before), taken by Stripe at checkout and paid out to Amico Mio directly. Sessions the team enters by hand carry no fee.</li>
           <li><b>Revenue</b> is the total Zen's clients paid on the site. Euro and Egyptian pound are never added together.</li>
           <li>Names, phone numbers, health answers and bookings belong to Zen's team and the owner: this account can't open them.</li>
         </ul>

@@ -17,7 +17,7 @@
 //
 // Money flow (Stripe Connect, direct charge):
 //   client card ──► Zen's connected Stripe account (merchant of record)
-//                      └─ application_fee_amount (2%) ──► platform account (AmicoMioFlorence)
+//                      └─ application_fee_amount (10%) ──► platform account (AmicoMioFlorence)
 //
 // Roles: an admin with role "all" sees every city; role "cairo" | "dahab" | "florence" is locked to that city —
 // every admin query is filtered by scope() on the server, never by the browser.
@@ -28,7 +28,7 @@
 // Vars: ZEN_STRIPE_ACCOUNT, ZEN_NOTIFY_EMAIL, FROM_EMAIL, SITE_URL, GOOGLE_CLIENT_ID, APPLE_*, WA_*, TWILIO_FROM,
 // DEV_MAGIC_LINK ("1" returns the sign-in link in the response — local testing only).
 
-import { CITIES, SLOTS } from "./catalog.js";
+import { CITIES, SLOTS, PLATFORM_FEE_BPS } from "./catalog.js";
 import { randomId, signPayload, verifyPayload, getCookie, setCookie, clearCookie, hashPassword, verifyPassword } from "./auth.js";
 import { cityNameIn, therapistPrices, nameIn, hoursUntil, cancelTerms, stripeRefund, fillFromWaitlist, payProvider, fawryOn, fawryCheckout, fawryStatus, fawryNotificationValid, CITY_KEYS, USER_COOKIE, ADMIN_COOKIE, json, clean, normEmail, isDate, isTime, fmt, now, today, feeOn, body, isLive, parseIntake, healthFlags, settings, currentUser, currentAdmin, scope, sendEmail, sendSms, stripeCheckout, slotsFor, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, maybeRewardLoyalty, isPlatform, isOwner, seesAll, therapistOf, visibleWhere, canSeeBooking, isPartner, isEmployee, managesCity, pickLang, userLang } from "./lib.js";
 import { M, paidLineFor } from "./mail.js";
@@ -357,7 +357,7 @@ async function checkout(req, env) {
   }
   const provider = payProvider(env, city.currency);
   if (!provider) return json({ preview: true, error: "Payments are not switched on yet." }, 503);
-  if (provider === "fawry") {   // Egypt: Fawry's hosted page (card, wallet or a Fawry reference number), settled to Zen's Egyptian account; the 2% is recorded for the monthly statement
+  if (provider === "fawry") {   // Egypt: Fawry's hosted page (card, wallet or a Fawry reference number), settled to Zen's Egyptian account; the 10% is recorded for the monthly statement
     const ref = "bk" + id;
     let pay; try { pay = await fawryCheckout(env, { ref, amount, name: svc.short || svc.name, description: `${date} · ${slotLabel(slot)}`, email, phone, customerName: name, returnUrl: `${env.SITE_URL}/api/fawry/return`, lang: base.lang }); } catch (e) { return json({ error: e.message }, 502); }
     await insertBooking(env, { ...base, status: "pending", stripe_session: ref, provider: "fawry" });
@@ -547,7 +547,7 @@ async function adminStats(env, admin, url) {
   return json({ city, months: months.results, this_month: thisMonth.results, last_month: lastMonth.results, by_service: byService.results, by_status: byStatus.results, clients, upcoming: upcoming.n, today: todayRows.results, by_city: byCity.results, rewards: rewards.results, review: review.n, ratings, packages: packs.results, gifts: gifts.results, show_fee: isPlatform(admin) });
 }
 
-// Ash's view: what the 2% platform fee earned, per month and per city, plus a health snapshot of the site. No client data.
+// Ash's view: what the platform fee (10%) earned, per month and per city, plus a health snapshot of the site. No client data.
 async function platformReport(env, admin) {
   const live = "status IN ('paid','confirmed','done')";
   const [months, byCity, totals, packs, gifts, admins, users, lastMsg, pendingReview] = await Promise.all([
@@ -563,7 +563,7 @@ async function platformReport(env, admin) {
   ]);
   const st = await settings(env);
   return json({
-    fee_bps: Number(env.PLATFORM_FEE_BPS || 200), live: isLive(env), stripe_account: env.ZEN_STRIPE_ACCOUNT || null,
+    fee_bps: PLATFORM_FEE_BPS, live: isLive(env), stripe_account: env.ZEN_STRIPE_ACCOUNT || null,
     months: months.results, by_city: byCity.results, totals: totals.results, packages: packs.results, gifts: gifts.results,
     admins: admins.results, users, messages_7d: lastMsg, pending_review: pendingReview.n,
     rules: { loyalty_every: st.loyalty_every, referral_pct: st.referral_pct, birthday_pct: st.birthday_pct, package_pct: st.package_pct },

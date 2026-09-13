@@ -199,7 +199,7 @@ export async function sessionCookieFor(env, userId) {
   await env.DB.prepare("UPDATE users SET last_login = ? WHERE id = ?").bind(now(), userId).run();
   return setCookie(USER_COOKIE, await signPayload(env.SESSION_SECRET, { uid: userId, exp: Math.floor(Date.now() / 1000) + 30 * 86400 }), 30 * 86400);
 }
-// Roles: "platform" = Locali & Ordinazioni (Ash): numbers, payments, the 2%, who's signed in — nothing operational.
+// Roles: "platform" = Locali & Ordinazioni (Ash): numbers, payments, the platform fee (10%), who's signed in — nothing operational.
 //        "all"      = Zen's owner: everything, every city.   "cairo" | "dahab" | "florence" = one city's team.
 export const isPlatform = (a) => a.role === "platform";
 export const isOwner = (a) => a.role === "all";

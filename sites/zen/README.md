@@ -52,13 +52,17 @@ sites/zen/
 
 **Preview mode**: without a deployed API, `demo.js` answers from generated sample data so all three areas can be reviewed. The banners at the top say so. Nothing in it runs once `/api` is live.
 
-## How the 2% works
+## How the platform fee works (10% since 2026-09-13, 2% before)
+
+**2026-09-13, Ash:** "The percentage is now 10%." `PLATFORM_FEE_BPS` in `src/catalog.js` went from 200 to 1000; every fee below (Stripe application fee, Fawry recorded fee, statements, join-page terms) follows that one constant. Ash has created the Stripe Connect platform and sent Zen's owner the onboarding link; the site goes live-money once that account exists and `STRIPE_SECRET_KEY` + `ZEN_STRIPE_ACCOUNT` are set (see "Going live").
+
+The original 2% design, still accurate apart from the number:
 
 Stripe Connect, **direct charges with an application fee**:
 
 1. Our Stripe account (`AmicoMioFlorence`, `acct_1U0OjLFtLAIrKWhD`) becomes a **Connect platform**. One-time switch in the Stripe Dashboard: Connect → Get started → "Platform or marketplace". No code.
 2. Zen gets a **connected account** under our platform. We send them a Stripe onboarding link; they fill in their business details and bank account (10 minutes, done once). Zen sees their own dashboard, payouts, refunds. We never hold their money.
-3. When a client books, the Worker creates a Checkout Session **on Zen's account** (`Stripe-Account` header) with `application_fee_amount = round(price × 2%)`. Stripe splits the payment at settlement: 98% (minus Stripe's processing fee) to Zen, **2% to us**, automatically, on every single booking.
+3. When a client books, the Worker creates a Checkout Session **on Zen's account** (`Stripe-Account` header) with `application_fee_amount = round(price × fee)` (10% now). Stripe splits the payment at settlement: 90% (minus Stripe's processing fee) to Zen, **10% to us**, automatically, on every single booking.
 4. The fee shows up in our Dashboard under Connect → Collected fees. Refund a booking and the fee is refunded proportionally (Stripe handles this).
 
 Why this rather than the alternatives:
