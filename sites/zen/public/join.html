@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<title>Zen Recovery · Join as a therapist</title>
+<meta name="description" content="Cupping and manual therapists in Cairo, Dahab or Florence: apply to join Zen Recovery. The owner approves every application; approved therapists get a profile, direct bookings and their own admin.">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira:ital,wght@0,300;0,400;1,800&family=Michroma&family=Figtree:wght@400;500;600&family=DM+Mono:wght@400;500&family=Cairo:wght@300;400;600;800&display=swap">
+<meta name="theme-color" content="#1B1E1D">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="img/favicon.png"><link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+<meta property="og:image" content="https://zenrecovery.club/img/logo-social.png"><meta property="og:title" content="Zen Recovery"><meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="site.css">
+<link rel="stylesheet" href="motion.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<div class="preview" id="preview">
+  Preview build — photos, prices and addresses are placeholders until Zen confirms them. Payments switch on once a Stripe account is connected.
+</div>
+
+<nav class="nav" id="nav" aria-label="Main">
+  <a class="brand no-i18n" href="index.html" aria-label="Zen Recovery, home"><img class="logo" src="img/logo-light.png" alt="Zen Recovery" width="112" height="40"></a>
+  <div class="nav-links">
+    <a href="index.html#how" class="hide-sm">How it works</a>
+    <a href="index.html#methods" class="hide-sm">Methods</a>
+    <a href="find.html" class="hide-sm">Near you</a>
+    <a href="booking.html" class="hide-sm">Booking</a>
+    <a href="giftcard.html" class="hide-sm" >Gift</a>
+    <a href="rewards.html" class="hide-sm" >Rewards</a>
+    <a href="team.html" class="hide-sm" aria-current="page">Team</a>
+    <span id="lang-slot"></span>
+    <a href="account.html" id="nav-account" class="signin" aria-label="Sign in"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg><span>Sign in</span></a>
+    <a href="booking.html" class="btn small">Book a session</a>
+  </div>
+</nav>
+
+<main id="main">
+<section class="page-head">
+  <p class="eyebrow">Join the team</p>
+  <h1 id="join-title">Work with Zen Recovery.</h1>
+  <p>Cupping, manual therapy and recovery, in Cairo, Dahab or Florence. Tell us who you are and where you work; the owner reads every application personally. If it's a yes, your profile goes live, clients book you directly, and you get your own team admin: hours, days off, prices, earnings.</p>
+</section>
+
+<section class="join" aria-labelledby="join-title">
+  <form class="card join-form" id="join-form" novalidate>
+    <div class="grid cols-2">
+      <div class="field"><label for="j-name">Full name</label><input id="j-name" autocomplete="name" required></div>
+      <div class="field"><label for="j-email">Email <span class="tiny">(your sign-in if approved)</span></label><input id="j-email" type="email" autocomplete="email" required></div>
+      <div class="field"><label for="j-phone">WhatsApp number</label><input id="j-phone" type="tel" autocomplete="tel" required></div>
+      <div class="field"><label for="j-city">City</label><select id="j-city" required><option value="cairo">Cairo</option><option value="dahab">Dahab</option><option value="florence">Florence</option></select></div>
+      <div class="field"><label for="j-title">Title <span class="tiny">(as shown to clients)</span></label><input id="j-title" placeholder="Recovery specialist · Gold's Gym"></div>
+      <div class="field"><label for="j-langs">Languages you speak</label><input id="j-langs" placeholder="Arabic, English"></div>
+      <div class="field"><label for="j-area">Neighbourhood where you work <span class="tiny">(shown to clients)</span></label><input id="j-area" placeholder="Sheikh Zayed, Maadi, New Cairo…" required></div>
+      <div class="field"><label for="j-address">Street address <span class="tiny">(only in confirmations)</span></label><input id="j-address"></div>
+      <div class="field"><label for="j-maps">Google Maps link <span class="tiny">(optional)</span></label><input id="j-maps" type="url" placeholder="https://maps.app.goo.gl/…"></div>
+      <div class="field"><label for="j-insta">Instagram <span class="tiny">(optional)</span></label><input id="j-insta" placeholder="@yourname"></div>
+    </div>
+    <div class="field"><label for="j-bio">One line about you <span class="tiny">(shown on your card)</span></label><input id="j-bio" maxlength="160" placeholder="Cupping and sports massage, 6 years."></div>
+    <div class="field"><label for="j-story">Your story <span class="tiny">(a few lines: training, where you've worked, who you treat)</span></label><textarea id="j-story" rows="5"></textarea></div>
+    <div class="field"><label for="j-certs">Certificates <span class="tiny">(one per line)</span></label><textarea id="j-certs" rows="3"></textarea></div>
+    <div class="grid cols-2">
+      <div class="field"><label for="j-photo">A photo of you <span class="tiny">(square works best)</span></label><input id="j-photo" type="file" accept="image/*"><div id="j-preview" class="join-preview" hidden></div></div>
+      <div class="field"><span class="label-like">Where you work from</span><div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button type="button" class="btn small ghost" id="j-locate">Use my current position</button><span class="tiny" id="j-pin">Not pinned yet. Tap while you're at your place; clients see distances from it.</span></div>
+        <label for="j-radius" style="margin-top:10px;display:block">I also travel to clients within (km) <span class="tiny">0 = at my place only</span></label><input id="j-radius" type="number" min="0" max="100" value="0" style="width:120px"></div>
+    </div>
+    <label class="check"><input type="checkbox" id="j-agree"><span>I'm a trained therapist, the details above are true, and I accept that Zen Recovery keeps 2% of each booking and can remove a profile at any time.</span></label>
+    <p class="err" id="j-err" role="alert" hidden></p>
+    <div class="row" style="gap:12px;align-items:center;flex-wrap:wrap"><button class="btn" type="submit" id="j-send">Send my application</button><span class="tiny">The owner answers within a few days, by email.</span></div>
+  </form>
+  <div class="card join-done" id="join-done" hidden>
+    <p class="eyebrow">Sent</p>
+    <h2>Thank you. The owner will read it personally.</h2>
+    <p>You'll get an email either way. If it's a yes, it carries your sign-in for the team admin and your profile goes live the same day.</p>
+    <a class="btn small" href="team.html">See the team</a>
+  </div>
+</section>
+
+<footer>
+  <div class="foot-grid">
+    <div>
+      <img class="logo lg" src="img/logo-dark.png" alt="Zen Recovery" width="200" height="72">
+      <p>Manual techniques, cupping, muscle recovery. Cairo, Dahab and Florence. Recovery = growth.</p>
+    </div>
+    <div>
+      <p class="eyebrow">Find us</p>
+      <ul>
+        <li><a href="https://instagram.com/zen_recovery10" target="_blank" rel="noopener">Instagram · @zen_recovery10</a></li>
+        <li><a href="https://instagram.com/recoverywithshaarawy" target="_blank" rel="noopener">Instagram · @recoverywithshaarawy (Cairo & Dahab)</a></li>
+        <li><a href="https://wa.me/201145638166" target="_blank" rel="noopener">WhatsApp · Cairo & Dahab</a></li>
+        <li><a href="find.html">Near you</a></li>
+        <li><a href="join.html">Join as a therapist</a></li>
+        <li><a href="booking.html">Cities</a></li>
+      </ul>
+    </div>
+    <div>
+      <p class="eyebrow">Sessions</p>
+      <ul>
+        <li><a href="index.html#how">How cupping works</a></li>
+        <li><a href="index.html#methods">Methods</a></li>
+        <li><a href="guide.html">Before and after</a></li>
+        <li><a href="rewards.html">Rewards</a></li>
+        <li><a href="team.html">Team</a></li>
+        <li><a href="giftcard.html">Gift a session</a></li>
+        <li><a href="account.html">My account</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot-bottom">
+    <span>© <span id="year"></span> Zen Recovery</span>
+    <span>Cupping is a complementary therapy and not a substitute for medical care. <a href="admin.html" style="color:inherit;opacity:.6">Team sign-in</a></span>
+  </div>
+</footer>
+
+<dialog id="dlg">
+  <div class="inner">
+    <h3 id="dlg-title">Almost there</h3>
+    <p id="dlg-body"></p>
+    <div class="row"><button class="btn small" id="dlg-close" type="button">Got it</button></div>
+  </div>
+</dialog>
+
+<script src="i18n.js"></script>
+<script src="guide.js"></script>
+<script src="site.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script src="join.js"></script>
+<script src="motion.js"></script>
+</body>
+</html>

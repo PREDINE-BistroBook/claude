@@ -484,3 +484,18 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
 .rules-list{margin:0; padding-inline-start:18px; display:grid; gap:8px; color:var(--ink-soft); font-size:.92rem} .rules-list li::marker{color:var(--mark)}
 #rules .rules-list{max-width:44rem; padding:0 var(--gutter) 40px; margin-inline-start:0; list-style-position:inside}
 .session-card .tools button{background:none; border:0; padding:0; font:inherit; color:#c2410c; cursor:pointer; text-decoration:underline}
+/* what clients say (2026-09-13) */
+.reviews{padding:clamp(48px, 8vh, 96px) var(--gutter)} .reviews-head{max-width:40rem; display:grid; gap:10px; margin-bottom:26px} .reviews-head h2{font-family:var(--display); font-weight:300; font-size:clamp(1.8rem, 3.6vw, 2.8rem); line-height:1.05; margin:0} .reviews-head p{color:var(--ink-soft)}
+.reviews-row{display:grid; grid-auto-flow:column; grid-auto-columns:minmax(260px, 340px); gap:16px; overflow-x:auto; scroll-snap-type:x mandatory; padding-bottom:8px; -webkit-overflow-scrolling:touch}
+.review{margin:0; scroll-snap-align:start; padding:22px; border:1px solid var(--line); border-radius:18px; background:var(--ground-3); display:grid; gap:12px; align-content:start}
+.review .stars{color:var(--mark); letter-spacing:2px; font-size:1rem} .review .stars span{color:var(--ink-mute)}
+.review blockquote{margin:0; font-size:1.02rem; line-height:1.5; color:var(--ink)} .review figcaption{font-size:.84rem; color:var(--ink-soft)}
+/* where it hurts (booking, 2026-09-13) */
+.bodymap-field .label-like{display:block; font-weight:500; margin-bottom:8px} .areas-map{max-width:220px} .areas-map .bodymap{width:100%; height:auto; display:block}
+.areas-map .part{cursor:pointer; fill:color-mix(in srgb, var(--mark) 12%, transparent); stroke:color-mix(in srgb, var(--mark) 45%, transparent); stroke-width:1; transition:fill .2s} .areas-map .part:hover{fill:color-mix(in srgb, var(--mark) 30%, transparent)} .areas-map .part.on{fill:var(--mark); stroke:var(--mark)} .areas-map .part:focus-visible{outline:2px solid var(--mark); outline-offset:2px}
+.areas-map .bm-caption{font-size:10px; fill:var(--ink-mute)} #areas-chips{margin-top:8px; display:flex; gap:6px; flex-wrap:wrap} #areas-chips .chip{font-size:.8rem; padding:4px 10px; border-radius:999px; background:var(--mark); color:#fff}
+/* join as a therapist (2026-09-13) */
+.join{padding:26px var(--gutter) 70px; max-width:60rem} .join-form{display:grid; gap:16px; padding:22px} .join-form .grid.cols-2{gap:14px} .join-preview{margin-top:8px; width:96px; height:96px; border-radius:50%; overflow:hidden} .join-preview img{width:100%; height:100%; object-fit:cover; display:block}
+.join-form[hidden],.join-done[hidden]{display:none} .join-done{display:grid; gap:12px; padding:26px; max-width:40rem} .join-done h2{font-family:var(--display); font-weight:300; font-size:1.8rem; line-height:1.05; margin:0} #j-locate.on{background:var(--mark); border-color:var(--mark); color:#fff}
+.join-cta{margin:26px var(--gutter) 60px; padding:22px; border:1px solid var(--line); border-radius:18px; background:var(--ground-3); display:flex; gap:16px; align-items:center; justify-content:space-between; flex-wrap:wrap} .join-cta p{margin:0; color:var(--ink-soft)}
+@media (max-width:640px){ .join-form .grid.cols-2{grid-template-columns:1fr} }

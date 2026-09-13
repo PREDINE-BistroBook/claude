@@ -17,6 +17,9 @@ db.prepare("INSERT INTO therapist_prices (therapist_id, service_id, amount) VALU
 const types = { ".html": "text/html; charset=utf-8", ".js": "application/javascript", ".css": "text/css", ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".json": "application/json", ".webp": "image/webp", ".ico": "image/x-icon", ".xml": "application/xml", ".txt": "text/plain", ".webmanifest": "application/manifest+json" };
 http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://localhost:8766");
+  if (url.pathname === "/api/e2e/feature-review" && req.method === "POST") {   // test-only: a done session with a 5-star rating, featured by the owner
+    const id = "rv" + Date.now().toString(36); db.prepare("INSERT INTO bookings (id, name, email, city, service_name, date, slot, amount, currency, status, rating, feedback, featured, done_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)").run(id, "Sara Tester", "sara@x.com", "cairo", "Dry cupping · 45 min · Cairo", "2026-09-01", "morning", 90000, "egp", "done", 5, "Best sleep in weeks.", 1, "2026-09-01 12:00:00");
+    res.writeHead(200, { "content-type": "application/json" }); res.end("{\"ok\":true}"); return; }
   if (url.pathname.startsWith("/api/")) {
     const chunks = []; for await (const c of req) chunks.push(c);
     const body = chunks.length ? Buffer.concat(chunks) : undefined;

@@ -74,7 +74,9 @@ CREATE TABLE IF NOT EXISTS bookings (
   refund_amount  INTEGER DEFAULT 0,
   refund_status  TEXT,                     -- done | manual | none
   agreed_at      TEXT,                     -- when the client ticked the booking rules
-  provider       TEXT DEFAULT 'stripe'     -- stripe | fawry (2026-09-13): who took the money; stripe_session holds the provider's reference either way
+  provider       TEXT DEFAULT 'stripe',    -- stripe | fawry (2026-09-13): who took the money; stripe_session holds the provider's reference either way
+  areas          TEXT,                     -- JSON list of body areas the client tapped (2026-09-13)
+  featured       INTEGER DEFAULT 0         -- the owner shows this rating + words on the home page
 );
 CREATE INDEX IF NOT EXISTS bookings_city_date ON bookings(city, date);
 CREATE INDEX IF NOT EXISTS bookings_user ON bookings(user_id);
@@ -133,7 +135,7 @@ CREATE TABLE IF NOT EXISTS blocked (id TEXT PRIMARY KEY, city TEXT NOT NULL, the
 CREATE TABLE IF NOT EXISTS packages (id TEXT PRIMARY KEY, city TEXT NOT NULL, name TEXT NOT NULL, sessions INTEGER NOT NULL, amount INTEGER NOT NULL, currency TEXT NOT NULL, months_valid INTEGER DEFAULT 6, active INTEGER DEFAULT 1, sort INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS client_packages (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, package_id TEXT NOT NULL, name TEXT, city TEXT, sessions INTEGER, remaining INTEGER, amount INTEGER, currency TEXT, platform_fee INTEGER DEFAULT 0, status TEXT DEFAULT 'pending', stripe_session TEXT, expires_at TEXT, created_at TEXT DEFAULT (datetime('now')), paid_at TEXT, provider TEXT DEFAULT 'stripe');
 CREATE TABLE IF NOT EXISTS gifts (id TEXT PRIMARY KEY, code TEXT UNIQUE NOT NULL, city TEXT NOT NULL, service_id TEXT, service_name TEXT, amount INTEGER, currency TEXT, platform_fee INTEGER DEFAULT 0, buyer_name TEXT, buyer_email TEXT, recipient_name TEXT, recipient_email TEXT, message TEXT, status TEXT DEFAULT 'pending', stripe_session TEXT, booking_id TEXT, created_at TEXT DEFAULT (datetime('now')), paid_at TEXT, redeemed_at TEXT, lang TEXT, provider TEXT DEFAULT 'stripe');
-CREATE TABLE IF NOT EXISTS partners (id TEXT PRIMARY KEY, code TEXT UNIQUE NOT NULL, name TEXT NOT NULL, city TEXT, pct INTEGER NOT NULL, active INTEGER DEFAULT 1, created_at TEXT DEFAULT (datetime('now')));
+CREATE TABLE IF NOT EXISTS partners (id TEXT PRIMARY KEY, code TEXT UNIQUE NOT NULL, name TEXT NOT NULL, city TEXT, pct INTEGER NOT NULL, active INTEGER DEFAULT 1, created_at TEXT DEFAULT (datetime('now')), kind TEXT DEFAULT 'partner', contact TEXT, created_by TEXT); -- kind: partner | hostel | gym | corporate (2026-09-13)
 CREATE TABLE IF NOT EXISTS waitlist (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, city TEXT NOT NULL, date TEXT NOT NULL, slot_pref TEXT, created_at TEXT DEFAULT (datetime('now')), notified_at TEXT);
 CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, user_id TEXT, booking_id TEXT, kind TEXT NOT NULL, channel TEXT NOT NULL, status TEXT, detail TEXT, created_at TEXT DEFAULT (datetime('now')));
 CREATE TABLE IF NOT EXISTS photos (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, booking_id TEXT, kind TEXT, r2_key TEXT NOT NULL, content_type TEXT, note TEXT, consent INTEGER DEFAULT 0, uploaded_by TEXT, created_at TEXT DEFAULT (datetime('now')), data TEXT);
@@ -165,3 +167,5 @@ INSERT OR IGNORE INTO services (id, city, name, minutes, amount, currency, descr
 INSERT OR IGNORE INTO services (id, city, name, minutes, amount, currency, description, sort) VALUES ('flo-slide', 'florence', 'Sliding cupping', 60, 7000, 'eur', 'Oiled skin, gliding cups. Massage with the lift built in.', 2);
 INSERT OR IGNORE INTO services (id, city, name, minutes, amount, currency, description, sort) VALUES ('flo-fire', 'florence', 'Fire cupping', 45, 6500, 'eur', 'Glass cups, a flash of flame, deeper warmth.', 3);
 INSERT OR IGNORE INTO services (id, city, name, minutes, amount, currency, description, sort) VALUES ('flo-face', 'florence', 'Facial cupping', 30, 4500, 'eur', 'Light, gliding, no marks.', 4);
+CREATE TABLE IF NOT EXISTS applications (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL, phone TEXT, city TEXT NOT NULL, area TEXT, address TEXT, maps_url TEXT, title TEXT, bio TEXT, story TEXT, certs TEXT, instagram TEXT, languages TEXT, photo TEXT, lat REAL, lng REAL, radius_km REAL DEFAULT 0, lang TEXT, status TEXT DEFAULT 'new', note TEXT, therapist_id TEXT, created_at TEXT DEFAULT (datetime('now')), decided_at TEXT);
+CREATE INDEX IF NOT EXISTS applications_status ON applications(status, created_at);
