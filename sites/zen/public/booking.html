@@ -16,6 +16,7 @@
 <link rel="stylesheet" href="motion.css">
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 
 <div class="preview" id="preview">
   Preview build — photos, prices and addresses are placeholders until Zen confirms them. Payments switch on once a Stripe account is connected.
@@ -31,7 +32,7 @@
     <a href="rewards.html" class="hide-sm" >Rewards</a>
     <a href="team.html" class="hide-sm">Team</a>
     <span id="lang-slot"></span>
-    <a href="account.html" id="nav-account" class="signin"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg><span>Sign in</span></a>
+    <a href="account.html" id="nav-account" class="signin" aria-label="Sign in"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg><span>Sign in</span></a>
     <a href="booking.html" class="btn small">Book a session</a>
   </div>
 </nav>
@@ -68,7 +69,7 @@
           <g fill="#E0B27E" opacity=".4"><circle cx="70" cy="330" r="2"/><circle cx="150" cy="345" r="2"/><circle cx="250" cy="335" r="2"/></g>
         </svg>
       </span>
-      <img class="photo" src="img/cairo.jpg" alt="Cupping session on the treatment table" onerror="this.remove()">
+      <img class="photo" src="img/cairo.jpg" alt="Cupping session on the treatment table" onerror="this.remove()" width="1000" height="1334">
       <span class="veil" aria-hidden="true"></span>
       <span class="flag">Egypt</span>
       <span class="tick" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2"><path d="M3 8.5l3 3 7-7"/></svg></span>
@@ -96,7 +97,7 @@
           </g>
         </svg>
       </span>
-      <img class="photo" src="img/dahab.jpg" alt="Blue silicone and glass cups across the back and arm" onerror="this.remove()">
+      <img class="photo" src="img/dahab.jpg" alt="Blue silicone and glass cups across the back and arm" onerror="this.remove()" width="894" height="1193">
       <span class="veil" aria-hidden="true"></span>
       <span class="flag">Egypt · Red Sea</span>
       <span class="tick" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2"><path d="M3 8.5l3 3 7-7"/></svg></span>
@@ -124,7 +125,7 @@
           <g fill="#B86A5A" opacity=".55"><path d="M0 330 h300 v10 h-300z"/><path d="M0 355 h300 v10 h-300z"/></g>
         </svg>
       </span>
-      <img class="photo" src="img/florence.jpg" alt="The Zen Recovery studio wall and a fire-cupping session" onerror="this.remove()">
+      <img class="photo" src="img/florence.jpg" alt="The Zen Recovery studio wall and a fire-cupping session" onerror="this.remove()" width="1000" height="1333">
       <span class="veil" aria-hidden="true"></span>
       <span class="flag">Italy</span>
       <span class="tick" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2"><path d="M3 8.5l3 3 7-7"/></svg></span>
@@ -230,7 +231,7 @@
       </div>
 
       <div class="book-actions">
-        <p class="err" id="err" hidden></p>
+        <p class="err" id="err" role="alert" hidden></p>
         <button class="btn" type="submit" id="pay">Reserve and pay</button>
         <p class="fine">Secure card payment by Stripe. Your card details never touch this site. Need to move the session? Message Zen up to 24 hours before.</p>
       </div>

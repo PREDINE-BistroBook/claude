@@ -1,0 +1,29 @@
+/* Zen Recovery — real end-to-end host. Run: node test/e2e-server.mjs (from sites/zen), then node test/e2e.mjs.
+   Real end-to-end host: serves sites/zen/public as static files and routes /api/* to the actual Worker code
+   with an in-memory SQLite standing in for D1 (same shim as smoke.mjs). Port 8766. Seeds a realistic team. */
+import { DatabaseSync } from "node:sqlite";
+import fs from "node:fs"; import http from "node:http"; import path from "node:path";
+import { fileURLToPath } from "node:url";
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."), PUB = ROOT + "/public";
+const db = new DatabaseSync(":memory:"); db.exec(fs.readFileSync(ROOT + "/schema.sql", "utf8"));
+const D1 = { prepare: (sql) => { let args = []; const st = { bind: (...a) => { args = a; return st; }, first: async () => db.prepare(sql).get(...args) ?? null, all: async () => ({ results: db.prepare(sql).all(...args) }), run: async () => { const r = db.prepare(sql).run(...args); return { meta: { changes: r.changes } }; } }; return st; }, batch: async (sts) => Promise.all(sts.map((s) => s.run())), exec: async (sql) => db.exec(sql) };
+const env = { DB: D1, ASSETS: { fetch: async () => new Response("asset") }, SESSION_SECRET: "e2e-secret", SITE_URL: "http://localhost:8766", FROM_EMAIL: "x", DEV_MAGIC_LINK: "1", ADMIN_BOOTSTRAP_EMAIL: "owner@x.com", ADMIN_BOOTSTRAP_PASSWORD: "Owner-pass-12345", ZEN_STRIPE_ACCOUNT: "", STRIPE_SECRET_KEY: "", RESEND_API_KEY: "", AI: null };
+const { default: worker } = await import(ROOT + "/src/worker.js");
+const mails = []; globalThis.__mails = mails;
+// seed: the live team, in the owner's order
+const team = [["Mazen Emad","cairo",0,"Founder · Sports recovery specialist"],["Shaarawy","dahab",1,"Cupping & manual therapy · Dahab"],["Hesham khaled","cairo",2,"Recovery specialist · Gold's Gym Beverly Hills"],["Adham","cairo",3,"Recovery specialist · Hansa Medica"],["Anas Hany","cairo",4,"Recovery & cupping · Gold's Gym Beverly Hills"],["Shika","florence",5,""]];
+team.forEach(([name, city, sort, title], i) => db.prepare("INSERT INTO therapists (id, city, name, bio, languages, active, sort, title, area) VALUES (?,?,?,?,?,?,?,?,?)").run("th" + i, city, name, "Cupping and recovery", "Arabic, English", 1, sort, title, city === "cairo" ? "Sheikh Zayed" : city));
+const types = { ".html": "text/html; charset=utf-8", ".js": "application/javascript", ".css": "text/css", ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".json": "application/json", ".webp": "image/webp", ".ico": "image/x-icon", ".xml": "application/xml", ".txt": "text/plain", ".webmanifest": "application/manifest+json" };
+http.createServer(async (req, res) => {
+  const url = new URL(req.url, "http://localhost:8766");
+  if (url.pathname.startsWith("/api/")) {
+    const chunks = []; for await (const c of req) chunks.push(c);
+    const body = chunks.length ? Buffer.concat(chunks) : undefined;
+    const r = await worker.fetch(new Request(url, { method: req.method, headers: req.headers, body: ["GET", "HEAD"].includes(req.method) ? undefined : body, redirect: "manual" }), env, { waitUntil() {} });
+    const h = {}; r.headers.forEach((v, k) => { h[k] = k === "set-cookie" ? r.headers.getSetCookie?.() || v : v; });
+    res.writeHead(r.status, h); res.end(Buffer.from(await r.arrayBuffer())); return;
+  }
+  let p = url.pathname === "/" ? "/index.html" : url.pathname; if (!path.extname(p)) p += ".html";
+  const f = path.join(PUB, p); if (!f.startsWith(PUB) || !fs.existsSync(f)) { res.writeHead(404, { "content-type": "text/html" }); res.end(fs.readFileSync(PUB + "/404.html")); return; }
+  res.writeHead(200, { "content-type": types[path.extname(f)] || "application/octet-stream", "cache-control": "no-store" }); res.end(fs.readFileSync(f));
+}).listen(8766, () => console.log("e2e server on 8766"));
