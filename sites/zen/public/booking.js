@@ -43,7 +43,7 @@ function choose(key, quiet) {
   const pl = $("#book-place"); pl.hidden = false;
   placeLinks();
   const form = $("#booking"); form.hidden = false;
-  renderServices();
+  renderServices(); showStep(1, true);
   const d = $("#date"); const tm = new Date(); // same-day booking is allowed: past times are filtered, and in window mode Zen confirms by WhatsApp
   d.min = tm.toISOString().slice(0, 10); if (!d.value || d.value < d.min) d.value = d.min;
   $("#phone").placeholder = c.currency === "EUR" ? "+39 …" : "+20 …";
@@ -117,7 +117,7 @@ function renderTherapistCards() {
   const anyone = CARD_LIST.length >= 2 ? `<button type="button" class="th-card any" data-th="" aria-pressed="${!sel?.value}"><span class="ph">✓</span><span class="body"><span class="l1"><b>${t("Anyone available")}</b>${s ? `<span class="price">${fmtAmt(s.price, c.currency)}</span>` : ""}</span><span class="sub">${t("First free slot, city price. The room picks who's on.")}</span></span></button>` : "";
   const hidden = CARD_LIST.length - list.length;
   box.innerHTML = (CARD_LIST.length >= 2 ? `<p class="th-lead">${t("Choose who you'd like to see")}</p>` : "") + anyone + list.map(card).join("") + (hidden > 0 && s ? `<p class="tiny th-note">${t("{n} of the team don't offer this session.", { n: hidden })}</p>` : "");
-  box.hidden = !CARD_LIST.length;
+  box.hidden = !CARD_LIST.length; if (typeof renderSteps === "function") renderSteps();
   $$("#place-therapists [data-th]").forEach((b) => (b.onclick = () => { if (!sel) return; sel.value = b.dataset.th; $$("#place-therapists [data-th]").forEach((x) => x.setAttribute("aria-pressed", x === b)); sel.dispatchEvent(new Event("change")); }));
 }
 /* ---------- live time slots (when the admin has set opening hours for the city) ---------- */
@@ -316,3 +316,28 @@ function renderAreas() {
   $("#areas-chips").innerHTML = AREAS.map((a) => `<span class="chip on">${esc(t(ZenGuide.label("pain", a)))}</span>`).join("");
 }
 renderAreas(); document.addEventListener("zen:lang", renderAreas);
+
+/* ---------- step by step (2026-09-13, Ash: "page by page: what's wrong → treatment → therapist → when → details → codes → pay") ---------- */
+var STEP_DEFS = [[1, "Where it hurts"], [2, "Treatment"], [3, "Therapist"], [4, "When"], [5, "Your details"], [6, "Rewards & codes"], [7, "Confirm"]];   // var + function declarations: choose() can run from the ?city= query before this block is reached
+var STEP = STEP || 1, CODES_WANTED = false;
+function stepOn(n) { return n === 3 ? (typeof CARD_LIST !== "undefined" ? CARD_LIST.length >= 2 : false) : n === 6 ? Boolean(typeof ME !== "undefined" && ME?.user) || CODES_WANTED : true; }   // one therapist → no choosing; guests are asked for codes only if they want to
+function renderSteps() { const on = STEP_DEFS.filter(([n]) => stepOn(n)); $("#wiz-steps").innerHTML = on.map(([n, l], i) => `<li data-step="${n}"${n === STEP ? ' aria-current="step"' : ""} class="${n < STEP ? "done" : ""}"><span>${i + 1}</span>${t(l)}</li>`).join(""); $$("#wiz-steps li.done").forEach((li) => (li.onclick = () => showStep(Number(li.dataset.step)))); }
+function showStep(n, quiet) {
+  STEP = n; $$("#booking .step").forEach((s) => (s.hidden = Number(s.dataset.step) !== n)); renderSteps();
+  $("#wiz-back").hidden = n === 1; $("#wiz-next").hidden = n === 7; $("#wiz-err").hidden = true; $("#wiz-next").textContent = n === 6 ? t("Continue to confirm") : t("Continue");
+  $("#reg-note").hidden = Boolean(ME?.user);
+  if (n === 4) loadSlots(); if (n === 7) updateSummary();
+  if (!quiet) { const top = $("#wiz-steps").getBoundingClientRect().top + window.scrollY - 84; window.scrollTo({ top, behavior: reduced ? "auto" : "smooth" }); }
+}
+function wizErr(msg) { const el = $("#wiz-err"); el.textContent = msg; el.hidden = false; }
+function validStep(n) {
+  if (n === 2 && !current()?.s) { wizErr(t("Pick a treatment first.")); return false; }
+  if (n === 4) { if (!$("#date").value) { wizErr(t("Pick a day.")); $("#date").focus(); return false; } if (!$("input[name=slot]:checked")) { wizErr(t("Pick a time first.")); return false; } }
+  if (n === 5) { for (const id of ["name", "phone", "email"]) { const el = $("#" + id); if (!el.checkValidity()) { wizErr(t("Please fill in your name, WhatsApp number, email and a day.")); el.reportValidity(); return false; } } }
+  return true;
+}
+function nextStep() { if (!validStep(STEP)) return; let n = STEP; do { n++; } while (n < 7 && !stepOn(n)); showStep(n); }
+function prevStep() { let n = STEP; do { n--; } while (n > 1 && !stepOn(n)); showStep(n); }
+$("#wiz-next").addEventListener("click", nextStep); $("#wiz-back").addEventListener("click", prevStep);
+$("#wiz-codes").addEventListener("click", (e) => { e.preventDefault(); CODES_WANTED = true; showStep(6); });
+$("#booking").addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.tagName !== "TEXTAREA" && STEP < 7) { e.preventDefault(); nextStep(); } });   // Enter moves on, never submits early
