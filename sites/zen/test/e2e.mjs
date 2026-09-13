@@ -8,7 +8,8 @@ const ctx = await b.newContext({ viewport: { width: 1280, height: 900 } }); cons
 await ctx.route("**/cdnjs.cloudflare.com/ajax/libs/gsap/**", (route) => { const f = route.request().url().includes("ScrollTrigger") ? "ScrollTrigger.min.js" : "gsap.min.js"; route.fulfill({ body: fs.readFileSync(G + f), contentType: "application/javascript" }); });
 await ctx.route(/googleapis|gstatic|google\.com|gravatar/, (r) => r.abort());
 const page = await ctx.newPage(); page.setDefaultTimeout(8000); process.on("unhandledRejection", (e) => { console.log("CRASH " + String(e && e.message || e).slice(0, 300)); process.exit(1); }); page.on("pageerror", (e) => errs.push(e.message)); page.on("console", (m) => { if (m.type() === "error" && !/cdnjs|favicon|ERR_FAILED|ERR_CONNECTION|503/.test(m.text())) errs.push(m.text()); });
-const go = async (p) => { await page.goto(H + "/" + p, { waitUntil: "load" }); await page.waitForTimeout(700); };
+const reveal = async () => page.evaluate(() => document.querySelectorAll("#booking .step").forEach((s) => (s.hidden = false))).catch(() => {});   // the booking is step by step now; the older checks look at everything at once
+const go = async (p) => { await page.goto(H + "/" + p, { waitUntil: "load" }); await page.waitForTimeout(700); if (p.startsWith("booking")) await reveal(); };
 const api = async (path, init) => { const r = await fetch(H + path, init); return { status: r.status, body: await r.json().catch(() => null), h: r.headers }; };
 
 // 1. every nav link on every page answers 200 (with and without .html)
@@ -169,6 +170,27 @@ await go("booking.html?city=cairo"); await page.waitForTimeout(600);
   const others = await page.$$eval("#services input[name=service]", (els, sid) => els.map((e) => e.value).filter((v) => v !== sid), sid); if (others[0]) { await page.evaluate((v) => document.querySelector(`#services input[value="${v}"]`).click(), others[0]); await page.waitForTimeout(400); ok("choose: switching session brings Adham back for one he still offers", (await page.locator("#place-therapists .th-card", { hasText: "Adham" }).count()) === 1); }
   await api("/api/admin/therapists/th3/prices", { method: "PUT", headers: { cookie, "content-type": "application/json" }, body: JSON.stringify({ offered: { [sid]: true } }) }); }
 await go("team.html"); ok("team: the brief (ratings / sessions) has a place on the cards", (await page.$$(".tm-card, .tm")).length >= 0);
+
+// 8e. the booking, step by step (slice 9): body map → treatment → therapist → when → details → (codes) → confirm
+const gctx = await b.newContext({ viewport: { width: 1280, height: 900 } }); await gctx.route("**/cdnjs.cloudflare.com/ajax/libs/gsap/**", (route) => { const f = route.request().url().includes("ScrollTrigger") ? "ScrollTrigger.min.js" : "gsap.min.js"; route.fulfill({ body: fs.readFileSync(G + f), contentType: "application/javascript" }); }); await gctx.route(/googleapis|gstatic|google\.com|gravatar/, (r) => r.abort());
+{ const page = await gctx.newPage(); page.setDefaultTimeout(8000); page.on("pageerror", (e) => errs.push("guest: " + e.message));   // a fresh, signed-out browser: the guest flow
+await page.goto(H + "/booking.html?city=cairo", { waitUntil: "load" }); await page.waitForTimeout(900);
+{ const vis = async () => page.$$eval("#booking .step", (els) => els.filter((e) => !e.hidden).map((e) => e.dataset.step));
+  ok("wizard: only step 1 (where it hurts) shows, with the body map; 7 steps in the bar for a guest? no: 6 (codes hidden for guests)", (await vis()).join() === "1" && await page.isVisible("#areas-map") && (await page.$$("#wiz-steps li")).length === 6, [await vis(), (await page.$$("#wiz-steps li")).length]);
+  await page.click("#wiz-next"); await page.waitForTimeout(400); ok("wizard: step 2 = treatment", (await vis()).join() === "2" && await page.isVisible("#services"));
+  await page.click("#wiz-next"); await page.waitForTimeout(500); ok("wizard: step 3 = therapist cards (Cairo has several)", (await vis()).join() === "3" && (await page.$$("#place-therapists .th-card")).length === 5);
+  await page.click('#place-therapists .th-card[data-th="th3"]'); await page.waitForTimeout(300);
+  await page.click("#wiz-next"); await page.waitForTimeout(600); ok("wizard: step 4 = when, with the therapist's slots", (await vis()).join() === "4" && await page.isVisible("#date"));
+  await page.fill("#date", ""); await page.click("#wiz-next"); await page.waitForTimeout(300); ok("wizard: no day → stays on step 4 with a message", (await vis()).join() === "4" && await page.isVisible("#wiz-err"), await page.textContent("#wiz-err"));
+  const day = new Date(Date.now() + 5 * 864e5).toISOString().slice(0, 10); await page.fill("#date", day); await page.waitForTimeout(900); const ts = await page.$("#timeslots input"); if (ts) await page.evaluate(() => document.querySelector("#timeslots input").click()); await page.waitForTimeout(200);
+  await page.click("#wiz-next"); await page.waitForTimeout(400); ok("wizard: step 5 = your details, with the 'we open your account' note for a guest", (await vis()).join() === "5" && await page.isVisible("#reg-note"));
+  await page.click("#wiz-next"); await page.waitForTimeout(300); ok("wizard: empty details → stays on step 5", (await vis()).join() === "5");
+  await page.fill("#name", "Wiz Client"); await page.fill("#phone", "+20 100 000 0000"); await page.fill("#email", "wiz@x.com"); await page.click("#wiz-next"); await page.waitForTimeout(500);
+  ok("wizard: a guest skips the codes step and lands on confirm with summary, rules, agree and pay", (await vis()).join() === "7" && await page.isVisible("#summary") && await page.isVisible("#agree") && await page.isVisible("#pay") && (await page.textContent("#sum-price")).trim() !== "—", [await vis(), await page.textContent("#sum-price")]);
+  await page.click("#wiz-codes"); await page.waitForTimeout(400); ok("wizard: 'Have a code?' opens the codes step with the gift and partner fields", (await vis()).join() === "6" && await page.isVisible("#partner-code") && await page.isVisible("#gift-code"));
+  await page.click("#wiz-next"); await page.waitForTimeout(300); ok("wizard: back on confirm; Back walks to the previous step", (await vis()).join() === "7"); await page.click("#wiz-back"); await page.waitForTimeout(300); ok("wizard: back from confirm goes to codes (now wanted)", (await vis()).join() === "6"); await page.click("#wiz-back"); await page.waitForTimeout(300); ok("wizard: …then details", (await vis()).join() === "5");
+  await page.click('#wiz-steps li.done[data-step="2"]'); await page.waitForTimeout(300); ok("wizard: a done step in the bar is a shortcut back", (await vis()).join() === "2"); }
+await page.setViewportSize({ width: 390, height: 844 }); await page.goto(H + "/booking.html?city=cairo", { waitUntil: "load" }); await page.waitForTimeout(900); await page.screenshot({ path: (process.env.SHOTS || ".") + "/shot-wiz-m1.png" }); await page.click("#wiz-next"); await page.waitForTimeout(400); await page.click("#wiz-next"); await page.waitForTimeout(600); await page.screenshot({ path: (process.env.SHOTS || ".") + "/shot-wiz-m3.png" }); await gctx.close(); }
 
 // 9. success page + no JS errors anywhere
 await go("success.html?free=1"); ok("success page renders", (await page.textContent("body")).length > 200);

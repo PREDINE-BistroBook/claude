@@ -317,6 +317,13 @@ async function checkout(req, env) {
   const own = chosen && therapist_id === chosen ? await env.DB.prepare("SELECT amount FROM therapist_prices WHERE therapist_id = ? AND service_id = ? AND offered = 1").bind(chosen, svc.id).first() : null;
 
   const user = await currentUser(req, env);
+  // 2026-09-13 (Ash): whoever books is registered, account or not — their sessions and rewards are kept under their email, and a magic link signs them in later
+  let account = user;
+  if (!account) {
+    account = await env.DB.prepare("SELECT * FROM users WHERE email = ?").bind(email).first();
+    if (!account) { try { account = await createUser(env, { email, name, city: cityKey, lang: pickLang(b.lang) }); } catch (e) { console.error("register guest", e.message); account = null; } }
+    if (account && phone && !account.phone) await env.DB.prepare("UPDATE users SET phone = ?, name = COALESCE(name, ?) WHERE id = ?").bind(phone, name, account.id).run();
+  }
   const list = own ? own.amount : svc.amount;
   let amount = list, discount_kind = null, credit = null, gift = null, partner = null, pack = null;
   if (b.package_id) {
@@ -342,7 +349,7 @@ async function checkout(req, env) {
   const flagged = Boolean(b.flagged) || Boolean(user && !user.approved && healthFlags(user.intake).length);
   const id = randomId();
   const areas = Array.isArray(b.areas) ? [...new Set(b.areas.map((a) => String(a).toLowerCase()).filter((a) => AREAS.includes(a)))].slice(0, 12) : [];
-  const base = { lang: pickLang(b.lang, user?.lang), agreed_at: b.agreed ? now() : null, areas: areas.length ? JSON.stringify(areas) : null, id, user_id: user?.id || null, email, name, phone, city: cityKey, service_id: svc.id, service_name: svc.name, date, slot, note, list_amount: list, amount, currency: city.currency, discount_kind, credit_id: credit?.id || null, platform_fee: feeOn(amount), therapist_id, package_id: pack?.id || null, gift_code: gift?.code || null, partner_code: partner?.code || null };
+  const base = { lang: pickLang(b.lang, user?.lang), agreed_at: b.agreed ? now() : null, areas: areas.length ? JSON.stringify(areas) : null, id, user_id: account?.id || user?.id || null, email, name, phone, city: cityKey, service_id: svc.id, service_name: svc.name, date, slot, note, list_amount: list, amount, currency: city.currency, discount_kind, credit_id: credit?.id || null, platform_fee: feeOn(amount), therapist_id, package_id: pack?.id || null, gift_code: gift?.code || null, partner_code: partner?.code || null };
 
   if (flagged) { // no card: a therapist checks the health answers first
     await insertBooking(env, { ...base, status: "review" });

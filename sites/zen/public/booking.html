@@ -155,30 +155,39 @@
         <div class="addr" id="place-addr"></div>
         <p class="maps" id="place-maps" hidden><a id="place-maps-link" href="#" target="_blank" rel="noopener">Open in Google Maps</a></p>
         <div class="team"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span id="place-team"></span></div>
-        <div class="therapists" id="place-therapists" hidden></div>
         <p class="wa" id="place-wa" hidden>Questions first? <a id="place-wa-link" href="#" target="_blank" rel="noopener">Message on WhatsApp</a></p>
       </div>
     </div>
 
-    <form class="booking" id="booking" hidden novalidate>
-      <fieldset>
-        <legend>Choose a session</legend>
-        <div class="services" id="services"></div>
-      </fieldset>
+    <form class="booking wizard no-motion" id="booking" hidden novalidate>
+      <ol class="wiz-steps" id="wiz-steps" aria-label="Booking steps"></ol>
 
-      <fieldset>
-        <legend>When</legend>
-        <div class="two">
+      <section class="step" data-step="1">
+        <h3 class="step-title">Where does it hurt?</h3>
+        <p class="step-lead">Tap the body. It reaches your therapist with the booking, so they know before you arrive. Nothing specific? Just continue.</p>
+        <div class="field bodymap-field"><div id="areas-map" class="areas-map"></div><div class="chips" id="areas-chips" aria-live="polite"></div></div>
+        <div class="field"><label for="note">Anything we should know? <span style="color:var(--ink-mute);font-weight:400">(optional)</span></label><textarea id="note" name="note" placeholder="An old injury, a spot to avoid, a first time…"></textarea></div>
+      </section>
+
+      <section class="step" data-step="2" hidden>
+        <h3 class="step-title">Choose a treatment</h3>
+        <p class="step-lead">This comes before the therapist: not everyone offers every treatment.</p>
+        <fieldset><div class="services" id="services"></div></fieldset>
+        <div id="prep-box" class="prep-box"></div>
+      </section>
+
+      <section class="step" data-step="3" hidden>
+        <h3 class="step-title">Choose your therapist</h3>
+        <p class="step-lead">A short brief on each: what they do, how clients rate them, where they work and their price for this treatment.</p>
+        <div class="therapists" id="place-therapists" hidden></div>
+        <div class="field" id="therapist-wrap" hidden><label for="therapist">Therapist</label><select id="therapist"><option value="">Anyone available</option></select><span class="tiny">Prices can differ by therapist.</span></div>
+      </section>
+
+      <section class="step" data-step="4" hidden>
+        <h3 class="step-title">When</h3>
+        <fieldset>
+          <div class="field"><label for="date">Day</label><input type="date" id="date" name="date" required></div>
           <div class="field">
-            <label for="date">Day</label>
-            <input type="date" id="date" name="date" required>
-          </div>
-          <div class="field" id="therapist-wrap" hidden>
-            <label for="therapist">Therapist</label>
-            <select id="therapist"><option value="">Anyone available</option></select>
-          <span class="tiny">Prices can differ by therapist.</span></div>
-        </div>
-        <div class="field">
           <label id="time-label">Preferred time</label>
           <div class="slots" id="slots">
             <span class="slot"><input type="radio" name="slot" id="slot-morning" value="morning" checked><label for="slot-morning">Morning</label></span>
@@ -188,24 +197,31 @@
           <div class="timeslots" id="timeslots" hidden></div>
           <div class="slots-empty" id="slots-empty" hidden></div>
         </div>
-        <p class="book-actions fine" id="when-note">Zen confirms the exact hour with you on WhatsApp within a few hours of booking.</p>
-      </fieldset>
+          <p class="book-actions fine" id="when-note">Zen confirms the exact hour with you on WhatsApp within a few hours of booking.</p>
+        </fieldset>
+      </section>
 
-      <fieldset>
-        <legend>Who</legend>
+      <section class="step" data-step="5" hidden>
+        <h3 class="step-title">Your details</h3>
+        <p class="step-lead" id="reg-note">We keep these with your booking and open your Zen account from them, so your sessions and rewards are saved. Sign in any time with your email, no password needed.</p>
+        <fieldset>
         <div class="two">
           <div class="field"><label for="name">Name</label><input id="name" name="name" autocomplete="name" required></div>
           <div class="field"><label for="phone">WhatsApp number</label><input id="phone" name="phone" type="tel" autocomplete="tel" placeholder="+39 …" required></div>
         </div>
         <div class="field"><label for="email">Email</label><input id="email" name="email" type="email" autocomplete="email" required></div>
-        <div class="field bodymap-field"><span class="label-like">Where does it hurt? <span style="color:var(--ink-mute);font-weight:400">(optional, tap the body)</span></span><div id="areas-map" class="areas-map"></div><div class="chips" id="areas-chips" aria-live="polite"></div></div>
-        <div class="field"><label for="note">Anything we should know? <span style="color:var(--ink-mute);font-weight:400">(optional)</span></label><textarea id="note" name="note" placeholder="An old injury, a spot to avoid, a first time…"></textarea></div>
+        </fieldset>
+        <fieldset id="health-box">
+        <legend>One safety question</legend>
+        <label class="check"><input type="checkbox" id="flagged"><span>I'm pregnant, I take blood thinners, I have a bleeding or heart condition, or I've had surgery in the last three months.</span></label>
+        <p class="fine" style="color:var(--ink-soft)">Tick it and nothing is charged online: a therapist reads your note first, confirms on WhatsApp, and you pay at the session.</p>
       </fieldset>
+      </section>
 
-      <div id="prep-box" class="prep-box"></div>
-
-      <fieldset id="rewards-box">
-        <legend>Rewards, packs and codes</legend>
+      <section class="step" data-step="6" hidden>
+        <h3 class="step-title">Rewards and codes</h3>
+        <p class="step-lead">A reward, a pack, a gift or a partner code: pick one before you pay.</p>
+        <fieldset id="rewards-box">
         <p class="fine" id="rewards-guest">Have an account? <a href="account.html">Sign in</a> to use your rewards and make this session count toward your free one.</p>
         <div id="rewards-user" hidden>
           <p class="fine" id="rewards-who"></p>
@@ -216,9 +232,19 @@
           <div class="field"><label for="gift-code">Gift code</label><div class="code-row"><input id="gift-code" placeholder="GIFT-XXXXXX" autocomplete="off" spellcheck="false"><button class="btn small ghost" type="button" id="gift-apply">Apply</button></div><span class="fine" id="gift-msg"></span></div>
           <div class="field"><label for="partner-code">Partner or promo code</label><div class="code-row"><input id="partner-code" placeholder="From your hotel, gym or dive centre" autocomplete="off" spellcheck="false"><button class="btn small ghost" type="button" id="partner-apply">Apply</button></div><span class="fine" id="partner-msg"></span></div>
         </div>
-      </fieldset>
+        </fieldset>
+      </section>
 
-      <details class="rules-box" id="rules-box">
+      <section class="step" data-step="7" hidden>
+        <h3 class="step-title">Check and confirm</h3>
+        <div class="summary" id="summary" aria-live="polite">
+        <div class="line"><span id="sum-service">—</span><span class="num" id="sum-price">—</span></div>
+        <div class="line"><span id="sum-when">—</span><span></span></div>
+        <div class="line" id="sum-discount-line" hidden><span id="sum-discount">Reward</span><span class="num" id="sum-discount-amt"></span></div>
+        <div class="line total"><span>To pay now</span><span class="num" id="sum-total">—</span></div>
+      </div>
+        <p class="fine" id="codes-link"><a href="#" id="wiz-codes">Have a gift or partner code?</a></p>
+        <details class="rules-box" id="rules-box">
         <summary><b>Booking rules</b> <span class="tiny">free cancellation up to <span data-rule="cancel_hours">24</span> h before</span></summary>
         <ul class="rules-list">
           <li>Cancel or move your session free of charge up to <span data-rule="cancel_hours">24</span> hours before it starts, from your account or on WhatsApp.</li>
@@ -230,27 +256,17 @@
           <li>Refunds go back to the card used, within 5–10 days.</li>
         </ul>
       </details>
-      <label class="check" id="agree-row"><input type="checkbox" id="agree"><span>I've read the booking rules and I agree to them.</span></label>
-      <fieldset id="health-box">
-        <legend>One safety question</legend>
-        <label class="check"><input type="checkbox" id="flagged"><span>I'm pregnant, I take blood thinners, I have a bleeding or heart condition, or I've had surgery in the last three months.</span></label>
-        <p class="fine" style="color:var(--ink-soft)">Tick it and nothing is charged online: a therapist reads your note first, confirms on WhatsApp, and you pay at the session.</p>
-      </fieldset>
-      <p class="fine" id="review-note" hidden style="color:var(--ink-soft)">Because of your health answers, a therapist checks this booking before it's confirmed. Nothing is charged online; you pay at the session.</p>
-
-      <div class="summary" id="summary" aria-live="polite">
-        <div class="line"><span id="sum-service">—</span><span class="num" id="sum-price">—</span></div>
-        <div class="line"><span id="sum-when">—</span><span></span></div>
-        <div class="line" id="sum-discount-line" hidden><span id="sum-discount">Reward</span><span class="num" id="sum-discount-amt"></span></div>
-        <div class="line total"><span>To pay now</span><span class="num" id="sum-total">—</span></div>
-      </div>
-
-      <div class="book-actions">
+        <label class="check" id="agree-row"><input type="checkbox" id="agree"><span>I've read the booking rules and I agree to them.</span></label>
+        <p class="fine" id="review-note" hidden style="color:var(--ink-soft)">Because of your health answers, a therapist checks this booking before it's confirmed. Nothing is charged online; you pay at the session.</p>
+        <div class="book-actions">
         <p class="err" id="err" role="alert" hidden></p>
         <button class="btn" type="submit" id="pay">Reserve and pay</button>
       <p class="tiny" id="pay-note"></p>
         <p class="fine">Secure card payment by Stripe. Your card details never touch this site. Need to move the session? Message Zen up to 24 hours before.</p>
       </div>
+      </section>
+
+      <div class="wiz-nav"><button type="button" class="btn ghost" id="wiz-back" hidden>Back</button><p class="err" id="wiz-err" role="alert" hidden></p><button type="button" class="btn" id="wiz-next">Continue</button></div>
     </form>
   </div>
 </section>

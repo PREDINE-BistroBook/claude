@@ -301,6 +301,7 @@ export async function adminFeatureRoute(req, env, url, admin) {
   if (mm && m === "DELETE") return manages() || deletePartner(env, admin, mm[1]);
   if (p === "/api/admin/statements" && m === "GET") return statements(env, admin, url);
   if (p === "/api/admin/chats" && m === "GET") return adminChats(env, admin, url);
+  if (p === "/api/admin/search" && m === "GET") return adminSearch(env, admin, url);
   { const ch = p.match(/^\/api\/admin\/chats\/([a-z0-9]+)$/); if (ch && m === "GET") return adminReadChat(env, admin, ch[1], url); if (ch && m === "POST") return adminSend(req, env, admin, ch[1]); }
   if (p === "/api/admin/gifts" && m === "GET") return listGifts(env, admin, url);
   if (p === "/api/admin/review" && m === "GET") return reviewList(env, admin);
@@ -635,7 +636,7 @@ async function startChat(req, env) {
   return json({ ok: true, id: c.id });
 }
 async function messagesOf(env, id, after) {
-  const r = after ? await env.DB.prepare("SELECT id, sender, admin_name, body, created_at FROM chat_messages WHERE chat_id = ? AND created_at > ? ORDER BY created_at, rowid LIMIT 200").bind(id, after).all()
+  const r = after ? await env.DB.prepare("SELECT id, sender, admin_name, body, created_at FROM chat_messages WHERE chat_id = ? AND created_at >= ? ORDER BY created_at, rowid LIMIT 200").bind(id, after).all()
                   : await env.DB.prepare("SELECT id, sender, admin_name, body, created_at FROM (SELECT id, sender, admin_name, body, created_at, rowid AS rid FROM chat_messages WHERE chat_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 200) ORDER BY created_at, rid").bind(id).all();
   return r.results;
 }
@@ -700,6 +701,27 @@ async function adminSend(req, env, admin, id) {
     sent = Boolean(await sendEmail(env, { to: c.user_email, ...M("chat_client", pickLang(c.user_lang), { first: (c.user_name || "").split(" ")[0] || "there", from: signed, excerpt: excerpt(text), link: `${env.SITE_URL}/account#messages` }) }).catch(() => false));
   }
   return json({ ok: true, id: mid, created_at: at, signed, emailed: sent });
+}
+
+/* ---------- one search box for the whole admin (2026-09-13, Ash: "easier storage and more efficient search") ----------
+   Everything the team stores is in D1 (SQLite) tables, one per kind of thing, with indexes on the fields people search by
+   (migration 025). This endpoint looks across them in one go and hands back grouped hits, scoped like the rest of the admin:
+   the owner sees all cities, a partner their city, a therapist what they may see (their own bookings, the city's clients). */
+async function adminSearch(env, admin, url) {
+  if (isPlatform(admin)) return json({ error: "Your account sees the numbers, not the people." }, 403);
+  const q = clean(url.searchParams.get("q"), 60).trim(); if (q.length < 2) return json({ q, clients: [], bookings: [], therapists: [], codes: [], gifts: [], applications: [] });
+  const like = "%" + q.replace(/[%_]/g, (c) => "\\" + c) + "%", digits = q.replace(/\D/g, ""), plike = digits.length >= 4 ? "%" + digits.split("").join("%") + "%" : null;
+  const me = isEmployee(admin) ? await therapistOf(env, admin) : null, city = isOwner(admin) ? null : admin.role;
+  const vis = visibleWhere(admin, me, "b.therapist_id");
+  const [clients, bookings, therapists, codes, gifts, applications] = await Promise.all([
+    env.DB.prepare(`SELECT u.id, u.name, u.email, u.phone, u.city, u.nearest_city, u.photo, (SELECT COUNT(*) FROM bookings b WHERE b.user_id = u.id AND b.status IN ('paid','confirmed','done')) sessions, (SELECT MAX(b.date) FROM bookings b WHERE b.user_id = u.id) last_date FROM users u WHERE (u.name LIKE ? ESCAPE '\\' OR u.email LIKE ? ESCAPE '\\'${plike ? " OR u.phone LIKE ?" : ""})${city ? ` AND (u.city = ? OR u.nearest_city = ? OR EXISTS (SELECT 1 FROM bookings b WHERE b.user_id = u.id AND b.city = ?${vis.sql}))` : ""} ORDER BY last_date DESC LIMIT 8`).bind(like, like, ...(plike ? [plike] : []), ...(city ? [city, city, city, ...vis.args] : [])).all(),
+    env.DB.prepare(`SELECT b.id, b.name, b.email, b.phone, b.city, b.service_name, b.date, b.slot, b.status, b.amount, b.currency, b.therapist_id, t.name therapist FROM bookings b LEFT JOIN therapists t ON t.id = b.therapist_id WHERE b.status != 'pending' AND (b.name LIKE ? ESCAPE '\\' OR b.email LIKE ? ESCAPE '\\' OR b.service_name LIKE ? ESCAPE '\\' OR b.id LIKE ? ESCAPE '\\' OR b.date LIKE ? ESCAPE '\\'${plike ? " OR b.phone LIKE ?" : ""})${city ? " AND b.city = ?" : ""}${vis.sql} ORDER BY b.date DESC LIMIT 10`).bind(like, like, like, like, like, ...(plike ? [plike] : []), ...(city ? [city] : []), ...vis.args).all(),
+    env.DB.prepare(`SELECT id, name, city, photo, title, area, active FROM therapists WHERE (name LIKE ? ESCAPE '\\' OR title LIKE ? ESCAPE '\\' OR area LIKE ? ESCAPE '\\')${city ? " AND city = ?" : ""} ORDER BY sort LIMIT 6`).bind(like, like, like, ...(city ? [city] : [])).all(),
+    managesCity(admin) ? env.DB.prepare(`SELECT id, code, name, kind, city, pct, active FROM partners WHERE (code LIKE ? ESCAPE '\\' OR name LIKE ? ESCAPE '\\')${isOwner(admin) ? "" : " AND (city = ? OR created_by = ?)"} LIMIT 6`).bind(like, like, ...(isOwner(admin) ? [] : [admin.role, admin.id])).all() : { results: [] },
+    managesCity(admin) ? env.DB.prepare(`SELECT id, code, city, service_name, amount, currency, buyer_name, recipient_name, status FROM gifts WHERE status != 'pending' AND (code LIKE ? ESCAPE '\\' OR buyer_name LIKE ? ESCAPE '\\' OR recipient_name LIKE ? ESCAPE '\\' OR buyer_email LIKE ? ESCAPE '\\' OR recipient_email LIKE ? ESCAPE '\\')${city ? " AND city = ?" : ""} ORDER BY created_at DESC LIMIT 6`).bind(like, like, like, like, like, ...(city ? [city] : [])).all() : { results: [] },
+    isOwner(admin) ? env.DB.prepare(`SELECT id, name, email, city, title, status FROM applications WHERE name LIKE ? ESCAPE '\\' OR email LIKE ? ESCAPE '\\' ORDER BY created_at DESC LIMIT 6`).bind(like, like).all() : { results: [] },
+  ]);
+  return json({ q, clients: clients.results, bookings: bookings.results, therapists: therapists.results, codes: codes.results, gifts: gifts.results, applications: applications.results });
 }
 
 /* ---------- monthly statements (2026-09-13): per therapist, per currency, by how the money was taken ----------
