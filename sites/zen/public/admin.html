@@ -651,7 +651,7 @@ function start(r) {
   if (isPlatform()) { loadOverview(); return; }
   loadTeamList().then(() => { loadOverview(); refreshReviewCount(); refreshChatCount(); });
   if (!window.chatCountTimer) window.chatCountTimer = setInterval(refreshChatCount, 60000);
-  if (location.hash === "#chat") setTimeout(() => $('.tabs button[data-tab="chat"]')?.click(), 200);
+  if (location.hash.startsWith("#chat")) setTimeout(() => { const want = location.hash.split("=")[1]; if (want) AOPEN = { id: want }; $('.tabs button[data-tab="chat"]')?.click(); }, 200);   // the email's "Respond" button lands on that conversation
 }
 async function refreshReviewCount() { try { const r = await ZenAPI("GET", "/api/admin/review"); const n = r.bookings.length + r.clients.length; $("#review-count").textContent = n; $("#review-count").hidden = !n; } catch {} }
 
@@ -1129,7 +1129,8 @@ async function loadChatTab() {
   $("#ch-city-pills").innerHTML = isOwner() ? `<span class="tiny">Showing</span><div class="pills">${[["", "All cities"], ["cairo", "Cairo"], ["dahab", "Dahab"], ["florence", "Florence"]].map(([k, l]) => `<button class="pill" data-chcity="${k}" aria-pressed="${chCity === k}">${l}</button>`).join("")}</div>` : "";
   $$("#ch-city-pills .pill").forEach((p) => (p.onclick = () => { chCity = p.dataset.chcity; loadChatTab(); }));
   await loadAChatList();
-  if (!AOPEN && ACHATS.length && !matchMedia("(max-width: 760px)").matches) await openAChat(ACHATS[0].id);
+  if (AOPEN && !AMSGS.length && ACHATS.some((c) => c.id === AOPEN.id)) await openAChat(AOPEN.id);
+  else if (!AOPEN && ACHATS.length && !matchMedia("(max-width: 760px)").matches) await openAChat(ACHATS[0].id);
   if (!aPoll) aPoll = setInterval(() => { if (document.hidden || $("#tab-chat").hidden || aBusy) return; if (AOPEN) refreshAThread(true); else loadAChatList(); }, 12000);
 }
 async function loadAChatList() {
