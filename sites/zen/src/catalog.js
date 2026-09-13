@@ -3,7 +3,7 @@
 // Prices are in minor units (cents / piastres). All values are PLACEHOLDERS until Zen confirms them.
 // Keep in sync with the CITIES object in public/index.html (names, ids, prices).
 
-export const PLATFORM_FEE_BPS = 200; // 2.00% of every booking, kept by the platform (Locali & Ordinazioni)
+export const PLATFORM_FEE_BPS = 1000; // 10% of every booking, kept by the platform (Locali & Ordinazioni). Was 2% until 2026-09-13; Ash set 10% on the Stripe platform.
 
 export const CITIES = {
   cairo: {

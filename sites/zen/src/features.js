@@ -1,8 +1,8 @@
 // Second batch of features (2026-09-12): live time slots + therapists, packages, gift vouchers, partner codes,
 // waitlist, data export, before/after photos, Apple sign-in, message log, referral leaderboard, health-flag review.
 // Public routes come through featureRoute(); admin routes through adminFeatureRoute() (the caller has already
-// checked the admin cookie). Everything money-related goes through stripeCheckout() in lib.js (2% platform fee).
-import { CITIES } from "./catalog.js";
+// checked the admin cookie). Everything money-related goes through stripeCheckout() in lib.js (10% platform fee).
+import { CITIES, PLATFORM_FEE_BPS } from "./catalog.js";
 import { randomId, referralCode, signPayload, verifyPayload, getCookie, clearCookie, hashPassword } from "./auth.js";
 import { CITY_KEYS, json, clean, normEmail, isDate, isTime, fmt, now, today, addDays, feeOn, body, isLive, currentUser, scope, sendEmail, stripeCheckout, slotsFor, healthFlags, parseIntake, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, isOwner, therapistOf, visibleWhere, isPartner, isEmployee, managesCity, pickLang, translateProfile, parseI18n } from "./lib.js";
 import { M } from "./mail.js";
@@ -697,8 +697,8 @@ async function adminSend(req, env, admin, id) {
 }
 
 /* ---------- monthly statements (2026-09-13): per therapist, per currency, by how the money was taken ----------
-   card  = Stripe (lands on Zen's Stripe account; the 2% is already taken by Stripe)
-   fawry = FawryPay (lands on the Egyptian settlement account; the 2% is recorded here and settled through this statement)
+   card  = Stripe (lands on Zen's Stripe account; the 10% is already taken by Stripe)
+   fawry = FawryPay (lands on the Egyptian settlement account; the 10% is recorded here and settled through this statement)
    cash  = entered by hand by the team (walk-in, cash, bank transfer): carries no platform fee
    free  = paid with a pack, a gift or a reward (counted, no money on the day)
    Late cancellations and no-shows count with the fee kept (cancel_fee). Owner: every therapist in the chosen city; partner: their
@@ -729,7 +729,7 @@ async function statements(env, admin, url) {
     const lines = [head.join(",")].concat(sessions.map((s) => [s.date, s.slot, s.city, s.therapist || "", s.client, s.service, s.status, s.channel, s.currency, (s.amount / 100).toFixed(2), (s.fee / 100).toFixed(2), (s.net / 100).toFixed(2), (s.refunded / 100).toFixed(2), s.paid_with || "", s.partner_code || ""].map(esc).join(",")));
     return new Response("\ufeff" + lines.join("\n") + "\n", { headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": `attachment; filename="zen-statement-${month}${city ? "-" + city : ""}${me ? "-" + me.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase() : ""}.csv"` } });
   }
-  return json({ month, city, mine: Boolean(me), therapist: me || null, fee_bps: Number(env.PLATFORM_FEE_BPS || 200), rows: out, sessions: me || url.searchParams.get("detail") === "1" ? sessions : undefined });
+  return json({ month, city, mine: Boolean(me), therapist: me || null, fee_bps: PLATFORM_FEE_BPS, rows: out, sessions: me || url.searchParams.get("detail") === "1" ? sessions : undefined });
 }
 const feeSum = (sessions, g, ch) => sessions.filter((s) => (s.therapist_id || null) === (g.therapist_id || null) && s.currency === g.currency && s.channel === ch).reduce((a, s) => a + s.fee, 0);
 async function listGifts(env, admin, url) {
