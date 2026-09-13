@@ -324,3 +324,7 @@ export async function slotsFor(env, city, date, therapistId) {
   if (date === ln.date) { const cutoff = ln.minutes + 60; for (const t of [...out.keys()]) if (toMin(t) < cutoff) out.delete(t); }
   return { mode: "slots", slots: [...out.entries()].sort().map(([time, th]) => ({ time, therapists: th.filter(Boolean) })) };
 }
+
+/* city names in the three languages (moved from worker.js 2026-09-13 so features.js can use them too) */
+export const CITY_I18N = { cairo: { it: "Il Cairo", ar: "القاهرة" }, dahab: { it: "Dahab", ar: "دهب" }, florence: { it: "Firenze", ar: "فلورنسا" } };
+export const cityNameIn = (k, lang) => CITY_I18N[k]?.[lang] || CITIES[k]?.name || k;

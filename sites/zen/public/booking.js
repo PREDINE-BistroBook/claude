@@ -247,7 +247,8 @@ $("#booking").addEventListener("submit", async (e) => {
     name: $("#name").value.trim(), phone: $("#phone").value.trim(), email: $("#email").value.trim(), note: $("#note").value.trim(),
     credit_id: dc?.kind === "credit" ? dc.id : undefined, package_id: dc?.kind === "package" ? dc.id : undefined, gift_code: dc?.kind === "gift" ? dc.code : undefined, partner_code: dc?.kind === "partner" ? dc.code : undefined,
     flagged: $("#flagged").checked || undefined,
-    agreed: true
+    agreed: true,
+    areas: AREAS.length ? AREAS : undefined
   };
   if (!$("#agree").checked) { err.textContent = t("Please read and accept the booking rules first."); err.hidden = false; $("#agree").focus(); return; }
   const btn = $("#pay"); btn.disabled = true; btn.textContent = t("One moment…");
@@ -272,3 +273,15 @@ $("#booking").addEventListener("submit", async (e) => {
 /* booking rules: numbers from the owner's settings; which provider takes the money per currency */
 let PAY = {};
 fetch("/api/status").then((r) => r.json()).then((s) => { PAY = s.pay || {}; if (s.rules) $$("[data-rule]").forEach((el) => { el.textContent = s.rules[el.dataset.rule]; }); if (city) updateSummary(); }).catch(() => {});
+
+/* where it hurts: the same body map as the client's intake, tap to toggle; the therapist sees it on the booking */
+let AREAS = [];
+function renderAreas() {
+  const box = $("#areas-map"); if (!box || !window.ZenGuide) return;
+  box.innerHTML = ZenGuide.bodyMap(AREAS, true);
+  $$("#areas-map .part").forEach((p) => { p.setAttribute("role", "button"); p.setAttribute("tabindex", "0"); p.setAttribute("aria-pressed", String(AREAS.includes(p.dataset.part)));
+    const toggle = () => { const id = p.dataset.part; AREAS = AREAS.includes(id) ? AREAS.filter((x) => x !== id) : [...AREAS, id]; renderAreas(); };
+    p.addEventListener("click", toggle); p.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } }); });
+  $("#areas-chips").innerHTML = AREAS.map((a) => `<span class="chip on">${esc(t(ZenGuide.label("pain", a)))}</span>`).join("");
+}
+renderAreas(); document.addEventListener("zen:lang", renderAreas);

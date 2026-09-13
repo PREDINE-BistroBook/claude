@@ -6,7 +6,7 @@ import { CITIES } from "./catalog.js";
 import { randomId, referralCode, signPayload, verifyPayload, getCookie, clearCookie, hashPassword } from "./auth.js";
 import { CITY_KEYS, json, clean, normEmail, isDate, isTime, fmt, now, today, addDays, feeOn, body, isLive, currentUser, scope, sendEmail, stripeCheckout, slotsFor, healthFlags, parseIntake, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, isOwner, therapistOf, visibleWhere, isPartner, isEmployee, managesCity, pickLang, translateProfile, parseI18n } from "./lib.js";
 import { M } from "./mail.js";
-import { translateService, therapistPrices, payProvider, fawryCheckout } from "./lib.js";
+import { translateService, therapistPrices, payProvider, fawryCheckout, cityNameIn } from "./lib.js";
 
 const b64u = (s) => btoa(typeof s === "string" ? unescape(encodeURIComponent(s)) : String.fromCharCode(...new Uint8Array(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const cityOf = (k) => (CITY_KEYS.includes(k) ? k : null);
@@ -20,6 +20,7 @@ export async function featureRoute(req, env, url, ctx) {
   if (p === "/api/slots" && m === "GET") return slots(env, url);
   if (p === "/api/team" && m === "GET") return team(env, url);
   if (p === "/api/providers" && m === "GET") return providers(env, url);
+  if (p === "/api/apply" && m === "POST") return applyToJoin(req, env);
   { const sp = p.match(/^\/api\/service-photo\/([a-z0-9-]+)$/); if (sp && m === "GET") return servicePhoto(env, sp[1]); }
   if (p === "/api/packages" && m === "GET") return packages(env, url);
   if (p === "/api/packages/checkout" && m === "POST") return packageCheckout(req, env);
@@ -267,6 +268,8 @@ export async function adminFeatureRoute(req, env, url, admin) {
   if (p === "/api/admin/services" && m === "POST") return saveService(req, env, admin, null);
   if ((mm = p.match(/^\/api\/admin\/services\/([a-z0-9-]+)$/)) && m === "PATCH") return saveService(req, env, admin, mm[1]);
   if (mm && m === "DELETE") return deleteService(env, admin, mm[1]);
+  if (p === "/api/admin/applications" && m === "GET") return owner() || listApplications(env, url);
+  { const ap = p.match(/^\/api\/admin\/applications\/([a-z0-9]+)\/(approve|decline)$/); if (ap && m === "POST") return owner() || decideApplication(req, env, admin, ap[1], ap[2]); }
   { const pr = p.match(/^\/api\/admin\/therapists\/([a-z0-9]+)\/prices$/); if (pr && m === "GET") return therapistPriceList(env, admin, pr[1]); if (pr && m === "PUT") return therapistPriceSave(req, env, admin, pr[1]); }
   if (p === "/api/admin/availability" && m === "GET") return listRows(env, admin, url, "availability", "ORDER BY city, weekday, start");
   if (p === "/api/admin/availability" && m === "POST") return addAvailability(req, env, admin);
@@ -455,6 +458,58 @@ async function saveTherapist(req, env, admin, id) {
   const textsChanged = !cur || ["title", "bio", "story", "certs", "languages", "area"].some((k) => (b[k] !== undefined && String(b[k] ?? "").trim() !== String(cur[k] || "").trim()));
   if (textsChanged) { let i18n = null; try { i18n = await translateProfile(env, { title: vals[10], bio: vals[1], story: vals[11], certs: vals[12], languages: vals[3], area: vals[7] }); } catch (e) { console.error("translate", e.message); } await env.DB.prepare("UPDATE therapists SET i18n = ? WHERE id = ?").bind(i18n ? JSON.stringify(i18n) : null, tid).run(); }
   return json({ ok: true, id: tid, created: link.created || null, admin_id: link.admin_id || null });
+}
+/* ---------- therapists apply to join (2026-09-13): public form → the owner approves (profile + sign-in created, emailed) or declines ---------- */
+const WORDS_APP = ["calm", "cup", "river", "sand", "reef", "olive", "tide", "moon", "lotus", "pine", "salt", "stone"];
+const appPassword = () => { const a = new Uint32Array(3); crypto.getRandomValues(a); return `${WORDS_APP[a[0] % 12]}-${WORDS_APP[a[1] % 12]}-${WORDS_APP[a[2] % 12]}-${(a[0] % 90) + 10}`; };
+async function applyToJoin(req, env) {
+  const b = await body(req);
+  const name = clean(b.name, 80), email = normEmail(b.email), phone = clean(b.phone, 40), city = cityOf(b.city);
+  if (!name || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email || "") || !phone || !city) return json({ error: "Your name, a real email, a WhatsApp number and the city." }, 400);
+  if (!b.agree) return json({ error: "Please accept the terms first." }, 400);
+  const open = await env.DB.prepare("SELECT id FROM applications WHERE email = ? AND status = 'new'").bind(email).first();
+  if (open) return json({ error: "We already have an open application from this email. The owner will answer soon." }, 409);
+  const ml = (k, max) => String(b[k] ?? "").replace(/\r/g, "").replace(/[\u0000-\u0009\u000b-\u001f]/g, " ").replace(/\n{3,}/g, "\n\n").trim().slice(0, max);
+  const num = (v, max) => { if (v === null || v === undefined || v === "") return null; const n = Number(v); return Number.isFinite(n) && Math.abs(n) <= max ? n : null; };
+  const lat = num(b.lat, 90), lng = num(b.lng, 180);
+  const id = randomId();
+  await env.DB.prepare("INSERT INTO applications (id, name, email, phone, city, area, address, maps_url, title, bio, story, certs, instagram, languages, photo, lat, lng, radius_km, lang) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+    .bind(id, name, email, phone, city, clean(b.area, 80), clean(b.address, 200), /^https:\/\/[^\s"<>]{6,300}$/.test(String(b.maps_url || "")) ? String(b.maps_url).trim() : "", clean(b.title, 80), clean(b.bio, 400), ml("story", 2000), ml("certs", 1200), String(b.instagram || "").trim().replace(/^@|^https?:\/\/(www\.)?instagram\.com\//i, "").replace(/\/.*$/, "").slice(0, 40), clean(b.languages, 60), validPhoto(b.photo) || null, lat !== null && lng !== null ? lat : null, lat !== null && lng !== null ? lng : null, Math.min(100, Math.max(0, Number(b.radius_km) || 0)), pickLang(b.lang)).run();
+  const lang = pickLang(b.lang);
+  sendEmail(env, { to: email, ...M("application_received", lang, { first: name.split(" ")[0], city: cityNameIn(city, lang) }) }).catch(() => {});
+  const owners = (await env.DB.prepare("SELECT email FROM admins WHERE role = 'all' AND email LIKE '%@%'").all()).results.map((r) => r.email);
+  if (owners.length) sendEmail(env, { to: owners, subject: `New therapist application · ${CITIES[city].name} · ${name}`, text: [`${name} applied to join Zen Recovery in ${CITIES[city].name}.`, ``, `Title:     ${clean(b.title, 80)}`, `Area:      ${clean(b.area, 80)}`, `Phone:     ${phone}`, `Email:     ${email}`, `Instagram: ${clean(b.instagram, 40)}`, ``, `Bio: ${clean(b.bio, 400)}`, ``, `Approve or decline under Team → Applications: ${env.SITE_URL}/admin`].join("\n") }).catch(() => {});
+  return json({ ok: true, id });
+}
+async function listApplications(env, url) {
+  const status = ["new", "approved", "declined"].includes(url.searchParams.get("status")) ? url.searchParams.get("status") : "new";
+  const r = await env.DB.prepare("SELECT id, name, email, phone, city, area, address, maps_url, title, bio, story, certs, instagram, languages, photo, lat, lng, radius_km, lang, status, note, therapist_id, created_at, decided_at FROM applications WHERE status = ? ORDER BY created_at DESC LIMIT 100").bind(status).all();
+  const counts = Object.fromEntries((await env.DB.prepare("SELECT status, COUNT(*) n FROM applications GROUP BY status").all()).results.map((x) => [x.status, x.n]));
+  return json({ rows: r.results, counts });
+}
+async function decideApplication(req, env, admin, id, verdict) {
+  const a = await env.DB.prepare("SELECT * FROM applications WHERE id = ?").bind(id).first();
+  if (!a) return json({ error: "Not found" }, 404);
+  if (a.status !== "new") return json({ error: "Already decided." }, 400);
+  const b = await body(req).catch(() => ({})), note = clean(b?.note, 300), lang = pickLang(a.lang), first = a.name.split(" ")[0];
+  if (verdict === "decline") {
+    await env.DB.prepare("UPDATE applications SET status = 'declined', note = ?, decided_at = ? WHERE id = ?").bind(note, now(), id).run();
+    sendEmail(env, { to: a.email, ...M("application_declined", lang, { first, city: cityNameIn(a.city, lang), note }) }).catch(() => {});
+    return json({ ok: true });
+  }
+  // approve: a sign-in (unless that email already has one), then the public profile linked to it, pinned and priced at the city price
+  let adminId = null, password = null;
+  const existing = await env.DB.prepare("SELECT id, role FROM admins WHERE email = ?").bind(a.email).first();
+  if (existing && existing.role !== "platform") adminId = existing.id;
+  else if (!existing) { password = appPassword(); const { hash, salt } = await hashPassword(password); adminId = randomId(); await env.DB.prepare("INSERT INTO admins (id, email, name, role, pass_hash, salt, level, notify) VALUES (?,?,?,?,?,?,?,1)").bind(adminId, a.email, a.name, a.city, hash, salt, "employee").run(); }
+  const maxSort = (await env.DB.prepare("SELECT MAX(sort) m FROM therapists").first()).m, tid = randomId();
+  await env.DB.prepare("INSERT INTO therapists (id, city, name, bio, photo, languages, active, sort, admin_id, area, address, maps_url, title, story, certs, instagram, lat, lng, radius_km) VALUES (?,?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?)")
+    .bind(tid, a.city, a.name, a.bio || "", a.photo || null, a.languages || "", (maxSort ?? -1) + 1, adminId, a.area || "", a.address || "", a.maps_url || "", a.title || "", a.story || "", a.certs || "", a.instagram || "", a.lat, a.lng, a.radius_km || 0).run();
+  let i18n = null; try { i18n = await translateProfile(env, { title: a.title, bio: a.bio, story: a.story, certs: a.certs, languages: a.languages, area: a.area }); } catch (e) { console.error("translate", e.message); }
+  if (i18n) await env.DB.prepare("UPDATE therapists SET i18n = ? WHERE id = ?").bind(JSON.stringify(i18n), tid).run();
+  await env.DB.prepare("UPDATE applications SET status = 'approved', note = ?, decided_at = ?, therapist_id = ? WHERE id = ?").bind(note, now(), tid, id).run();
+  const sent = await sendEmail(env, { to: a.email, ...M("application_approved", lang, { first, city: cityNameIn(a.city, lang), site: env.SITE_URL, signin: a.email, password: password || "(your existing password)" }) }).catch(() => false);
+  return json({ ok: true, therapist_id: tid, admin_id: adminId, sent: Boolean(sent), password: sent ? undefined : password });
 }
 /* ---------- a therapist's own prices (2026-09-13): owner or the city's partner set them; the therapist sees theirs ---------- */
 async function therapistPriceList(env, admin, id) {

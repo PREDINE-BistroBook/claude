@@ -30,7 +30,7 @@
 
 import { CITIES, SLOTS } from "./catalog.js";
 import { randomId, signPayload, verifyPayload, getCookie, setCookie, clearCookie, hashPassword, verifyPassword } from "./auth.js";
-import { therapistPrices, nameIn, hoursUntil, cancelTerms, stripeRefund, fillFromWaitlist, payProvider, fawryOn, fawryCheckout, fawryStatus, fawryNotificationValid, CITY_KEYS, USER_COOKIE, ADMIN_COOKIE, json, clean, normEmail, isDate, isTime, fmt, now, today, feeOn, body, isLive, parseIntake, healthFlags, settings, currentUser, currentAdmin, scope, sendEmail, sendSms, stripeCheckout, slotsFor, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, maybeRewardLoyalty, isPlatform, isOwner, seesAll, therapistOf, visibleWhere, canSeeBooking, isPartner, isEmployee, managesCity, pickLang, userLang } from "./lib.js";
+import { cityNameIn, therapistPrices, nameIn, hoursUntil, cancelTerms, stripeRefund, fillFromWaitlist, payProvider, fawryOn, fawryCheckout, fawryStatus, fawryNotificationValid, CITY_KEYS, USER_COOKIE, ADMIN_COOKIE, json, clean, normEmail, isDate, isTime, fmt, now, today, feeOn, body, isLive, parseIntake, healthFlags, settings, currentUser, currentAdmin, scope, sendEmail, sendSms, stripeCheckout, slotsFor, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, maybeRewardLoyalty, isPlatform, isOwner, seesAll, therapistOf, visibleWhere, canSeeBooking, isPartner, isEmployee, managesCity, pickLang, userLang } from "./lib.js";
 import { M, paidLineFor } from "./mail.js";
 import { featureRoute, adminFeatureRoute, giftPaid, packagePaid, authFlags } from "./features.js";
 import { runCron } from "./cron.js";
@@ -53,6 +53,7 @@ export default {
 async function route(req, env, url, ctx) {
   const p = url.pathname, m = req.method;
   if (p === "/api/status") return status(env);
+  if (p === "/api/reviews" && m === "GET") return publicReviews(env);
   if (p === "/api/fawry/return" && m === "GET") return fawryReturn(env, url);
   if (p === "/api/fawry/notify" && m === "POST") return fawryNotify(req, env);
   if (p === "/api/catalog" && m === "GET") return publicCatalog(env);
@@ -129,6 +130,9 @@ function cleanIntake(v) { // whitelist keys, cap sizes; stored as JSON text
   return JSON.stringify(o).slice(0, 4000);
 }
 const slotLabel = (s) => SLOTS[s] || s;
+const AREAS = ["neck", "shoulder_l", "shoulder_r", "upper_back", "mid_back", "lower_back", "arm_l", "arm_r", "hips", "thigh_l", "thigh_r", "calf_l", "calf_r", "face"];   // the body map's part keys (public/guide.js)
+const AREA_LABELS = {"neck": "Neck", "shoulder_l": "Left shoulder", "shoulder_r": "Right shoulder", "upper_back": "Upper back", "mid_back": "Mid back", "lower_back": "Lower back", "arm_l": "Left arm", "arm_r": "Right arm", "hips": "Hips / glutes", "thigh_l": "Left thigh", "thigh_r": "Right thigh", "calf_l": "Left calf", "calf_r": "Right calf", "face": "Face / jaw"};
+const AREA_LABEL = (a) => AREA_LABELS[a] || a.replace(/_/g, " ");
 
 async function status(env) {
   const st = await settings(env);
@@ -336,7 +340,8 @@ async function checkout(req, env) {
   }
   const flagged = Boolean(b.flagged) || Boolean(user && !user.approved && healthFlags(user.intake).length);
   const id = randomId();
-  const base = { lang: pickLang(b.lang, user?.lang), agreed_at: b.agreed ? now() : null, id, user_id: user?.id || null, email, name, phone, city: cityKey, service_id: svc.id, service_name: svc.name, date, slot, note, list_amount: list, amount, currency: city.currency, discount_kind, credit_id: credit?.id || null, platform_fee: feeOn(amount), therapist_id, package_id: pack?.id || null, gift_code: gift?.code || null, partner_code: partner?.code || null };
+  const areas = Array.isArray(b.areas) ? [...new Set(b.areas.map((a) => String(a).toLowerCase()).filter((a) => AREAS.includes(a)))].slice(0, 12) : [];
+  const base = { lang: pickLang(b.lang, user?.lang), agreed_at: b.agreed ? now() : null, areas: areas.length ? JSON.stringify(areas) : null, id, user_id: user?.id || null, email, name, phone, city: cityKey, service_id: svc.id, service_name: svc.name, date, slot, note, list_amount: list, amount, currency: city.currency, discount_kind, credit_id: credit?.id || null, platform_fee: feeOn(amount), therapist_id, package_id: pack?.id || null, gift_code: gift?.code || null, partner_code: partner?.code || null };
 
   if (flagged) { // no card: a therapist checks the health answers first
     await insertBooking(env, { ...base, status: "review" });
@@ -372,7 +377,7 @@ async function checkout(req, env) {
 }
 
 async function insertBooking(env, o) {
-  const cols = ["id", "user_id", "email", "name", "phone", "city", "service_id", "service_name", "date", "slot", "note", "list_amount", "amount", "currency", "discount_kind", "credit_id", "platform_fee", "status", "source", "stripe_session", "payment_intent", "paid_at", "done_at", "therapist_id", "package_id", "gift_code", "partner_code", "lang", "agreed_at", "provider"];
+  const cols = ["id", "user_id", "email", "name", "phone", "city", "service_id", "service_name", "date", "slot", "note", "list_amount", "amount", "currency", "discount_kind", "credit_id", "platform_fee", "status", "source", "stripe_session", "payment_intent", "paid_at", "done_at", "therapist_id", "package_id", "gift_code", "partner_code", "lang", "agreed_at", "provider", "areas"];
   await env.DB.prepare(`INSERT INTO bookings (${cols.join(",")}) VALUES (${cols.map(() => "?").join(",")})`).bind(...cols.map((c) => o[c] ?? (c === "source" ? "web" : null))).run();
 }
 // Use up whatever paid for the booking (reward credit, gift, package session). restore() undoes it on cancel.
@@ -385,6 +390,12 @@ async function restore(env, bk) {
   if (bk.credit_id) await env.DB.prepare("UPDATE credits SET status = 'available', booking_id = NULL, used_at = NULL WHERE id = ?").bind(bk.credit_id).run();
   if (bk.gift_code) await env.DB.prepare("UPDATE gifts SET status = 'paid', redeemed_at = NULL, booking_id = NULL WHERE code = ? AND booking_id = ?").bind(bk.gift_code, bk.id).run();
   if (bk.package_id) await env.DB.prepare("UPDATE client_packages SET remaining = remaining + 1 WHERE id = ?").bind(bk.package_id).run();
+}
+
+// ---------- reviews the owner shows on the home page (2026-09-13): real ratings + words left by clients after a done session ----------
+async function publicReviews(env) {
+  const r = await env.DB.prepare("SELECT b.name, b.city, b.service_name, b.rating, b.feedback, b.lang, b.date FROM bookings b WHERE b.featured = 1 AND b.rating >= 4 AND COALESCE(b.feedback, '') != '' ORDER BY b.done_at DESC, b.date DESC LIMIT 12").all();
+  return json({ reviews: r.results.map((x) => ({ first: (x.name || "").split(" ")[0], city: x.city, service: (x.service_name || "").split(" · ")[0], rating: x.rating, text: x.feedback, lang: x.lang || "en", when: x.date })) }, 200, { "cache-control": "public, max-age=300" });
 }
 
 // ---------- Fawry: the client comes back, and Fawry tells us server-to-server; both settle only after Get Payment Status says PAID ----------
@@ -473,15 +484,13 @@ async function afterPaid(env, bk) {
     sendEmail(env, {
       to: await notifyList(env, bk.city, bk.therapist_id),
       subject: `New booking · ${city.name} · ${bk.service_name} · ${bk.date} ${slotLabel(bk.slot)}`,
-      text: [`New booking through the website.`, ``, `City:     ${city.name}`, `Session:  ${bk.service_name}`, `Day:      ${bk.date}`, `Time:     ${slotLabel(bk.slot)}`, th ? `Therapist: ${th}` : null, ``,
+      text: [`New booking through the website.`, ``, bk.areas ? `Where it hurts: ${JSON.parse(bk.areas).map(AREA_LABEL).join(", ")}` : null, `City:     ${city.name}`, `Session:  ${bk.service_name}`, `Day:      ${bk.date}`, `Time:     ${slotLabel(bk.slot)}`, th ? `Therapist: ${th}` : null, ``,
         `Client:   ${bk.name}`, `WhatsApp: ${bk.phone}`, `Email:    ${bk.email}`, `Note:     ${bk.note || "—"}`, bk.partner_code ? `Partner:  ${bk.partner_code}` : null, ``, `Paid:     ${paidLine(bk)}`, ``,
         exact ? `The time is fixed. Mark it "Confirmed" in the admin once you've said hello on WhatsApp: ${env.SITE_URL}/admin` : `Confirm the exact hour with the client on WhatsApp, then mark it "Confirmed" in the admin: ${env.SITE_URL}/admin`].filter((l) => l !== null).join("\n"),
     }),
     sendEmail(env, { to: bk.email, ...M("booking_confirmed", lang, { name: bk.name, city: cityNameIn(bk.city, lang), service: nameIn(await serviceOf(env, bk.city, bk.service_id), lang, cityNameIn(bk.city, lang)) || bk.service_name, date: bk.date, slot: slotLabel(bk.slot), therapist: th, paid: paidLineFor(lang, bk, fmt), where: where ? where.replace(/^Where:\s*/, "") : "", exact, phone: bk.phone, site: env.SITE_URL }) }),
   ]);
 }
-const CITY_I18N = { cairo: { it: "Il Cairo", ar: "القاهرة" }, dahab: { it: "Dahab", ar: "دهب" }, florence: { it: "Firenze", ar: "فلورنسا" } };
-const cityNameIn = (k, lang) => CITY_I18N[k]?.[lang] || CITIES[k]?.name || k;
 async function afterReview(env, bk) {
   const city = CITIES[bk.city], lang = pickLang(bk.lang, await userLang(env, bk.user_id));
   await Promise.all([
@@ -565,7 +574,7 @@ async function adminBookings(env, admin, url) {
   const city = scope(admin, url.searchParams.get("city"));
   const w = cityWhere(city);
   const status = clean(url.searchParams.get("status"), 20), from = clean(url.searchParams.get("from"), 10), to = clean(url.searchParams.get("to"), 10), qs = clean(url.searchParams.get("q"), 60);
-  let sql = `SELECT b.id, b.user_id, b.name, b.email, b.phone, b.city, b.service_name, b.date, b.slot, b.amount, b.list_amount, b.currency, b.discount_kind, b.platform_fee, b.status, b.source, b.note, b.created_at, b.cancel_fee, b.cancelled_at, b.cancelled_by, b.refund_amount, b.refund_status, b.rating, b.feedback, b.therapist_note, b.therapist_id, b.gift_code, b.partner_code, b.package_id, t.name therapist, u.intake AS user_intake, u.notes AS user_notes, u.nearest_city AS user_nearest, u.lang AS user_lang, u.approved AS user_approved
+  let sql = `SELECT b.id, b.user_id, b.name, b.email, b.phone, b.city, b.service_name, b.date, b.slot, b.amount, b.list_amount, b.currency, b.discount_kind, b.platform_fee, b.status, b.source, b.note, b.created_at, b.cancel_fee, b.cancelled_at, b.cancelled_by, b.refund_amount, b.refund_status, b.areas, b.featured, b.rating, b.feedback, b.rating, b.feedback, b.therapist_note, b.therapist_id, b.gift_code, b.partner_code, b.package_id, t.name therapist, u.intake AS user_intake, u.notes AS user_notes, u.nearest_city AS user_nearest, u.lang AS user_lang, u.approved AS user_approved
     FROM bookings b LEFT JOIN users u ON u.id = b.user_id LEFT JOIN therapists t ON t.id = b.therapist_id WHERE b.status != 'pending'${w.sql.replace(" city = ?", " b.city = ?")}`;
   const args = [...w.args];
   const v = visibleWhere(admin, await therapistOf(env, admin), "b.therapist_id"); sql += v.sql; args.push(...v.args);
@@ -607,6 +616,7 @@ async function adminUpdateBooking(req, env, admin, id) {
   if (b.therapist_id !== undefined && !isOwner(admin)) { const want = clean(b.therapist_id, 40) || null;
     if (isPartner(admin)) { if (want && !(await env.DB.prepare("SELECT 1 FROM therapists WHERE id = ? AND city = ?").bind(want, bk.city).first())) return json({ error: "That therapist isn't in your city." }, 400); }
     else { const same = want === bk.therapist_id, accept = bk.therapist_id === null && mine && want === mine.id; if (!same && !accept) return json({ error: "Only the owner or your city's partner can assign a booking to someone else." }, 403); } }
+  if (b.featured !== undefined) { if (!isOwner(admin)) return json({ error: "Only the owner picks the reviews shown on the site." }, 403); await env.DB.prepare("UPDATE bookings SET featured = ? WHERE id = ?").bind(b.featured ? 1 : 0, id).run(); if (Object.keys(b).length === 1) return json({ ok: true }); }
   const status = ["paid", "confirmed", "done", "cancelled", "no_show"].includes(b.status) ? b.status : null;
   const slot = b.slot !== undefined ? clean(b.slot, 20) : bk.slot;
   const note = b.note !== undefined ? clean(b.note, 500) : bk.note;

@@ -48,7 +48,7 @@
   @media (max-width:640px){.charts{grid-template-columns:1fr} .settings-grid{grid-template-columns:1fr} .team-card{flex-wrap:wrap} .review-item .row{align-items:stretch} .subtabs .pill{flex:1;text-align:center}} .days label:has(input:checked){background:var(--ink);color:var(--ground);border-color:var(--ink)}
   .team-card{display:flex;gap:16px;align-items:center;padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--ground-3);cursor:pointer;transition:border-color .15s,transform .15s} .team-card:hover{border-color:var(--mark);transform:translateY(-1px)} .team-card .avatar{width:72px;height:72px;font-size:1.2rem;flex:none;box-shadow:0 6px 16px -8px rgba(0,0,0,.35)}
   .team-card .meta{flex:1;display:grid;gap:3px;font-size:.9rem;min-width:0} .team-card .meta b{font-weight:500;font-size:1rem;display:flex;gap:8px;align-items:center;flex-wrap:wrap} .team-card .meta .bio{color:var(--ink-soft)} .team-card .meta .tiny{color:var(--ink-mute)}
-  .team-card.off{opacity:.65} .team-card .actions{flex:none}
+  .team-card.off{opacity:.65} .team-card .actions{flex:none} .app-card{cursor:default} .app-card:hover{transform:none} .app-card .actions{display:grid;gap:6px} #apps-filter{padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--ground-3);font:inherit}
   .photo-pick{display:flex;gap:16px;align-items:center} .photo-pick .avatar.lg{cursor:pointer;position:relative;overflow:hidden} .photo-pick .avatar.lg::after{content:"Change";position:absolute;inset:auto 0 0 0;padding:4px 0;text-align:center;font:500 .66rem var(--body);background:rgba(0,0,0,.45);color:#fff;letter-spacing:.04em;text-transform:uppercase} .photo-pick input[type=file]{display:none}
   #dlg-ask .inner{gap:10px} #dlg-ask p{margin:0;color:var(--ink-soft);font-size:.95rem;white-space:pre-line}
   /* calendar: month grid per city */
@@ -279,6 +279,11 @@
       </details>
       <p class="tiny" style="margin:-6px 0 12px">Tap a person to edit their photo, name, bio, languages or order on the website.</p>
       <div class="grid cols-2" id="team-list" style="margin-bottom:18px"></div>
+      <section id="apps-box" hidden>
+        <div class="section-head"><h2>Applications <span class="count" id="apps-count" hidden></span></h2><select id="apps-filter" aria-label="Which applications"><option value="new">Waiting for you</option><option value="approved">Approved</option><option value="declined">Declined</option></select></div>
+        <p class="tiny" style="margin:-6px 0 12px">Therapists who applied through the "Join as a therapist" page. Approve and they get a sign-in and a card on the Team page in their city, at the city's prices, pinned where they said they work. Decline and they get a short email.</p>
+        <div class="grid cols-2" id="apps-list" style="margin-bottom:18px"></div>
+      </section>
     </div>
 
     <!-- offers: packs, partners, gifts -->
@@ -719,7 +724,8 @@ function openBooking(b) {
     ${b.flags?.length ? `<div class="help" style="border-color:var(--bad);background:color-mix(in srgb,var(--bad) 7%,var(--ground-3))"><b>Health: ${b.flags.map((f) => G.label("health", f)).join(", ")}.</b> Adapt the session or ask for a doctor's okay first. Details in the client's notes below.</div>` : ""}
     ${b.user_id ? `<p class="eyebrow">About the client</p><div class="intake-grid">${G.bodyMap(b.pain || [], false)}<div><div class="chips">${(b.goals || []).map((g) => `<span class="chip">${G.label("goals", g)}</span>`).join("")}${(b.health || []).filter((h) => h !== "none").map((h) => `<span class="chip">${G.label("health", h)}</span>`).join("")}${b.experience ? `<span class="chip">${G.label("experience", b.experience)}</span>` : ""}</div>${b.pain?.length ? `<p class="tiny" style="margin-top:8px">Focus: ${b.pain.map((p) => G.label("pain", p)).join(", ")}</p>` : `<p class="tiny" style="margin-top:8px">No focus areas given.</p>`}${b.user_notes ? `<p class="mini" style="margin-top:8px"><b>Client's notes:</b> ${esc(b.user_notes)}</p>` : ""}</div></div>` : `<p class="tiny">Booked without an account, so no questionnaire. Ask on WhatsApp about injuries, medication and pregnancy before the session.</p>`}
     ${(() => { const k = G.serviceKey(b.service_name); return b.status === "confirmed" || b.status === "paid" ? `<details class="help"><summary>What to remind them before a ${G.SERVICE_LABEL[k].toLowerCase()} session</summary>${G.list("before", k)}</details>` : ""; })()}
-    ${b.rating ? `<div class="help" style="background:var(--ground-3)"><b>Client's rating: ${"★".repeat(b.rating)}${"☆".repeat(5 - b.rating)}</b>${b.feedback ? `<span>“${esc(b.feedback)}”</span>` : ""}</div>` : ""}
+    ${(() => { let ar = []; try { ar = JSON.parse(b.areas || "[]"); } catch (_) {} return ar.length ? `<div class="help" style="background:var(--ground-3)"><b>Where it hurts (from the booking form)</b><div class="row" style="gap:12px;align-items:flex-start;margin-top:6px"><div style="width:110px;flex:none">${G.bodyMap(ar, false)}</div><div class="chips">${ar.map((x) => `<span class="chip">${esc(G.label("pain", x))}</span>`).join("")}</div></div></div>` : ""; })()}
+    ${b.rating ? `<div class="help" style="background:var(--ground-3)"><b>Client's rating: ${"★".repeat(b.rating)}${"☆".repeat(5 - b.rating)}</b>${b.feedback ? `<span>“${esc(b.feedback)}”</span>` : ""}${isOwner() && b.rating >= 4 && b.feedback ? `<label class="row" style="gap:8px;margin-top:8px;font-size:.9rem"><input type="checkbox" id="dr-featured" ${b.featured ? "checked" : ""}> Show on the home page ("What clients say")</label>` : ""}</div>` : ""}
     <div class="field"><label for="dr-tnote">Note to the client <span class="tiny">(they see this in their account: what you did, what to do at home)</span></label><textarea id="dr-tnote">${esc(b.therapist_note || "")}</textarea></div>
     <div class="field" style="margin-top:10px"><label for="dr-note">Team note <span class="tiny">(only the team sees this)</span></label><textarea id="dr-note">${esc(b.note || "")}</textarea></div>
     <div class="row" style="margin-top:10px"><button class="btn small" id="dr-save-note">Save notes</button><span class="ok" id="dr-ok" hidden>Saved</span></div>
@@ -731,6 +737,7 @@ function openBooking(b) {
   { const box = $("#dr-cancel-box"); if (box) { box.hidden = !["pending", "paid", "confirmed", "review"].includes(b.status);
     $("#dr-cancel").onclick = async () => { const fee = await ask({ title: `Cancel ${b.name}'s session?`, text: "The rules decide the fee (free outside the window, otherwise the late %). Type a different fee % to override, or leave it empty.", ok: "Cancel the session", danger: true, field: { label: "Fee % (optional)" } }); if (fee === null) return; const body = { status: "cancelled" }; if (String(fee).trim() !== "" && fee !== true) body.fee_pct = Number(fee); await ZenAPI("PATCH", "/api/admin/bookings/" + b.id, body); $("#drawer").close(); loadBookings(); };
     $("#dr-noshow").onclick = async () => { if (!(await ask({ title: `Mark ${b.name} as no-show?`, text: "The no-show fee from the rules is kept; nothing is refunded.", ok: "No-show", danger: true }))) return; await ZenAPI("PATCH", "/api/admin/bookings/" + b.id, { status: "no_show" }); $("#drawer").close(); loadBookings(); }; } }
+  { const fx = $("#dr-featured"); if (fx) fx.addEventListener("change", async () => { try { await ZenAPI("PATCH", "/api/admin/bookings/" + b.id, { featured: fx.checked }); } catch (ex) { fx.checked = !fx.checked; await ask({ title: "Couldn't change it", text: ex.message, ok: "OK" }); } }); }
   $("#dr-save-slot").onclick = async () => { await ZenAPI("PATCH", "/api/admin/bookings/" + b.id, { slot: $("#dr-slot").value, therapist_id: $("#dr-th")?.value ?? undefined }); $("#dr-ok").hidden = false; loadBookings(); };
   $("#dr-save-note").onclick = async () => { await ZenAPI("PATCH", "/api/admin/bookings/" + b.id, { note: $("#dr-note").value, therapist_note: $("#dr-tnote").value }); $("#dr-ok").hidden = false; };
   d.querySelectorAll("button[data-act]").forEach((btn) => (btn.onclick = async () => { await setStatus(b.id, btn.dataset.act); closeDrawer(); }));
@@ -937,11 +944,37 @@ async function loadTeamTab() {
   await loadTeamList();
   if (isOwner()) { try { ADMINS = (await ZenAPI("GET", "/api/admin/admins")).admins; } catch { ADMINS = []; } }
   $("#add-therapist").hidden = !managesCity();
+  $("#apps-box").hidden = !isOwner(); if (isOwner()) loadApplications();
   const sorted = [...TEAM].sort((a, b) => a.city.localeCompare(b.city) || (a.sort || 0) - (b.sort || 0) || a.name.localeCompare(b.name));
   $("#team-list").innerHTML = sorted.length ? sorted.map((t) => `<div class="team-card ${t.active ? "" : "off"}" ${canEditTh(t) ? `data-edit="${t.id}" role="button" tabindex="0"` : `style="cursor:default"`}><span class="avatar">${t.photo ? `<img src="${t.photo}" alt="">` : initials(t.name)}</span><div class="meta"><b>${esc(t.name)}<span class="badge city-${t.city}">${CITY_NAME[t.city]}</span>${t.active ? "" : `<span class="status cancelled">paused</span>`}</b><span class="bio">${t.title ? `<b style="display:inline;font-size:.86rem">${esc(t.title)}</b> · ` : ""}${esc(t.bio || "")}</span><span class="tiny">${esc(t.languages || "")}${t.area ? " · " + esc(t.area) : " · no neighbourhood yet"}${t.photo ? "" : " · no photo yet"}${t.lat !== null && t.lat !== undefined && t.lng !== null && t.lng !== undefined ? "" : " · not pinned on the map"}</span><span class="tiny">${t.admin_id ? (isOwner() ? `signs in as <b>${esc(t.admin_email)}</b>` : "has a sign-in account") : "no sign-in account yet"}${t.id === T?.id ? " · this is you" : ""}</span></div><div class="actions">${canEditTh(t) ? `<button class="btn ghost" data-edit="${t.id}">Edit</button>` : ""}${canEditTh(t) && managesCity() ? `<button class="btn ghost" data-toggle="${t.id}" data-active="${t.active}">${t.active ? "Pause" : "Show"}</button>` : ""}</div></div>`).join("") : `<div class="empty">No therapists yet. Tap "Add a therapist" so clients can see who they'll meet.</div>`;
   $$("#team-list [data-toggle]").forEach((b) => (b.onclick = async (e) => { e.stopPropagation(); await ZenAPI("PATCH", "/api/admin/therapists/" + b.dataset.toggle, { active: b.dataset.active !== "1" }); loadTeamTab(); }));
   $$("#team-list [data-edit]").forEach((el) => { const open = (e) => { e.stopPropagation(); openTherapist(TEAM.find((x) => x.id === el.dataset.edit)); }; el.onclick = open; if (el.tagName === "DIV") el.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(e); } }; });
 }
+/* applications from the public "Join as a therapist" page (2026-09-13): owner only; approve = sign-in + team card, decline = email */
+let APPS = [];
+async function loadApplications() {
+  const status = $("#apps-filter").value || "new";
+  let counts = {}; try { const r = await ZenAPI("GET", "/api/admin/applications?status=" + status); APPS = r.rows || []; counts = r.counts || {}; } catch { APPS = []; }
+  const n = counts.new || 0; $("#apps-count").textContent = n; $("#apps-count").hidden = !n;
+  const line = (a) => [a.title, a.area, a.languages].filter(Boolean).map(esc).join(" · ");
+  $("#apps-list").innerHTML = APPS.length ? APPS.map((a) => `<div class="team-card app-card" data-app="${a.id}"><span class="avatar">${a.photo ? `<img src="${a.photo}" alt="">` : initials(a.name)}</span><div class="meta"><b>${esc(a.name)}<span class="badge city-${a.city}">${CITY_NAME[a.city] || esc(a.city)}</span>${a.status !== "new" ? `<span class="status ${a.status === "approved" ? "paid" : "cancelled"}">${a.status}</span>` : ""}</b><span class="bio">${esc(a.bio || "")}</span><span class="tiny">${line(a) || "no title yet"}</span><span class="tiny">${esc(a.phone || "")} · ${esc(a.email)}${a.instagram ? ` · <a href="https://instagram.com/${encodeURIComponent(a.instagram)}" target="_blank" rel="noopener">@${esc(a.instagram)}</a>` : ""}${a.lat !== null && a.lat !== undefined ? "" : " · not pinned on the map"}${a.radius_km ? ` · travels ${a.radius_km} km` : ""}</span>${a.story ? `<details class="tiny" style="margin-top:4px"><summary>Story &amp; certificates</summary><div style="white-space:pre-wrap;margin-top:4px">${esc(a.story)}${a.certs ? "\n\nCertificates:\n" + esc(a.certs) : ""}</div></details>` : a.certs ? `<details class="tiny" style="margin-top:4px"><summary>Certificates</summary><div style="white-space:pre-wrap;margin-top:4px">${esc(a.certs)}</div></details>` : ""}<span class="tiny">applied ${esc((a.created_at || "").slice(0, 10))}${a.decided_at ? ` · decided ${esc(a.decided_at.slice(0, 10))}` : ""}${a.note ? ` · note: ${esc(a.note)}` : ""}</span></div><div class="actions">${a.status === "new" ? `<button class="btn small" data-approve="${a.id}">Approve</button><button class="btn small ghost" data-decline="${a.id}">Decline</button>` : a.therapist_id ? `<button class="btn ghost" data-edit-th="${a.therapist_id}">Open profile</button>` : ""}</div></div>`).join("") : `<div class="empty">${status === "new" ? "No one is waiting. Applications from the “Join as a therapist” page show up here." : "Nothing here yet."}</div>`;
+  $$("#apps-list [data-approve]").forEach((b) => (b.onclick = () => decideApp(b.dataset.approve, "approve")));
+  $$("#apps-list [data-decline]").forEach((b) => (b.onclick = () => decideApp(b.dataset.decline, "decline")));
+  $$("#apps-list [data-edit-th]").forEach((b) => (b.onclick = () => { const t = TEAM.find((x) => x.id === b.dataset.editTh); if (t) openTherapist(t); }));
+}
+async function decideApp(id, verdict) {
+  const a = APPS.find((x) => x.id === id); if (!a) return;
+  const note = await ask(verdict === "approve"
+    ? { title: `Approve ${a.name}?`, text: `They get a sign-in (${a.email}) that sees only their own bookings, a card on the Team page for ${CITY_NAME[a.city] || a.city} at the city's prices, and an email with the details. You can edit or pause the profile afterwards.`, ok: "Approve", field: { label: "A note for them (optional)", placeholder: "Welcome aboard — first sessions start next week." } }
+    : { title: `Decline ${a.name}?`, text: "They get a short, kind email. Add a reason if you want them to see one.", ok: "Decline", danger: true, field: { label: "Reason (optional, they read it)", placeholder: "We're not adding therapists in Dahab right now." } });
+  if (note === null) return;
+  try {
+    const r = await ZenAPI("POST", `/api/admin/applications/${id}/${verdict}`, { note });
+    if (verdict === "approve") { if (r.password) await showCredentials({ id: r.admin_id, name: a.name, signin: a.email, password: r.password, email: a.email }); else await ask({ title: "Approved", text: r.sent ? `${a.name} is on the Team page for ${CITY_NAME[a.city] || a.city}; the sign-in details went to ${a.email}.` : `${a.name} is on the Team page. They sign in with the password they already had.`, ok: "OK" }); }
+  } catch (ex) { await ask({ title: "Couldn't do that", text: ex.message, ok: "OK" }); }
+  loadTeamTab();
+}
+$("#apps-filter").addEventListener("change", loadApplications);
 let thPhoto;
 function renderThPreview(t) { const src = thPhoto === undefined ? t?.photo : thPhoto; $("#th-preview").innerHTML = src ? `<img src="${src}" alt="" style="width:100%;height:100%;object-fit:cover">` : initials($("#th-name").value || t?.name || "?"); }
 function openTherapist(t) {

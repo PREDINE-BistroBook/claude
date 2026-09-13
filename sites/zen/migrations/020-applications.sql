@@ -1,0 +1,3 @@
+-- 2026-09-13: therapists apply to join; the owner approves (creates the profile + sign-in) or declines
+CREATE TABLE IF NOT EXISTS applications (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL, phone TEXT, city TEXT NOT NULL, area TEXT, address TEXT, maps_url TEXT, title TEXT, bio TEXT, story TEXT, certs TEXT, instagram TEXT, languages TEXT, photo TEXT, lat REAL, lng REAL, radius_km REAL DEFAULT 0, lang TEXT, status TEXT DEFAULT 'new', note TEXT, therapist_id TEXT, created_at TEXT DEFAULT (datetime('now')), decided_at TEXT);
+CREATE INDEX IF NOT EXISTS applications_status ON applications(status, created_at);

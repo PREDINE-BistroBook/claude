@@ -74,7 +74,9 @@ CREATE TABLE IF NOT EXISTS bookings (
   refund_amount  INTEGER DEFAULT 0,
   refund_status  TEXT,                     -- done | manual | none
   agreed_at      TEXT,                     -- when the client ticked the booking rules
-  provider       TEXT DEFAULT 'stripe'     -- stripe | fawry (2026-09-13): who took the money; stripe_session holds the provider's reference either way
+  provider       TEXT DEFAULT 'stripe',    -- stripe | fawry (2026-09-13): who took the money; stripe_session holds the provider's reference either way
+  areas          TEXT,                     -- JSON list of body areas the client tapped (2026-09-13)
+  featured       INTEGER DEFAULT 0         -- the owner shows this rating + words on the home page
 );
 CREATE INDEX IF NOT EXISTS bookings_city_date ON bookings(city, date);
 CREATE INDEX IF NOT EXISTS bookings_user ON bookings(user_id);
@@ -165,3 +167,5 @@ INSERT OR IGNORE INTO services (id, city, name, minutes, amount, currency, descr
 INSERT OR IGNORE INTO services (id, city, name, minutes, amount, currency, description, sort) VALUES ('flo-slide', 'florence', 'Sliding cupping', 60, 7000, 'eur', 'Oiled skin, gliding cups. Massage with the lift built in.', 2);
 INSERT OR IGNORE INTO services (id, city, name, minutes, amount, currency, description, sort) VALUES ('flo-fire', 'florence', 'Fire cupping', 45, 6500, 'eur', 'Glass cups, a flash of flame, deeper warmth.', 3);
 INSERT OR IGNORE INTO services (id, city, name, minutes, amount, currency, description, sort) VALUES ('flo-face', 'florence', 'Facial cupping', 30, 4500, 'eur', 'Light, gliding, no marks.', 4);
+CREATE TABLE IF NOT EXISTS applications (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL, phone TEXT, city TEXT NOT NULL, area TEXT, address TEXT, maps_url TEXT, title TEXT, bio TEXT, story TEXT, certs TEXT, instagram TEXT, languages TEXT, photo TEXT, lat REAL, lng REAL, radius_km REAL DEFAULT 0, lang TEXT, status TEXT DEFAULT 'new', note TEXT, therapist_id TEXT, created_at TEXT DEFAULT (datetime('now')), decided_at TEXT);
+CREATE INDEX IF NOT EXISTS applications_status ON applications(status, created_at);

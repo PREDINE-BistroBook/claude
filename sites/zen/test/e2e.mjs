@@ -1,5 +1,4 @@
 /* Zen Recovery — pages talking to the real API and to each other (needs test/e2e-server.mjs running). See README "Tests". */
-/* End-to-end against the REAL worker (e2e-server.mjs on 8766): pages talking to the API and to each other. */
 import { chromium } from "playwright";   // npm i -D playwright (or point PLAYWRIGHT at a global install)
 import fs from "node:fs";
 const G = process.env.GSAP_DIST || "node_modules/gsap/dist/", H = process.env.E2E_HOST || "http://localhost:8766";   // GSAP served locally so the run never depends on the CDN
@@ -37,6 +36,8 @@ const cards = await page.$$eval("#place-therapists .therapist", (els) => els.map
 await page.click("#services label, #services .svc"); const d = new Date(Date.now() + 3 * 864e5).toISOString().slice(0, 10); await page.fill("#date", d); await page.waitForTimeout(700);
 ok("booking: slot mode resolved from /api/slots (windows without availability)", await page.isVisible("#slots") || await page.isVisible("#timeslots"));
 await page.fill("#name", "Sara Tester"); await page.fill("#email", "sara@x.com"); await page.fill("#phone", "+20 111 222 3333");
+ok("booking: body map rendered", (await page.$$("#areas-map .part")).length >= 6, (await page.$$("#areas-map .part")).length);
+await page.click("#areas-map .part >> nth=1"); await page.waitForTimeout(200); ok("booking: tapping the body adds a chip and marks the part", (await page.$$("#areas-chips .chip")).length === 1 && (await page.$$eval("#areas-map .part.on", (e) => e.length)) === 1);
 const sum = await page.textContent("#summary"); ok("booking: summary filled (service + price + date)", /EGP|€/.test(sum) && sum.includes(d.slice(8)) || sum.length > 20, sum.slice(0, 120));
 await page.click("#pay"); await page.waitForTimeout(500);
 ok("booking: rules box shown with the owner's numbers", (await page.isVisible("#rules-box")) && (await page.$eval("#rules-box [data-rule=cancel_hours]", (e) => e.textContent)) === "24");
@@ -97,6 +98,11 @@ await go("booking.html?city=cairo"); ok("booking therapist list follows the admi
 const hide = await api("/api/admin/therapists/" + add.body.id, { method: "PATCH", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ active: false }) });
 await go("team.html"); ok("paused therapist disappears from the team page", !(await page.textContent("#team-list")).includes("Omar"), hide);
 
+// 7b. what clients say: hidden while nothing is picked; the owner features a real rating → the strip shows it
+await go("index.html"); ok("home: reviews strip hidden while empty", await page.evaluate(() => document.querySelector("#reviews").hidden));
+{ const ok2 = await page.evaluate(async () => { const r = await fetch("/api/e2e/feature-review", { method: "POST" }); return r.ok; }); ok("e2e: seeded a featured review", ok2); }
+await go("index.html"); ok("home: reviews strip shows the owner-picked rating", !(await page.evaluate(() => document.querySelector("#reviews").hidden)) && (await page.textContent("#reviews-row")).includes("Best sleep"));
+
 // 8. near you: everyone without a position; typed area filters; a shared position sorts by distance and booking/team show km
 await go("find.html"); ok("find: everyone listed without a position", (await page.$$("#find-list .find-card")).length === 6 && (await page.textContent("#find-status")).includes("Showing everyone"));
 await page.fill("#find-q", "dahab"); await page.waitForTimeout(700); const fq = await page.$$eval("#find-list .find-card h2", (h) => h.map((e) => e.textContent.trim())); ok("find: typed area filters (Dahab → Shaarawy)", fq.length === 1 && fq[0] === "Shaarawy", fq);
@@ -111,6 +117,14 @@ await go("booking.html?city=cairo"); const bo = await page.$$eval("#place-therap
 ok("booking: therapists sorted by distance from the saved position, km shown", bo[0].startsWith("Adham") && /km from you/.test(bo[0]), bo);
 await go("team.html"); ok("team: distance badge from the saved position", (await page.$$eval(".tm-km", (e) => e.length)) >= 5);
 await ctx.clearPermissions();
+
+// 8b. join as a therapist: the public form → thank-you; the owner sees it under Team → Applications
+await go("join.html"); ok("join: page renders with the form", await page.isVisible("#join-form"));
+await page.fill("#j-name", "Nour Selim"); await page.fill("#j-email", "nour.e2e@x.com"); await page.fill("#j-phone", "+20 100 000 0000"); await page.selectOption("#j-city", "cairo"); await page.fill("#j-title", "Sports massage therapist"); await page.fill("#j-area", "Maadi"); await page.fill("#j-bio", "Sports massage and cupping for runners.");
+await page.click("#j-send"); await page.waitForTimeout(500); ok("join: refused until the terms are accepted", await page.isVisible("#j-err") && await page.isVisible("#join-form"), await page.textContent("#j-err"));
+await page.check("#j-agree"); await page.click("#j-send"); await page.waitForTimeout(1200); ok("join: thank-you shown, form gone", await page.isVisible("#join-done") && !(await page.isVisible("#join-form")));
+{ const apps = await api("/api/admin/applications?status=new", { headers: { cookie } }); ok("join: the owner's list has the application with its fields", apps.status === 200 && apps.body.rows.some((r) => r.email === "nour.e2e@x.com" && r.city === "cairo" && r.area === "Maadi") && apps.body.counts.new >= 1, apps.body);
+  const dup = await api("/api/apply", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "Nour Selim", email: "nour.e2e@x.com", phone: "+20", city: "cairo", agree: true }) }); ok("join: a second open application from the same email is refused", dup.status === 409, dup); }
 
 // 9. success page + no JS errors anywhere
 await go("success.html?free=1"); ok("success page renders", (await page.textContent("body")).length > 200);

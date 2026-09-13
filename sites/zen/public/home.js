@@ -47,3 +47,13 @@
   tl.to({}, { duration: .4 }, 5.4);
 })();
 
+/* ---------- what clients say: real, owner-picked ratings ---------- */
+(async function reviews() {
+  const sec = document.getElementById("reviews"), row = document.getElementById("reviews-row"); if (!sec) return;
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const I = window.ZenI18n, t = I ? I.t : (s) => s, CITY = { cairo: "Cairo", dahab: "Dahab", florence: "Florence" };
+  let list = []; try { const r = await fetch("/api/reviews"); if ((r.headers.get("content-type") || "").includes("json")) list = (await r.json()).reviews || []; } catch (_) {}
+  if (!list.length) return;
+  row.innerHTML = list.map((v) => `<figure class="review" role="listitem" dir="auto"><div class="stars" aria-label="${v.rating} / 5">${"★".repeat(v.rating)}<span>${"☆".repeat(5 - v.rating)}</span></div><blockquote>${esc(v.text)}</blockquote><figcaption>${esc(v.first)} · ${t(CITY[v.city] || v.city)} · ${esc(t(v.service))}</figcaption></figure>`).join("");
+  sec.hidden = false; if (window.Motion) window.Motion.scan();
+})();

@@ -41,13 +41,28 @@ await page.click("#add-cancel"); await page.waitForTimeout(300);
 
 // team: add dialog has the pin controls; existing card opens prefilled with its pin; cancel
 await tab("team");
-const cards = await page.$$("#team-list .team-card"); ok("team: 6 cards", cards.length === 6, cards.length);
+const cards = await page.$$("#team-list .team-card"); ok("team: the seeded cards", cards.length >= 6, cards.length);
 await page.click("#add-therapist"); await page.waitForTimeout(400); ok("team: add dialog with pin controls + radius", await openDlg("#dlg-th") && await page.isVisible("#th-locate") && await page.isVisible("#th-lat") && await page.isVisible("#th-radius"));
 await page.click("#th-cancel"); await page.waitForTimeout(300);
 await page.locator("#team-list .team-card", { hasText: "Adham" }).click(); await page.waitForTimeout(400);
 ok("team: Adham's dialog prefilled with his pin (New Cairo)", (await page.inputValue("#th-name")) === "Adham" && (await page.inputValue("#th-lat")).startsWith("30.01") && (await page.textContent("#th-pin-status")).includes("Pinned"), [await page.inputValue("#th-lat"), await page.textContent("#th-pin-status")]);
 await page.fill("#th-radius", "12"); await page.click("#th-save"); await page.waitForTimeout(900); ok("team: radius saved, dialog closed", !(await openDlg("#dlg-th")));
 const t = await (await fetch(H + "/api/team?city=cairo")).json(); ok("team: API carries the saved radius", t.therapists.find((x) => x.name === "Adham").radius_km === 12, t.therapists.find((x) => x.name === "Adham"));
+
+// applications (owner): a form submission shows up under Team → Applications; approve → credentials dialog → a new team card + sign-in
+await fetch(H + "/api/apply", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "Nour Selim", email: "nour.adm@x.com", phone: "+20 100 000 0000", city: "cairo", title: "Sports massage therapist", area: "Maadi", bio: "Sports massage and cupping.", languages: "Arabic, English", lat: 29.9602, lng: 31.2569, radius_km: 8, agree: true }) });
+await fetch(H + "/api/apply", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "Omar Declined", email: "omar.adm@x.com", phone: "+20 1", city: "dahab", agree: true }) });
+await tab("team"); ok("apps: the owner sees the Applications box with 2 waiting", await page.isVisible("#apps-box") && (await page.textContent("#apps-count")).trim() === "2" && (await page.$$("#apps-list .app-card")).length === 2, await page.textContent("#apps-count"));
+await page.locator("#apps-list .app-card", { hasText: "Omar" }).locator("[data-decline]").click(); await page.waitForTimeout(300); ok("apps: decline asks first", await openDlg("#dlg-ask") && (await page.textContent("#ask-title")).includes("Decline Omar"));
+await page.fill("#ask-input", "Not adding in Dahab right now."); await page.click("#ask-yes"); await page.waitForTimeout(900); ok("apps: declined one gone from the waiting list", (await page.$$("#apps-list .app-card")).length === 1 && (await page.textContent("#apps-count")).trim() === "1");
+await page.locator("#apps-list .app-card", { hasText: "Nour" }).locator("[data-approve]").click(); await page.waitForTimeout(300); ok("apps: approve asks first", await openDlg("#dlg-ask") && (await page.textContent("#ask-title")).includes("Approve Nour"));
+await page.click("#ask-yes"); await page.waitForTimeout(1500); ok("apps: credentials dialog with the sign-in + a password (no mail here)", await openDlg("#dlg-ask") && (await page.textContent("#ask-title")).includes("Sign-in for Nour") && /nour\.adm@x\.com/.test(await page.textContent("#ask-text")), await page.textContent("#ask-title"));
+const nourPw = (await page.textContent("#ask-text")).trim().split("\n").pop().trim(); await page.click("#ask-yes"); await page.waitForTimeout(900);
+ok("apps: Nour is now a team card in Cairo with a sign-in", (await page.locator("#team-list .team-card", { hasText: "Nour Selim" }).count()) === 1 && (await page.locator("#team-list .team-card", { hasText: "Nour Selim" }).textContent()).includes("nour.adm@x.com") && (await page.$$("#apps-list .app-card")).length === 0);
+{ const t2 = await (await fetch(H + "/api/team?city=cairo")).json(); const n = t2.therapists.find((x) => x.name === "Nour Selim"); ok("apps: public team API has her, pinned in Maadi, at the end of the order", n && n.area === "Maadi" && n.radius_km === 8 && n.sort === Math.max(...t2.therapists.map((x) => x.sort)), n);
+  const li = await fetch(H + "/api/admin/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: "nour.adm@x.com", password: nourPw }) }); ok("apps: she can sign in with the password shown", li.status === 200, [li.status, nourPw]); }
+await page.selectOption("#apps-filter", "declined"); await page.waitForTimeout(600); ok("apps: declined filter shows Omar with the note", (await page.textContent("#apps-list")).includes("Omar") && (await page.textContent("#apps-list")).includes("Not adding in Dahab"));
+await page.selectOption("#apps-filter", "new"); await page.waitForTimeout(400);
 
 // services: add dialog opens, cancel; settings: profile, admins table with role + level selects
 await tab("services"); await page.click("#add-service"); await page.waitForTimeout(400); ok("services: add dialog", await openDlg("#dlg-svc")); await page.click("#sv-cancel"); await page.waitForTimeout(300);
@@ -66,5 +81,6 @@ await page.fill("#a-email", "hesham@x.com"); await page.fill("#a-pass", "Hesham-
 ok("employee: signs in with the password the owner typed", await page.isVisible(".tabs") && !(await page.isVisible("#login-form")), await page.textContent("#login-err").catch(() => ""));
 await tab("calendar"); ok("employee: own calendar badge, no therapist pills", (await page.textContent("#cal-th")).includes("Your calendar") && (await page.$$("#cal-th [data-calth]")).length === 0, await page.textContent("#cal-th"));
 await tab("team"); const editable = await page.$$eval("#team-list [data-edit]", (els) => [...new Set(els.map((e) => e.dataset.edit))]); ok("employee: can open only their own profile", editable.length === 1, editable);
+ok("employee: no Applications box", !(await page.isVisible("#apps-box")));
 ok("no JS errors across the admin sweep", errs.length === 0, errs); ok("no native pop-ups", native.length === 0, native);
 await b.close();
