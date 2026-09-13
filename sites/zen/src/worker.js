@@ -92,7 +92,7 @@ async function route(req, env, url, ctx) {
     if (p === "/api/admin/settings" && m === "PUT") return adminSaveSettings(req, env, admin);
     if (p === "/api/admin/admins" && m === "GET") return adminList(env, admin);
     if (p === "/api/admin/admins" && m === "POST") return adminCreate(req, env, admin);
-    const inv = p.match(/^\/api\/admin\/admins\/([a-z0-9]+)\/invite$/); if (inv && m === "POST") return adminInvite(env, admin, inv[1]);
+    const inv = p.match(/^\/api\/admin\/admins\/([a-z0-9]+)\/invite$/); if (inv && m === "POST") return adminInvite(req, env, admin, inv[1]);
     mm = p.match(/^\/api\/admin\/admins\/([a-z0-9]+)$/);
     if (mm && m === "DELETE") return adminDelete(env, admin, mm[1]);
     if (mm && m === "PATCH") return adminEdit(req, env, admin, mm[1]);
@@ -708,16 +708,19 @@ const WORDS = ["calm", "cup", "river", "sand", "palm", "wave", "stone", "reef", 
 function tempPassword() { const a = new Uint32Array(4); crypto.getRandomValues(a); return `${WORDS[a[0] % WORDS.length]}-${WORDS[a[1] % WORDS.length]}-${WORDS[a[2] % WORDS.length]}-${10 + (a[3] % 90)}`; }
 // Owner: give an account a fresh temporary password and deliver it. With a real email the password goes to the person by email and is
 // never shown; for a username-only account it comes back once so the owner can pass it on in person.
-async function adminInvite(env, admin, id) {
+async function adminInvite(req, env, admin, id) {
   if (!isOwner(admin)) return json({ error: "Only the owner can send sign-ins." }, 403);
   const a = await env.DB.prepare("SELECT * FROM admins WHERE id = ?").bind(id).first();
   if (!a || a.role === "platform") return json({ error: "Not found" }, 404);
-  const password = tempPassword(), { hash, salt } = await hashPassword(password);
-  await env.DB.prepare("UPDATE admins SET pass_hash = ?, salt = ? WHERE id = ?").bind(hash, salt, id).run();
+  // the owner just typed a password and may already have told the person: if it is sent along and matches, email that one and keep it; otherwise a fresh temporary one replaces the current
+  const b = await body(req).catch(() => ({}));
+  const keep = b && typeof b.password === "string" && b.password.length >= 10 && (await verifyPassword(b.password, a.pass_hash, a.salt));
+  const password = keep ? b.password : tempPassword();
+  if (!keep) { const { hash, salt } = await hashPassword(password); await env.DB.prepare("UPDATE admins SET pass_hash = ?, salt = ? WHERE id = ?").bind(hash, salt, id).run(); }
   const signin = a.username && a.email.includes("@") ? `${a.email} (or the username "${a.username}")` : a.email;
   let sent = false;
   if (a.email.includes("@")) sent = await sendEmail(env, { to: a.email, subject: "Your Zen Recovery admin sign-in", text: [`Hi ${a.name},`, ``, `Here is your sign-in for the Zen Recovery admin:`, ``, `Where:     ${env.SITE_URL}/admin`, `Sign in:   ${signin}`, `Password:  ${password}`, ``, `This password is temporary. After signing in, change it under Settings → Your password.`, ``, `Zen Recovery`].join("\n") });
-  return json({ ok: true, sent, signin, password: sent ? undefined : password });
+  return json({ ok: true, sent, signin, kept: Boolean(keep), password: sent ? undefined : password });
 }
 async function adminPassword(req, env, admin) {
   const b = await body(req);

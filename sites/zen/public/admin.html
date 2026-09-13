@@ -502,7 +502,7 @@
     <p id="ask-text"></p>
     <div class="field" id="ask-field" hidden><label for="ask-input" id="ask-label"></label><input id="ask-input" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false"><span class="tiny" id="ask-hint"></span></div>
     <p class="err" id="ask-err" hidden></p>
-    <div class="row" style="justify-content:flex-end"><button class="btn small ghost" type="button" id="ask-no">Cancel</button><button class="btn small" type="submit" id="ask-yes">OK</button></div>
+    <div class="row" style="justify-content:flex-end"><button class="btn small ghost" type="button" id="ask-no">Cancel</button><button class="btn small ghost" type="button" id="ask-alt" hidden>Other</button><button class="btn small" type="submit" id="ask-yes">OK</button></div>
   </form>
 </dialog>
 
@@ -760,13 +760,14 @@ function suggestPassword() { const a = new Uint32Array(4); crypto.getRandomValue
 // After a sign-in is created or reset: show exactly what to tell the person, or send it to their email.
 async function showCredentials({ id, name, signin, password, email }) {
   const canMail = email && email.includes("@");
-  const choice = await ask({ title: `Sign-in for ${name}`, text: `Sign in at ${location.origin}/admin as "${signin}" with the password below. Write it down now: it isn't shown again. They should change it under Settings after the first sign-in.\n\n${password}`, ok: canMail ? "Email it to them instead" : "Got it" });
-  if (choice && canMail) { try { const r = await ZenAPI("POST", "/api/admin/admins/" + id + "/invite"); if (r.sent) await ask({ title: "Sent", text: `A new temporary password went to ${email}. The one shown before no longer works.`, ok: "OK" }); else await ask({ title: "Couldn't send the email", text: `Tell them this one in person: ${r.password}`, ok: "OK" }); } catch (ex) { await ask({ title: "Couldn't send the email", text: ex.message, ok: "OK" }); } }
+  const choice = await ask({ title: `Sign-in for ${name}`, text: `Sign in at ${location.origin}/admin as "${signin}" with the password below. Write it down now: it isn't shown again. They should change it under Settings after the first sign-in.\n\n${password}`, ok: "Got it", alt: canMail ? "Also email it to them" : null, cancel: "Close" });
+  if (choice === "alt" && canMail) { try { const r = await ZenAPI("POST", "/api/admin/admins/" + id + "/invite", { password }); if (r.sent) await ask({ title: "Sent", text: `The sign-in went to ${email}. The password stays the one shown before.`, ok: "OK" }); else await ask({ title: "Couldn't send the email", text: `Tell them this one in person: ${r.password || password}`, ok: "OK" }); } catch (ex) { await ask({ title: "Couldn't send the email", text: ex.message, ok: "OK" }); } }
 }
 // In-page confirm / single-field prompt. Resolves with true (or the typed value) on OK, null on cancel.
-function ask({ title, text = "", ok = "OK", danger = false, field = null }) {
+function ask({ title, text = "", ok = "OK", danger = false, field = null, alt = null, cancel = "Cancel" }) {   // alt: an optional third button, resolves with "alt"
   return new Promise((resolve) => {
     const d = $("#dlg-ask"); $("#ask-title").textContent = title; $("#ask-text").textContent = text; $("#ask-text").hidden = !text; $("#ask-err").hidden = true;
+    $("#ask-no").textContent = cancel; const altBtn = $("#ask-alt"); altBtn.hidden = !alt; altBtn.textContent = alt || ""; altBtn.onclick = () => done("alt");
     const yes = $("#ask-yes"); yes.textContent = ok; yes.className = "btn small" + (danger ? " danger" : "");
     $("#ask-field").hidden = !field; if (field) { $("#ask-label").innerHTML = esc(field.label) + (field.suggest ? ` <button type="button" id="ask-suggest" style="background:none;border:0;color:var(--mark);cursor:pointer;padding:0;font:inherit;font-size:.78rem">suggest one</button>` : ""); if (field.suggest) $("#ask-suggest").onclick = () => { $("#ask-input").value = suggestPassword(); }; $("#ask-hint").textContent = field.hint || ""; $("#ask-input").type = field.type || "text"; $("#ask-input").value = field.value || ""; $("#ask-input").placeholder = field.placeholder || ""; }
     // Esc fires "cancel" synchronously; the "close" event is queued and would leak into the next ask(), so it isn't used.
@@ -824,9 +825,10 @@ async function loadCalendar() {
   const [y, m] = calMonth.split("-").map(Number); const first = new Date(y, m - 1, 1), start = new Date(first); start.setDate(1 - ((first.getDay() + 6) % 7)); const end = new Date(start); end.setDate(start.getDate() + 41);
   const [bk, bl, av, wl] = await Promise.all([ZenAPI("GET", `/api/admin/bookings?city=${calCity}&from=${isoDay(start)}&to=${isoDay(end)}`), ZenAPI("GET", "/api/admin/blocked"), ZenAPI("GET", "/api/admin/availability"), ZenAPI("GET", "/api/admin/waitlist")]);
   CAL = { bookings: bk.bookings.filter((b) => !["cancelled", "no_show"].includes(b.status)), blocked: bl.rows, avail: av.rows, wait: wl.rows };
-  const team = teamIn(calCity); if (calTh && !team.some((t) => t.id === calTh)) calTh = "";
+  const team = teamIn(calCity).filter((t) => t.active || t.id === calTh || CAL.bookings.some((b) => b.therapist_id === t.id));   // paused people only while they still have sessions in view
+  if (calTh && !team.some((t) => t.id === calTh)) calTh = "";
   $("#cal-th").innerHTML = own ? `<span class="badge">Your calendar · ${esc(T.name)}</span>` : team.length ? `<button class="pill" data-calth="" aria-pressed="${!calTh}">Everyone</button>` + team.map((t) => `<button class="pill" data-calth="${t.id}" aria-pressed="${t.id === calTh}">${esc(t.name)}</button>`).join("") : "";
-  $$("#cal-th [data-calth]").forEach((p) => (p.onclick = () => { calTh = p.dataset.calth; renderMonth(); if (calDay) renderDay(); }));
+  $$("#cal-th [data-calth]").forEach((p) => (p.onclick = () => { calTh = p.dataset.calth; $$("#cal-th [data-calth]").forEach((q) => q.setAttribute("aria-pressed", String(q === p))); renderMonth(); if (calDay) renderDay(); }));
   $("#cal-head").innerHTML = DAY_ORDER.map((d) => `<span>${WD[d]}</span>`).join("");
   renderMonth(); if (calDay) renderDay(); else $("#cal-day").hidden = true;
   $("#cal-help").open = !av.rows.length && !bl.rows.length;
