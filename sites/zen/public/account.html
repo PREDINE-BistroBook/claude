@@ -588,6 +588,21 @@ function icsFor(b) {
   const ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Zen Recovery//EN", "BEGIN:VEVENT", `UID:${b.id}@zenrecovery.club`, `DTSTART:${start}`, `DTEND:${end}`, `SUMMARY:Zen Recovery · ${b.service_name.split(" · ")[0]}`, `LOCATION:Zen Recovery ${CITY_NAME[b.city]}`, "DESCRIPTION:Zen confirms the exact hour on WhatsApp. Eat light\\, drink water\\, no hard workout that day.", "END:VEVENT", "END:VCALENDAR"].join("\r\n");
   return "data:text/calendar;charset=utf-8," + encodeURIComponent(ics);
 }
+/* cancel a session under the booking rules (2026-09-13) */
+async function cancelFlow(id) {
+  const d = $("#dlg-cancel"), yes = $("#cx-yes"), err = $("#cx-err"); err.hidden = true;
+  let p; try { p = await ZenAPI("GET", "/api/me/bookings/" + id + "/cancel"); } catch (ex) { $("#cx-text").textContent = ex.message; $("#cx-yes").hidden = true; $("#dlg-cancel").showModal(); return; }
+  const fmtM = (v, cur) => money(v, cur);
+  const bk = (bookingsCache || []).find((b) => b.id === id) || {};
+  $("#cx-text").textContent = !p.can_cancel ? t("This booking is already closed.") : p.late
+    ? t("It starts in less than {hours} hours. {pct}% of the price is kept ({fee}).", { hours: p.rules.cancel_hours, pct: p.pct, fee: p.fee ? fmtM(p.fee, bk.currency) : "0" }) + (p.refund ? " " + t("Refund: {amount}.", { amount: fmtM(p.refund, bk.currency) }) : "")
+    : t("More than {hours} hours ahead: no fee.", { hours: p.rules.cancel_hours }) + (p.refund ? " " + t("Refund: {amount}.", { amount: fmtM(p.refund, bk.currency) }) : "");
+  yes.hidden = !p.can_cancel; yes.textContent = t("Cancel the session"); $("#cx-no").textContent = t("Keep it");
+  $("#cx-no").onclick = () => d.close();
+  yes.onclick = async () => { yes.disabled = true; try { await ZenAPI("POST", "/api/me/bookings/" + id + "/cancel"); d.close(); await loadSessions(); } catch (ex) { err.textContent = ex.message; err.hidden = false; } finally { yes.disabled = false; } };
+  d.showModal();
+}
+
 async function loadSessions() {
   const { bookings } = await ZenAPI("GET", "/api/me/bookings"); bookingsCache = bookings;
   const today = new Date().toISOString().slice(0, 10);
@@ -715,20 +730,6 @@ boot();
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
 <script src="motion.js">
-/* cancel a session under the booking rules (2026-09-13) */
-async function cancelFlow(id) {
-  const d = $("#dlg-cancel"), yes = $("#cx-yes"), err = $("#cx-err"); err.hidden = true;
-  let p; try { p = await ZenAPI("GET", "/api/me/bookings/" + id + "/cancel"); } catch (ex) { $("#cx-text").textContent = ex.message; $("#cx-yes").hidden = true; $("#dlg-cancel").showModal(); return; }
-  const fmtM = (v, cur) => money(v, cur);
-  const bk = (bookingsCache || []).find((b) => b.id === id) || {};
-  $("#cx-text").textContent = !p.can_cancel ? t("This booking is already closed.") : p.late
-    ? t("It starts in less than {hours} hours. {pct}% of the price is kept ({fee}).", { hours: p.rules.cancel_hours, pct: p.pct, fee: p.fee ? fmtM(p.fee, bk.currency) : "0" }) + (p.refund ? " " + t("Refund: {amount}.", { amount: fmtM(p.refund, bk.currency) }) : "")
-    : t("More than {hours} hours ahead: no fee.", { hours: p.rules.cancel_hours }) + (p.refund ? " " + t("Refund: {amount}.", { amount: fmtM(p.refund, bk.currency) }) : "");
-  yes.hidden = !p.can_cancel; yes.textContent = t("Cancel the session"); $("#cx-no").textContent = t("Keep it");
-  $("#cx-no").onclick = () => d.close();
-  yes.onclick = async () => { yes.disabled = true; try { await ZenAPI("POST", "/api/me/bookings/" + id + "/cancel"); d.close(); await loadSessions(); } catch (ex) { err.textContent = ex.message; err.hidden = false; } finally { yes.disabled = false; } };
-  d.showModal();
-}
 </script>
 </body>
 </html>

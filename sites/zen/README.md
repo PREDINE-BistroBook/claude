@@ -247,6 +247,24 @@ Ash asked for the cancellation rules "from GetYourGuide if they apply". What app
 - **Waitlist fill:** every cancellation (client or admin) emails the first three people waiting for that city and day, once each, with a booking link, and logs it; the hourly cron keeps doing the same for days that free up otherwise.
 - Tests: smoke +15 (rules, owner edits, free vs late, 50% fee + manual refund, no-show 80%, twice refused, waitlist notified), e2e +6 (rules box, pay refused until agreed, Cancel from the account, dialog says no fee, card gone).
 
+## Fawry for Egypt (2026-09-13, Ash: "add Fawry for the Egyptian transactions, deposited in an Egyptian account")
+
+**How the money flows now.** Two providers, chosen by currency: **Fawry for EGP** (Cairo, Dahab) as soon as it is configured, **Stripe for EUR** (Florence) once Connect is live. Fawry settles to the Egyptian bank account on Zen's FawryPay merchant account (Ash's family's, as decided). There is no automatic split with Fawry: the platform's 2% is **recorded** on every Fawry booking (`platform_fee`) and collected through the monthly statement per therapist, not by the gateway.
+
+**Integration** (`src/lib.js`: `fawryOn`, `payProvider`, `fawryCheckout`, `fawryStatus`, `fawryNotificationValid`; `src/worker.js`: `/api/fawry/return`, `/api/fawry/notify`, `fawrySettle`):
+- Booking, gift and package checkouts call FawryPay's hosted checkout (`POST {base}/fawrypay-api/api/payments/init`, signature = SHA-256 of merchantCode + merchantRefNum + customerProfileId + returnUrl + itemId + quantity + price(2 dp) + secure key) and send the client to the page Fawry returns. `merchantRefNum` is `bk`/`gf`/`pk` + our id, stored in `stripe_session` with `provider = 'fawry'` (migration 018, applied to production).
+- The client comes back on `/api/fawry/return`; Fawry also POSTs `/api/fawry/notify` (server notification V2, `messageSignature` checked against our secure key; the V1 shape is accepted too). **Neither is trusted alone**: every settlement re-reads the order with Get Payment Status V2 (`/ECommerceWeb/Fawry/payments/status/v2`, signature merchantCode + merchantRefNumber + key) and only `PAID` marks the booking paid, then the same confirmation emails and rewards as a Stripe payment. Repeated notifications are harmless. EXPIRED / CANCELED notifications cancel a still-pending booking.
+- Refunds on Fawry payments are **manual** for now (`refund_status = manual`, the therapists' email says so); Fawry's refund API can be wired later.
+- Base URL: `FAWRY_ENV = staging` → `atfawry.fawrystaging.com`, `production` → `atfawry.com`. The booking button reads "Reserve and pay with Fawry" with "Card, mobile wallet or a Fawry reference number, in EGP".
+- **Not verifiable from this session:** developer.fawrystaging.com is blocked by the egress policy, so the request/response shapes come from FawryPay's published docs and SDK samples as indexed by search. The first real transaction must be done on **staging** (test cards from the FawryPay dashboard); if the init endpoint answers with a JSON object instead of a plain URL, `fawryCheckout` already reads `url` / `paymentUrl` / `redirectUrl`.
+
+**Ash's checklist to switch it on:**
+1. Open a FawryPay merchant account (fawry.com → FawryPay → "Get started"; company documents + the Egyptian bank account for settlement). Ask for the **staging** credentials first.
+2. In the FawryPay dashboard: copy the **merchant code** and the **secure key**; set the server notification (callback) URL to `https://zenrecovery.club/api/fawry/notify` and allow the return URL `https://zenrecovery.club/api/fawry/return`.
+3. GitHub → repo → Settings → Secrets → `FAWRY_SECURE_KEY`; `sites/zen/wrangler.toml` → `FAWRY_MERCHANT_CODE` (and `FAWRY_ENV = "staging"` until the first real payment works; then `"production"` and the production code/key).
+4. Deploy (any merge does it), book a Cairo session, pay on Fawry's page, check the booking turns "paid" in the admin and the confirmation email arrives.
+- Tests: smoke +12 with Fawry's endpoints mocked (init signature, status re-read, signed/unsigned notification, return before/after payment, gift in Dahab, Florence untouched).
+
 ## Ideas for later (not built — Ash decides)
 
 Built on 2026-09-12 (first batch): login bar, Google sign-in, three languages, session rating + therapist note, weekly check-ins with a progress chart, add-to-calendar, reschedule via WhatsApp, exercises per focus area, installable app. Built the same evening (second batch): items 15–30 below, plus 1–4, 7–9 and 13 which they overlap with — see the table above. Still genuinely open: 5 (deposit model), 6 (fee on hand-added bookings — a business decision), 10 (body map in the guest booking form; signed-in clients already have it in the questionnaire), 12 (link-in-bio page). Kept here for the record:

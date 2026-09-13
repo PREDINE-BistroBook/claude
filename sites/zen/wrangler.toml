@@ -44,6 +44,8 @@ SITE_URL = "https://zenrecovery.club"
 ZEN_STRIPE_ACCOUNT = ""          # acct_... of Zen's connected account. Empty = preview mode (no card payments).
 ZEN_NOTIFY_EMAIL = ""   # optional extra address for new bookings / gifts / review requests. Empty: only admins with "email me about bookings" on get them (Amico Mio never does)
 FROM_EMAIL = "Zen Recovery <booking@zenrecovery.club>"   # domain verified on Resend 2026-09-12
+FAWRY_ENV = "staging"            # staging | production — Fawry for Cairo/Dahab (EGP), settled to Zen's Egyptian bank account. Secret: FAWRY_SECURE_KEY
+FAWRY_MERCHANT_CODE = ""         # from the FawryPay merchant dashboard; empty = EGP cities pay by Stripe (if live) or stay in preview
 GOOGLE_CLIENT_ID = "329793656753-nmee0krmfa7h8m4sqcdu59nf9uadgm7e.apps.googleusercontent.com"           # OAuth 2.0 Web client id from Google Cloud Console; empty = Google button hidden. Secret: GOOGLE_CLIENT_SECRET
 APPLE_CLIENT_ID = ""            # Apple "Services ID" (e.g. club.zenrecovery.web); with APPLE_TEAM_ID, APPLE_KEY_ID and the secret APPLE_PRIVATE_KEY (.p8 contents)
 APPLE_TEAM_ID = ""

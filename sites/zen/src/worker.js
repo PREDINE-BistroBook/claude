@@ -30,7 +30,7 @@
 
 import { CITIES, SLOTS } from "./catalog.js";
 import { randomId, signPayload, verifyPayload, getCookie, setCookie, clearCookie, hashPassword, verifyPassword } from "./auth.js";
-import { therapistPrices, nameIn, hoursUntil, cancelTerms, stripeRefund, fillFromWaitlist, CITY_KEYS, USER_COOKIE, ADMIN_COOKIE, json, clean, normEmail, isDate, isTime, fmt, now, today, feeOn, body, isLive, parseIntake, healthFlags, settings, currentUser, currentAdmin, scope, sendEmail, sendSms, stripeCheckout, slotsFor, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, maybeRewardLoyalty, isPlatform, isOwner, seesAll, therapistOf, visibleWhere, canSeeBooking, isPartner, isEmployee, managesCity, pickLang, userLang } from "./lib.js";
+import { therapistPrices, nameIn, hoursUntil, cancelTerms, stripeRefund, fillFromWaitlist, payProvider, fawryOn, fawryCheckout, fawryStatus, fawryNotificationValid, CITY_KEYS, USER_COOKIE, ADMIN_COOKIE, json, clean, normEmail, isDate, isTime, fmt, now, today, feeOn, body, isLive, parseIntake, healthFlags, settings, currentUser, currentAdmin, scope, sendEmail, sendSms, stripeCheckout, slotsFor, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, maybeRewardLoyalty, isPlatform, isOwner, seesAll, therapistOf, visibleWhere, canSeeBooking, isPartner, isEmployee, managesCity, pickLang, userLang } from "./lib.js";
 import { M, paidLineFor } from "./mail.js";
 import { featureRoute, adminFeatureRoute, giftPaid, packagePaid, authFlags } from "./features.js";
 import { runCron } from "./cron.js";
@@ -53,6 +53,8 @@ export default {
 async function route(req, env, url, ctx) {
   const p = url.pathname, m = req.method;
   if (p === "/api/status") return status(env);
+  if (p === "/api/fawry/return" && m === "GET") return fawryReturn(env, url);
+  if (p === "/api/fawry/notify" && m === "POST") return fawryNotify(req, env);
   if (p === "/api/catalog" && m === "GET") return publicCatalog(env);
   if (p === "/api/auth/google" && m === "GET") return googleStart(env, url);
   if (p === "/api/auth/google/callback" && m === "GET") return googleCallback(req, env, url);
@@ -131,7 +133,7 @@ const slotLabel = (s) => SLOTS[s] || s;
 async function status(env) {
   const st = await settings(env);
   const f = authFlags(env);
-  return json({ live: isLive(env), preview: !isLive(env), google: Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET), apple: f.apple, sms: f.sms,
+  return json({ live: isLive(env) || fawryOn(env), preview: !isLive(env) && !fawryOn(env), fawry: fawryOn(env), pay: { egp: payProvider(env, "egp"), eur: payProvider(env, "eur") }, google: Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET), apple: f.apple, sms: f.sms,
     settings: { loyalty_every: st.loyalty_every, referral_pct: st.referral_pct, birthday_pct: st.birthday_pct, package_pct: st.package_pct }, rules: st.rules, gmaps: st.gmaps, whatsapp: st.whatsapp, review: st.review });
 }
 
@@ -348,7 +350,15 @@ async function checkout(req, env) {
     await afterPaid(env, { ...base, status: "paid" });
     return json({ url: `${env.SITE_URL}/success.html?free=1` });
   }
-  if (!isLive(env)) return json({ preview: true, error: "Payments are not switched on yet." }, 503);
+  const provider = payProvider(env, city.currency);
+  if (!provider) return json({ preview: true, error: "Payments are not switched on yet." }, 503);
+  if (provider === "fawry") {   // Egypt: Fawry's hosted page (card, wallet or a Fawry reference number), settled to Zen's Egyptian account; the 2% is recorded for the monthly statement
+    const ref = "bk" + id;
+    let pay; try { pay = await fawryCheckout(env, { ref, amount, name: svc.short || svc.name, description: `${date} · ${slotLabel(slot)}`, email, phone, customerName: name, returnUrl: `${env.SITE_URL}/api/fawry/return`, lang: base.lang }); } catch (e) { return json({ error: e.message }, 502); }
+    await insertBooking(env, { ...base, status: "pending", stripe_session: ref, provider: "fawry" });
+    if (credit) await env.DB.prepare("UPDATE credits SET status = 'reserved', booking_id = ? WHERE id = ?").bind(id, credit.id).run();
+    return json({ url: pay.url, provider: "fawry" });
+  }
 
   const label = discount_kind ? ` · ${discount_kind === "gift" ? "gift applied" : discount_kind === "partner" ? `${partner.pct}% partner discount` : `${credit.pct}% reward applied`}` : "";
   let session;
@@ -362,7 +372,7 @@ async function checkout(req, env) {
 }
 
 async function insertBooking(env, o) {
-  const cols = ["id", "user_id", "email", "name", "phone", "city", "service_id", "service_name", "date", "slot", "note", "list_amount", "amount", "currency", "discount_kind", "credit_id", "platform_fee", "status", "source", "stripe_session", "payment_intent", "paid_at", "done_at", "therapist_id", "package_id", "gift_code", "partner_code", "lang", "agreed_at"];
+  const cols = ["id", "user_id", "email", "name", "phone", "city", "service_id", "service_name", "date", "slot", "note", "list_amount", "amount", "currency", "discount_kind", "credit_id", "platform_fee", "status", "source", "stripe_session", "payment_intent", "paid_at", "done_at", "therapist_id", "package_id", "gift_code", "partner_code", "lang", "agreed_at", "provider"];
   await env.DB.prepare(`INSERT INTO bookings (${cols.join(",")}) VALUES (${cols.map(() => "?").join(",")})`).bind(...cols.map((c) => o[c] ?? (c === "source" ? "web" : null))).run();
 }
 // Use up whatever paid for the booking (reward credit, gift, package session). restore() undoes it on cancel.
@@ -375,6 +385,41 @@ async function restore(env, bk) {
   if (bk.credit_id) await env.DB.prepare("UPDATE credits SET status = 'available', booking_id = NULL, used_at = NULL WHERE id = ?").bind(bk.credit_id).run();
   if (bk.gift_code) await env.DB.prepare("UPDATE gifts SET status = 'paid', redeemed_at = NULL, booking_id = NULL WHERE code = ? AND booking_id = ?").bind(bk.gift_code, bk.id).run();
   if (bk.package_id) await env.DB.prepare("UPDATE client_packages SET remaining = remaining + 1 WHERE id = ?").bind(bk.package_id).run();
+}
+
+// ---------- Fawry: the client comes back, and Fawry tells us server-to-server; both settle only after Get Payment Status says PAID ----------
+async function fawrySettle(env, ref) {
+  const st = await fawryStatus(env, ref);
+  if (!st.paid) return { paid: false, status: st.status };
+  const kind = ref.slice(0, 2), id = ref.slice(2);
+  if (kind === "bk") {
+    const bk = await env.DB.prepare("SELECT * FROM bookings WHERE id = ? AND stripe_session = ?").bind(id, ref).first();
+    if (!bk) return { paid: true, missing: true };
+    if (bk.status === "pending") {
+      await env.DB.prepare("UPDATE bookings SET status = 'paid', paid_at = ?, payment_intent = ? WHERE id = ? AND status = 'pending'").bind(now(), st.fawryRef, id).run();
+      await consume(env, bk); await afterPaid(env, { ...bk, status: "paid", payment_intent: st.fawryRef });
+    }
+    return { paid: true, kind, id };
+  }
+  if (kind === "gf") { await giftPaid(env, id); return { paid: true, kind, id }; }
+  if (kind === "pk") { await packagePaid(env, id, st.fawryRef); return { paid: true, kind, id }; }
+  return { paid: true, unknown: true };
+}
+const fawryLanding = (env, ref, ok) => { const kind = ref.slice(0, 2); if (kind === "gf") return `${env.SITE_URL}/${ok ? "success.html?gift=1" : "giftcard?pay=failed"}`; if (kind === "pk") return `${env.SITE_URL}/account${ok ? "?package=1" : "?pay=failed"}#packages`; return `${env.SITE_URL}/${ok ? "success.html?f=1" : "booking?pay=failed"}`; };
+async function fawryReturn(env, url) {
+  const ref = clean(url.searchParams.get("merchantRefNumber") || url.searchParams.get("merchantRefNum") || "", 40);
+  if (!fawryOn(env) || !/^(bk|gf|pk)[a-z0-9]+$/.test(ref)) return Response.redirect(`${env.SITE_URL}/booking`, 302);
+  let r; try { r = await fawrySettle(env, ref); } catch (e) { console.error("fawry return", e.message); r = { paid: false }; }
+  return Response.redirect(fawryLanding(env, ref, r.paid), 302);
+}
+async function fawryNotify(req, env) {
+  if (!fawryOn(env)) return new Response("off", { status: 404 });
+  const n = await req.json().catch(() => null);
+  if (!n || !(await fawryNotificationValid(env, n))) return new Response("bad signature", { status: 400 });
+  const ref = String(n.merchantRefNumber || "");
+  if (String(n.orderStatus || "").toUpperCase() === "PAID" && /^(bk|gf|pk)[a-z0-9]+$/.test(ref)) { try { await fawrySettle(env, ref); } catch (e) { console.error("fawry notify", e.message); } }
+  else if (["EXPIRED", "CANCELED", "CANCELLED", "FAILED"].includes(String(n.orderStatus || "").toUpperCase()) && /^bk[a-z0-9]+$/.test(ref)) { await env.DB.prepare("UPDATE bookings SET status = 'cancelled' WHERE id = ? AND status = 'pending'").bind(ref.slice(2)).run(); }
+  return new Response("ok");
 }
 
 // ---------- webhook ----------

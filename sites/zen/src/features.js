@@ -6,7 +6,7 @@ import { CITIES } from "./catalog.js";
 import { randomId, referralCode, signPayload, verifyPayload, getCookie, clearCookie, hashPassword } from "./auth.js";
 import { CITY_KEYS, json, clean, normEmail, isDate, isTime, fmt, now, today, addDays, feeOn, body, isLive, currentUser, scope, sendEmail, stripeCheckout, slotsFor, healthFlags, parseIntake, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, isOwner, therapistOf, visibleWhere, isPartner, isEmployee, managesCity, pickLang, translateProfile, parseI18n } from "./lib.js";
 import { M } from "./mail.js";
-import { translateService, therapistPrices } from "./lib.js";
+import { translateService, therapistPrices, payProvider, fawryCheckout } from "./lib.js";
 
 const b64u = (s) => btoa(typeof s === "string" ? unescape(encodeURIComponent(s)) : String.fromCharCode(...new Uint8Array(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const cityOf = (k) => (CITY_KEYS.includes(k) ? k : null);
@@ -96,12 +96,12 @@ async function packageCheckout(req, env) {
   const b = await body(req);
   const pk = await env.DB.prepare("SELECT * FROM packages WHERE id = ? AND active = 1").bind(clean(b.package_id, 40)).first();
   if (!pk) return json({ error: "That package isn't available." }, 400);
-  if (!isLive(env)) return json({ preview: true, error: "Payments are not switched on yet." }, 503);
+  const provider = payProvider(env, pk.currency); if (!provider) return json({ preview: true, error: "Payments are not switched on yet." }, 503);
   const id = randomId();
-  const { url, id: sid } = await stripeCheckout(env, { amount: pk.amount, currency: pk.currency, name: `${pk.name} · ${pk.sessions} sessions · ${CITIES[pk.city].name}`, description: `Valid ${pk.months_valid} months from purchase`, email: u.email,
+  const { url, id: sid } = provider === "fawry" ? await fawryCheckout(env, { ref: "pk" + id, amount: pk.amount, name: `${pk.name} · ${pk.sessions} sessions`, description: CITIES[pk.city].name, email: u.email, phone: u.phone, customerName: u.name, returnUrl: `${env.SITE_URL}/api/fawry/return`, lang: u.lang }) : await stripeCheckout(env, { amount: pk.amount, currency: pk.currency, name: `${pk.name} · ${pk.sessions} sessions · ${CITIES[pk.city].name}`, description: `Valid ${pk.months_valid} months from purchase`, email: u.email,
     success: `${env.SITE_URL}/account?package=1#packages`, cancel: `${env.SITE_URL}/account#packages`, metadata: { kind: "package", package_row: id } });
-  await env.DB.prepare("INSERT INTO client_packages (id, user_id, package_id, name, city, sessions, remaining, amount, currency, platform_fee, status, stripe_session) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")
-    .bind(id, u.id, pk.id, pk.name, pk.city, pk.sessions, pk.sessions, pk.amount, pk.currency, feeOn(pk.amount), "pending", sid).run();
+  await env.DB.prepare("INSERT INTO client_packages (id, user_id, package_id, name, city, sessions, remaining, amount, currency, platform_fee, status, stripe_session, provider) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)")
+    .bind(id, u.id, pk.id, pk.name, pk.city, pk.sessions, pk.sessions, pk.amount, pk.currency, feeOn(pk.amount), "pending", sid, provider).run();
   return json({ url });
 }
 // Called from the Stripe webhook (worker.js) when metadata.kind === "package".
@@ -128,12 +128,12 @@ async function giftCheckout(req, env) {
   if (!city || !svc) return json({ error: "Pick a city and a session." }, 400);
   const buyer_name = clean(b.buyer_name, 80), buyer_email = normEmail(b.buyer_email), recipient_name = clean(b.recipient_name, 80), recipient_email = normEmail(b.recipient_email), message = clean(b.message, 300);
   if (!buyer_name || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(buyer_email) || !recipient_name) return json({ error: "Your name and email, and who the gift is for." }, 400);
-  if (!isLive(env)) return json({ preview: true, error: "Payments are not switched on yet." }, 503);
+  const provider = payProvider(env, city.currency); if (!provider) return json({ preview: true, error: "Payments are not switched on yet." }, 503);
   const id = randomId(), code = "GIFT-" + referralCode();
-  const { url, id: sid } = await stripeCheckout(env, { amount: svc.amount, currency: city.currency, name: `Gift: ${svc.name}`, description: `For ${recipient_name}. Sent by email as a code after payment.`, email: buyer_email,
+  const { url, id: sid } = provider === "fawry" ? await fawryCheckout(env, { ref: "gf" + id, amount: svc.amount, name: `Gift: ${svc.short || svc.name}`, description: `For ${recipient_name}`, email: buyer_email, phone: "", customerName: buyer_name, returnUrl: `${env.SITE_URL}/api/fawry/return`, lang: pickLang(b.lang) }) : await stripeCheckout(env, { amount: svc.amount, currency: city.currency, name: `Gift: ${svc.name}`, description: `For ${recipient_name}. Sent by email as a code after payment.`, email: buyer_email,
     success: `${env.SITE_URL}/success.html?gift=1`, cancel: `${env.SITE_URL}/giftcard`, metadata: { kind: "gift", gift_id: id } });
-  await env.DB.prepare("INSERT INTO gifts (id, code, city, service_id, service_name, amount, currency, platform_fee, buyer_name, buyer_email, recipient_name, recipient_email, message, status, stripe_session, lang) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-    .bind(id, code, b.city, svc.id, svc.name, svc.amount, city.currency, feeOn(svc.amount), buyer_name, buyer_email, recipient_name, recipient_email || null, message, "pending", sid, pickLang(b.lang)).run();
+  await env.DB.prepare("INSERT INTO gifts (id, code, city, service_id, service_name, amount, currency, platform_fee, buyer_name, buyer_email, recipient_name, recipient_email, message, status, stripe_session, lang, provider) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+    .bind(id, code, b.city, svc.id, svc.name, svc.amount, city.currency, feeOn(svc.amount), buyer_name, buyer_email, recipient_name, recipient_email || null, message, "pending", sid, pickLang(b.lang), provider).run();
   return json({ url });
 }
 export async function giftPaid(env, giftId) {

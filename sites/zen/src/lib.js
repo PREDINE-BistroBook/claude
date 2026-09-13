@@ -17,6 +17,39 @@ export const addDays = (d, n) => { const x = new Date(d + "T12:00:00Z"); x.setUT
 export const feeOn = (amount) => Math.round((amount * PLATFORM_FEE_BPS) / 10000);
 export const body = async (req) => (await req.json().catch(() => null)) || {};
 export const isLive = (env) => Boolean(env.STRIPE_SECRET_KEY && env.ZEN_STRIPE_ACCOUNT);
+/* ---------- Fawry (2026-09-13): card / wallet / Fawry-reference payments in Egypt, settled to an Egyptian bank account.
+   Hosted checkout: we POST an init request, Fawry answers with the URL of its payment page; the client comes back on returnUrl and
+   Fawry also POSTs a server notification. We never trust either alone: every settlement re-reads the order with Get Payment Status V2. ---------- */
+export const fawryOn = (env) => Boolean(env.FAWRY_MERCHANT_CODE && env.FAWRY_SECURE_KEY);
+export const fawryBase = (env) => (env.FAWRY_ENV === "production" ? "https://atfawry.com" : "https://atfawry.fawrystaging.com");
+// which provider takes a payment in this currency: Fawry for EGP when it is set up, else Stripe when live, else nothing (preview)
+export const payProvider = (env, currency) => (String(currency).toLowerCase() === "egp" && fawryOn(env) ? "fawry" : isLive(env) ? "stripe" : null);
+export async function sha256hex(s) { const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)); return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, "0")).join(""); }
+const two = (minor) => (minor / 100).toFixed(2);
+export async function fawryCheckout(env, { ref, amount, name, description, email, phone, customerName, returnUrl, lang }) {
+  const price = two(amount), item = { itemId: ref, description: (description ? `${name} — ${description}` : name).slice(0, 200), price: Number(price), quantity: 1 };
+  const signature = await sha256hex(env.FAWRY_MERCHANT_CODE + ref + "" + returnUrl + item.itemId + "1" + price + env.FAWRY_SECURE_KEY);
+  const payload = { merchantCode: env.FAWRY_MERCHANT_CODE, merchantRefNum: ref, customerMobile: String(phone || "").replace(/[^\d+]/g, "") || "01000000000", customerEmail: email || undefined, customerName: customerName || undefined, customerProfileId: "", paymentExpiry: Date.now() + 30 * 60 * 1000, language: lang === "ar" ? "ar-eg" : "en-gb", chargeItems: [item], returnUrl, authCaptureModePayment: false, signature };
+  const r = await fetch(`${fawryBase(env)}/fawrypay-api/api/payments/init`, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/plain" }, body: JSON.stringify(payload) });
+  const text = await r.text();
+  let url = text.trim(); try { const j = JSON.parse(text); url = j.url || j.paymentUrl || j.redirectUrl || url; } catch {}
+  if (!r.ok || !/^https?:\/\//.test(url)) { console.error("fawry init", r.status, text.slice(0, 300)); throw new Error("Fawry couldn't start the payment. Please try again or message Zen on WhatsApp."); }
+  return { url, id: ref };
+}
+export async function fawryStatus(env, ref) {
+  const signature = await sha256hex(env.FAWRY_MERCHANT_CODE + ref + env.FAWRY_SECURE_KEY);
+  const r = await fetch(`${fawryBase(env)}/ECommerceWeb/Fawry/payments/status/v2?merchantCode=${encodeURIComponent(env.FAWRY_MERCHANT_CODE)}&merchantRefNumber=${encodeURIComponent(ref)}&signature=${signature}`, { headers: { accept: "application/json" } });
+  const j = await r.json().catch(() => ({}));
+  return { paid: r.ok && String(j.orderStatus || "").toUpperCase() === "PAID", status: j.orderStatus || null, fawryRef: j.fawryRefNumber || j.referenceNumber || null, amount: j.paymentAmount ?? j.orderAmount ?? null, method: j.paymentMethod || null, raw: j };
+}
+// server notification (V2, with the V1 shape accepted too): true when the message signature matches our secure key
+export async function fawryNotificationValid(env, n) {
+  const p = (v) => (v === undefined || v === null || v === "" ? "" : Number(v).toFixed(2));
+  const v2 = await sha256hex(String(n.fawryRefNumber || "") + String(n.merchantRefNumber || "") + p(n.paymentAmount) + p(n.orderAmount) + String(n.orderStatus || "") + String(n.paymentMethod || "") + String(n.paymentRefrenceNumber || n.paymentReferenceNumber || "") + env.FAWRY_SECURE_KEY);
+  const v1 = await sha256hex(String(n.fawryRefNumber || "") + String(n.merchantRefNumber || "") + p(n.paymentAmount) + String(n.orderStatus || "") + env.FAWRY_SECURE_KEY);
+  const given = String(n.messageSignature || n.signature || "").toLowerCase();
+  return given === v2 || given === v1;
+}
 // Services come from the D1 `services` table (editable in the admin); src/catalog.js is only the seed/fallback.
 // Shape matches the old static catalog: { cairo: { name, currency, tz, services: { id: { name, amount, minutes, description } } } }
 // Names are built as "Dry cupping · 45 min · Cairo" so bookings keep the same service_name convention.
@@ -98,7 +131,7 @@ export function cancelTerms(bk, rules, opts = {}) {
 // refund (part of) an online payment on Zen's connected account; the platform fee is refunded proportionally. Returns "done" | "manual" (nothing online to refund, or Stripe not live)
 export async function stripeRefund(env, bk, amount) {
   if (!amount || amount <= 0) return "none";
-  if (!isLive(env) || !bk.payment_intent) return "manual";
+  if (bk.provider === "fawry" || !isLive(env) || !bk.payment_intent) return "manual";
   const params = new URLSearchParams({ payment_intent: bk.payment_intent, amount: String(amount), refund_application_fee: "true" });
   const r = await fetch("https://api.stripe.com/v1/refunds", { method: "POST", headers: { authorization: `Bearer ${env.STRIPE_SECRET_KEY}`, "Stripe-Account": env.ZEN_STRIPE_ACCOUNT, "content-type": "application/x-www-form-urlencoded", "Stripe-Version": "2024-06-20" }, body: params });
   if (!r.ok) { console.error("stripe refund", await r.text()); return "manual"; }

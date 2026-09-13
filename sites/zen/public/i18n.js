@@ -5,6 +5,7 @@
 window.ZenI18n = (function () {
   const LANGS = { en: "English", it: "Italiano", ar: "العربية" };
   const IT = {
+    "Reserve and pay with Fawry": "Prenota e paga con Fawry", "Card, mobile wallet or a Fawry reference number, in EGP. Secure page by Fawry.": "Carta, wallet mobile o codice Fawry, in EGP. Pagina sicura di Fawry.", "Secure card payment by Stripe.": "Pagamento sicuro con carta tramite Stripe.",
     // booking rules (2026-09-13)
     "Booking rules": "Regole di prenotazione",
     "Cancel or move your session free of charge up to": "Annulla o sposta la seduta gratuitamente fino a", "hours before it starts, from your account or on WhatsApp.": "ore prima dell'inizio, dal tuo account o su WhatsApp.",
@@ -373,6 +374,7 @@ window.ZenI18n = (function () {
     "January": "gennaio", "February": "febbraio", "March": "marzo", "April": "aprile", "May": "maggio", "June": "giugno", "July": "luglio", "August": "agosto", "September": "settembre", "October": "ottobre", "November": "novembre", "December": "dicembre",
   };
   const AR = {
+    "Reserve and pay with Fawry": "احجز وادفع عبر فوري", "Card, mobile wallet or a Fawry reference number, in EGP. Secure page by Fawry.": "بطاقة أو محفظة إلكترونية أو كود فوري، بالجنيه المصري. صفحة آمنة من فوري.", "Secure card payment by Stripe.": "دفع آمن بالبطاقة عبر Stripe.",
     // booking rules (2026-09-13)
     "Booking rules": "قواعد الحجز",
     "Cancel or move your session free of charge up to": "يمكنك إلغاء الجلسة أو تغيير موعدها مجانًا حتى", "hours before it starts, from your account or on WhatsApp.": "ساعة قبل بدايتها، من حسابك أو عبر واتساب.",
