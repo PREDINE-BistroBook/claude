@@ -46,8 +46,8 @@ async function slots(env, url) {
   const city = cityOf(url.searchParams.get("city")), date = clean(url.searchParams.get("date"), 10);
   if (!city || !isDate(date)) return json({ error: "city and date" }, 400);
   if (date < localNow(CITIES[city].tz).date) return json({ mode: "slots", slots: [] });
-  const th = clean(url.searchParams.get("therapist"), 40) || null;
-  const r = await slotsFor(env, city, date, th);
+  const th = clean(url.searchParams.get("therapist"), 40) || null, svc = clean(url.searchParams.get("service"), 40) || null;
+  const r = await slotsFor(env, city, date, th, svc);
   return json(r, 200, { "cache-control": "no-store" });
 }
 // Cover pictures are served as images (cached a day) instead of inline in the catalog, which kept every page load light.
@@ -88,7 +88,10 @@ async function providers(env, url) {
 async function team(env, url) {
   const city = cityOf(url.searchParams.get("city"));
   const r = await env.DB.prepare("SELECT id, city, name, bio, photo, languages, area, maps_url, title, story, certs, instagram, i18n, sort, lat, lng, radius_km FROM therapists WHERE active = 1" + (city ? " AND city = ?" : "") + " ORDER BY city, sort, name").bind(...(city ? [city] : [])).all();
-  return json({ therapists: r.results.map((t) => ({ ...t, i18n: parseI18n(t.i18n) })) });
+  // the brief a client chooses by (2026-09-13): real numbers only — sessions done here and the average of the ratings clients left
+  const stats = Object.fromEntries((await env.DB.prepare("SELECT therapist_id, COUNT(*) done, AVG(rating) avg, COUNT(rating) n FROM bookings WHERE status = 'done' AND therapist_id IS NOT NULL GROUP BY therapist_id").all().catch(() => ({ results: [] }))).results.map((x) => [x.therapist_id, x]));
+  const off = {}; for (const x of (await env.DB.prepare("SELECT therapist_id, service_id FROM therapist_prices WHERE offered = 0").all().catch(() => ({ results: [] }))).results) (off[x.therapist_id] ||= []).push(x.service_id);
+  return json({ therapists: r.results.map((t) => ({ ...t, i18n: parseI18n(t.i18n), sessions_done: stats[t.id]?.done || 0, rating_avg: stats[t.id]?.n ? Math.round(stats[t.id].avg * 10) / 10 : null, rating_n: stats[t.id]?.n || 0, not_offered: off[t.id] || [] })) });
 }
 async function packages(env, url) {
   const city = cityOf(url.searchParams.get("city"));
@@ -524,19 +527,22 @@ async function therapistPriceList(env, admin, id) {
   if (!th || (!isOwner(admin) && th.city !== admin.role)) return json({ error: "Not found" }, 404);
   if (isEmployee(admin)) { const me = await therapistOf(env, admin); if (!me || me.id !== id) return json({ error: "Not found" }, 404); }
   const services = (await env.DB.prepare("SELECT id, name, minutes, amount, currency FROM services WHERE city = ? AND active = 1 ORDER BY sort, name").bind(th.city).all()).results;
-  const own = Object.fromEntries((await env.DB.prepare("SELECT service_id, amount FROM therapist_prices WHERE therapist_id = ?").bind(id).all()).results.map((r) => [r.service_id, r.amount]));
-  return json({ therapist: th, can_edit: managesCity(admin), rows: services.map((s) => ({ ...s, own: own[s.id] ?? null })) });
+  const own = Object.fromEntries((await env.DB.prepare("SELECT service_id, amount, offered FROM therapist_prices WHERE therapist_id = ?").bind(id).all()).results.map((r) => [r.service_id, r]));
+  const me = isEmployee(admin) ? await therapistOf(env, admin) : null;
+  return json({ therapist: th, can_edit: managesCity(admin) || Boolean(me && me.id === id), mine: Boolean(me && me.id === id), rows: services.map((s) => ({ ...s, own: own[s.id] && own[s.id].offered !== 0 ? own[s.id].amount : null, offered: own[s.id] ? own[s.id].offered !== 0 : true })) });
 }
 async function therapistPriceSave(req, env, admin, id) {
   const th = await env.DB.prepare("SELECT id, city FROM therapists WHERE id = ?").bind(id).first();
   if (!th || (!isOwner(admin) && th.city !== admin.role)) return json({ error: "Not found" }, 404);
-  if (!managesCity(admin)) return json({ error: "The owner or your city's partner sets prices." }, 403);
-  const b = await body(req), prices = b && typeof b.prices === "object" && b.prices ? b.prices : {};
+  if (!managesCity(admin)) { const me = await therapistOf(env, admin); if (!me || me.id !== id) return json({ error: "You can set your own list and prices only." }, 403); }   // 2026-09-13: every therapist controls their own list
+  const b = await body(req), prices = b && typeof b.prices === "object" && b.prices ? b.prices : {}, offered = b && typeof b.offered === "object" && b.offered ? b.offered : {};
   const ids = new Set((await env.DB.prepare("SELECT id FROM services WHERE city = ?").bind(th.city).all()).results.map((r) => r.id));
-  for (const [sid, v] of Object.entries(prices)) {
+  for (const sid of new Set([...Object.keys(prices), ...Object.keys(offered)])) {
     if (!ids.has(sid)) continue;
+    if (offered[sid] === false || offered[sid] === 0) { await env.DB.prepare("INSERT INTO therapist_prices (therapist_id, service_id, amount, offered) VALUES (?,?,0,0) ON CONFLICT(therapist_id, service_id) DO UPDATE SET offered = 0").bind(id, sid).run(); continue; }
+    const v = prices[sid];
     if (v === null || v === "" || v === undefined) await env.DB.prepare("DELETE FROM therapist_prices WHERE therapist_id = ? AND service_id = ?").bind(id, sid).run();
-    else { const n = Number(v); if (!Number.isInteger(n) || n < 0 || n > 100000000) return json({ error: "Prices are whole numbers in minor units (piastres / cents)." }, 400); await env.DB.prepare("INSERT INTO therapist_prices (therapist_id, service_id, amount) VALUES (?,?,?) ON CONFLICT(therapist_id, service_id) DO UPDATE SET amount = excluded.amount").bind(id, sid, n).run(); }
+    else { const n = Number(v); if (!Number.isInteger(n) || n < 0 || n > 100000000) return json({ error: "Prices are whole numbers in minor units (piastres / cents)." }, 400); await env.DB.prepare("INSERT INTO therapist_prices (therapist_id, service_id, amount, offered) VALUES (?,?,?,1) ON CONFLICT(therapist_id, service_id) DO UPDATE SET amount = excluded.amount, offered = 1").bind(id, sid, n).run(); }
   }
   return json({ ok: true });
 }

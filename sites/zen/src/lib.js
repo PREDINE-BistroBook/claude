@@ -62,12 +62,14 @@ export async function catalog(env, { all = false } = {}) {
   return out;
 }
 // { service_id: { therapist_id: amount } } for a city's active therapists — a therapist's own price beats the city price when the client chose them
-export async function therapistPrices(env, city) {
-  const out = {}; let rows = [];
-  try { rows = (await env.DB.prepare("SELECT p.therapist_id, p.service_id, p.amount FROM therapist_prices p JOIN therapists t ON t.id = p.therapist_id WHERE t.active = 1" + (city ? " AND t.city = ?" : "")).bind(...(city ? [city] : [])).all()).results; } catch (e) { console.error("therapist_prices", e.message); }
-  for (const r of rows) (out[r.service_id] ||= {})[r.therapist_id] = r.amount;
-  return out;
+export async function therapistOffering(env, city) {   // { prices: { service_id: { therapist_id: amount } }, off: { service_id: [therapist_id] } }
+  const prices = {}, off = {}; let rows = [];
+  try { rows = (await env.DB.prepare("SELECT p.therapist_id, p.service_id, p.amount, p.offered FROM therapist_prices p JOIN therapists t ON t.id = p.therapist_id WHERE t.active = 1" + (city ? " AND t.city = ?" : "")).bind(...(city ? [city] : [])).all()).results; } catch (e) { console.error("therapist_prices", e.message); }
+  for (const r of rows) { if (r.offered === 0) (off[r.service_id] ||= []).push(r.therapist_id); else (prices[r.service_id] ||= {})[r.therapist_id] = r.amount; }
+  return { prices, off };
 }
+export async function therapistPrices(env, city) { return (await therapistOffering(env, city)).prices; }
+export async function offersService(env, therapistId, serviceId) { const r = await env.DB.prepare("SELECT offered FROM therapist_prices WHERE therapist_id = ? AND service_id = ?").bind(therapistId, serviceId).first(); return !r || r.offered !== 0; }
 export const nameIn = (svc, lang, cityName) => { const n = (lang !== "en" && svc?.i18n?.[lang]?.name) || svc?.short || ""; return n ? `${n} · ${svc.minutes} min · ${cityName}` : svc?.name || ""; };
 export async function serviceOf(env, city, id) { if (!CITY_KEYS.includes(city) || !id) return null; const c = await catalog(env); return c[city].services[id] || null; }
 // Who hears about a new booking / gift / pack in a city: ZEN_NOTIFY_EMAIL (if set) plus every admin with a real email who asked for it
@@ -300,14 +302,14 @@ export async function maybeRewardLoyalty(env, userId) {
 // ---------- availability → free slots ----------
 const toMin = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
 const toHHMM = (m) => String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
-export async function slotsFor(env, city, date, therapistId) {
+export async function slotsFor(env, city, date, therapistId, serviceId = null) {   // serviceId: leave out the therapists who switched that session off
   const weekday = new Date(date + "T12:00:00Z").getUTCDay();
   const rules = (await env.DB.prepare("SELECT * FROM availability WHERE city = ? AND weekday = ?" + (therapistId ? " AND (therapist_id = ? OR therapist_id IS NULL)" : "")).bind(...[city, weekday, ...(therapistId ? [therapistId] : [])]).all()).results;
   const configured = (await env.DB.prepare("SELECT COUNT(*) n FROM availability WHERE city = ?").bind(city).first()).n > 0;
   if (!configured) return { mode: "windows", slots: [] };
   const blocked = (await env.DB.prepare("SELECT * FROM blocked WHERE city = ? AND date = ?").bind(city, date).all()).results;
   const taken = (await env.DB.prepare("SELECT slot, therapist_id FROM bookings WHERE city = ? AND date = ? AND status IN ('paid','confirmed','done','review')").bind(city, date).all()).results;
-  const therapists = (await env.DB.prepare("SELECT id FROM therapists WHERE city = ? AND active = 1").bind(city).all()).results.map((t) => t.id);
+  const therapists = (serviceId ? await env.DB.prepare("SELECT id FROM therapists WHERE city = ? AND active = 1 AND id NOT IN (SELECT therapist_id FROM therapist_prices WHERE service_id = ? AND offered = 0)").bind(city, serviceId).all() : await env.DB.prepare("SELECT id FROM therapists WHERE city = ? AND active = 1").bind(city).all()).results.map((t) => t.id);
   const out = new Map();
   for (const r of rules) {
     const who = r.therapist_id ? [r.therapist_id] : therapists.length ? therapists : [null];

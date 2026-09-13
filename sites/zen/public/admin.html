@@ -536,7 +536,7 @@
       <div class="row" style="align-items:flex-end;flex-wrap:wrap"><div class="field" style="flex:1;min-width:160px"><label for="th-radius">Also travels to clients within (km) <span class="tiny">0 = at their place only</span></label><input id="th-radius" type="number" min="0" max="100" step="1" placeholder="0"></div><span class="tiny" id="th-pin-status" style="flex:2"></span></div>
     </div>
     <div class="grid" id="th-prices-box" style="gap:8px;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--ground-3)" hidden>
-      <div><b style="font-size:.92rem">Their own prices</b><div class="tiny" id="th-prices-note">Leave a field empty to charge the city price. A client who picks this therapist pays these; "Anyone available" pays the city price.</div></div>
+      <div><b style="font-size:.92rem" id="th-prices-title">Their list and prices</b><div class="tiny" id="th-prices-note">Untick a session they don't do; clients won't be offered it with them. Leave a price empty to charge the city price. A client who picks this therapist pays these; "Anyone available" pays the city price.</div></div>
       <div id="th-prices" class="grid" style="gap:6px"></div>
     </div>
     <label class="row" style="gap:8px;font-size:.92rem"><input type="checkbox" id="th-active" checked> Shown on the website and bookable</label>
@@ -1243,14 +1243,18 @@ let PRICE_ROWS = [];
 async function loadPrices(id) {
   const box = $("#th-prices-box"); PRICE_ROWS = []; box.hidden = true; if (!id) return;
   try { const r = await ZenAPI("GET", "/api/admin/therapists/" + id + "/prices"); PRICE_ROWS = r.rows; box.hidden = !r.rows.length;
-    $("#th-prices").innerHTML = r.rows.map((s) => `<div class="row" style="align-items:center;gap:10px"><span style="flex:1;font-size:.9rem">${esc(s.name)} <span class="tiny">· ${s.minutes} min · city price ${money(s.amount, s.currency)}</span></span><input data-price="${s.id}" inputmode="numeric" placeholder="${(s.amount / 100).toFixed(0)}" value="${s.own !== null ? (s.own / 100).toFixed(0) : ""}" style="width:110px" ${r.can_edit ? "" : "disabled"}></div>`).join("");
-    $("#th-prices-note").textContent = r.can_edit ? `Leave a field empty to charge the city price. Amounts in ${(r.rows[0]?.currency || "").toUpperCase()}. A client who picks this therapist pays these; "Anyone available" pays the city price.` : "Set by the owner or your city's partner.";
+    PRICE_CAN_EDIT = Boolean(r.can_edit);
+    $("#th-prices").innerHTML = r.rows.map((s) => `<div class="row" style="align-items:center;gap:10px"><label class="row" style="gap:8px;flex:1;font-size:.9rem;align-items:center"><input type="checkbox" data-offered="${s.id}" ${s.offered ? "checked" : ""} ${r.can_edit ? "" : "disabled"}><span>${esc(s.name)} <span class="tiny">· ${s.minutes} min · city price ${money(s.amount, s.currency)}</span></span></label><input data-price="${s.id}" inputmode="numeric" placeholder="${(s.amount / 100).toFixed(0)}" value="${s.own !== null ? (s.own / 100).toFixed(0) : ""}" style="width:110px" ${r.can_edit ? "" : "disabled"} ${s.offered ? "" : "hidden"}></div>`).join("");
+    $$("#th-prices [data-offered]").forEach((cb) => (cb.onchange = () => { const inp = $(`#th-prices [data-price="${cb.dataset.offered}"]`); if (inp) inp.hidden = !cb.checked; }));
+    $("#th-prices-title").textContent = r.mine ? "Your list and prices" : "Their list and prices";
+    $("#th-prices-note").textContent = r.can_edit ? `${r.mine ? "Untick a session you don't do; clients won't be offered it with you." : "Untick a session they don't do; clients won't be offered it with them."} Leave a price empty to charge the city price. Amounts in ${(r.rows[0]?.currency || "").toUpperCase()}. A client who picks ${r.mine ? "you" : "this therapist"} pays these; "Anyone available" pays the city price.` : "Set by the therapist, the owner or the city's partner.";
   } catch (_) { box.hidden = true; }
 }
+let PRICE_CAN_EDIT = false;
 async function savePrices(id) {
-  if (!id || !PRICE_ROWS.length || !managesCity()) return;
-  const prices = {}; $$("#th-prices [data-price]").forEach((i) => { const v = i.value.trim(); prices[i.dataset.price] = v === "" ? null : Math.round(Number(v) * 100); });
-  await ZenAPI("PUT", "/api/admin/therapists/" + id + "/prices", { prices });
+  if (!id || !PRICE_ROWS.length || !PRICE_CAN_EDIT) return;
+  const prices = {}, offered = {}; $$("#th-prices [data-price]").forEach((i) => { const v = i.value.trim(); prices[i.dataset.price] = v === "" ? null : Math.round(Number(v) * 100); }); $$("#th-prices [data-offered]").forEach((cb) => (offered[cb.dataset.offered] = cb.checked));
+  await ZenAPI("PUT", "/api/admin/therapists/" + id + "/prices", { prices, offered });
 }
 function pinStatus() { const a = $("#th-lat").value.trim(), b = $("#th-lng").value.trim(); $("#th-pin-status").textContent = a && b ? `Pinned at ${a}, ${b}` : "Not pinned yet: clients can't find them by distance."; }
 ["#th-lat", "#th-lng"].forEach((k) => $(k).addEventListener("input", pinStatus));
