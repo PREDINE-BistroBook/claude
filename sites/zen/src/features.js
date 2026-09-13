@@ -6,7 +6,7 @@ import { CITIES } from "./catalog.js";
 import { randomId, referralCode, signPayload, verifyPayload, getCookie, clearCookie, hashPassword } from "./auth.js";
 import { CITY_KEYS, json, clean, normEmail, isDate, isTime, fmt, now, today, addDays, feeOn, body, isLive, currentUser, scope, sendEmail, stripeCheckout, slotsFor, healthFlags, parseIntake, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, isOwner, therapistOf, visibleWhere, isPartner, isEmployee, managesCity, pickLang, translateProfile, parseI18n } from "./lib.js";
 import { M } from "./mail.js";
-import { translateService, therapistPrices, payProvider, fawryCheckout, cityNameIn } from "./lib.js";
+import { translateService, therapistPrices, payProvider, fawryCheckout, cityNameIn, isPlatform } from "./lib.js";
 
 const b64u = (s) => btoa(typeof s === "string" ? unescape(encodeURIComponent(s)) : String.fromCharCode(...new Uint8Array(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const cityOf = (k) => (CITY_KEYS.includes(k) ? k : null);
@@ -21,6 +21,9 @@ export async function featureRoute(req, env, url, ctx) {
   if (p === "/api/team" && m === "GET") return team(env, url);
   if (p === "/api/providers" && m === "GET") return providers(env, url);
   if (p === "/api/apply" && m === "POST") return applyToJoin(req, env);
+  if (p === "/api/me/chats" && m === "GET") return myChats(req, env);
+  if (p === "/api/me/chats" && m === "POST") return startChat(req, env);
+  { const ch = p.match(/^\/api\/me\/chats\/([a-z0-9]+)$/); if (ch && m === "GET") return readChat(req, env, ch[1], url); if (ch && m === "POST") return clientSend(req, env, ch[1], ctx); }
   { const sp = p.match(/^\/api\/service-photo\/([a-z0-9-]+)$/); if (sp && m === "GET") return servicePhoto(env, sp[1]); }
   if (p === "/api/packages" && m === "GET") return packages(env, url);
   if (p === "/api/packages/checkout" && m === "POST") return packageCheckout(req, env);
@@ -294,6 +297,8 @@ export async function adminFeatureRoute(req, env, url, admin) {
   if ((mm = p.match(/^\/api\/admin\/partners\/([a-z0-9]+)$/)) && m === "PATCH") return manages() || savePartner(req, env, admin, mm[1]);
   if (mm && m === "DELETE") return manages() || deletePartner(env, admin, mm[1]);
   if (p === "/api/admin/statements" && m === "GET") return statements(env, admin, url);
+  if (p === "/api/admin/chats" && m === "GET") return adminChats(env, admin, url);
+  { const ch = p.match(/^\/api\/admin\/chats\/([a-z0-9]+)$/); if (ch && m === "GET") return adminReadChat(env, admin, ch[1], url); if (ch && m === "POST") return adminSend(req, env, admin, ch[1]); }
   if (p === "/api/admin/gifts" && m === "GET") return listGifts(env, admin, url);
   if (p === "/api/admin/review" && m === "GET") return reviewList(env, admin);
   if ((mm = p.match(/^\/api\/admin\/clients\/([a-z0-9]+)\/approve$/)) && m === "POST") return approveClient(env, admin, mm[1]);
@@ -590,6 +595,105 @@ async function partnersReport(env, admin) {
       (SELECT COUNT(DISTINCT COALESCE(b.user_id, b.email)) FROM bookings b WHERE b.partner_code = p.code AND b.status IN ('paid','confirmed','done')) people
     FROM partners p${own.sql} ORDER BY bookings DESC, p.name`).bind(...own.args).all();
   return json({ rows: r.results.map((p) => ({ ...p, mine: p.created_by === admin.id, can_edit: true })), can_add: true, city: isOwner(admin) ? null : admin.role, kinds: PARTNER_KINDS });
+}
+
+/* ---------- in-site chat (2026-09-13, Ash: "a communication system between the client and the therapist") ----------
+   A chat is one client + one therapist (or the city's room when no therapist is picked yet). Clients write from their
+   account; the therapist answers from the admin (the city's partner and the owner see every chat in the city and can
+   answer too, signed with their own name). Nobody is online all day, so the other side gets ONE email per half hour at
+   most ("X wrote to you", with a link); the page itself polls while it is open. Plain text only, 2000 characters,
+   30 messages per 10 minutes per client. */
+const CHAT_MAX = 2000, CHAT_BURST = 30;
+const chatBody = (v) => String(v ?? "").replace(/\r/g, "").replace(/[\u0000-\u0008\u000b-\u001f]/g, "").replace(/\n{3,}/g, "\n\n").trim().slice(0, CHAT_MAX);
+const excerpt = (t) => (t.length > 160 ? t.slice(0, 157).trimEnd() + "…" : t).replace(/\s*\n\s*/g, " ");
+const STALE = (iso, minutes) => !iso || Date.now() - new Date(iso.replace(" ", "T") + (iso.endsWith("Z") ? "" : "Z")).getTime() > minutes * 60e3;
+async function chatRow(env, id) { return env.DB.prepare("SELECT c.*, t.name therapist_name, t.photo therapist_photo, t.city therapist_city, u.name user_name, u.email user_email, u.lang user_lang, u.photo user_photo FROM chats c LEFT JOIN therapists t ON t.id = c.therapist_id LEFT JOIN users u ON u.id = c.user_id WHERE c.id = ?").bind(id).first(); }
+const chatPublic = (c, side) => ({ id: c.id, city: c.city, therapist_id: c.therapist_id, therapist: c.therapist_name || null, therapist_photo: c.therapist_photo || null, client: c.user_name, client_photo: c.user_photo || null, client_email: side === "team" ? c.user_email : undefined, user_id: side === "team" ? c.user_id : undefined, last_at: c.last_at, last_body: c.last_body ? excerpt(c.last_body) : "", last_from: c.last_from, unread: side === "team" ? c.team_unread : c.client_unread });
+async function myChats(req, env) {
+  const u = await currentUser(req, env); if (!u) return json({ error: "Sign in first." }, 401);
+  const rows = (await env.DB.prepare("SELECT c.*, t.name therapist_name, t.photo therapist_photo, u.name user_name, u.photo user_photo FROM chats c LEFT JOIN therapists t ON t.id = c.therapist_id LEFT JOIN users u ON u.id = c.user_id WHERE c.user_id = ? ORDER BY COALESCE(c.last_at, c.created_at) DESC, c.rowid DESC").bind(u.id).all()).results;
+  const booked = new Set((await env.DB.prepare("SELECT DISTINCT therapist_id FROM bookings WHERE user_id = ? AND therapist_id IS NOT NULL").bind(u.id).all()).results.map((r) => r.therapist_id));
+  const team = (await env.DB.prepare("SELECT id, name, city, photo, title, i18n FROM therapists WHERE active = 1 ORDER BY sort, name").all()).results.map((t) => ({ id: t.id, name: t.name, city: t.city, photo: t.photo, title: t.title || "", i18n: t.i18n ? JSON.parse(t.i18n) : null, booked: booked.has(t.id), near: t.city === (u.nearest_city || u.city) }));
+  team.sort((a, b) => (b.booked - a.booked) || (b.near - a.near));
+  return json({ chats: rows.map((c) => chatPublic(c, "client")), can_message: team, unread: rows.reduce((n, c) => n + (c.client_unread || 0), 0) });
+}
+async function startChat(req, env) {
+  const u = await currentUser(req, env); if (!u) return json({ error: "Sign in first." }, 401);
+  const b = await body(req);
+  let th = null, city = null;
+  if (b.therapist_id) { th = await env.DB.prepare("SELECT id, city FROM therapists WHERE id = ? AND active = 1").bind(String(b.therapist_id)).first(); if (!th) return json({ error: "That therapist isn't available." }, 404); city = th.city; }
+  else { city = cityOf(b.city) || cityOf(u.nearest_city) || cityOf(u.city); if (!city) return json({ error: "Pick a therapist or a city." }, 400); }
+  const key = u.id + ":" + (th ? th.id : "room:" + city);
+  let c = await env.DB.prepare("SELECT id FROM chats WHERE key = ?").bind(key).first();
+  if (!c) { c = { id: randomId() }; await env.DB.prepare("INSERT INTO chats (id, key, user_id, therapist_id, city) VALUES (?,?,?,?,?)").bind(c.id, key, u.id, th?.id || null, city).run(); }
+  return json({ ok: true, id: c.id });
+}
+async function messagesOf(env, id, after) {
+  const r = after ? await env.DB.prepare("SELECT id, sender, admin_name, body, created_at FROM chat_messages WHERE chat_id = ? AND created_at > ? ORDER BY created_at, rowid LIMIT 200").bind(id, after).all()
+                  : await env.DB.prepare("SELECT id, sender, admin_name, body, created_at FROM (SELECT id, sender, admin_name, body, created_at, rowid AS rid FROM chat_messages WHERE chat_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 200) ORDER BY created_at, rid").bind(id).all();
+  return r.results;
+}
+async function readChat(req, env, id, url) {
+  const u = await currentUser(req, env); if (!u) return json({ error: "Sign in first." }, 401);
+  const c = await chatRow(env, id); if (!c || c.user_id !== u.id) return json({ error: "Not found" }, 404);
+  const msgs = await messagesOf(env, id, url.searchParams.get("after"));
+  if (c.client_unread) await env.DB.prepare("UPDATE chats SET client_unread = 0 WHERE id = ?").bind(id).run();
+  return json({ chat: chatPublic({ ...c, client_unread: 0 }, "client"), messages: msgs });
+}
+async function clientSend(req, env, id, ctx) {
+  const u = await currentUser(req, env); if (!u) return json({ error: "Sign in first." }, 401);
+  const c = await chatRow(env, id); if (!c || c.user_id !== u.id) return json({ error: "Not found" }, 404);
+  const text = chatBody((await body(req)).body); if (!text) return json({ error: "Write something first." }, 400);
+  const burst = (await env.DB.prepare("SELECT COUNT(*) n FROM chat_messages m JOIN chats c ON c.id = m.chat_id WHERE c.user_id = ? AND m.sender = 'client' AND m.created_at > datetime('now','-10 minutes')").bind(u.id).first()).n;
+  if (burst >= CHAT_BURST) return json({ error: "That's a lot of messages at once. Give the therapist a few minutes to answer." }, 429);
+  const mid = randomId(), at = now();
+  await env.DB.prepare("INSERT INTO chat_messages (id, chat_id, sender, body, created_at) VALUES (?,?,?,?,?)").bind(mid, id, "client", text, at).run();
+  await env.DB.prepare("UPDATE chats SET last_at = ?, last_body = ?, last_from = 'client', team_unread = team_unread + 1 WHERE id = ?").bind(at, text, id).run();
+  let emailed = false;
+  if (STALE(c.team_notified_at, 30)) {
+    await env.DB.prepare("UPDATE chats SET team_notified_at = ? WHERE id = ?").bind(at, id).run();
+    const to = await notifyList(env, c.city, c.therapist_id);
+    emailed = Boolean(await sendEmail(env, { to, subject: `${u.name || "A client"} wrote in the site chat${c.therapist_name ? " · " + c.therapist_name : " · " + CITIES[c.city].name}`, text: [`${u.name || "A client"} (${u.email}) wrote${c.therapist_name ? " to " + c.therapist_name : " to the " + CITIES[c.city].name + " room"}:`, ``, `"${excerpt(text)}"`, ``, `Answer under Messages in the admin: ${env.SITE_URL}/admin.html#chat`, ``, `You get at most one of these emails per half hour per conversation; the chat itself shows everything.`].join("\n") }).catch(() => false));
+  }
+  return json({ ok: true, id: mid, created_at: at, emailed });
+}
+// team side: who may see which chat
+const chatVisible = (admin, me, c) => isOwner(admin) || (c.city === admin.role && (managesCity(admin) || (me && c.therapist_id === me.id) || c.therapist_id === null));
+async function adminChats(env, admin, url) {
+  if (isPlatform(admin)) return json({ error: "Your account sees the numbers, not the conversations." }, 403);
+  const me = isEmployee(admin) ? await therapistOf(env, admin) : null;
+  const city = scope(admin, url.searchParams.get("city"));
+  const where = [], args = [];
+  if (city) { where.push("c.city = ?"); args.push(city); }
+  if (isEmployee(admin)) { if (me) { where.push("(c.therapist_id = ? OR c.therapist_id IS NULL)"); args.push(me.id); } else where.push("c.therapist_id IS NULL"); }
+  const rows = (await env.DB.prepare(`SELECT c.*, t.name therapist_name, t.photo therapist_photo, u.name user_name, u.email user_email, u.photo user_photo FROM chats c LEFT JOIN therapists t ON t.id = c.therapist_id LEFT JOIN users u ON u.id = c.user_id${where.length ? " WHERE " + where.join(" AND ") : ""} ORDER BY COALESCE(c.last_at, c.created_at) DESC, c.rowid DESC LIMIT 300`).bind(...args).all()).results;
+  if (url.searchParams.get("count") === "1") return json({ unread: rows.reduce((n, c) => n + (c.team_unread || 0), 0) });
+  return json({ chats: rows.map((c) => chatPublic(c, "team")), unread: rows.reduce((n, c) => n + (c.team_unread || 0), 0), me: me ? { id: me.id, name: me.name } : null, city });
+}
+async function adminReadChat(env, admin, id, url) {
+  if (isPlatform(admin)) return json({ error: "Not found" }, 404);
+  const me = isEmployee(admin) ? await therapistOf(env, admin) : null;
+  const c = await chatRow(env, id); if (!c || !chatVisible(admin, me, c)) return json({ error: "Not found" }, 404);
+  const msgs = await messagesOf(env, id, url.searchParams.get("after"));
+  if (c.team_unread) await env.DB.prepare("UPDATE chats SET team_unread = 0 WHERE id = ?").bind(id).run();
+  return json({ chat: chatPublic({ ...c, team_unread: 0 }, "team"), messages: msgs });
+}
+async function adminSend(req, env, admin, id) {
+  if (isPlatform(admin)) return json({ error: "Not found" }, 404);
+  const me = await therapistOf(env, admin);   // any admin linked to a profile signs with that profile's name on their own chats
+  const c = await chatRow(env, id); if (!c || !chatVisible(admin, isEmployee(admin) ? me : null, c)) return json({ error: "Not found" }, 404);
+  const text = chatBody((await body(req)).body); if (!text) return json({ error: "Write something first." }, 400);
+  // signed with the therapist's name when the writer IS that therapist (or answers the room); otherwise "Zen · <name>" so the client knows who answered
+  const signed = me && (c.therapist_id === me.id || c.therapist_id === null) ? me.name : `Zen · ${admin.name}`;
+  const mid = randomId(), at = now();
+  await env.DB.prepare("INSERT INTO chat_messages (id, chat_id, sender, admin_id, admin_name, body, created_at) VALUES (?,?,?,?,?,?,?)").bind(mid, id, "therapist", admin.id, signed, text, at).run();
+  await env.DB.prepare("UPDATE chats SET last_at = ?, last_body = ?, last_from = 'therapist', client_unread = client_unread + 1 WHERE id = ?").bind(at, text, id).run();
+  let sent = false;
+  if (c.user_email && STALE(c.client_notified_at, 30)) {
+    await env.DB.prepare("UPDATE chats SET client_notified_at = ? WHERE id = ?").bind(at, id).run();
+    sent = Boolean(await sendEmail(env, { to: c.user_email, ...M("chat_client", pickLang(c.user_lang), { first: (c.user_name || "").split(" ")[0] || "there", from: signed, excerpt: excerpt(text), link: `${env.SITE_URL}/account#messages` }) }).catch(() => false));
+  }
+  return json({ ok: true, id: mid, created_at: at, signed, emailed: sent });
 }
 
 /* ---------- monthly statements (2026-09-13): per therapist, per currency, by how the money was taken ----------

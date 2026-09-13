@@ -126,6 +126,21 @@ await page.check("#j-agree"); await page.click("#j-send"); await page.waitForTim
 { const apps = await api("/api/admin/applications?status=new", { headers: { cookie } }); ok("join: the owner's list has the application with its fields", apps.status === 200 && apps.body.rows.some((r) => r.email === "nour.e2e@x.com" && r.city === "cairo" && r.area === "Maadi") && apps.body.counts.new >= 1, apps.body);
   const dup = await api("/api/apply", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "Nour Selim", email: "nour.e2e@x.com", phone: "+20", city: "cairo", agree: true }) }); ok("join: a second open application from the same email is refused", dup.status === 409, dup); }
 
+// 8c. messages (slice 7): the client writes to a therapist from the account; the Message links on the cards
+await go("find.html"); ok("find: every card has a Message link to the account chat", (await page.$$eval("#find-list .find-card a[href*='account.html?chat=']", (a) => a.length)) >= 5);
+await go("team.html"); ok("team: Message button next to Book", (await page.$$eval(".tm-actions a[href*='account.html?chat=']", (a) => a.length)) >= 5);
+await go("account.html?chat=th3#messages"); await page.waitForTimeout(1500);
+ok("account: ?chat=th3 opens the Messages tab on a chat with Adham", !(await page.isVisible("#tab-messages[hidden]")) && await page.isVisible("#chat-main") && (await page.textContent("#chat-name")).includes("Adham"), await page.textContent("#chat-name").catch(() => ""));
+await page.fill("#chat-input", "Hi Adham, is cupping ok two days after a 10k?"); await page.click("#chat-send"); await page.waitForTimeout(900);
+ok("account: the message shows in the thread, marked as mine", (await page.$$("#chat-msgs .msg.me")).length === 1 && (await page.textContent("#chat-msgs")).includes("two days after"), await page.textContent("#chat-msgs"));
+ok("account: the conversation list has Adham with my last line", (await page.$$("#chat-list .chat-item")).length === 1 && (await page.textContent("#chat-list")).includes("Adham") && (await page.textContent("#chat-list")).includes("You:"), await page.textContent("#chat-list"));
+{ const th = await api("/api/admin/chats", { headers: { cookie } }); ok("admin API: the owner sees the chat with 1 unread from Sara", th.status === 200 && th.body.chats.length === 1 && th.body.chats[0].unread === 1 && th.body.chats[0].therapist === "Adham", th.body);
+  const rep = await api("/api/admin/chats/" + th.body.chats[0].id, { method: "POST", headers: { cookie, "content-type": "application/json" }, body: JSON.stringify({ body: "Yes, two days is fine. See you Thursday." }) }); ok("admin API: the owner answers, signed Zen · name", rep.status === 200 && /^Zen · /.test(rep.body.signed), rep.body); }
+await page.waitForTimeout(200); await page.evaluate(() => refreshThread(true)); await page.waitForTimeout(800);
+ok("account: the answer arrives on the next refresh, signed", (await page.$$("#chat-msgs .msg:not(.me)")).length === 1 && (await page.textContent("#chat-msgs")).includes("Thursday") && (await page.textContent("#chat-msgs")).includes("Zen ·"), await page.textContent("#chat-msgs"));
+await page.selectOption("#chat-with", "room"); await page.click("#chat-start"); await page.waitForTimeout(900); ok("account: a second conversation with the room", (await page.$$("#chat-list .chat-item")).length === 2 && (await page.textContent("#chat-name")).includes("Zen Recovery"), await page.textContent("#chat-name"));
+await page.click(`.tabs button[data-tab="sessions"]`); await page.waitForTimeout(400); ok("account: sessions carry a Message button for the assigned therapist (or none when unassigned)", (await page.$$("#tab-sessions [data-chat]")).length >= 0);
+
 // 9. success page + no JS errors anywhere
 await go("success.html?free=1"); ok("success page renders", (await page.textContent("body")).length > 200);
 ok("no JS errors across the flow", errs.length === 0, errs);

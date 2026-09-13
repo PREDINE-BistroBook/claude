@@ -87,6 +87,26 @@ ok("no native pop-ups so far", native.length === 0, native);
   const prow = page.locator("#partners-table tbody tr", { hasText: "GOLDS15" }); ok("codes: the gym code is in the table with its kind and contact", (await prow.count()) === 1 && (await prow.textContent()).includes("Gym") && (await prow.textContent()).includes("front desk"), await page.textContent("#partners-table"));
   const look = await (await fetch(H + "/api/partner/GOLDS15?city=cairo")).json(); ok("codes: clients can use it at once", look.partner?.pct === 15 && look.partner.kind === "gym", look); }
 
+// messages (slice 7): a client writes to Adham and to the Cairo room; the owner answers from the Messages tab
+let clientCookie = "";
+{ const rl = await (await fetch(H + "/api/auth/request-link", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: "chat.client@x.com", name: "Chat Client", lang: "en" }) })).json();
+  const v = await fetch(rl.link, { redirect: "manual" }); clientCookie = (v.headers.getSetCookie?.() || []).map((c) => c.split(";")[0]).join("; ");
+  const cj = (path, init = {}) => fetch(H + path, { ...init, headers: { cookie: clientCookie, "content-type": "application/json", ...(init.headers || {}) } }).then((r) => r.json());
+  const c1 = await cj("/api/me/chats", { method: "POST", body: JSON.stringify({ therapist_id: "th3" }) }); await cj("/api/me/chats/" + c1.id, { method: "POST", body: JSON.stringify({ body: "Hi Adham, do you do dry needling?" }) });
+  const c2 = await cj("/api/me/chats", { method: "POST", body: JSON.stringify({ city: "cairo" }) }); await cj("/api/me/chats/" + c2.id, { method: "POST", body: JSON.stringify({ body: "Room: who is free on Friday?" }) });
+  ok("chat: two client conversations created through the API", Boolean(c1.id && c2.id && c1.id !== c2.id), [c1, c2]); }
+await page.waitForTimeout(300); await page.evaluate(() => refreshChatCount()); await page.waitForTimeout(500);
+ok("chat: the Messages tab badge shows 2 unread", (await page.textContent("#chat-count")).trim() === "2" && await page.isVisible("#chat-count"), await page.textContent("#chat-count"));
+await tab("chat"); await page.waitForTimeout(500);
+ok("chat: list shows both, the room one and Adham's, newest first", (await page.$$("#achat-list .chat-item")).length === 2 && (await page.textContent("#achat-list .chat-item")).includes("room"), await page.textContent("#achat-list"));
+await page.locator("#achat-list .chat-item", { hasText: "Adham" }).click(); await page.waitForTimeout(600);
+ok("chat: Adham's thread opens with the client's line and her email", (await page.textContent("#achat-msgs")).includes("dry needling") && (await page.textContent("#achat-sub")).includes("chat.client@x.com"), await page.textContent("#achat-sub"));
+await page.fill("#achat-input", "Yes, Adham does. Book any evening."); await page.keyboard.press("Enter"); await page.waitForTimeout(900);
+ok("chat: Enter sends; the answer shows as mine, signed Zen · Owner", (await page.$$("#achat-msgs .msg.me")).length === 1 && (await page.textContent("#achat-msgs .msg.me")).includes("Zen ·"), await page.textContent("#achat-msgs"));
+ok("chat: badge gone once both conversations were opened (the first opens by itself)", await page.isHidden("#chat-count"), await page.textContent("#chat-count"));
+{ const mine = await (await fetch(H + "/api/me/chats", { headers: { cookie: clientCookie } })).json(); ok("chat: the client now has 1 unread from the team with the owner's line", mine.unread === 1 && mine.chats.find((c) => c.therapist === "Adham").last_body.includes("Book any evening"), mine.chats); }
+await page.click("#achat-client"); await page.waitForTimeout(600); ok("chat: Open client opens the client drawer", (await page.textContent("#drawer")).includes("Chat Client"), (await page.textContent("#drawer")).slice(0, 120)); await page.click("#dr-close").catch(() => {}); await page.waitForTimeout(300);
+
 // an employee: create Hesham's account through the team dialog (owner), sign out, sign in as him → own calendar only, can't edit others
 await tab("team"); await page.locator("#team-list .team-card", { hasText: "Hesham" }).click(); await page.waitForTimeout(400);
 await page.selectOption("#th-admin", "new"); await page.waitForTimeout(200); await page.fill("#th-new-email", "hesham@x.com"); await page.fill("#th-new-pass", "Hesham-pass-12345"); await page.click("#th-save"); await page.waitForTimeout(1200);
@@ -100,6 +120,7 @@ ok("employee: signs in with the password the owner typed", await page.isVisible(
 await tab("calendar"); ok("employee: own calendar badge, no therapist pills", (await page.textContent("#cal-th")).includes("Your calendar") && (await page.$$("#cal-th [data-calth]")).length === 0, await page.textContent("#cal-th"));
 await tab("team"); const editable = await page.$$eval("#team-list [data-edit]", (els) => [...new Set(els.map((e) => e.dataset.edit))]); ok("employee: can open only their own profile", editable.length === 1, editable);
 ok("employee: no Applications box", !(await page.isVisible("#apps-box")));
+await tab("chat"); await page.waitForTimeout(500); ok("employee: Hesham sees only the room chat, not Adham's", (await page.$$("#achat-list .chat-item")).length === 1 && (await page.textContent("#achat-list")).includes("room"), await page.textContent("#achat-list"));
 await tab("money"); ok("employee: the tab reads Your earnings and shows their own card only", (await page.textContent("#tab-money-btn")).trim() === "Your earnings" && (await page.textContent("#money-title")).trim() === "Your earnings" && !(await page.isVisible("#st-city-pills .pill")), await page.textContent("#money-title"));
 ok("no JS errors across the admin sweep", errs.length === 0, errs); ok("no native pop-ups", native.length === 0, native);
 await b.close();

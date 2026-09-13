@@ -31,7 +31,7 @@ function card(th, i) {
       <p class="tm-meta">${LF(th, "languages") ? `<span>${t("Speaks {langs}", { langs: esc(LF(th, "languages")) })}</span>` : ""}${LF(th, "area") ? `<span>${t("Works in {area}", { area: esc(LF(th, "area")) })}${th.maps_url ? ` · <a href="${esc(th.maps_url)}" target="_blank" rel="noopener">${t("Map")}</a>` : ""}</span>` : ""}</p>
       <div class="tm-text">${text.map((p) => `<p class="tm-story">${esc(p)}</p>`).join("")}</div>
       ${LF(th, "certs") ? `<h3 class="tm-h">${t("Certifications")}</h3><ul class="tm-certs">${lines(LF(th, "certs")).map((c) => `<li><i></i><span>${esc(c)}</span></li>`).join("")}</ul>` : ""}
-      <div class="tm-actions"><a class="btn" href="${book}">${t("Book with {name}", { name: esc(first) })}</a>${th.instagram ? `<a class="btn ghost" href="https://instagram.com/${esc(th.instagram)}" target="_blank" rel="noopener">${t("Follow on Instagram")} · @${esc(th.instagram)}</a>` : ""}</div>
+      <div class="tm-actions"><a class="btn" href="${book}">${t("Book with {name}", { name: esc(first) })}</a><a class="btn ghost" href="account.html?chat=${esc(th.id)}#messages">${t("Message {name}", { name: esc(first) })}</a>${th.instagram ? `<a class="btn ghost" href="https://instagram.com/${esc(th.instagram)}" target="_blank" rel="noopener">${t("Follow on Instagram")} · @${esc(th.instagram)}</a>` : ""}</div>
     </div>
   </article>`;
 }
