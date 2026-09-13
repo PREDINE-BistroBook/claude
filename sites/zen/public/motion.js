@@ -39,7 +39,8 @@
   if (nav) { gsap.from(nav, { y: -24, opacity: 0, duration: .8, ease: "power3.out", delay: .5 }); ScrollTrigger.create({ start: 40, onUpdate: (s) => nav.classList.toggle("scrolled", s.scroll() > 40) }); }
 
   /* ---------- reveals ---------- */
-  const words = (el) => { if (el.dataset.split) return; el.dataset.split = "1"; const walk = (n) => { [...n.childNodes].forEach((c) => { if (c.nodeType === 3 && c.textContent.trim()) { const f = document.createDocumentFragment(); c.textContent.split(/(\s+)/).forEach((w) => { if (!w) return; if (/^\s+$/.test(w)) f.append(document.createTextNode(w)); else { const s = document.createElement("span"); s.className = "w"; s.innerHTML = `<span>${w.replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[ch]))}</span>`; f.append(s); } }); c.replaceWith(f); } else if (c.nodeType === 1 && !c.classList.contains("w")) walk(c); }); }; walk(el); };
+  // the translator swaps whole sentences in text nodes, so a heading is translated BEFORE it is split into words, and re-split when the language changes
+  const words = (el) => { if (el.dataset.split) return; if (el.__orig === undefined) el.__orig = el.innerHTML; if (window.ZenI18n?.apply) ZenI18n.apply(el); el.dataset.split = "1"; const walk = (n) => { [...n.childNodes].forEach((c) => { if (c.nodeType === 3 && c.textContent.trim()) { const f = document.createDocumentFragment(); c.textContent.split(/(\s+)/).forEach((w) => { if (!w) return; if (/^\s+$/.test(w)) f.append(document.createTextNode(w)); else { const s = document.createElement("span"); s.className = "w"; s.innerHTML = `<span>${w.replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[ch]))}</span>`; f.append(s); } }); c.replaceWith(f); } else if (c.nodeType === 1 && !c.classList.contains("w")) walk(c); }); }; walk(el); };
   const HEAD = "h1, h2", ITEMS = "p, li, .card, .btn, dt, dd, .method, .therapist, .svc, .step, .kpi, .reward, .place, .tm-feature, .field, .row, blockquote, figure, table, img, svg.cupfig, .links-grid a, .hero-visual, details";
   const seen = new WeakSet();
   function scan(root = document) {
@@ -74,7 +75,10 @@
     const real = muts.some((m) => [...m.addedNodes].some((n) => n.nodeType === 1 && !n.closest(".mveil, .aura") && !n.classList.contains("w")));
     if (!real) return; clearTimeout(t); t = setTimeout(() => scan(), 80);
   }).observe(document.body, { childList: true, subtree: true });
-  document.addEventListener("zen:lang", () => setTimeout(scan, 120));
+  document.addEventListener("zen:lang", () => {
+    $$("[data-split]").forEach((h) => { h.innerHTML = h.__orig; delete h.dataset.split; words(h); gsap.set($$(".w > span", h), { yPercent: 0, rotate: 0 }); });   // fresh text in the new language, already in place (no replay)
+    setTimeout(scan, 120);
+  });
 
   /* ---------- buttons lean toward the pointer ---------- */
   if (matchMedia("(pointer: fine)").matches) {
