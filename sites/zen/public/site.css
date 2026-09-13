@@ -479,3 +479,8 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
 .therapist .km{display:block; font-size:.8rem; color:var(--mark); font-weight:500}
 .tm-km{display:inline-flex; align-items:center; gap:6px; font-size:.82rem; color:var(--mark); font-weight:500}
 @media (max-width:520px){ .find-card{padding:14px} .find-card .ph{width:56px; height:56px; font-size:1.3rem} }
+/* booking rules (2026-09-13) */
+.rules-box{border:1px solid var(--line); border-radius:14px; padding:12px 16px; background:var(--ground-3)} .rules-box summary{cursor:pointer; list-style:none; display:flex; gap:10px; align-items:baseline; flex-wrap:wrap} .rules-box summary::-webkit-details-marker{display:none} .rules-box[open] summary{margin-bottom:8px}
+.rules-list{margin:0; padding-inline-start:18px; display:grid; gap:8px; color:var(--ink-soft); font-size:.92rem} .rules-list li::marker{color:var(--mark)}
+#rules .rules-list{max-width:44rem; padding:0 var(--gutter) 40px; margin-inline-start:0; list-style-position:inside}
+.session-card .tools button{background:none; border:0; padding:0; font:inherit; color:#c2410c; cursor:pointer; text-decoration:underline}

@@ -30,7 +30,7 @@
 
 import { CITIES, SLOTS } from "./catalog.js";
 import { randomId, signPayload, verifyPayload, getCookie, setCookie, clearCookie, hashPassword, verifyPassword } from "./auth.js";
-import { therapistPrices, nameIn, CITY_KEYS, USER_COOKIE, ADMIN_COOKIE, json, clean, normEmail, isDate, isTime, fmt, now, today, feeOn, body, isLive, parseIntake, healthFlags, settings, currentUser, currentAdmin, scope, sendEmail, sendSms, stripeCheckout, slotsFor, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, maybeRewardLoyalty, isPlatform, isOwner, seesAll, therapistOf, visibleWhere, canSeeBooking, isPartner, isEmployee, managesCity, pickLang, userLang } from "./lib.js";
+import { therapistPrices, nameIn, hoursUntil, cancelTerms, stripeRefund, fillFromWaitlist, payProvider, fawryOn, fawryCheckout, fawryStatus, fawryNotificationValid, CITY_KEYS, USER_COOKIE, ADMIN_COOKIE, json, clean, normEmail, isDate, isTime, fmt, now, today, feeOn, body, isLive, parseIntake, healthFlags, settings, currentUser, currentAdmin, scope, sendEmail, sendSms, stripeCheckout, slotsFor, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, maybeRewardLoyalty, isPlatform, isOwner, seesAll, therapistOf, visibleWhere, canSeeBooking, isPartner, isEmployee, managesCity, pickLang, userLang } from "./lib.js";
 import { M, paidLineFor } from "./mail.js";
 import { featureRoute, adminFeatureRoute, giftPaid, packagePaid, authFlags } from "./features.js";
 import { runCron } from "./cron.js";
@@ -53,12 +53,15 @@ export default {
 async function route(req, env, url, ctx) {
   const p = url.pathname, m = req.method;
   if (p === "/api/status") return status(env);
+  if (p === "/api/fawry/return" && m === "GET") return fawryReturn(env, url);
+  if (p === "/api/fawry/notify" && m === "POST") return fawryNotify(req, env);
   if (p === "/api/catalog" && m === "GET") return publicCatalog(env);
   if (p === "/api/auth/google" && m === "GET") return googleStart(env, url);
   if (p === "/api/auth/google/callback" && m === "GET") return googleCallback(req, env, url);
   if (p === "/api/me/checkins" && m === "GET") return myCheckins(req, env);
   if (p === "/api/me/checkins" && m === "POST") return saveCheckin(req, env);
   { const fb = p.match(/^\/api\/me\/bookings\/([a-z0-9]+)\/feedback$/); if (fb && m === "POST") return bookingFeedback(req, env, fb[1]); }
+  { const cb = p.match(/^\/api\/me\/bookings\/([a-z0-9]+)\/cancel$/); if (cb && m === "POST") return cancelMyBooking(req, env, cb[1]); if (cb && m === "GET") return cancelPreview(req, env, cb[1]); }
   if (p === "/api/checkout" && m === "POST") return checkout(req, env);
   if (p === "/api/stripe-webhook" && m === "POST") return webhook(req, env);
 
@@ -130,8 +133,8 @@ const slotLabel = (s) => SLOTS[s] || s;
 async function status(env) {
   const st = await settings(env);
   const f = authFlags(env);
-  return json({ live: isLive(env), preview: !isLive(env), google: Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET), apple: f.apple, sms: f.sms,
-    settings: { loyalty_every: st.loyalty_every, referral_pct: st.referral_pct, birthday_pct: st.birthday_pct, package_pct: st.package_pct }, gmaps: st.gmaps, whatsapp: st.whatsapp, review: st.review });
+  return json({ live: isLive(env) || fawryOn(env), preview: !isLive(env) && !fawryOn(env), fawry: fawryOn(env), pay: { egp: payProvider(env, "egp"), eur: payProvider(env, "eur") }, google: Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET), apple: f.apple, sms: f.sms,
+    settings: { loyalty_every: st.loyalty_every, referral_pct: st.referral_pct, birthday_pct: st.birthday_pct, package_pct: st.package_pct }, rules: st.rules, gmaps: st.gmaps, whatsapp: st.whatsapp, review: st.review });
 }
 
 // ---------- client auth ----------
@@ -333,7 +336,7 @@ async function checkout(req, env) {
   }
   const flagged = Boolean(b.flagged) || Boolean(user && !user.approved && healthFlags(user.intake).length);
   const id = randomId();
-  const base = { lang: pickLang(b.lang, user?.lang), id, user_id: user?.id || null, email, name, phone, city: cityKey, service_id: svc.id, service_name: svc.name, date, slot, note, list_amount: list, amount, currency: city.currency, discount_kind, credit_id: credit?.id || null, platform_fee: feeOn(amount), therapist_id, package_id: pack?.id || null, gift_code: gift?.code || null, partner_code: partner?.code || null };
+  const base = { lang: pickLang(b.lang, user?.lang), agreed_at: b.agreed ? now() : null, id, user_id: user?.id || null, email, name, phone, city: cityKey, service_id: svc.id, service_name: svc.name, date, slot, note, list_amount: list, amount, currency: city.currency, discount_kind, credit_id: credit?.id || null, platform_fee: feeOn(amount), therapist_id, package_id: pack?.id || null, gift_code: gift?.code || null, partner_code: partner?.code || null };
 
   if (flagged) { // no card: a therapist checks the health answers first
     await insertBooking(env, { ...base, status: "review" });
@@ -347,7 +350,15 @@ async function checkout(req, env) {
     await afterPaid(env, { ...base, status: "paid" });
     return json({ url: `${env.SITE_URL}/success.html?free=1` });
   }
-  if (!isLive(env)) return json({ preview: true, error: "Payments are not switched on yet." }, 503);
+  const provider = payProvider(env, city.currency);
+  if (!provider) return json({ preview: true, error: "Payments are not switched on yet." }, 503);
+  if (provider === "fawry") {   // Egypt: Fawry's hosted page (card, wallet or a Fawry reference number), settled to Zen's Egyptian account; the 2% is recorded for the monthly statement
+    const ref = "bk" + id;
+    let pay; try { pay = await fawryCheckout(env, { ref, amount, name: svc.short || svc.name, description: `${date} · ${slotLabel(slot)}`, email, phone, customerName: name, returnUrl: `${env.SITE_URL}/api/fawry/return`, lang: base.lang }); } catch (e) { return json({ error: e.message }, 502); }
+    await insertBooking(env, { ...base, status: "pending", stripe_session: ref, provider: "fawry" });
+    if (credit) await env.DB.prepare("UPDATE credits SET status = 'reserved', booking_id = ? WHERE id = ?").bind(id, credit.id).run();
+    return json({ url: pay.url, provider: "fawry" });
+  }
 
   const label = discount_kind ? ` · ${discount_kind === "gift" ? "gift applied" : discount_kind === "partner" ? `${partner.pct}% partner discount` : `${credit.pct}% reward applied`}` : "";
   let session;
@@ -361,7 +372,7 @@ async function checkout(req, env) {
 }
 
 async function insertBooking(env, o) {
-  const cols = ["id", "user_id", "email", "name", "phone", "city", "service_id", "service_name", "date", "slot", "note", "list_amount", "amount", "currency", "discount_kind", "credit_id", "platform_fee", "status", "source", "stripe_session", "payment_intent", "paid_at", "done_at", "therapist_id", "package_id", "gift_code", "partner_code", "lang"];
+  const cols = ["id", "user_id", "email", "name", "phone", "city", "service_id", "service_name", "date", "slot", "note", "list_amount", "amount", "currency", "discount_kind", "credit_id", "platform_fee", "status", "source", "stripe_session", "payment_intent", "paid_at", "done_at", "therapist_id", "package_id", "gift_code", "partner_code", "lang", "agreed_at", "provider"];
   await env.DB.prepare(`INSERT INTO bookings (${cols.join(",")}) VALUES (${cols.map(() => "?").join(",")})`).bind(...cols.map((c) => o[c] ?? (c === "source" ? "web" : null))).run();
 }
 // Use up whatever paid for the booking (reward credit, gift, package session). restore() undoes it on cancel.
@@ -374,6 +385,41 @@ async function restore(env, bk) {
   if (bk.credit_id) await env.DB.prepare("UPDATE credits SET status = 'available', booking_id = NULL, used_at = NULL WHERE id = ?").bind(bk.credit_id).run();
   if (bk.gift_code) await env.DB.prepare("UPDATE gifts SET status = 'paid', redeemed_at = NULL, booking_id = NULL WHERE code = ? AND booking_id = ?").bind(bk.gift_code, bk.id).run();
   if (bk.package_id) await env.DB.prepare("UPDATE client_packages SET remaining = remaining + 1 WHERE id = ?").bind(bk.package_id).run();
+}
+
+// ---------- Fawry: the client comes back, and Fawry tells us server-to-server; both settle only after Get Payment Status says PAID ----------
+async function fawrySettle(env, ref) {
+  const st = await fawryStatus(env, ref);
+  if (!st.paid) return { paid: false, status: st.status };
+  const kind = ref.slice(0, 2), id = ref.slice(2);
+  if (kind === "bk") {
+    const bk = await env.DB.prepare("SELECT * FROM bookings WHERE id = ? AND stripe_session = ?").bind(id, ref).first();
+    if (!bk) return { paid: true, missing: true };
+    if (bk.status === "pending") {
+      await env.DB.prepare("UPDATE bookings SET status = 'paid', paid_at = ?, payment_intent = ? WHERE id = ? AND status = 'pending'").bind(now(), st.fawryRef, id).run();
+      await consume(env, bk); await afterPaid(env, { ...bk, status: "paid", payment_intent: st.fawryRef });
+    }
+    return { paid: true, kind, id };
+  }
+  if (kind === "gf") { await giftPaid(env, id); return { paid: true, kind, id }; }
+  if (kind === "pk") { await packagePaid(env, id, st.fawryRef); return { paid: true, kind, id }; }
+  return { paid: true, unknown: true };
+}
+const fawryLanding = (env, ref, ok) => { const kind = ref.slice(0, 2); if (kind === "gf") return `${env.SITE_URL}/${ok ? "success.html?gift=1" : "giftcard?pay=failed"}`; if (kind === "pk") return `${env.SITE_URL}/account${ok ? "?package=1" : "?pay=failed"}#packages`; return `${env.SITE_URL}/${ok ? "success.html?f=1" : "booking?pay=failed"}`; };
+async function fawryReturn(env, url) {
+  const ref = clean(url.searchParams.get("merchantRefNumber") || url.searchParams.get("merchantRefNum") || "", 40);
+  if (!fawryOn(env) || !/^(bk|gf|pk)[a-z0-9]+$/.test(ref)) return Response.redirect(`${env.SITE_URL}/booking`, 302);
+  let r; try { r = await fawrySettle(env, ref); } catch (e) { console.error("fawry return", e.message); r = { paid: false }; }
+  return Response.redirect(fawryLanding(env, ref, r.paid), 302);
+}
+async function fawryNotify(req, env) {
+  if (!fawryOn(env)) return new Response("off", { status: 404 });
+  const n = await req.json().catch(() => null);
+  if (!n || !(await fawryNotificationValid(env, n))) return new Response("bad signature", { status: 400 });
+  const ref = String(n.merchantRefNumber || "");
+  if (String(n.orderStatus || "").toUpperCase() === "PAID" && /^(bk|gf|pk)[a-z0-9]+$/.test(ref)) { try { await fawrySettle(env, ref); } catch (e) { console.error("fawry notify", e.message); } }
+  else if (["EXPIRED", "CANCELED", "CANCELLED", "FAILED"].includes(String(n.orderStatus || "").toUpperCase()) && /^bk[a-z0-9]+$/.test(ref)) { await env.DB.prepare("UPDATE bookings SET status = 'cancelled' WHERE id = ? AND status = 'pending'").bind(ref.slice(2)).run(); }
+  return new Response("ok");
 }
 
 // ---------- webhook ----------
@@ -519,7 +565,7 @@ async function adminBookings(env, admin, url) {
   const city = scope(admin, url.searchParams.get("city"));
   const w = cityWhere(city);
   const status = clean(url.searchParams.get("status"), 20), from = clean(url.searchParams.get("from"), 10), to = clean(url.searchParams.get("to"), 10), qs = clean(url.searchParams.get("q"), 60);
-  let sql = `SELECT b.id, b.user_id, b.name, b.email, b.phone, b.city, b.service_name, b.date, b.slot, b.amount, b.list_amount, b.currency, b.discount_kind, b.platform_fee, b.status, b.source, b.note, b.created_at, b.rating, b.feedback, b.therapist_note, b.therapist_id, b.gift_code, b.partner_code, b.package_id, t.name therapist, u.intake AS user_intake, u.notes AS user_notes, u.nearest_city AS user_nearest, u.lang AS user_lang, u.approved AS user_approved
+  let sql = `SELECT b.id, b.user_id, b.name, b.email, b.phone, b.city, b.service_name, b.date, b.slot, b.amount, b.list_amount, b.currency, b.discount_kind, b.platform_fee, b.status, b.source, b.note, b.created_at, b.cancel_fee, b.cancelled_at, b.cancelled_by, b.refund_amount, b.refund_status, b.rating, b.feedback, b.therapist_note, b.therapist_id, b.gift_code, b.partner_code, b.package_id, t.name therapist, u.intake AS user_intake, u.notes AS user_notes, u.nearest_city AS user_nearest, u.lang AS user_lang, u.approved AS user_approved
     FROM bookings b LEFT JOIN users u ON u.id = b.user_id LEFT JOIN therapists t ON t.id = b.therapist_id WHERE b.status != 'pending'${w.sql.replace(" city = ?", " b.city = ?")}`;
   const args = [...w.args];
   const v = visibleWhere(admin, await therapistOf(env, admin), "b.therapist_id"); sql += v.sql; args.push(...v.args);
@@ -570,8 +616,38 @@ async function adminUpdateBooking(req, env, admin, id) {
     .bind(status || bk.status, slot, note, tnote, th, status || bk.status, now(), id).run();
   if (bk.status === "review" && status && status !== "cancelled" && bk.user_id) { await env.DB.prepare("UPDATE users SET approved = 1 WHERE id = ?").bind(bk.user_id).run(); await maybeRewardReferrer(env, bk.user_id); }
   if (status === "done" && bk.status !== "done") await maybeRewardLoyalty(env, bk.user_id);
-  if (status === "cancelled" && bk.status !== "cancelled") await restore(env, bk);
+  if (status === "cancelled" && bk.status !== "cancelled") await closeBooking(env, bk, { by: "admin", feePct: b.fee_pct === undefined ? undefined : Math.min(100, Math.max(0, Number(b.fee_pct) || 0)) });
+  if (status === "no_show" && bk.status !== "no_show") await closeBooking(env, bk, { by: "admin", noShow: true });
   return json({ ok: true });
+}
+
+// ---------- cancellations (2026-09-13): the owner's rules decide the fee; online payments are refunded on Zen's account; the freed day goes to the waitlist ----------
+async function closeBooking(env, bk, { by, feePct, noShow = false }) {
+  const st = await settings(env), terms = cancelTerms(bk, st.rules, { noShow, feePct });
+  const refund_status = noShow ? "none" : await stripeRefund(env, bk, terms.refund);
+  await env.DB.prepare("UPDATE bookings SET cancel_fee = ?, cancelled_at = ?, cancelled_by = ?, refund_amount = ?, refund_status = ? WHERE id = ?").bind(terms.fee, now(), by, noShow ? 0 : terms.refund, refund_status, bk.id).run();
+  if (!noShow && terms.fee === 0) await restore(env, bk);   // a free cancellation gives the reward / gift / package session back; a late one keeps it, like the fee
+  const lang = pickLang(bk.lang), fmtM = (v) => fmt(v, bk.currency);
+  if (!noShow && bk.email) sendEmail(env, { to: bk.email, ...M("booking_cancelled", lang, { name: bk.name, service: nameIn(await serviceOf(env, bk.city, bk.service_id), lang, cityNameIn(bk.city, lang)) || bk.service_name, date: bk.date, city: cityNameIn(bk.city, lang), by, hours: st.rules.cancel_hours, fee: terms.fee ? fmtM(terms.fee) : "", refund: terms.refund ? fmtM(terms.refund) : "", refund_status, site: env.SITE_URL }) }).catch(() => {});
+  if (!noShow) fillFromWaitlist(env, bk.city, bk.date, slotLabel(bk.slot), M).catch((e) => console.error("waitlist fill", e.message));
+  return { ...terms, refund_status };
+}
+async function cancelPreview(req, env, id) {
+  const u = await currentUser(req, env); if (!u) return json({ error: "Sign in first." }, 401);
+  const bk = await env.DB.prepare("SELECT * FROM bookings WHERE id = ? AND user_id = ?").bind(id, u.id).first();
+  if (!bk) return json({ error: "Not found" }, 404);
+  const st = await settings(env); return json({ ...cancelTerms(bk, st.rules), rules: st.rules, can_cancel: ["pending", "paid", "confirmed", "review"].includes(bk.status) });
+}
+async function cancelMyBooking(req, env, id) {
+  const u = await currentUser(req, env); if (!u) return json({ error: "Sign in first." }, 401);
+  const bk = await env.DB.prepare("SELECT * FROM bookings WHERE id = ? AND user_id = ?").bind(id, u.id).first();
+  if (!bk) return json({ error: "Not found" }, 404);
+  if (!["pending", "paid", "confirmed", "review"].includes(bk.status)) return json({ error: "This booking is already closed." }, 400);
+  if (hoursUntil(bk) < 0) return json({ error: "The session has already started. Message the room instead." }, 400);
+  await env.DB.prepare("UPDATE bookings SET status = 'cancelled' WHERE id = ?").bind(id).run();
+  const r = await closeBooking(env, bk, { by: "client" });
+  sendEmail(env, { to: await notifyList(env, bk.city, bk.therapist_id), subject: `Cancelled · ${CITIES[bk.city].name} · ${bk.name} · ${bk.date}`, text: [`${bk.name} cancelled their ${bk.service_name} on ${bk.date} ${slotLabel(bk.slot)}.`, r.late ? `Inside the ${r.hours < 0 ? 0 : Math.round(r.hours)}h mark: fee kept ${fmt(r.fee, bk.currency)}.` : `Outside the window: no fee.`, r.refund ? `Refund ${fmt(r.refund, bk.currency)}: ${r.refund_status === "done" ? "done through Stripe" : r.refund_status === "manual" ? "TO ARRANGE (no online payment to refund automatically)" : "none"}.` : ``, `The day was offered to the waitlist.`].join("\n") }).catch(() => {});
+  return json({ ok: true, late: r.late, fee: r.fee, refund: r.refund, refund_status: r.refund_status });
 }
 
 // A therapist takes an unassigned booking in their city. First come, first served; the owner can still reassign.
@@ -636,6 +712,9 @@ async function adminSaveSettings(req, env, admin) {
     env.DB.prepare("INSERT OR REPLACE INTO settings VALUES ('referral_pct', ?)").bind(num(b.referral_pct ?? cur.referral_pct, 0, 100, 40)),
     env.DB.prepare("INSERT OR REPLACE INTO settings VALUES ('birthday_pct', ?)").bind(num(b.birthday_pct ?? cur.birthday_pct, 0, 100, 20)),
     env.DB.prepare("INSERT OR REPLACE INTO settings VALUES ('package_pct', ?)").bind(num(b.package_pct ?? cur.package_pct, 0, 100, 15)),
+    env.DB.prepare("INSERT OR REPLACE INTO settings VALUES ('cancel_hours', ?)").bind(num(b.cancel_hours ?? cur.rules.cancel_hours, 0, 168, 24)),
+    env.DB.prepare("INSERT OR REPLACE INTO settings VALUES ('late_pct', ?)").bind(num(b.late_pct ?? cur.rules.late_pct, 0, 100, 100)),
+    env.DB.prepare("INSERT OR REPLACE INTO settings VALUES ('noshow_pct', ?)").bind(num(b.noshow_pct ?? cur.rules.noshow_pct, 0, 100, 100)),
   ];
   const link = (v) => { v = clean(v, 300); return /^https?:\/\//.test(v) ? v : ""; };
   for (const c of CITY_KEYS) {

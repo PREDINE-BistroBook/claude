@@ -17,6 +17,39 @@ export const addDays = (d, n) => { const x = new Date(d + "T12:00:00Z"); x.setUT
 export const feeOn = (amount) => Math.round((amount * PLATFORM_FEE_BPS) / 10000);
 export const body = async (req) => (await req.json().catch(() => null)) || {};
 export const isLive = (env) => Boolean(env.STRIPE_SECRET_KEY && env.ZEN_STRIPE_ACCOUNT);
+/* ---------- Fawry (2026-09-13): card / wallet / Fawry-reference payments in Egypt, settled to an Egyptian bank account.
+   Hosted checkout: we POST an init request, Fawry answers with the URL of its payment page; the client comes back on returnUrl and
+   Fawry also POSTs a server notification. We never trust either alone: every settlement re-reads the order with Get Payment Status V2. ---------- */
+export const fawryOn = (env) => Boolean(env.FAWRY_MERCHANT_CODE && env.FAWRY_SECURE_KEY);
+export const fawryBase = (env) => (env.FAWRY_ENV === "production" ? "https://atfawry.com" : "https://atfawry.fawrystaging.com");
+// which provider takes a payment in this currency: Fawry for EGP when it is set up, else Stripe when live, else nothing (preview)
+export const payProvider = (env, currency) => (String(currency).toLowerCase() === "egp" && fawryOn(env) ? "fawry" : isLive(env) ? "stripe" : null);
+export async function sha256hex(s) { const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)); return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, "0")).join(""); }
+const two = (minor) => (minor / 100).toFixed(2);
+export async function fawryCheckout(env, { ref, amount, name, description, email, phone, customerName, returnUrl, lang }) {
+  const price = two(amount), item = { itemId: ref, description: (description ? `${name} — ${description}` : name).slice(0, 200), price: Number(price), quantity: 1 };
+  const signature = await sha256hex(env.FAWRY_MERCHANT_CODE + ref + "" + returnUrl + item.itemId + "1" + price + env.FAWRY_SECURE_KEY);
+  const payload = { merchantCode: env.FAWRY_MERCHANT_CODE, merchantRefNum: ref, customerMobile: String(phone || "").replace(/[^\d+]/g, "") || "01000000000", customerEmail: email || undefined, customerName: customerName || undefined, customerProfileId: "", paymentExpiry: Date.now() + 30 * 60 * 1000, language: lang === "ar" ? "ar-eg" : "en-gb", chargeItems: [item], returnUrl, authCaptureModePayment: false, signature };
+  const r = await fetch(`${fawryBase(env)}/fawrypay-api/api/payments/init`, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/plain" }, body: JSON.stringify(payload) });
+  const text = await r.text();
+  let url = text.trim(); try { const j = JSON.parse(text); url = j.url || j.paymentUrl || j.redirectUrl || url; } catch {}
+  if (!r.ok || !/^https?:\/\//.test(url)) { console.error("fawry init", r.status, text.slice(0, 300)); throw new Error("Fawry couldn't start the payment. Please try again or message Zen on WhatsApp."); }
+  return { url, id: ref };
+}
+export async function fawryStatus(env, ref) {
+  const signature = await sha256hex(env.FAWRY_MERCHANT_CODE + ref + env.FAWRY_SECURE_KEY);
+  const r = await fetch(`${fawryBase(env)}/ECommerceWeb/Fawry/payments/status/v2?merchantCode=${encodeURIComponent(env.FAWRY_MERCHANT_CODE)}&merchantRefNumber=${encodeURIComponent(ref)}&signature=${signature}`, { headers: { accept: "application/json" } });
+  const j = await r.json().catch(() => ({}));
+  return { paid: r.ok && String(j.orderStatus || "").toUpperCase() === "PAID", status: j.orderStatus || null, fawryRef: j.fawryRefNumber || j.referenceNumber || null, amount: j.paymentAmount ?? j.orderAmount ?? null, method: j.paymentMethod || null, raw: j };
+}
+// server notification (V2, with the V1 shape accepted too): true when the message signature matches our secure key
+export async function fawryNotificationValid(env, n) {
+  const p = (v) => (v === undefined || v === null || v === "" ? "" : Number(v).toFixed(2));
+  const v2 = await sha256hex(String(n.fawryRefNumber || "") + String(n.merchantRefNumber || "") + p(n.paymentAmount) + p(n.orderAmount) + String(n.orderStatus || "") + String(n.paymentMethod || "") + String(n.paymentRefrenceNumber || n.paymentReferenceNumber || "") + env.FAWRY_SECURE_KEY);
+  const v1 = await sha256hex(String(n.fawryRefNumber || "") + String(n.merchantRefNumber || "") + p(n.paymentAmount) + String(n.orderStatus || "") + env.FAWRY_SECURE_KEY);
+  const given = String(n.messageSignature || n.signature || "").toLowerCase();
+  return given === v2 || given === v1;
+}
 // Services come from the D1 `services` table (editable in the admin); src/catalog.js is only the seed/fallback.
 // Shape matches the old static catalog: { cairo: { name, currency, tz, services: { id: { name, amount, minutes, description } } } }
 // Names are built as "Dry cupping · 45 min · Cairo" so bookings keep the same service_name convention.
@@ -80,6 +113,42 @@ export function localNow(tz) {
   const g = (t) => p.find((x) => x.type === t)?.value || "00";
   return { date: `${g("year")}-${g("month")}-${g("day")}`, minutes: (Number(g("hour")) % 24) * 60 + Number(g("minute")) };
 }
+// hours from now (city time) to the start of a booking: an exact HH:MM slot, or the start of the window (morning 9, afternoon 12, evening 17)
+export function hoursUntil(bk) {
+  const tz = CITIES[bk.city]?.tz || "UTC", nowL = localNow(tz);
+  const start = /^\d\d:\d\d$/.test(bk.slot || "") ? Number(bk.slot.slice(0, 2)) * 60 + Number(bk.slot.slice(3)) : ({ morning: 9 * 60, afternoon: 12 * 60, evening: 17 * 60 }[bk.slot] ?? 9 * 60);
+  const days = Math.round((Date.UTC(...bk.date.split("-").map(Number).map((v, i) => (i === 1 ? v - 1 : v))) - Date.UTC(...nowL.date.split("-").map(Number).map((v, i) => (i === 1 ? v - 1 : v)))) / 864e5);
+  return (days * 1440 + start - nowL.minutes) / 60;
+}
+// what a cancellation costs now: { late, fee, refund } in minor units, from the owner's rules
+export function cancelTerms(bk, rules, opts = {}) {
+  const hrs = hoursUntil(bk), late = hrs < rules.cancel_hours;
+  const pct = opts.noShow ? rules.noshow_pct : opts.feePct !== undefined ? opts.feePct : late ? rules.late_pct : 0;
+  const paid = ["paid", "confirmed", "done"].includes(bk.status) ? Number(bk.amount) || 0 : 0;
+  const fee = Math.min(paid, Math.round((paid * pct) / 100));
+  return { hours: hrs, late, pct, fee, refund: paid - fee, paid };
+}
+// refund (part of) an online payment on Zen's connected account; the platform fee is refunded proportionally. Returns "done" | "manual" (nothing online to refund, or Stripe not live)
+export async function stripeRefund(env, bk, amount) {
+  if (!amount || amount <= 0) return "none";
+  if (bk.provider === "fawry" || !isLive(env) || !bk.payment_intent) return "manual";
+  const params = new URLSearchParams({ payment_intent: bk.payment_intent, amount: String(amount), refund_application_fee: "true" });
+  const r = await fetch("https://api.stripe.com/v1/refunds", { method: "POST", headers: { authorization: `Bearer ${env.STRIPE_SECRET_KEY}`, "Stripe-Account": env.ZEN_STRIPE_ACCOUNT, "content-type": "application/x-www-form-urlencoded", "Stripe-Version": "2024-06-20" }, body: params });
+  if (!r.ok) { console.error("stripe refund", await r.text()); return "manual"; }
+  return "done";
+}
+// a freed day: tell the first people waiting for that city/day (once each)
+export async function fillFromWaitlist(env, city, date, slotLabelText, M) {
+  const rows = (await env.DB.prepare("SELECT w.*, u.email, u.name, u.lang FROM waitlist w JOIN users u ON u.id = w.user_id WHERE w.city = ? AND w.date = ? AND w.notified_at IS NULL ORDER BY w.created_at LIMIT 3").bind(city, date).all()).results;
+  let n = 0;
+  for (const w of rows) {
+    const ok = await sendEmail(env, { to: w.email, ...M("waitlist", w.lang && ["en", "it", "ar"].includes(w.lang) ? w.lang : "en", { first: (w.name || "").split(" ")[0], city: CITIES[city].name, date, times: slotLabelText, link: `${env.SITE_URL}/booking?city=${city}&date=${date}` }) });
+    await env.DB.prepare("UPDATE waitlist SET notified_at = ? WHERE id = ?").bind(now(), w.id).run();
+    await logMessage(env, { user_id: w.user_id, kind: "waitlist", channel: "email", status: ok ? "sent" : "failed", detail: `${city} ${date} (freed by a cancellation)` }).catch(() => {});
+    n++;
+  }
+  return n;
+}
 export const FLAGS = ["pregnant", "anticoagulant", "bleeding", "heart", "diabetes", "skin", "surgery"];
 export function parseIntake(t) { try { return t ? JSON.parse(t) : null; } catch { return null; } }
 export function healthFlags(intakeText) { const i = parseIntake(intakeText); return i?.health ? i.health.filter((h) => FLAGS.includes(h)) : []; }
@@ -88,6 +157,7 @@ export async function settings(env) {
   const rows = (await env.DB.prepare("SELECT key, value FROM settings").all()).results;
   const s = Object.fromEntries(rows.map((r) => [r.key, r.value]));
   return { loyalty_every: Number(s.loyalty_every || 10), referral_pct: Number(s.referral_pct || 40), birthday_pct: Number(s.birthday_pct || 50), package_pct: Number(s.package_pct || 15),
+    rules: { cancel_hours: Number(s.cancel_hours ?? 24), late_pct: Number(s.late_pct ?? 100), noshow_pct: Number(s.noshow_pct ?? 100) },
     platform_fee_pct: PLATFORM_FEE_BPS / 100, gmaps: { cairo: s.gmaps_cairo || "", dahab: s.gmaps_dahab || "", florence: s.gmaps_florence || "" }, whatsapp: { cairo: s.wa_cairo || "", dahab: s.wa_dahab || "", florence: s.wa_florence || "" },
     review: { cairo: s.review_cairo || "", dahab: s.review_dahab || "", florence: s.review_florence || "" },
     address: { cairo: s.addr_cairo || "", dahab: s.addr_dahab || "", florence: s.addr_florence || "" }, team: { cairo: s.team_cairo || "", dahab: s.team_dahab || "", florence: s.team_florence || "" } };

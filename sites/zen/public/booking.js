@@ -226,7 +226,8 @@ function updateSummary() {
   $("#sum-discount-line").hidden = !dc; if (dc) { $("#sum-discount").textContent = dc.label; $("#sum-discount-amt").textContent = "− " + money(dc.off, c.currency); }
   const review = $("#flagged").checked || !$("#review-note").hidden;
   $("#sum-total").textContent = review ? t("Pay at the session") : total === 0 ? t("Nothing to pay") : money(total, c.currency);
-  $("#pay").textContent = review ? t("Send for a therapist's OK") : total === 0 ? t("Reserve my free session") : t("Reserve and pay");
+  $("#pay").textContent = review ? t("Send for a therapist's OK") : total === 0 ? t("Reserve my free session") : (PAY[c.currency.toLowerCase()] === "fawry" ? t("Reserve and pay with Fawry") : t("Reserve and pay"));
+  $("#pay-note").textContent = review || total === 0 ? "" : PAY[c.currency.toLowerCase()] === "fawry" ? t("Card, mobile wallet or a Fawry reference number, in EGP. Secure page by Fawry.") : t("Secure card payment by Stripe.");
 }
 $("#booking").addEventListener("change", (e) => { updateSummary(); if (e.target.name === "service") renderPrep(); });
 $("#flagged").addEventListener("change", updateSummary);
@@ -245,8 +246,10 @@ $("#booking").addEventListener("submit", async (e) => {
     city, service: s.id, date: $("#date").value, slot, therapist_id: $("#therapist").value || undefined,
     name: $("#name").value.trim(), phone: $("#phone").value.trim(), email: $("#email").value.trim(), note: $("#note").value.trim(),
     credit_id: dc?.kind === "credit" ? dc.id : undefined, package_id: dc?.kind === "package" ? dc.id : undefined, gift_code: dc?.kind === "gift" ? dc.code : undefined, partner_code: dc?.kind === "partner" ? dc.code : undefined,
-    flagged: $("#flagged").checked || undefined
+    flagged: $("#flagged").checked || undefined,
+    agreed: true
   };
+  if (!$("#agree").checked) { err.textContent = t("Please read and accept the booking rules first."); err.hidden = false; $("#agree").focus(); return; }
   const btn = $("#pay"); btn.disabled = true; btn.textContent = t("One moment…");
   try {
     const r = await fetch("/api/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
@@ -265,3 +268,7 @@ $("#booking").addEventListener("submit", async (e) => {
     btn.disabled = false; updateSummary();
   }
 });
+
+/* booking rules: numbers from the owner's settings; which provider takes the money per currency */
+let PAY = {};
+fetch("/api/status").then((r) => r.json()).then((s) => { PAY = s.pay || {}; if (s.rules) $$("[data-rule]").forEach((el) => { el.textContent = s.rules[el.dataset.rule]; }); if (city) updateSummary(); }).catch(() => {});

@@ -67,7 +67,14 @@ CREATE TABLE IF NOT EXISTS bookings (
   payment_intent TEXT,
   created_at     TEXT DEFAULT (datetime('now')),
   paid_at        TEXT,
-  done_at        TEXT
+  done_at        TEXT,
+  cancel_fee     INTEGER DEFAULT 0,        -- 2026-09-13: fee kept on a late cancellation / no-show (minor units)
+  cancelled_at   TEXT,
+  cancelled_by   TEXT,                     -- client | admin
+  refund_amount  INTEGER DEFAULT 0,
+  refund_status  TEXT,                     -- done | manual | none
+  agreed_at      TEXT,                     -- when the client ticked the booking rules
+  provider       TEXT DEFAULT 'stripe'     -- stripe | fawry (2026-09-13): who took the money; stripe_session holds the provider's reference either way
 );
 CREATE INDEX IF NOT EXISTS bookings_city_date ON bookings(city, date);
 CREATE INDEX IF NOT EXISTS bookings_user ON bookings(user_id);
@@ -124,8 +131,8 @@ CREATE TABLE IF NOT EXISTS therapists (id TEXT PRIMARY KEY, city TEXT NOT NULL, 
 CREATE TABLE IF NOT EXISTS availability (id TEXT PRIMARY KEY, city TEXT NOT NULL, therapist_id TEXT, weekday INTEGER NOT NULL, start TEXT NOT NULL, end TEXT NOT NULL, slot_minutes INTEGER DEFAULT 60);
 CREATE TABLE IF NOT EXISTS blocked (id TEXT PRIMARY KEY, city TEXT NOT NULL, therapist_id TEXT, date TEXT NOT NULL, start TEXT, end TEXT, reason TEXT);
 CREATE TABLE IF NOT EXISTS packages (id TEXT PRIMARY KEY, city TEXT NOT NULL, name TEXT NOT NULL, sessions INTEGER NOT NULL, amount INTEGER NOT NULL, currency TEXT NOT NULL, months_valid INTEGER DEFAULT 6, active INTEGER DEFAULT 1, sort INTEGER DEFAULT 0);
-CREATE TABLE IF NOT EXISTS client_packages (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, package_id TEXT NOT NULL, name TEXT, city TEXT, sessions INTEGER, remaining INTEGER, amount INTEGER, currency TEXT, platform_fee INTEGER DEFAULT 0, status TEXT DEFAULT 'pending', stripe_session TEXT, expires_at TEXT, created_at TEXT DEFAULT (datetime('now')), paid_at TEXT);
-CREATE TABLE IF NOT EXISTS gifts (id TEXT PRIMARY KEY, code TEXT UNIQUE NOT NULL, city TEXT NOT NULL, service_id TEXT, service_name TEXT, amount INTEGER, currency TEXT, platform_fee INTEGER DEFAULT 0, buyer_name TEXT, buyer_email TEXT, recipient_name TEXT, recipient_email TEXT, message TEXT, status TEXT DEFAULT 'pending', stripe_session TEXT, booking_id TEXT, created_at TEXT DEFAULT (datetime('now')), paid_at TEXT, redeemed_at TEXT, lang TEXT);
+CREATE TABLE IF NOT EXISTS client_packages (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, package_id TEXT NOT NULL, name TEXT, city TEXT, sessions INTEGER, remaining INTEGER, amount INTEGER, currency TEXT, platform_fee INTEGER DEFAULT 0, status TEXT DEFAULT 'pending', stripe_session TEXT, expires_at TEXT, created_at TEXT DEFAULT (datetime('now')), paid_at TEXT, provider TEXT DEFAULT 'stripe');
+CREATE TABLE IF NOT EXISTS gifts (id TEXT PRIMARY KEY, code TEXT UNIQUE NOT NULL, city TEXT NOT NULL, service_id TEXT, service_name TEXT, amount INTEGER, currency TEXT, platform_fee INTEGER DEFAULT 0, buyer_name TEXT, buyer_email TEXT, recipient_name TEXT, recipient_email TEXT, message TEXT, status TEXT DEFAULT 'pending', stripe_session TEXT, booking_id TEXT, created_at TEXT DEFAULT (datetime('now')), paid_at TEXT, redeemed_at TEXT, lang TEXT, provider TEXT DEFAULT 'stripe');
 CREATE TABLE IF NOT EXISTS partners (id TEXT PRIMARY KEY, code TEXT UNIQUE NOT NULL, name TEXT NOT NULL, city TEXT, pct INTEGER NOT NULL, active INTEGER DEFAULT 1, created_at TEXT DEFAULT (datetime('now')));
 CREATE TABLE IF NOT EXISTS waitlist (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, city TEXT NOT NULL, date TEXT NOT NULL, slot_pref TEXT, created_at TEXT DEFAULT (datetime('now')), notified_at TEXT);
 CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, user_id TEXT, booking_id TEXT, kind TEXT NOT NULL, channel TEXT NOT NULL, status TEXT, detail TEXT, created_at TEXT DEFAULT (datetime('now')));
@@ -133,6 +140,9 @@ CREATE TABLE IF NOT EXISTS photos (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, b
 CREATE INDEX IF NOT EXISTS bookings_city_date_slot ON bookings(city, date, slot);
 INSERT OR IGNORE INTO settings VALUES ('birthday_pct', '50');
 INSERT OR IGNORE INTO settings VALUES ('package_pct', '15');
+INSERT OR IGNORE INTO settings VALUES ('cancel_hours', '24');   -- free cancellation / free move up to this many hours before
+INSERT OR IGNORE INTO settings VALUES ('late_pct', '100');      -- % of the price kept inside the window
+INSERT OR IGNORE INTO settings VALUES ('noshow_pct', '100');
 INSERT OR IGNORE INTO settings VALUES ('review_cairo', '');
 INSERT OR IGNORE INTO settings VALUES ('review_dahab', '');
 INSERT OR IGNORE INTO settings VALUES ('review_florence', '');

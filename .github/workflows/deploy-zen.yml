@@ -87,6 +87,7 @@ jobs:
           WA_TOKEN: ${{ secrets.WA_TOKEN }}
           TWILIO_SID: ${{ secrets.TWILIO_SID }}
           TWILIO_TOKEN: ${{ secrets.TWILIO_TOKEN }}
+          FAWRY_SECURE_KEY: ${{ secrets.FAWRY_SECURE_KEY }}
           ADMIN_BOOTSTRAP_EMAIL: fetta.amore.business@gmail.com
         run: |
           put() { if [ -n "${!1:-}" ]; then printf '%s' "${!1}" | wrangler secret put "$1"; else echo "  (skip $1 — secret not set)"; fi; }
@@ -100,6 +101,7 @@ jobs:
           put WA_TOKEN
           put TWILIO_SID
           put TWILIO_TOKEN
+          put FAWRY_SECURE_KEY
           if wrangler secret list | grep -q '"SESSION_SECRET"'; then echo "  SESSION_SECRET already set"; else
             openssl rand -hex 32 | tr -d '\n' | wrangler secret put SESSION_SECRET; fi
 

@@ -383,6 +383,13 @@
       </div>
     </div>
   </section>
+
+<dialog id="dlg-cancel"><form method="dialog" class="inner">
+  <h3 id="cx-title">Cancel this session?</h3>
+  <p id="cx-text"></p>
+  <p class="err" id="cx-err" role="alert" hidden></p>
+  <div class="row" style="justify-content:flex-end;gap:10px"><button class="btn small ghost" type="button" id="cx-no">Keep it</button><button class="btn small" type="button" id="cx-yes">Cancel the session</button></div>
+</form></dialog>
 </main>
 
 <script src="i18n.js"></script>
@@ -581,6 +588,21 @@ function icsFor(b) {
   const ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Zen Recovery//EN", "BEGIN:VEVENT", `UID:${b.id}@zenrecovery.club`, `DTSTART:${start}`, `DTEND:${end}`, `SUMMARY:Zen Recovery · ${b.service_name.split(" · ")[0]}`, `LOCATION:Zen Recovery ${CITY_NAME[b.city]}`, "DESCRIPTION:Zen confirms the exact hour on WhatsApp. Eat light\\, drink water\\, no hard workout that day.", "END:VEVENT", "END:VCALENDAR"].join("\r\n");
   return "data:text/calendar;charset=utf-8," + encodeURIComponent(ics);
 }
+/* cancel a session under the booking rules (2026-09-13) */
+async function cancelFlow(id) {
+  const d = $("#dlg-cancel"), yes = $("#cx-yes"), err = $("#cx-err"); err.hidden = true;
+  let p; try { p = await ZenAPI("GET", "/api/me/bookings/" + id + "/cancel"); } catch (ex) { $("#cx-text").textContent = ex.message; $("#cx-yes").hidden = true; $("#dlg-cancel").showModal(); return; }
+  const fmtM = (v, cur) => money(v, cur);
+  const bk = (bookingsCache || []).find((b) => b.id === id) || {};
+  $("#cx-text").textContent = !p.can_cancel ? t("This booking is already closed.") : p.late
+    ? t("It starts in less than {hours} hours. {pct}% of the price is kept ({fee}).", { hours: p.rules.cancel_hours, pct: p.pct, fee: p.fee ? fmtM(p.fee, bk.currency) : "0" }) + (p.refund ? " " + t("Refund: {amount}.", { amount: fmtM(p.refund, bk.currency) }) : "")
+    : t("More than {hours} hours ahead: no fee.", { hours: p.rules.cancel_hours }) + (p.refund ? " " + t("Refund: {amount}.", { amount: fmtM(p.refund, bk.currency) }) : "");
+  yes.hidden = !p.can_cancel; yes.textContent = t("Cancel the session"); $("#cx-no").textContent = t("Keep it");
+  $("#cx-no").onclick = () => d.close();
+  yes.onclick = async () => { yes.disabled = true; try { await ZenAPI("POST", "/api/me/bookings/" + id + "/cancel"); d.close(); await loadSessions(); } catch (ex) { err.textContent = ex.message; err.hidden = false; } finally { yes.disabled = false; } };
+  d.showModal();
+}
+
 async function loadSessions() {
   const { bookings } = await ZenAPI("GET", "/api/me/bookings"); bookingsCache = bookings;
   const today = new Date().toISOString().slice(0, 10);
@@ -591,7 +613,7 @@ async function loadSessions() {
     return `<div class="session-card" data-id="${b.id}">
       <div class="d">${d.getDate()}<small>${d.toLocaleDateString(LOCALE(), { month: "short" })}</small></div>
       <div class="info"><b>${svc} · ${cityName(b.city)}</b><span class="muted">${fmtDate(b.date)} · ${SLOT[b.slot] ? t(SLOT[b.slot]) : esc(b.slot)}${b.therapist ? " · " + esc(b.therapist) : ""}${b.discount_kind ? " · " + t({ loyalty: "free session", referral: "reward applied", package: "from your pack", gift: "gift code", partner: "partner discount", manual: "custom price", birthday: "birthday discount" }[b.discount_kind] || "reward applied") : ""}</span>
-        ${isUp ? `<div class="tools"><a href="${icsFor(b)}" download="zen-session.ics">${t("Add to calendar")}</a><a href="${wa ? `https://wa.me/${wa}?text=${msg}` : "https://ig.me/m/zen_recovery10"}" target="_blank" rel="noopener">${t("Need to move it?")} ${t("Message the room")}</a></div>` : ""}
+        ${isUp ? `<div class="tools"><a href="${icsFor(b)}" download="zen-session.ics">${t("Add to calendar")}</a><a href="${wa ? `https://wa.me/${wa}?text=${msg}` : "https://ig.me/m/zen_recovery10"}" target="_blank" rel="noopener">${t("Need to move it?")} ${t("Message the room")}</a>${["pending", "paid", "confirmed", "review"].includes(b.status) ? `<button type="button" data-cancel="${b.id}">${t("Cancel")}</button>` : ""}</div>` : ""}
         ${b.therapist_note ? `<div class="tnote"><b>${t("From your therapist")}</b>${esc(b.therapist_note)}</div>` : ""}
         ${b.status === "done" ? (b.rating ? `<div class="rate" title="${t("Your rating")}">${"★".repeat(b.rating)}<span class="tiny">${"☆".repeat(5 - b.rating)}</span>${b.feedback ? `<span class="tiny" style="margin-inline-start:8px">“${esc(b.feedback)}”</span>` : ""}</div>` : `<div class="rate-form"><span class="tiny">${t("How was it?")}</span><div class="rate" data-rate="0">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-n="${n}" aria-label="${n}">★</button>`).join("")}</div><textarea class="fb" placeholder="${t("A word for your therapist (optional)")}"></textarea><div class="row"><button type="button" class="btn small send-fb">${t("Send")}</button><span class="ok" hidden>${t("Thanks, saved.")}</span><span class="err" hidden></span></div></div>`) : ""}
       </div>
@@ -602,6 +624,7 @@ async function loadSessions() {
   let pastHtml = past.map((b) => card(b, false)).join("");
   if (recent) { const k = G.serviceKey(recent.service_name); pastHtml = `<div class="prep"><h4>${t("After your {service} session", { service: t(G.SERVICE_LABEL[k]).toLowerCase() })}</h4>${G.list("after", k)}</div>` + pastHtml; }
   $("#upcoming").innerHTML = up.length ? upHtml : `<div class="empty">${t("Nothing booked.")} <a href="${$("#book-link").href}">${t("Pick a day.")}</a></div>`;
+  $$("#upcoming [data-cancel]").forEach((btn) => btn.addEventListener("click", () => cancelFlow(btn.dataset.cancel)));
   $("#past").innerHTML = past.length ? pastHtml : `<div class="empty">${t("Your first session will show up here, with what you paid and how it went.")}</div>`;
   $("#past-count").textContent = past.length ? t("{n} completed", { n: past.filter((b) => b.status === "done").length }) : "";
   $$("#past .rate-form").forEach((f) => {
@@ -706,6 +729,7 @@ boot();
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
-<script src="motion.js"></script>
+<script src="motion.js">
+</script>
 </body>
 </html>

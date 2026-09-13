@@ -38,7 +38,10 @@ await page.click("#services label, #services .svc"); const d = new Date(Date.now
 ok("booking: slot mode resolved from /api/slots (windows without availability)", await page.isVisible("#slots") || await page.isVisible("#timeslots"));
 await page.fill("#name", "Sara Tester"); await page.fill("#email", "sara@x.com"); await page.fill("#phone", "+20 111 222 3333");
 const sum = await page.textContent("#summary"); ok("booking: summary filled (service + price + date)", /EGP|€/.test(sum) && sum.includes(d.slice(8)) || sum.length > 20, sum.slice(0, 120));
-await page.click("#pay"); await page.waitForTimeout(1200);
+await page.click("#pay"); await page.waitForTimeout(500);
+ok("booking: rules box shown with the owner's numbers", (await page.isVisible("#rules-box")) && (await page.$eval("#rules-box [data-rule=cancel_hours]", (e) => e.textContent)) === "24");
+ok("booking: pay is refused until the rules are accepted", (await page.textContent("#err")).includes("booking rules"), await page.textContent("#err"));
+await page.check("#agree"); await page.click("#pay"); await page.waitForTimeout(1200);
 const err = await page.textContent("#err").catch(() => ""); const dlgOpen = await page.evaluate(() => Boolean(document.querySelector("#dlg")?.open)); ok("booking: API answer surfaced to the client (payments off → dialog or message, not a dead button)", (err || "").length > 5 || dlgOpen || page.url().includes("success"), { err, dlgOpen, url: page.url() }); if (dlgOpen) await page.click("#dlg-close");
 ok("booking: pay button re-enabled after the answer", !(await page.isDisabled("#pay")) || page.url().includes("success"));
 
@@ -72,6 +75,13 @@ if (link) { await page.goto(link, { waitUntil: "networkidle" }); signed = true; 
 await page.waitForTimeout(800);
 const wiz = await page.isVisible("#wizard"); ok("account: signed in through the magic link (new client → intake wizard)", signed && (wiz || await page.isVisible("#app-view")), { signed, url: page.url() });
 ok("account: the intake wizard opens for a first visit (or the app greets by name)", wiz || (await page.textContent("#hello")).includes("Sara"));
+// the client cancels a far-ahead session from the account under the rules (free), and the card disappears from "upcoming"
+{ const mk = await page.evaluate(async (em) => (await (await fetch("/api/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ city: "cairo", service: "cai-dry", date: "2027-05-05", slot: "morning", name: "Sara Tester", email: em, phone: "+20 111", flagged: true, agreed: true, lang: "en" }) })).json()), EM);
+  ok("account: a review-path booking exists for the client", mk && (mk.url || "").includes("review"), mk);
+  await page.evaluate(async () => { await fetch("/api/me", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ country: "EG", nearest_city: "cairo", city: "cairo", intake: { goals: ["pain"], pain: ["back"], health: [], completed_at: "2026-09-13" } }) }); });   // intake done → the account shows the app, not the wizard
+  await go("account.html"); await page.waitForTimeout(900); await page.click('[role="tab"][data-tab="sessions"]'); await page.waitForTimeout(400);
+  const cbtn = await page.$("#upcoming [data-cancel]"); ok("account: upcoming session has a Cancel button", Boolean(cbtn));
+  if (cbtn) { await cbtn.click(); await page.waitForTimeout(700); ok("account: cancel dialog says no fee (far ahead)", (await page.textContent("#cx-text")).includes("no fee"), await page.textContent("#cx-text")); await page.click("#cx-yes"); await page.waitForTimeout(900); ok("account: session gone from upcoming", (await page.$$("#upcoming [data-cancel]")).length === 0); } }
 await go("booking.html?city=cairo"); ok("booking knows the signed-in client (name prefilled, rewards box for users)", (await page.inputValue("#name")).includes("Sara") && (await page.isVisible("#rewards-user")));
 await go("index.html"); ok("home nav shows the account link as signed-in", (await page.textContent("#nav-account")).trim().length > 0);
 
