@@ -120,7 +120,7 @@ CREATE TABLE IF NOT EXISTS checkins (            -- "how do you feel today" betw
   created_at TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS checkins_user ON checkins(user_id, date);
-CREATE TABLE IF NOT EXISTS therapists (id TEXT PRIMARY KEY, city TEXT NOT NULL, name TEXT NOT NULL, bio TEXT, photo TEXT, languages TEXT, active INTEGER DEFAULT 1, sort INTEGER DEFAULT 0, created_at TEXT DEFAULT (datetime('now')), admin_id TEXT, area TEXT, address TEXT, maps_url TEXT, title TEXT, story TEXT, certs TEXT, instagram TEXT, i18n TEXT);
+CREATE TABLE IF NOT EXISTS therapists (id TEXT PRIMARY KEY, city TEXT NOT NULL, name TEXT NOT NULL, bio TEXT, photo TEXT, languages TEXT, active INTEGER DEFAULT 1, sort INTEGER DEFAULT 0, created_at TEXT DEFAULT (datetime('now')), admin_id TEXT, area TEXT, address TEXT, maps_url TEXT, title TEXT, story TEXT, certs TEXT, instagram TEXT, i18n TEXT, lat REAL, lng REAL, radius_km REAL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS availability (id TEXT PRIMARY KEY, city TEXT NOT NULL, therapist_id TEXT, weekday INTEGER NOT NULL, start TEXT NOT NULL, end TEXT NOT NULL, slot_minutes INTEGER DEFAULT 60);
 CREATE TABLE IF NOT EXISTS blocked (id TEXT PRIMARY KEY, city TEXT NOT NULL, therapist_id TEXT, date TEXT NOT NULL, start TEXT, end TEXT, reason TEXT);
 CREATE TABLE IF NOT EXISTS packages (id TEXT PRIMARY KEY, city TEXT NOT NULL, name TEXT NOT NULL, sessions INTEGER NOT NULL, amount INTEGER NOT NULL, currency TEXT NOT NULL, months_valid INTEGER DEFAULT 6, active INTEGER DEFAULT 1, sort INTEGER DEFAULT 0);

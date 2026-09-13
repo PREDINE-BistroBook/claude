@@ -32,7 +32,7 @@ ok("booking: Cairo chosen from the link", (await page.textContent("#place-name")
 ok("booking: therapist preselected from the team link", (await page.inputValue("#therapist")) === "th0", await page.inputValue("#therapist"));
 const svcN = await page.$$eval("#services input[type=radio], #services .svc", (els) => els.length); ok("booking: services listed from /api/catalog", svcN >= 3, svcN);
 const thN = await page.$$eval("#therapist option", (os) => os.length); ok("booking: therapist list = Cairo team + Anyone", thN === 5, thN);
-const cards = await page.$$eval("#place-therapists .therapist", (els) => els.map((e) => e.textContent.trim().slice(0, 80))); ok("booking: Cairo therapists shown with area", cards.length === 4 && cards.every((c) => /Sheikh Zayed/.test(c)), cards);
+const cards = await page.$$eval("#place-therapists .therapist", (els) => els.map((e) => e.textContent.trim().slice(0, 80))); ok("booking: Cairo therapists shown with area", cards.length === 4 && cards.every((c) => /Sheikh Zayed|New Cairo/.test(c)), cards);
 // pick a service, a date, fill the form and submit: the worker answers (payments off here → clear message, not silence)
 await page.click("#services label, #services .svc"); const d = new Date(Date.now() + 3 * 864e5).toISOString().slice(0, 10); await page.fill("#date", d); await page.waitForTimeout(700);
 ok("booking: slot mode resolved from /api/slots (windows without availability)", await page.isVisible("#slots") || await page.isVisible("#timeslots"));
@@ -82,7 +82,22 @@ await go("booking.html?city=cairo"); ok("booking therapist list follows the admi
 const hide = await api("/api/admin/therapists/" + add.body.id, { method: "PATCH", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ active: false }) });
 await go("team.html"); ok("paused therapist disappears from the team page", !(await page.textContent("#team-list")).includes("Omar"), hide);
 
-// 8. success page + no JS errors anywhere
+// 8. near you: everyone without a position; typed area filters; a shared position sorts by distance and booking/team show km
+await go("find.html"); ok("find: everyone listed without a position", (await page.$$("#find-list .find-card")).length === 6 && (await page.textContent("#find-status")).includes("Showing everyone"));
+await page.fill("#find-q", "dahab"); await page.waitForTimeout(700); const fq = await page.$$eval("#find-list .find-card h2", (h) => h.map((e) => e.textContent.trim())); ok("find: typed area filters (Dahab → Shaarawy)", fq.length === 1 && fq[0] === "Shaarawy", fq);
+await page.fill("#find-q", ""); await page.waitForTimeout(700);
+await ctx.grantPermissions(["geolocation"]); await ctx.setGeolocation({ latitude: 30.02, longitude: 31.44 });   // New Cairo
+await page.click("#find-locate"); await page.waitForTimeout(1500);
+const near = await page.$$eval("#find-list .find-card", (cs) => cs.map((c) => [c.querySelector("h2").textContent.trim(), c.querySelector(".find-km")?.textContent || ""]));
+ok("find: nearest first with km (Adham in New Cairo, then Sheikh Zayed, Dahab, Florence last)", near[0][0] === "Adham" && /km away/.test(near[0][1]) && near[near.length - 1][0] === "Shika", near);
+ok("find: nearest city named", (await page.textContent("#find-status")).includes("Nearest city: Cairo"));
+ok("find: Book with → booking carries city + therapist", /booking\.html\?city=cairo&therapist=th3/.test(await page.$eval("#find-list .find-card a.btn", (a) => a.getAttribute("href"))));
+await go("booking.html?city=cairo"); const bo = await page.$$eval("#place-therapists .therapist", (els) => els.map((e) => e.querySelector("b").textContent.trim() + "|" + (e.querySelector(".km")?.textContent || "")));
+ok("booking: therapists sorted by distance from the saved position, km shown", bo[0].startsWith("Adham") && /km from you/.test(bo[0]), bo);
+await go("team.html"); ok("team: distance badge from the saved position", (await page.$$eval(".tm-km", (e) => e.length)) >= 5);
+await ctx.clearPermissions();
+
+// 9. success page + no JS errors anywhere
 await go("success.html?free=1"); ok("success page renders", (await page.textContent("body")).length > 200);
 ok("no JS errors across the flow", errs.length === 0, errs);
 await b.close();

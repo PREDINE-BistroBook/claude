@@ -13,16 +13,14 @@
 .marquee{overflow:hidden; border-block:1px solid var(--line); padding:14px 0; background:var(--ground-2); white-space:nowrap}
 .marquee .track{display:inline-flex; gap:40px; align-items:center; padding-inline:20px; font-family:var(--label); font-size:.72rem; letter-spacing:.24em; text-transform:uppercase; color:var(--ink-soft); will-change:transform}
 .marquee .track span::after{content:"●"; color:var(--mark); margin-inline-start:40px; font-size:.5rem; vertical-align:middle}
-/* floating cups behind the hero + a slow aura */
+/* a slow aura behind the hero */
 .hero{position:relative; overflow:hidden}
 .hero::before{content:""; position:absolute; inset:-30% -20% auto auto; width:70vw; max-width:900px; aspect-ratio:1; border-radius:50%; pointer-events:none; z-index:0;
   background:radial-gradient(closest-side, color-mix(in srgb, var(--mark) 12%, transparent), transparent 70%); animation:aura-drift 14s ease-in-out infinite alternate}
 @keyframes aura-drift{from{transform:translate(0,0) scale(1)} to{transform:translate(-8%, 10%) scale(1.15)}}
 .hero > *{position:relative; z-index:1}
-.float{position:absolute; border-radius:50%; border:2px solid color-mix(in srgb, var(--mark) 55%, transparent); background:radial-gradient(circle at 35% 30%, rgba(255,255,255,.7), rgba(255,255,255,.05) 60%, transparent); pointer-events:none; z-index:0; opacity:.9}
-.float.f1{width:120px; height:120px; left:-2%; top:2%; opacity:.6} .float.f2{width:58px; height:58px; left:38%; top:70%} .float.f3{width:84px; height:84px; right:8%; bottom:10%} .float.f4{width:40px; height:40px; right:30%; top:8%}
-@media (max-width:760px){.float.f1{width:70px;height:70px} .float.f3{display:none} .aura{display:none}}
+@media (max-width:760px){.aura{display:none}}
 /* cards and choices react */
 .motion .card,.motion .method,.motion .svc,.motion .links-grid a,.motion .place,.motion .therapist{transition:transform .35s var(--ease), box-shadow .35s var(--ease), border-color .35s}
 .motion .card:hover,.motion .method:hover,.motion .svc:hover,.motion .links-grid a:hover,.motion .therapist:hover{transform:translateY(-3px); box-shadow:0 24px 40px -28px rgba(27,30,29,.45)}
-@media (prefers-reduced-motion:reduce){.hero::before{animation:none} .float{display:none}}
+@media (prefers-reduced-motion:reduce){.hero::before{animation:none}}

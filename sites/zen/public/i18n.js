@@ -5,6 +5,18 @@
 window.ZenI18n = (function () {
   const LANGS = { en: "English", it: "Italiano", ar: "العربية" };
   const IT = {
+    // near you (2026-09-13)
+    "Near you": "Vicino a te", "Find a therapist near you": "Trova un terapista vicino a te", "Find a therapist near you.": "Trova un terapista vicino a te.",
+    "Every Zen therapist works from their own place, in Cairo, Dahab or Florence. Tell us where you are and we'll show you who's closest, how far, and from what price.": "Ogni terapista Zen lavora dal proprio posto, al Cairo, a Dahab o a Firenze. Dicci dove sei e ti mostriamo chi è più vicino, a che distanza e da che prezzo.",
+    "Use my location": "Usa la mia posizione", "Or type a neighbourhood or city": "Oppure scrivi un quartiere o una città", "Neighbourhood or city": "Quartiere o città",
+    "Your position stays on your phone; we only use it to sort the list.": "La tua posizione resta sul tuo telefono; la usiamo solo per ordinare la lista.",
+    "Finding you…": "Ti stiamo localizzando…", "We couldn't get your position. Type where you are instead.": "Non siamo riusciti a rilevare la posizione. Scrivi dove sei.",
+    "Showing everyone. Share your position or type an area to sort by distance.": "Ecco tutti. Condividi la posizione o scrivi una zona per ordinare per distanza.",
+    "Nearest city: {city}, {km} km": "Città più vicina: {city}, {km} km", "{km} km away": "a {km} km", "{km} km from you": "a {km} km da te", "{km} km": "{km} km", "Comes to you": "Viene da te",
+    "Not pinned on the map yet": "Non ancora sulla mappa", "From {price}": "Da {price}", "{n} sessions": "{n} sedute", "Their story": "La loro storia",
+    'No one matches "{q}". Try a city name.': 'Nessuno corrisponde a "{q}". Prova con il nome di una città.',
+    "Distances are as the crow flies, from the place each therapist pinned. The exact address arrives with your confirmation.": "Le distanze sono in linea d'aria, dal punto che ogni terapista ha segnato. L'indirizzo esatto arriva con la conferma.",
+    "Filter by city": "Filtra per città", "Every therapist works from their own place. Share where you are and see who's closest, how far, from what price.": "Ogni terapista lavora dal proprio posto. Dicci dove sei e vedi chi è più vicino, a che distanza, da che prezzo.", "Find →": "Trova →",
     // pages split (2026-09-12)
     "Booking": "Prenotazione", "Gift": "Regalo", "Rewards": "Premi", "Guide": "Guida", "Where next": "E adesso", "Everything else lives on its own page.": "Tutto il resto ha la sua pagina.",
     "Pick a city, a session and a time. Pay by card, or at the session if a therapist needs to look first.": "Scegli città, seduta e orario. Paghi con carta, o alla seduta se un terapista deve prima dare un'occhiata.",
@@ -343,6 +355,18 @@ window.ZenI18n = (function () {
     "January": "gennaio", "February": "febbraio", "March": "marzo", "April": "aprile", "May": "maggio", "June": "giugno", "July": "luglio", "August": "agosto", "September": "settembre", "October": "ottobre", "November": "novembre", "December": "dicembre",
   };
   const AR = {
+    // near you (2026-09-13)
+    "Near you": "بالقرب منك", "Find a therapist near you": "ابحث عن معالج بالقرب منك", "Find a therapist near you.": "ابحث عن معالج بالقرب منك.",
+    "Every Zen therapist works from their own place, in Cairo, Dahab or Florence. Tell us where you are and we'll show you who's closest, how far, and from what price.": "كل معالج في زن يعمل من مكانه الخاص، في القاهرة أو دهب أو فلورنسا. أخبرنا أين أنت وسنعرض لك الأقرب إليك، وكم يبعد، وبأي سعر يبدأ.",
+    "Use my location": "استخدم موقعي", "Or type a neighbourhood or city": "أو اكتب اسم حي أو مدينة", "Neighbourhood or city": "حي أو مدينة",
+    "Your position stays on your phone; we only use it to sort the list.": "موقعك يبقى على هاتفك؛ نستخدمه فقط لترتيب القائمة.",
+    "Finding you…": "جارٍ تحديد موقعك…", "We couldn't get your position. Type where you are instead.": "تعذّر تحديد موقعك. اكتب أين أنت بدلًا من ذلك.",
+    "Showing everyone. Share your position or type an area to sort by distance.": "نعرض الجميع. شارك موقعك أو اكتب منطقة للترتيب حسب المسافة.",
+    "Nearest city: {city}, {km} km": "أقرب مدينة: {city}، {km} كم", "{km} km away": "على بعد {km} كم", "{km} km from you": "على بعد {km} كم منك", "{km} km": "{km} كم", "Comes to you": "يأتي إليك",
+    "Not pinned on the map yet": "لم يُحدَّد على الخريطة بعد", "From {price}": "ابتداءً من {price}", "{n} sessions": "{n} جلسات", "Their story": "قصتهم",
+    'No one matches "{q}". Try a city name.': 'لا أحد يطابق "{q}". جرّب اسم مدينة.',
+    "Distances are as the crow flies, from the place each therapist pinned. The exact address arrives with your confirmation.": "المسافات على الخط المستقيم من النقطة التي حدّدها كل معالج. العنوان الدقيق يصلك مع التأكيد.",
+    "Filter by city": "تصفية حسب المدينة", "Every therapist works from their own place. Share where you are and see who's closest, how far, from what price.": "كل معالج يعمل من مكانه الخاص. شارك موقعك لترى الأقرب، وكم يبعد، وبأي سعر يبدأ.", "Find →": "ابحث ←",
     // pages split
     "Booking": "الحجز", "Gift": "هدية", "Rewards": "المكافآت", "Guide": "الدليل", "Where next": "إلى أين الآن", "Everything else lives on its own page.": "كل شيء آخر له صفحته الخاصة.",
     "Pick a city, a session and a time. Pay by card, or at the session if a therapist needs to look first.": "اختر مدينة وجلسة ووقتًا. ادفع بالبطاقة، أو في الجلسة إن احتاج المعالج أن يطّلع أولًا.",
