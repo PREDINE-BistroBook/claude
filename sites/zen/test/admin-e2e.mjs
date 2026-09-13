@@ -69,6 +69,24 @@ await tab("services"); await page.click("#add-service"); await page.waitForTimeo
 await tab("settings"); ok("settings: profile form + admins table", await page.isVisible("#admins-table") && (await page.$$("#admins-table tbody tr")).length >= 1);
 ok("no native pop-ups so far", native.length === 0, native);
 
+// money (slice 5): the owner's Statements tab for this month, per therapist, with a CSV link; partner/gym/company codes with a kind
+{ const ym = new Date().toISOString().slice(0, 7), day = ym + "-15";
+  const mk = (o) => page.request.post(H + "/api/admin/bookings", { data: o });   // page.request shares the browser's (httpOnly) admin cookie
+  await mk({ city: "cairo", service: "cai-dry", name: "Cash One", date: day, status: "done", therapist_id: "th3", amount: 90000 });
+  await mk({ city: "cairo", service: "cai-dry", name: "Cash Two", date: day, status: "done", therapist_id: "th3", amount: 90000 });
+  await tab("money"); await page.waitForTimeout(600);
+  ok("money: Statements tab with the month picker set to this month", (await page.textContent("#money-title")).trim() === "Statements" && (await page.inputValue("#st-month")) === ym && await page.isVisible("#st-city-pills"));
+  const card = page.locator("#st-list .statement", { hasText: "Adham" }); ok("money: Adham's card: 2 sessions, cash EGP 1,800, nothing to pay from the site", (await card.count()) === 1 && /Cash[\s\S]*1,800/.test(await card.textContent()) && /To pay the therapist[\s\S]*EGP.0\b/.test(await card.textContent()) && /Sessions[\s\S]*2/.test(await card.textContent()), await card.textContent().catch(() => ""));
+  ok("money: the session table lists both, paid in cash", (await page.$$("#st-table tbody tr")).length >= 2 && (await page.textContent("#st-table")).includes("Cash"));
+  const csv = await page.request.get(H + (await page.getAttribute("#st-csv", "href"))); ok("money: CSV link answers a CSV with the two lines", csv.status() === 200 && (csv.headers()["content-type"] || "").startsWith("text/csv") && (await csv.text()).split("\n").filter(Boolean).length === 3, [csv.status(), (await csv.text()).slice(0, 200)]);
+  await page.click('#st-city-pills [data-stcity="florence"]'); await page.waitForTimeout(600); ok("money: city pill filters (Florence empty)", (await page.textContent("#st-list")).includes("No sessions"));
+  await page.click('#st-city-pills [data-stcity=""]'); await page.waitForTimeout(400);
+  await tab("offers"); await page.click('.subtabs [data-sub="partners"]'); await page.waitForTimeout(300);
+  ok("codes: the form has a kind and a contact", await page.isVisible("#pa-kind") && await page.isVisible("#pa-contact"));
+  await page.fill("#pa-name", "Gold's Gym"); await page.fill("#pa-code", "GOLDS15"); await page.selectOption("#pa-kind", "gym"); await page.fill("#pa-contact", "front desk"); await page.selectOption("#pa-city", "cairo"); await page.fill("#pa-pct", "15"); await page.click("#partner-form button[type=submit]"); await page.waitForTimeout(900);
+  const prow = page.locator("#partners-table tbody tr", { hasText: "GOLDS15" }); ok("codes: the gym code is in the table with its kind and contact", (await prow.count()) === 1 && (await prow.textContent()).includes("Gym") && (await prow.textContent()).includes("front desk"), await page.textContent("#partners-table"));
+  const look = await (await fetch(H + "/api/partner/GOLDS15?city=cairo")).json(); ok("codes: clients can use it at once", look.partner?.pct === 15 && look.partner.kind === "gym", look); }
+
 // an employee: create Hesham's account through the team dialog (owner), sign out, sign in as him → own calendar only, can't edit others
 await tab("team"); await page.locator("#team-list .team-card", { hasText: "Hesham" }).click(); await page.waitForTimeout(400);
 await page.selectOption("#th-admin", "new"); await page.waitForTimeout(200); await page.fill("#th-new-email", "hesham@x.com"); await page.fill("#th-new-pass", "Hesham-pass-12345"); await page.click("#th-save"); await page.waitForTimeout(1200);
@@ -82,5 +100,6 @@ ok("employee: signs in with the password the owner typed", await page.isVisible(
 await tab("calendar"); ok("employee: own calendar badge, no therapist pills", (await page.textContent("#cal-th")).includes("Your calendar") && (await page.$$("#cal-th [data-calth]")).length === 0, await page.textContent("#cal-th"));
 await tab("team"); const editable = await page.$$eval("#team-list [data-edit]", (els) => [...new Set(els.map((e) => e.dataset.edit))]); ok("employee: can open only their own profile", editable.length === 1, editable);
 ok("employee: no Applications box", !(await page.isVisible("#apps-box")));
+await tab("money"); ok("employee: the tab reads Your earnings and shows their own card only", (await page.textContent("#tab-money-btn")).trim() === "Your earnings" && (await page.textContent("#money-title")).trim() === "Your earnings" && !(await page.isVisible("#st-city-pills .pill")), await page.textContent("#money-title"));
 ok("no JS errors across the admin sweep", errs.length === 0, errs); ok("no native pop-ups", native.length === 0, native);
 await b.close();

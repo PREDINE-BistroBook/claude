@@ -122,6 +122,7 @@
       <button role="tab" aria-selected="false" data-tab="calendar">Calendar</button>
       <button role="tab" aria-selected="false" data-tab="team">Team</button>
       <button role="tab" aria-selected="false" data-tab="offers">Packs &amp; partners</button>
+      <button role="tab" aria-selected="false" data-tab="money" id="tab-money-btn">Statements</button>
       <button role="tab" aria-selected="false" data-tab="review">Needs review<span class="count" id="review-count" hidden></span></button>
       <button role="tab" aria-selected="false" data-tab="platform" hidden>Platform</button>
       <button role="tab" aria-selected="false" data-tab="settings">Settings</button>
@@ -286,6 +287,24 @@
       </section>
     </div>
 
+    <!-- money: monthly statements per therapist (owner/partner) or "Your earnings" (employee) -->
+    <div id="tab-money" hidden>
+      <div class="section-head"><h2 id="money-title">Statements</h2><div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><input type="month" id="st-month" aria-label="Month" style="padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--ground-3);font:inherit"><a class="btn small ghost" id="st-csv" href="#" download>Download CSV</a></div></div>
+      <details class="help"><summary>How to read a statement</summary>
+        <ul>
+          <li><b>Card</b>: paid on the site with Stripe. The money lands on Zen's Stripe account; Amico Mio's 2% is already taken by Stripe at checkout.</li>
+          <li><b>Fawry</b>: paid on the site with FawryPay. The money lands on the Egyptian settlement account; the 2% is recorded here and settled once a month.</li>
+          <li><b>Cash</b>: sessions the team entered by hand (cash, walk-in, bank transfer). The therapist collected it directly; no platform fee.</li>
+          <li><b>Free</b>: paid with a pack, a gift or a reward. Counted, no money that day.</li>
+          <li><b>Kept</b>: late cancellations and no-shows under the booking rules, counted with the fee that was kept.</li>
+          <li><b>To pay the therapist</b> = card + Fawry takings minus the 2%. Cash they already have. Sessions still to come are included so the month reads the same before and after.</li>
+        </ul>
+      </details>
+      <div class="scope" id="st-city-pills"></div>
+      <div id="st-list" class="grid cols-2" style="margin-bottom:18px"></div>
+      <div id="st-sessions" hidden><h3 style="margin:0 0 8px">Sessions this month</h3><div class="table-wrap"><table id="st-table"><thead><tr><th>Date</th><th>Therapist</th><th>Client</th><th>Session</th><th>Status</th><th>How paid</th><th>Amount</th><th>2%</th></tr></thead><tbody></tbody></table></div></div>
+    </div>
+
     <!-- offers: packs, partners, gifts -->
     <div id="tab-offers" hidden>
       <div class="section-head"><h2>Packs, partners and gifts</h2></div>
@@ -305,10 +324,12 @@
         <div class="table-wrap"><table id="sold-table"><thead><tr><th>Client</th><th>City</th><th>Pack</th><th>Left</th><th>Paid</th><th>Valid until</th></tr></thead><tbody></tbody></table></div>
       </div>
       <div id="sub-partners" hidden>
-        <details class="help"><summary>About partner codes</summary><ul><li>Give a hotel, hostel, gym or dive centre a code. Their guests type it when booking and get the discount; you see exactly how many bookings each partner brings, so you know who deserves a bigger thank-you.</li><li>A code can be for one city or all of them. Pause it any time.</li></ul></details>
-        <div class="table-wrap" style="margin-bottom:14px"><table id="partners-table"><thead><tr><th>Code</th><th>Partner</th><th>City</th><th>Off</th><th>Bookings</th><th>This month</th><th>Revenue</th><th>Last</th><th></th></tr></thead><tbody></tbody></table></div>
+        <details class="help"><summary>About partner, gym and company codes</summary><ul><li>The owner and each city's partner create codes here themselves, no need to ask anyone. A partner-level account sees and edits its own city's codes.</li><li>Give a hotel, hostel, gym, company or dive centre a code. Their guests type it when booking and get the discount; you see exactly how many bookings each partner brings, so you know who deserves a bigger thank-you.</li><li>A code can be for one city or all of them. Pause it any time.</li></ul></details>
+        <div class="table-wrap" style="margin-bottom:14px"><table id="partners-table"><thead><tr><th>Code</th><th>Partner</th><th>Kind</th><th>City</th><th>Off</th><th>Bookings</th><th>This month</th><th>Revenue</th><th>Last</th><th></th></tr></thead><tbody></tbody></table></div>
         <form id="partner-form" class="filters card" style="align-items:end">
           <div class="field"><label for="pa-name">Partner</label><input id="pa-name" placeholder="Dahab Divers" required></div>
+          <div class="field"><label for="pa-kind">Kind</label><select id="pa-kind"><option value="partner">Partner</option><option value="hostel">Hotel / hostel</option><option value="gym">Gym</option><option value="corporate">Company</option></select></div>
+          <div class="field"><label for="pa-contact">Contact <span class="tiny">(optional)</span></label><input id="pa-contact" placeholder="name, WhatsApp or email"></div>
           <div class="field"><label for="pa-code">Code <span class="tiny">(blank = random)</span></label><input id="pa-code" placeholder="DIVERS10" style="text-transform:uppercase"></div>
           <div class="field"><label for="pa-city">City</label><select id="pa-city"><option value="">All cities</option><option value="cairo">Cairo</option><option value="dahab">Dahab</option><option value="florence">Florence</option></select></div>
           <div class="field" style="min-width:90px"><label for="pa-pct">% off</label><input id="pa-pct" type="number" min="1" max="50" value="10"></div>
@@ -566,7 +587,7 @@ const short = (minor, cur) => { const v = minor / 100; const s = v >= 1000 ? (v 
 const fmtDate = (d) => new Date(d + "T12:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 const monthLabel = (m) => new Date(m + "-01T12:00:00").toLocaleDateString("en-GB", { month: "short" });
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-let A = null, T = null, ADMINS = [], ADMIN_ROWS = [], CITIES = {}, SETTINGS = {}, cityFilter = "";
+let A = null, T = null, ADMINS = [], ADMIN_ROWS = [], CITIES = {}, SETTINGS = {}, cityFilter = "", DEMO = false, stCity = "";
 const isOwner = () => A.role === "all";
 const isPlatform = () => A.role === "platform";
 const isPartner = () => A.level === "partner";                       // runs one city: every booking, the team, hours, assignments
@@ -582,7 +603,8 @@ async function boot() {
   if (ZenAPI.isDemo()) { $("#demo-banner").hidden = false; $("#demo-login").hidden = false; }
 }
 function start(r) {
-  A = r.admin; T = r.therapist || null; CITIES = r.cities; SETTINGS = r.settings;
+  A = r.admin; T = r.therapist || null; CITIES = r.cities; SETTINGS = r.settings; DEMO = Boolean(r.demo);
+  $("#tab-money-btn").textContent = isEmployee() ? "Your earnings" : "Statements"; $("#tab-money-btn").hidden = isPlatform();
   $("#f-mine-wrap").hidden = !T && managesCity(); if (isEmployee()) { $("#f-mine").innerHTML = `<option value="">${T ? "Mine and unassigned" : "Unassigned"}</option>${T ? `<option value="me">Only mine</option><option value="open">Only unassigned</option>` : ""}`; $("#f-mine").value = ""; } else if (T) $("#f-mine").value = "me"; $("#me-profile-note").hidden = !T; if (T) $("#me-profile-note").innerHTML = `You're linked to the therapist profile <b>${esc(T.name)}</b> (${CITY_NAME[T.city]}). The photo and bio clients see are edited under <b>Team</b>; Bookings opens on your own sessions.`;
   $("#login-view").hidden = true; $("#app-view").hidden = false; $("#who").hidden = false;
   $("#admin-name").textContent = A.name; $("#admin-avatar").innerHTML = A.photo ? `<img src="${A.photo}" alt="">` : initials(A.name);
@@ -1025,18 +1047,42 @@ async function loadOffers() {
   $("#gifts-table tbody").innerHTML = gf.rows.length ? gf.rows.map((g) => `<tr><td class="num">${esc(g.code)}</td><td>${CITY_NAME[g.city]}</td><td>${esc(g.service_name.split(" · ")[0])}</td><td class="num">${money(g.amount, g.currency)}</td><td>${esc(g.buyer_name)}<div class="tiny">${esc(g.buyer_email)}</div></td><td>${esc(g.recipient_name)}<div class="tiny">${esc(g.recipient_email || "")}</div></td><td><span class="status ${g.status === "paid" ? "confirmed" : g.status === "redeemed" ? "done" : "cancelled"}">${g.status === "paid" ? "unused" : g.status}</span></td><td class="num">${esc((g.paid_at || g.created_at || "").slice(0, 10))}</td></tr>`).join("") : `<tr><td colspan="8" class="empty">No gifts sold yet.</td></tr>`;
   $$("[data-pk-toggle]").forEach((b) => (b.onclick = async () => { await ZenAPI("PATCH", "/api/admin/packages/" + b.dataset.pkToggle, { active: b.dataset.active !== "1" }); loadOffers(); }));
   $$("[data-pk-del]").forEach((b) => (b.onclick = async () => { if (await ask({ title: "Remove this pack from sale?", text: "Packs already bought stay valid.", ok: "Remove", danger: true })) { await ZenAPI("DELETE", "/api/admin/packages/" + b.dataset.pkDel); loadOffers(); } }));
-  if (isOwner()) { const { rows } = await ZenAPI("GET", "/api/admin/partners");
-    $("#partners-table tbody").innerHTML = rows.length ? rows.map((p) => `<tr><td class="num"><b>${esc(p.code)}</b></td><td>${esc(p.name)}${p.active ? "" : ` <span class="status cancelled">paused</span>`}</td><td>${p.city ? CITY_NAME[p.city] : "all"}</td><td class="num">${p.pct}%</td><td class="num">${p.bookings}</td><td class="num">${p.this_month}</td><td class="num">${p.revenue ? p.revenue : "—"}</td><td class="num">${p.last_booking ? fmtDate(p.last_booking) : "—"}</td><td><div class="actions"><button class="btn ghost" data-pa-toggle="${p.id}" data-active="${p.active}">${p.active ? "Pause" : "Activate"}</button><button class="btn ghost danger" data-pa-del="${p.id}">Remove</button></div></td></tr>`).join("") : `<tr><td colspan="9" class="empty">No partner codes yet.</td></tr>`;
+  if (managesCity()) { const { rows, city: myCity } = await ZenAPI("GET", "/api/admin/partners");
+    if (myCity) { $("#pa-city").innerHTML = `<option value="${myCity}">${CITY_NAME[myCity]}</option>`; $("#pa-city").disabled = true; }
+    const rev = (p) => [p.rev_egp ? money(p.rev_egp, "egp") : "", p.rev_eur ? money(p.rev_eur, "eur") : ""].filter(Boolean).join(" + ") || "—";
+    $("#partners-table tbody").innerHTML = rows.length ? rows.map((p) => `<tr><td class="num"><b>${esc(p.code)}</b></td><td>${esc(p.name)}${p.active ? "" : ` <span class="status cancelled">paused</span>`}${p.contact ? `<div class="tiny">${esc(p.contact)}</div>` : ""}</td><td>${KIND_LABEL[p.kind] || "Partner"}</td><td>${p.city ? CITY_NAME[p.city] : "all"}</td><td class="num">${p.pct}%</td><td class="num">${p.bookings}${p.people ? `<div class="tiny">${p.people} ${p.people === 1 ? "person" : "people"}</div>` : ""}</td><td class="num">${p.this_month}</td><td class="num">${rev(p)}</td><td class="num">${p.last_booking ? fmtDate(p.last_booking) : "—"}</td><td><div class="actions"><button class="btn ghost" data-pa-toggle="${p.id}" data-active="${p.active}">${p.active ? "Pause" : "Activate"}</button><button class="btn ghost danger" data-pa-del="${p.id}">Remove</button></div></td></tr>`).join("") : `<tr><td colspan="10" class="empty">No codes yet. Add the first one below: a gym, a hotel, a company, a dive centre.</td></tr>`;
     $$("[data-pa-toggle]").forEach((b) => (b.onclick = async () => { await ZenAPI("PATCH", "/api/admin/partners/" + b.dataset.paToggle, { active: b.dataset.active !== "1" }); loadOffers(); }));
-    $$("[data-pa-del]").forEach((b) => (b.onclick = async () => { if (await ask({ title: "Remove this partner code?", text: "Bookings that used it keep their record.", ok: "Remove", danger: true })) { await ZenAPI("DELETE", "/api/admin/partners/" + b.dataset.paDel); loadOffers(); } }));
-  } else { $("#sub-partners").innerHTML = `<div class="empty">Partner codes are managed by the owner.</div>`; $("#partner-form")?.remove(); }
+    $$("[data-pa-del]").forEach((b) => (b.onclick = async () => { if (await ask({ title: "Remove this code?", text: "Bookings that used it keep their record.", ok: "Remove", danger: true })) { await ZenAPI("DELETE", "/api/admin/partners/" + b.dataset.paDel); loadOffers(); } }));
+  } else { $("#sub-partners").innerHTML = `<div class="empty">Partner, gym and company codes are managed by the owner or your city's partner.</div>`; $("#partner-form")?.remove(); }
 }
 $("#pack-form").addEventListener("submit", async (e) => { e.preventDefault(); const err = $("#pack-err"); err.hidden = true;
   try { await ZenAPI("POST", "/api/admin/packages", { city: $("#pk-city").value, name: $("#pk-name").value.trim(), sessions: Number($("#pk-n").value), amount: Math.round(Number($("#pk-amount").value) * 100), months_valid: Number($("#pk-months").value) }); e.target.reset(); $("#pk-n").value = 5; $("#pk-months").value = 6; loadOffers(); }
   catch (ex) { err.textContent = ex.message; err.hidden = false; } });
 $("#partner-form")?.addEventListener("submit", async (e) => { e.preventDefault(); const err = $("#partner-err"); err.hidden = true;
-  try { await ZenAPI("POST", "/api/admin/partners", { name: $("#pa-name").value.trim(), code: $("#pa-code").value.trim(), city: $("#pa-city").value || null, pct: Number($("#pa-pct").value) }); e.target.reset(); $("#pa-pct").value = 10; loadOffers(); }
+  try { await ZenAPI("POST", "/api/admin/partners", { name: $("#pa-name").value.trim(), code: $("#pa-code").value.trim(), city: $("#pa-city").value || null, pct: Number($("#pa-pct").value), kind: $("#pa-kind").value, contact: $("#pa-contact").value.trim() }); const keep = $("#pa-city").disabled ? $("#pa-city").value : ""; e.target.reset(); if (keep) $("#pa-city").value = keep; $("#pa-pct").value = 10; loadOffers(); }
   catch (ex) { err.textContent = ex.message; err.hidden = false; } });
+
+const KIND_LABEL = { partner: "Partner", hostel: "Hotel / hostel", gym: "Gym", corporate: "Company" };
+/* ---------- money: monthly statements (2026-09-13) ---------- */
+const CH_LABEL = { card: "Card", fawry: "Fawry", cash: "Cash", free: "Free" };
+async function loadMoney() {
+  if (!$("#st-month").value) $("#st-month").value = new Date().toISOString().slice(0, 7);
+  const month = $("#st-month").value; $("#money-title").textContent = isEmployee() ? "Your earnings" : "Statements";
+  $("#st-city-pills").innerHTML = isOwner() ? `<span class="tiny">Showing</span><div class="pills">${[["", "All cities"], ["cairo", "Cairo"], ["dahab", "Dahab"], ["florence", "Florence"]].map(([k, l]) => `<button class="pill" data-stcity="${k}" aria-pressed="${stCity === k}">${l}</button>`).join("")}</div>` : "";
+  $$("#st-city-pills .pill").forEach((p) => (p.onclick = () => { stCity = p.dataset.stcity; loadMoney(); }));
+  const q = `month=${month}&city=${stCity}`; $("#st-csv").href = `/api/admin/statements?${q}&format=csv`; $("#st-csv").hidden = DEMO;
+  let r; try { r = await ZenAPI("GET", `/api/admin/statements?${q}&detail=1`); } catch (ex) { $("#st-list").innerHTML = `<div class="empty">${esc(ex.message)}</div>`; return; }
+  const pct = (r.fee_bps || 200) / 100;
+  if (r.note) { $("#st-list").innerHTML = `<div class="empty">${esc(r.note)}</div>`; $("#st-sessions").hidden = true; return; }
+  $("#st-list").innerHTML = r.rows.length ? r.rows.map((g) => `<div class="card statement"><div class="row" style="justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><b style="font-size:1.05rem">${esc(g.therapist)}</b><span class="badge city-${g.city}">${CITY_NAME[g.city] || esc(g.city)}</span></div>
+      <dl class="kv" style="margin-top:8px"><dt>Sessions</dt><dd>${g.sessions} <span class="tiny">(${g.done} done${g.upcoming ? `, ${g.upcoming} to come` : ""}${g.kept ? `, ${g.kept} kept fee` : ""})</span></dd>
+      <dt>Card</dt><dd>${g.card ? `${money(g.card_amount, g.currency)} <span class="tiny">· ${g.card}</span>` : "—"}</dd><dt>Fawry</dt><dd>${g.fawry ? `${money(g.fawry_amount, g.currency)} <span class="tiny">· ${g.fawry}</span>` : "—"}</dd><dt>Cash</dt><dd>${g.cash ? `${money(g.cash_amount, g.currency)} <span class="tiny">· ${g.cash}</span>` : "—"}</dd><dt>Free</dt><dd>${g.free || "—"}</dd>
+      <dt>Gross</dt><dd><b>${money(g.gross, g.currency)}</b>${g.refunded ? ` <span class="tiny">· refunded ${money(g.refunded, g.currency)}</span>` : ""}</dd><dt>Amico Mio ${pct}%</dt><dd>${money(g.fee, g.currency)}</dd>
+      <dt>${isEmployee() ? "Coming to you from the site" : "To pay the therapist"}</dt><dd><b>${money(g.to_therapist, g.currency)}</b>${g.cash_amount ? ` <span class="tiny">+ ${money(g.cash_amount, g.currency)} collected in cash</span>` : ""}</dd></dl></div>`).join("") : `<div class="empty">No sessions in ${month}${stCity ? " in " + CITY_NAME[stCity] : ""}.</div>`;
+  const rows = r.sessions || []; $("#st-sessions").hidden = !rows.length;
+  $("#st-table tbody").innerHTML = rows.map((x) => `<tr><td class="num">${fmtDate(x.date)}${x.slot ? ` <span class="tiny">${esc(x.slot)}</span>` : ""}</td><td>${esc(x.therapist || "—")}</td><td>${esc(x.client || "")}</td><td>${esc((x.service || "").split(" · ")[0])}</td><td><span class="status ${x.status}">${x.status === "no_show" ? "no-show" : x.status}</span></td><td>${CH_LABEL[x.channel] || x.channel}${x.paid_with ? ` <span class="tiny">${esc(x.paid_with)}</span>` : ""}${x.partner_code ? ` <span class="tiny">${esc(x.partner_code)}</span>` : ""}</td><td class="num">${money(x.amount, x.currency)}</td><td class="num">${x.fee ? money(x.fee, x.currency) : "—"}</td></tr>`).join("");
+}
+$("#st-month").addEventListener("change", loadMoney);
 
 /* ---------- needs review ---------- */
 async function loadReview() {
@@ -1113,7 +1159,7 @@ $("#svc-form").addEventListener("submit", async (e) => { e.preventDefault(); con
   catch (ex) { err.textContent = ex.message; err.hidden = false; } });
 
 /* ---------- tabs, login ---------- */
-$$(".tabs button").forEach((b) => b.addEventListener("click", () => { $$(".tabs button").forEach((x) => x.setAttribute("aria-selected", x === b)); ["overview", "bookings", "clients", "services", "calendar", "team", "offers", "review", "platform", "settings"].forEach((t) => ($("#tab-" + t).hidden = t !== b.dataset.tab)); closeDrawer(); ({ overview: loadOverview, platform: loadPlatform, bookings: loadBookings, clients: loadClients, services: loadServices, calendar: loadCalendar, team: loadTeamTab, offers: loadOffers, review: loadReview, settings: loadSettings })[b.dataset.tab](); }));
+$$(".tabs button").forEach((b) => b.addEventListener("click", () => { $$(".tabs button").forEach((x) => x.setAttribute("aria-selected", x === b)); ["overview", "bookings", "clients", "services", "calendar", "team", "money", "offers", "review", "platform", "settings"].forEach((t) => ($("#tab-" + t).hidden = t !== b.dataset.tab)); closeDrawer(); ({ overview: loadOverview, platform: loadPlatform, bookings: loadBookings, clients: loadClients, services: loadServices, calendar: loadCalendar, team: loadTeamTab, money: loadMoney, offers: loadOffers, review: loadReview, settings: loadSettings })[b.dataset.tab](); }));
 $("#login-form").addEventListener("submit", async (e) => { e.preventDefault(); const err = $("#login-err"); err.hidden = true; $("#login-btn").disabled = true; try { await ZenAPI("POST", "/api/admin/login", { email: $("#a-email").value.trim(), password: $("#a-pass").value }); start(await ZenAPI("GET", "/api/admin/me")); } catch (ex) { err.textContent = ex.message; err.hidden = false; } finally { $("#login-btn").disabled = false; } });
 let PRICE_ROWS = [];
 async function loadPrices(id) {
