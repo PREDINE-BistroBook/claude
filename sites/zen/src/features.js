@@ -608,7 +608,7 @@ const chatBody = (v) => String(v ?? "").replace(/\r/g, "").replace(/[\u0000-\u00
 const excerpt = (t) => (t.length > 160 ? t.slice(0, 157).trimEnd() + "…" : t).replace(/\s*\n\s*/g, " ");
 const STALE = (iso, minutes) => !iso || Date.now() - new Date(iso.replace(" ", "T") + (iso.endsWith("Z") ? "" : "Z")).getTime() > minutes * 60e3;
 async function chatRow(env, id) { return env.DB.prepare("SELECT c.*, t.name therapist_name, t.photo therapist_photo, t.city therapist_city, u.name user_name, u.email user_email, u.lang user_lang, u.photo user_photo FROM chats c LEFT JOIN therapists t ON t.id = c.therapist_id LEFT JOIN users u ON u.id = c.user_id WHERE c.id = ?").bind(id).first(); }
-const chatPublic = (c, side) => ({ id: c.id, city: c.city, therapist_id: c.therapist_id, therapist: c.therapist_name || null, therapist_photo: c.therapist_photo || null, client: c.user_name, client_photo: c.user_photo || null, client_email: side === "team" ? c.user_email : undefined, user_id: side === "team" ? c.user_id : undefined, last_at: c.last_at, last_body: c.last_body ? excerpt(c.last_body) : "", last_from: c.last_from, unread: side === "team" ? c.team_unread : c.client_unread });
+const chatPublic = (c, side) => ({ id: c.id, city: c.city, therapist_id: c.therapist_id, therapist: c.therapist_name || null, therapist_photo: c.therapist_photo || null, client: c.user_name, client_photo: c.user_photo || null, client_email: side === "team" ? c.user_email : undefined, user_id: side === "team" ? c.user_id : undefined, last_at: c.last_at, last_body: c.last_body ? excerpt(c.last_body) : "", last_from: c.last_from, unread: side === "team" ? c.team_unread : c.client_unread, their_read_at: side === "team" ? c.client_read_at || null : c.team_read_at || null });
 async function myChats(req, env) {
   const u = await currentUser(req, env); if (!u) return json({ error: "Sign in first." }, 401);
   const rows = (await env.DB.prepare("SELECT c.*, t.name therapist_name, t.photo therapist_photo, u.name user_name, u.photo user_photo FROM chats c LEFT JOIN therapists t ON t.id = c.therapist_id LEFT JOIN users u ON u.id = c.user_id WHERE c.user_id = ? ORDER BY COALESCE(c.last_at, c.created_at) DESC, c.rowid DESC").bind(u.id).all()).results;
@@ -637,7 +637,7 @@ async function readChat(req, env, id, url) {
   const u = await currentUser(req, env); if (!u) return json({ error: "Sign in first." }, 401);
   const c = await chatRow(env, id); if (!c || c.user_id !== u.id) return json({ error: "Not found" }, 404);
   const msgs = await messagesOf(env, id, url.searchParams.get("after"));
-  if (c.client_unread) await env.DB.prepare("UPDATE chats SET client_unread = 0 WHERE id = ?").bind(id).run();
+  await env.DB.prepare("UPDATE chats SET client_unread = 0, client_read_at = ? WHERE id = ?").bind(now(), id).run();
   return json({ chat: chatPublic({ ...c, client_unread: 0 }, "client"), messages: msgs });
 }
 async function clientSend(req, env, id, ctx) {
@@ -648,7 +648,7 @@ async function clientSend(req, env, id, ctx) {
   if (burst >= CHAT_BURST) return json({ error: "That's a lot of messages at once. Give the therapist a few minutes to answer." }, 429);
   const mid = randomId(), at = now();
   await env.DB.prepare("INSERT INTO chat_messages (id, chat_id, sender, body, created_at) VALUES (?,?,?,?,?)").bind(mid, id, "client", text, at).run();
-  await env.DB.prepare("UPDATE chats SET last_at = ?, last_body = ?, last_from = 'client', team_unread = team_unread + 1 WHERE id = ?").bind(at, text, id).run();
+  await env.DB.prepare("UPDATE chats SET last_at = ?, last_body = ?, last_from = 'client', team_unread = team_unread + 1, client_read_at = ? WHERE id = ?").bind(at, text, at, id).run();   // writing means you have read what was there
   let emailed = false;
   if (STALE(c.team_notified_at, 30)) {
     await env.DB.prepare("UPDATE chats SET team_notified_at = ? WHERE id = ?").bind(at, id).run();
@@ -675,7 +675,7 @@ async function adminReadChat(env, admin, id, url) {
   const me = isEmployee(admin) ? await therapistOf(env, admin) : null;
   const c = await chatRow(env, id); if (!c || !chatVisible(admin, me, c)) return json({ error: "Not found" }, 404);
   const msgs = await messagesOf(env, id, url.searchParams.get("after"));
-  if (c.team_unread) await env.DB.prepare("UPDATE chats SET team_unread = 0 WHERE id = ?").bind(id).run();
+  await env.DB.prepare("UPDATE chats SET team_unread = 0, team_read_at = ? WHERE id = ?").bind(now(), id).run();
   return json({ chat: chatPublic({ ...c, team_unread: 0 }, "team"), messages: msgs });
 }
 async function adminSend(req, env, admin, id) {
@@ -687,7 +687,7 @@ async function adminSend(req, env, admin, id) {
   const signed = me && (c.therapist_id === me.id || c.therapist_id === null) ? me.name : `Zen · ${admin.name}`;
   const mid = randomId(), at = now();
   await env.DB.prepare("INSERT INTO chat_messages (id, chat_id, sender, admin_id, admin_name, body, created_at) VALUES (?,?,?,?,?,?,?)").bind(mid, id, "therapist", admin.id, signed, text, at).run();
-  await env.DB.prepare("UPDATE chats SET last_at = ?, last_body = ?, last_from = 'therapist', client_unread = client_unread + 1 WHERE id = ?").bind(at, text, id).run();
+  await env.DB.prepare("UPDATE chats SET last_at = ?, last_body = ?, last_from = 'therapist', client_unread = client_unread + 1, team_read_at = ? WHERE id = ?").bind(at, text, at, id).run();
   let sent = false;
   if (c.user_email && STALE(c.client_notified_at, 30)) {
     await env.DB.prepare("UPDATE chats SET client_notified_at = ? WHERE id = ?").bind(at, id).run();
