@@ -138,7 +138,20 @@ ok("account: the conversation list has Adham with my last line", (await page.$$(
   const rep = await api("/api/admin/chats/" + th.body.chats[0].id, { method: "POST", headers: { cookie, "content-type": "application/json" }, body: JSON.stringify({ body: "Yes, two days is fine. See you Thursday." }) }); ok("admin API: the owner answers, signed Zen · name", rep.status === 200 && /^Zen · /.test(rep.body.signed), rep.body); }
 await page.waitForTimeout(200); await page.evaluate(() => refreshThread(true)); await page.waitForTimeout(800);
 ok("account: the answer arrives on the next refresh, signed", (await page.$$("#chat-msgs .msg:not(.me)")).length === 1 && (await page.textContent("#chat-msgs")).includes("Thursday") && (await page.textContent("#chat-msgs")).includes("Zen ·"), await page.textContent("#chat-msgs"));
-await page.selectOption("#chat-with", "room"); await page.click("#chat-start"); await page.waitForTimeout(900); ok("account: a second conversation with the room", (await page.$$("#chat-list .chat-item")).length === 2 && (await page.textContent("#chat-name")).includes("Zen Recovery"), await page.textContent("#chat-name"));
+await page.click("#chat-new-btn"); await page.waitForTimeout(300); ok("account: New message opens the picker with the therapists and the room", await page.evaluate(() => document.querySelector("#chat-pick").open) && (await page.$$("#chat-pick-list [data-with]")).length >= 6);
+await page.click('#chat-pick-list [data-with="room"]'); await page.waitForTimeout(900); ok("account: a second conversation with the room", (await page.$$("#chat-list .chat-item")).length === 2 && (await page.textContent("#chat-name")).includes("Zen Recovery"), await page.textContent("#chat-name"));
+ok("account: bubbles carry the time and my messages carry ticks; a day separator on top", (await page.$$("#chat-msgs .chat-day")).length >= 0);
+await page.click("#chat-list [data-open]:last-child"); await page.waitForTimeout(700); ok("account: back on Adham's thread, my message shows two ticks, blue once the team opened it", (await page.$$("#chat-msgs .msg.me .tk")).length === 1 && (await page.$$("#chat-msgs .chat-day")).length === 1, await page.innerHTML("#chat-msgs"));
+{ const tk = await page.$eval("#chat-msgs .msg.me .tk", (e) => e.className); ok("account: read tick is blue (the owner opened the thread through the API earlier)", /read/.test(tk), tk); }
+// phone: the thread takes the whole screen with a back button; the list is what you see first
+await page.setViewportSize({ width: 390, height: 844 }); await go("account.html#messages"); await page.waitForTimeout(1200);
+ok("phone: the list shows first, no thread auto-opened", (await page.$$("#chat-list .chat-item")).length === 2 && !(await page.isVisible("#chat-main")), await page.isVisible("#chat-main"));
+await page.screenshot({ path: (process.env.SHOTS || ".") + "/shot-chat-list-m.png" });
+await page.click("#chat-list [data-open]:last-child"); await page.waitForTimeout(900);
+ok("phone: the thread is full-screen (fixed) with a back button", await page.isVisible("#chat-back") && (await page.$eval("#chat-main", (e) => getComputedStyle(e).position)) === "fixed", await page.$eval("#chat-main", (e) => getComputedStyle(e).position));
+await page.screenshot({ path: (process.env.SHOTS || ".") + "/shot-chat-thread-m.png" });
+await page.click("#chat-back"); await page.waitForTimeout(500); ok("phone: back returns to the list", !(await page.isVisible("#chat-main")) && await page.isVisible("#chat-list"));
+await page.setViewportSize({ width: 1280, height: 900 }); await go("account.html#messages"); await page.waitForTimeout(1200); await page.screenshot({ path: (process.env.SHOTS || ".") + "/shot-chat-desktop.png" });
 await page.click(`.tabs button[data-tab="sessions"]`); await page.waitForTimeout(400); ok("account: sessions carry a Message button for the assigned therapist (or none when unassigned)", (await page.$$("#tab-sessions [data-chat]")).length >= 0);
 
 // 9. success page + no JS errors anywhere

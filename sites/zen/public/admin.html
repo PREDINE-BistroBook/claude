@@ -88,14 +88,6 @@
   @media (max-width:860px){.settings-grid{grid-template-columns:1fr}}
   @media (max-width:640px){#admins-table thead{display:none} #admins-table tr{display:grid;gap:6px;padding:12px 0;border-bottom:1px solid var(--line)} #admins-table td{display:block;padding:0;border:0;white-space:normal} #admins-table td:last-child .actions{margin-top:4px}}
 
-  /* in-site chat (2026-09-13): client ↔ therapist, in the account and in the admin */
-  .chat-wrap{display:grid;grid-template-columns:260px 1fr;gap:16px;align-items:start} .chat-side{display:grid;gap:10px;align-content:start} .chat-list{display:grid;gap:6px}
-  .chat-item{display:flex;gap:10px;align-items:center;padding:10px;border:1px solid var(--line,#e5e2dc);border-radius:14px;background:var(--ground-3,#fff);cursor:pointer;text-align:start;font:inherit;color:inherit;width:100%} .chat-item[aria-current="true"]{border-color:var(--mark,#8a6a3c)} .chat-item .who{display:grid;gap:2px;min-width:0;flex:1} .chat-item .who b{font-weight:500} .chat-item .who span{font-size:.8rem;color:var(--ink-mute,#777);white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .chat-item .n{background:var(--mark,#8a6a3c);color:#fff;border-radius:999px;font-size:.72rem;padding:2px 7px;flex:none}
-  .chat-main{display:grid;grid-template-rows:auto 1fr auto auto;border:1px solid var(--line,#e5e2dc);border-radius:16px;background:var(--ground-3,#fff);min-height:380px;max-height:72vh} .chat-head{display:flex;gap:10px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line,#e5e2dc)} .chat-head b{display:block;font-weight:500} .chat-head .tiny{display:block} .chat-head > div{flex:1;min-width:0}
-  .chat-msgs{overflow:auto;padding:14px;display:grid;gap:8px;align-content:start} .msg{max-width:78%;padding:9px 12px;border-radius:14px;background:var(--ground,#f6f4f0);border:1px solid var(--line,#e5e2dc);white-space:pre-wrap;overflow-wrap:anywhere;font-size:.95rem;justify-self:start} .msg.me{justify-self:end;background:var(--ink,#1c1a17);color:var(--ground,#f6f4f0);border-color:var(--ink,#1c1a17)} .msg .m{display:block;font-size:.72rem;opacity:.7;margin-top:4px}
-  .chat-form{display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--line,#e5e2dc);align-items:end} .chat-form textarea{flex:1;resize:vertical;min-height:44px;font:inherit;padding:8px 10px;border:1px solid var(--line,#e5e2dc);border-radius:10px;background:var(--ground,#f6f4f0);color:inherit} .chat-note{padding:0 14px 10px;margin:0} .chat-empty{padding:20px;color:var(--ink-mute,#777)} .chat-new{display:grid;gap:6px} .chat-new select{flex:1;min-width:0;font:inherit;padding:8px 10px;border:1px solid var(--line,#e5e2dc);border-radius:10px;background:var(--ground-3,#fff);color:inherit}
-  @media (max-width:700px){.chat-wrap{grid-template-columns:1fr} .chat-main{max-height:none;min-height:0} .chat-msgs{max-height:50vh}}
-  
 </style>
 </head>
 <body>
@@ -321,17 +313,18 @@
       <details class="help"><summary>How the chat works</summary>
         <ul>
           <li>Clients write from their account, to a therapist they picked or to the city's room (no therapist picked yet). A therapist sees their own conversations plus the room; the city's partner and the owner see every conversation in the city and can answer too. When someone other than the therapist answers, the client sees "Zen · name".</li>
-          <li>Nobody is online all day: the client gets an email when you answer, and you get one when they write, at most one per half hour per conversation. This page refreshes itself while it's open.</li>
+          <li>Nobody is online all day: the client gets an email when you answer, and you get one when they write, at most one per half hour per conversation. This page refreshes itself while it's open. Two blue ticks under your message mean the client has opened it.</li>
           <li>Anything medical or urgent: say so in the chat and move it to a call. Keep the booking itself on the site so the record stays clean.</li>
         </ul>
       </details>
       <div class="scope" id="ch-city-pills"></div>
-      <div class="chat-wrap">
-        <aside class="chat-side"><div id="achat-list" class="chat-list"></div><div class="empty" id="achat-empty">No conversations yet. Clients find "Messages" in their account and a "Message" button on every therapist's card.</div></aside>
-        <section class="chat-main" id="achat-main" hidden>
-          <header class="chat-head"><span class="avatar" id="achat-avatar"></span><div><b id="achat-name"></b><span class="tiny" id="achat-sub"></span></div><button class="btn small ghost" id="achat-client" type="button">Open client</button></header>
+      <div class="chat-wrap chat">
+        <aside class="chat-side"><div class="chat-side-head"><h3>Conversations</h3><span class="tiny" id="achat-total"></span></div><div></div><div id="achat-list" class="chat-list"></div></aside>
+        <section class="chat-main idle" id="achat-main">
+          <header class="chat-head"><button class="back" type="button" id="achat-back" aria-label="Back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.4 4.6 8 12l7.4 7.4 1.4-1.4-6-6 6-6z"/></svg></button><span class="ch-av sm" id="achat-avatar"></span><div class="t"><b id="achat-name"></b><span class="tiny" id="achat-sub"></span></div><button class="btn small ghost" id="achat-client" type="button">Open client</button></header>
           <div class="chat-msgs" id="achat-msgs" aria-live="polite"></div>
-          <form class="chat-form" id="achat-form"><textarea id="achat-input" rows="2" maxlength="2000" placeholder="Write your answer…" aria-label="Answer"></textarea><button class="btn small" type="submit">Send</button></form>
+          <form class="chat-form" id="achat-form"><textarea id="achat-input" rows="1" maxlength="2000" placeholder="Write your answer" aria-label="Answer" autocomplete="off"></textarea><button class="send" type="submit" id="achat-send" aria-label="Send" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 21.5 23 12 2.5 2.5v7.4L16.6 12 2.5 14.1z"/></svg></button></form>
+          <div class="chat-empty" id="achat-idle"><b>Pick a conversation.</b><span>Clients find "Messages" in their account and a "Message" button on every therapist's card.</span></div>
         </section>
       </div>
     </div>
@@ -1118,36 +1111,56 @@ async function loadMoney() {
 $("#st-month").addEventListener("change", loadMoney);
 
 
-/* ---------- messages: the therapists' side of the in-site chat (2026-09-13) ---------- */
-let ACHATS = [], aOpen = null, aLastAt = null, aPoll = null, chCity = "";
-const aWhen = (iso) => { if (!iso) return ""; const d = new Date(iso.replace(" ", "T") + (/Z$|[+-]\d\d:\d\d$/.test(iso) ? "" : "Z")); if (isNaN(d)) return ""; const same = d.toDateString() === new Date().toDateString(); return (same ? "" : d.toLocaleDateString("en-GB", { day: "numeric", month: "short" }) + " ") + d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }); };
+/* ---------- messages: the therapists' side of the in-site chat (2026-09-13; WhatsApp-style) ---------- */
+let ACHATS = [], AOPEN = null, AMSGS = [], aPoll = null, aBusy = false, chCity = "";
+const A_COARSE = matchMedia("(pointer: coarse)").matches;
+const aDt = (iso) => { if (!iso) return null; const d = new Date(iso.replace(" ", "T") + (/Z$|[+-]\d\d:\d\d$/.test(iso) ? "" : "Z")); return isNaN(d) ? null : d; };
+const aHm = (iso) => { const d = aDt(iso); return d ? d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : ""; };
+const aDay = (iso) => { const d = aDt(iso); if (!d) return ""; const today = new Date(), y = new Date(); y.setDate(today.getDate() - 1); return d.toDateString() === today.toDateString() ? "Today" : d.toDateString() === y.toDateString() ? "Yesterday" : d.toLocaleDateString("en-GB", { day: "numeric", month: "long" }); };
+const aListTime = (iso) => { const d = aDt(iso); return !d ? "" : d.toDateString() === new Date().toDateString() ? aHm(iso) : d.toLocaleDateString("en-GB", { day: "numeric", month: "short" }); };
+const aAv = (photo, name) => photo ? `<img src="${photo}" alt="">` : initials(name || "?");
 async function refreshChatCount() { if (!A || isPlatform()) return; try { const r = await ZenAPI("GET", "/api/admin/chats?count=1"); $("#chat-count").textContent = r.unread; $("#chat-count").hidden = !r.unread; } catch {} }
 async function loadChatTab() {
   $("#ch-city-pills").innerHTML = isOwner() ? `<span class="tiny">Showing</span><div class="pills">${[["", "All cities"], ["cairo", "Cairo"], ["dahab", "Dahab"], ["florence", "Florence"]].map(([k, l]) => `<button class="pill" data-chcity="${k}" aria-pressed="${chCity === k}">${l}</button>`).join("")}</div>` : "";
   $$("#ch-city-pills .pill").forEach((p) => (p.onclick = () => { chCity = p.dataset.chcity; loadChatTab(); }));
   await loadAChatList();
-  if (!aOpen && ACHATS.length) await openAChat(ACHATS[0].id);
-  if (!aPoll) aPoll = setInterval(() => { if (document.hidden || $("#tab-chat").hidden) return; if (aOpen) refreshAThread(true); else loadAChatList(); }, 20000);
+  if (!AOPEN && ACHATS.length && !matchMedia("(max-width: 760px)").matches) await openAChat(ACHATS[0].id);
+  if (!aPoll) aPoll = setInterval(() => { if (document.hidden || $("#tab-chat").hidden || aBusy) return; if (AOPEN) refreshAThread(true); else loadAChatList(); }, 12000);
 }
 async function loadAChatList() {
   const r = await ZenAPI("GET", "/api/admin/chats?city=" + chCity); ACHATS = r.chats || [];
-  $("#chat-count").textContent = r.unread || 0; $("#chat-count").hidden = !r.unread;
-  $("#achat-list").innerHTML = ACHATS.map((c) => `<button type="button" class="chat-item" data-aopen="${c.id}" aria-current="${c.id === aOpen}"><span class="avatar">${c.client_photo ? `<img src="${c.client_photo}" alt="">` : initials(c.client || "?")}</span><span class="who"><b>${esc(c.client || "Client")} <span class="badge city-${c.city}">${CITY_NAME[c.city] || esc(c.city)}</span></b><span>${c.therapist ? "with " + esc(c.therapist) : "the " + (CITY_NAME[c.city] || c.city) + " room"} · ${c.last_from === "therapist" ? "you: " : ""}${esc(c.last_body || "")}</span></span>${c.unread ? `<span class="n">${c.unread}</span>` : ""}</button>`).join("");
+  $("#chat-count").textContent = r.unread || 0; $("#chat-count").hidden = !r.unread; $("#achat-total").textContent = ACHATS.length ? `${ACHATS.length}${r.unread ? ` · ${r.unread} unread` : ""}` : "";
+  $("#achat-list").innerHTML = ACHATS.length ? ACHATS.map((c) => `<button type="button" class="chat-item${c.unread ? " unread" : ""}" data-aopen="${c.id}" aria-current="${c.id === AOPEN?.id}"><span class="ch-av">${aAv(c.client_photo, c.client)}</span><span class="who"><span class="l1"><b>${esc(c.client || "Client")}</b><time>${aListTime(c.last_at)}</time></span><span class="l2"><span>${c.therapist ? "→ " + esc(c.therapist) : "→ the " + (CITY_NAME[c.city] || c.city) + " room"} · ${c.last_from === "therapist" ? "you: " : ""}${esc(c.last_body || "")}</span>${c.unread ? `<span class="n">${c.unread}</span>` : ""}</span></span></button>`).join("")
+    : `<div class="chat-empty"><b>No conversations yet.</b><span>Clients find "Messages" in their account and a "Message" button on every therapist's card.</span></div>`;
   $$("#achat-list [data-aopen]").forEach((b) => (b.onclick = () => openAChat(b.dataset.aopen)));
-  $("#achat-empty").hidden = Boolean(ACHATS.length);
+  if (AOPEN) { const cur = ACHATS.find((c) => c.id === AOPEN.id); if (cur && cur.their_read_at !== AOPEN.their_read_at) { AOPEN = { ...AOPEN, ...cur }; renderAThread(); } }
 }
-async function openAChat(id) { aOpen = id; aLastAt = null; $("#achat-main").hidden = false; $("#achat-msgs").innerHTML = ""; $$("#achat-list [data-aopen]").forEach((b) => b.setAttribute("aria-current", b.dataset.aopen === id)); await refreshAThread(false); }
-function appendAMsgs(list) { const box = $("#achat-msgs"); for (const m of list) { const mine = m.sender === "therapist"; const el = document.createElement("div"); el.className = "msg" + (mine ? " me" : ""); el.innerHTML = `${esc(m.body)}<span class="m">${mine ? esc(m.admin_name || "you") : "client"} · ${aWhen(m.created_at)}</span>`; box.appendChild(el); aLastAt = m.created_at; } if (list.length) box.scrollTop = box.scrollHeight; }
+async function openAChat(id) { AOPEN = ACHATS.find((c) => c.id === id) || { id }; AMSGS = []; const main = $("#achat-main"); main.classList.remove("idle"); main.classList.add("open"); $("#achat-msgs").innerHTML = ""; if (matchMedia("(max-width: 760px)").matches) { document.body.appendChild(main); document.body.classList.add("chat-open"); $("#achat-client").textContent = "Client"; } $$("#achat-list [data-aopen]").forEach((b) => b.setAttribute("aria-current", b.dataset.aopen === id)); await refreshAThread(false); if (!A_COARSE) $("#achat-input").focus(); }
+function closeAChat() { AOPEN = null; AMSGS = []; const main = $("#achat-main"); main.classList.remove("open"); main.classList.add("idle"); if (main.parentElement === document.body) { $("#tab-chat .chat-wrap").appendChild(main); document.body.classList.remove("chat-open"); $("#achat-client").textContent = "Open client"; } loadAChatList(); }
+function renderAThread() {
+  const box = $("#achat-msgs"), stick = box.scrollHeight - box.scrollTop - box.clientHeight < 80 || !box.childElementCount;
+  let html = "", lastDay = "", lastSender = "";
+  for (const m of AMSGS) {
+    const day = aDt(m.created_at)?.toDateString() || ""; if (day !== lastDay) { html += `<div class="chat-day">${esc(aDay(m.created_at))}</div>`; lastDay = day; lastSender = ""; }
+    const mine = m.sender === "therapist", who = mine ? "me:" + (m.admin_name || "") : "c", first = who !== lastSender; lastSender = who;
+    const read = mine && AOPEN?.their_read_at && m.created_at <= AOPEN.their_read_at;
+    html += `<div class="msg${mine ? " me" : ""}${first ? " first" : " cont"}">${first && mine && m.admin_name ? `<span class="from">${esc(m.admin_name)}</span>` : ""}${esc(m.body)}<span class="m">${aHm(m.created_at)}${mine ? `<span class="tk${read ? " read" : ""}" title="${read ? "Read by the client" : "Delivered"}">✓✓</span>` : ""}</span></div>`;
+  }
+  box.innerHTML = html; if (stick) box.scrollTop = box.scrollHeight;
+}
 async function refreshAThread(incremental) {
-  if (!aOpen) return;
-  try { const r = await ZenAPI("GET", `/api/admin/chats/${aOpen}` + (incremental && aLastAt ? `?after=${encodeURIComponent(aLastAt)}` : ""));
-    if (!incremental) { const c = r.chat; $("#achat-avatar").innerHTML = c.client_photo ? `<img src="${c.client_photo}" alt="">` : initials(c.client || "?"); $("#achat-name").textContent = c.client || "Client"; $("#achat-sub").textContent = `${c.client_email || ""} · ${c.therapist ? "writing to " + c.therapist : "writing to the " + (CITY_NAME[c.city] || c.city) + " room"}`; $("#achat-client").onclick = () => c.user_id && openClient(c.user_id); $("#achat-client").hidden = !c.user_id; }
-    appendAMsgs(r.messages || []); if (r.messages?.length || !incremental) loadAChatList();
+  if (!AOPEN) return; const id = AOPEN.id, after = incremental && AMSGS.length ? AMSGS[AMSGS.length - 1].created_at : null;
+  try { const r = await ZenAPI("GET", `/api/admin/chats/${id}` + (after ? `?after=${encodeURIComponent(after)}` : "")); if (!AOPEN || AOPEN.id !== id) return;
+    AOPEN = { ...AOPEN, ...r.chat }; const c = r.chat; $("#achat-avatar").innerHTML = aAv(c.client_photo, c.client); $("#achat-name").textContent = c.client || "Client"; $("#achat-sub").textContent = `${c.client_email || ""} · ${c.therapist ? "writing to " + c.therapist : "writing to the " + (CITY_NAME[c.city] || c.city) + " room"}`; $("#achat-client").onclick = () => c.user_id && openClient(c.user_id); $("#achat-client").hidden = !c.user_id;
+    const fresh = (r.messages || []).filter((m) => !AMSGS.some((x) => x.id === m.id)); AMSGS = incremental ? AMSGS.concat(fresh) : r.messages || []; renderAThread();
+    if (fresh.length && incremental) loadAChatList();
   } catch (ex) { if (!incremental) await ask({ title: "Couldn't open that", text: ex.message, ok: "OK" }); }
 }
-$("#achat-form").addEventListener("submit", async (e) => { e.preventDefault(); const ta = $("#achat-input"), text = ta.value.trim(); if (!text || !aOpen) return; const btn = e.target.querySelector("button[type=submit]"); btn.disabled = true;
-  try { const r = await ZenAPI("POST", `/api/admin/chats/${aOpen}`, { body: text }); ta.value = ""; appendAMsgs([{ sender: "therapist", admin_name: r.signed, body: text, created_at: r.created_at }]); loadAChatList(); } catch (ex) { await ask({ title: "Couldn't send", text: ex.message, ok: "OK" }); } finally { btn.disabled = false; ta.focus(); } });
-$("#achat-input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("#achat-form").requestSubmit(); } });
+function growAInput() { const ta = $("#achat-input"); ta.style.height = "42px"; ta.style.height = Math.min(ta.scrollHeight, 132) + "px"; $("#achat-send").disabled = !ta.value.trim(); }
+$("#achat-input").addEventListener("input", growAInput); $("#achat-back").addEventListener("click", closeAChat);
+$("#achat-form").addEventListener("submit", async (e) => { e.preventDefault(); const ta = $("#achat-input"), text = ta.value.trim(); if (!text || !AOPEN || aBusy) return; aBusy = true; $("#achat-send").disabled = true;
+  try { const r = await ZenAPI("POST", `/api/admin/chats/${AOPEN.id}`, { body: text }); ta.value = ""; growAInput(); AMSGS.push({ id: r.id, sender: "therapist", admin_name: r.signed, body: text, created_at: r.created_at }); renderAThread(); loadAChatList(); } catch (ex) { await ask({ title: "Couldn't send", text: ex.message, ok: "OK" }); $("#achat-send").disabled = false; } finally { aBusy = false; if (!A_COARSE) ta.focus(); } });
+$("#achat-input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing && !A_COARSE) { e.preventDefault(); $("#achat-form").requestSubmit(); } });
 
 /* ---------- needs review ---------- */
 async function loadReview() {
