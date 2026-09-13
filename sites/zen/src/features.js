@@ -6,7 +6,7 @@ import { CITIES, PLATFORM_FEE_BPS } from "./catalog.js";
 import { randomId, referralCode, signPayload, verifyPayload, getCookie, clearCookie, hashPassword } from "./auth.js";
 import { CITY_KEYS, json, clean, normEmail, isDate, isTime, fmt, now, today, addDays, feeOn, body, isLive, currentUser, scope, sendEmail, stripeCheckout, slotsFor, healthFlags, parseIntake, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, isOwner, therapistOf, visibleWhere, isPartner, isEmployee, managesCity, pickLang, translateProfile, parseI18n } from "./lib.js";
 import { M } from "./mail.js";
-import { translateService, therapistPrices, payProvider, fawryCheckout, cityNameIn, isPlatform } from "./lib.js";
+import { translateService, therapistPrices, payProvider, fawryCheckout, cityNameIn, isPlatform, chatEmailHtml } from "./lib.js";
 
 const b64u = (s) => btoa(typeof s === "string" ? unescape(encodeURIComponent(s)) : String.fromCharCode(...new Uint8Array(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const cityOf = (k) => (CITY_KEYS.includes(k) ? k : null);
@@ -660,7 +660,9 @@ async function clientSend(req, env, id, ctx) {
   if (STALE(c.team_notified_at, 30)) {
     await env.DB.prepare("UPDATE chats SET team_notified_at = ? WHERE id = ?").bind(at, id).run();
     const to = await notifyList(env, c.city, c.therapist_id);
-    emailed = Boolean(await sendEmail(env, { to, subject: `${u.name || "A client"} wrote in the site chat${c.therapist_name ? " · " + c.therapist_name : " · " + CITIES[c.city].name}`, text: [`${u.name || "A client"} (${u.email}) wrote${c.therapist_name ? " to " + c.therapist_name : " to the " + CITIES[c.city].name + " room"}:`, ``, `"${excerpt(text)}"`, ``, `Answer under Messages in the admin: ${env.SITE_URL}/admin.html#chat`, ``, `You get at most one of these emails per half hour per conversation; the chat itself shows everything.`].join("\n") }).catch(() => false));
+    const who = u.name || "A client", url = `${env.SITE_URL}/admin.html#chat=${id}`, toWhom = c.therapist_name ? "to " + c.therapist_name : "to the " + CITIES[c.city].name + " room";
+    emailed = Boolean(await sendEmail(env, { to, subject: `Urgent · new message from ${who} · ${c.therapist_name || CITIES[c.city].name}`, text: [`${who} (${u.email}) wrote ${toWhom}:`, ``, `"${text}"`, ``, `Respond here: ${url}`, ``, `You get at most one of these emails per half hour per conversation; the chat itself shows everything.`].join("\n"),
+      html: chatEmailHtml(env, { eyebrow: "Urgent · a client is waiting", title: `${who} wrote ${toWhom}`, from: `${who} · ${u.email}${u.phone ? " · " + u.phone : ""}`, message: text, button: "Respond in the chat", url, note: "The button opens this conversation in the Zen admin (sign in if asked). You get at most one of these emails per half hour per conversation; the chat itself shows everything." }) }).catch(() => false));
   }
   return json({ ok: true, id: mid, created_at: at, emailed });
 }
@@ -698,7 +700,9 @@ async function adminSend(req, env, admin, id) {
   let sent = false;
   if (c.user_email && STALE(c.client_notified_at, 30)) {
     await env.DB.prepare("UPDATE chats SET client_notified_at = ? WHERE id = ?").bind(at, id).run();
-    sent = Boolean(await sendEmail(env, { to: c.user_email, ...M("chat_client", pickLang(c.user_lang), { first: (c.user_name || "").split(" ")[0] || "there", from: signed, excerpt: excerpt(text), link: `${env.SITE_URL}/account#messages` }) }).catch(() => false));
+    const link = `${env.SITE_URL}/account.html?chat=${c.therapist_id || "room"}#messages`, mail = M("chat_client", pickLang(c.user_lang), { first: (c.user_name || "").split(" ")[0] || "there", from: signed, excerpt: excerpt(text), link });
+    const L = pickLang(c.user_lang), T = { en: ["New message", `${signed} answered you`, "Reply in the chat", "The button opens your conversation on zenrecovery.club. You get at most one of these emails per half hour; the chat itself shows everything."], it: ["Nuovo messaggio", `${signed} ti ha risposto`, "Rispondi nella chat", "Il pulsante apre la tua conversazione su zenrecovery.club. Ricevi al massimo una di queste email ogni mezz'ora; la chat mostra tutto."], ar: ["رسالة جديدة", `${signed} ردّ عليك`, "الرد في المحادثة", "يفتح الزر محادثتك على zenrecovery.club. تصلك رسالة واحدة كهذه على الأكثر كل نصف ساعة؛ المحادثة نفسها تعرض كل شيء."] }[L] || null;
+    sent = Boolean(await sendEmail(env, { to: c.user_email, ...mail, html: chatEmailHtml(env, { eyebrow: T[0], title: T[1], from: signed, message: text, button: T[2], url: link, note: T[3] }) }).catch(() => false));
   }
   return json({ ok: true, id: mid, created_at: at, signed, emailed: sent });
 }

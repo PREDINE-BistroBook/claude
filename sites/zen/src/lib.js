@@ -225,10 +225,30 @@ export function emailHtml(env, text) {
 <div style="padding:14px 26px 22px;font-size:12px;color:#8B928F;border-top:1px solid #e3e5e0">Zen Recovery · Cairo · Dahab · Florence · <a href="${env.SITE_URL}" style="color:#8B928F">zenrecovery.club</a></div>
 </div></body></html>`;
 }
-export async function sendEmail(env, { to, subject, text }) {
+// A chat ping (2026-09-13, Ash: "an email pops with urgent and the customer message, with a Respond button that takes them to the chat"):
+// the same frame as every other email, with the message in a card and one big button instead of a bare link.
+export function chatEmailHtml(env, { eyebrow, title, from, message, button, url, note }) {
+  const esc = escHtml;
+  return `<!doctype html><html><body style="margin:0;background:#EDEEEA;padding:24px 12px;font-family:Figtree,Segoe UI,Helvetica,Arial,sans-serif;color:#1B1E1D">
+<div style="max-width:560px;margin:0 auto;background:#F7F7F5;border:1px solid #d9dbd6;border-radius:18px;overflow:hidden">
+<div style="background:#000;padding:22px;text-align:center"><a href="${env.SITE_URL}"><img src="${env.SITE_URL}/img/logo-email.png" alt="Zen Recovery" width="120" height="120" style="display:inline-block;border:0"></a></div>
+<div style="padding:26px 26px 8px">
+  <div style="font-family:DM Mono,Menlo,monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#D23F31;font-weight:600">${esc(eyebrow)}</div>
+  <h1 style="font-size:22px;line-height:1.2;font-weight:600;margin:8px 0 14px">${esc(title)}</h1>
+  <div style="background:#fff;border:1px solid #e3e5e0;border-radius:14px;padding:16px 18px;margin:0 0 18px">
+    <div style="font-size:12px;color:#8B928F;margin-bottom:6px">${esc(from)}</div>
+    <div style="font-size:17px;line-height:1.5;white-space:pre-wrap">${esc(message)}</div>
+  </div>
+  <a href="${url}" style="display:inline-block;background:#1B1E1D;color:#fff;text-decoration:none;font-weight:600;font-size:16px;padding:14px 26px;border-radius:999px">${esc(button)}</a>
+  <p style="font-size:13px;color:#8B928F;line-height:1.5;margin:18px 0 12px">${esc(note)}</p>
+</div>
+<div style="padding:14px 26px 22px;font-size:12px;color:#8B928F;border-top:1px solid #e3e5e0">Zen Recovery · Cairo · Dahab · Florence · <a href="${env.SITE_URL}" style="color:#8B928F">zenrecovery.club</a></div>
+</div></body></html>`;
+}
+export async function sendEmail(env, { to, subject, text, html }) {
   const list = [...new Set((Array.isArray(to) ? to : [to]).filter(Boolean))];
   if (!env.RESEND_API_KEY || !list.length) return false;
-  const r = await fetch("https://api.resend.com/emails", { method: "POST", headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" }, body: JSON.stringify({ from: env.FROM_EMAIL, to: list, subject, text, html: emailHtml(env, text) }) });
+  const r = await fetch("https://api.resend.com/emails", { method: "POST", headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" }, body: JSON.stringify({ from: env.FROM_EMAIL, to: list, subject, text, html: html || emailHtml(env, text) }) });
   if (!r.ok) console.error("resend error", await r.text());
   return r.ok;
 }
