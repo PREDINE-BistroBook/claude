@@ -5,7 +5,7 @@
 //   · waitlist: tell people when a slot opens on the day they asked for
 import { M } from "./mail.js";
 import { CITIES, SLOTS } from "./catalog.js";
-import { settings, sendEmail, sendWhatsApp, logMessage, slotsFor, today, addDays, now , pickLang, translateProfile } from "./lib.js";
+import { settings, sendEmail, sendWhatsApp, logMessage, slotsFor, today, addDays, now , pickLang, translateProfile, translateService } from "./lib.js";
 
 export async function runCron(env) {
   const results = {};
@@ -85,6 +85,8 @@ async function translations(env) {
   const rows = (await env.DB.prepare("SELECT id, title, bio, story, certs, languages, area FROM therapists WHERE i18n IS NULL AND (COALESCE(story,'') != '' OR COALESCE(bio,'') != '' OR COALESCE(title,'') != '') LIMIT 5").all()).results;
   let n = 0;
   for (const r of rows) { const i18n = await translateProfile(env, r); if (i18n) { await env.DB.prepare("UPDATE therapists SET i18n = ? WHERE id = ?").bind(JSON.stringify(i18n), r.id).run(); n++; } }
+  const svcs = (await env.DB.prepare("SELECT id, name, description FROM services WHERE i18n IS NULL LIMIT 5").all()).results;
+  for (const r of svcs) { const i18n = await translateService(env, r); if (i18n) { await env.DB.prepare("UPDATE services SET i18n = ? WHERE id = ?").bind(JSON.stringify(i18n), r.id).run(); n++; } }
   return n;
 }
 async function waitlist(env) {

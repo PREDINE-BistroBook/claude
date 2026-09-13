@@ -30,7 +30,7 @@
 
 import { CITIES, SLOTS } from "./catalog.js";
 import { randomId, signPayload, verifyPayload, getCookie, setCookie, clearCookie, hashPassword, verifyPassword } from "./auth.js";
-import { CITY_KEYS, USER_COOKIE, ADMIN_COOKIE, json, clean, normEmail, isDate, isTime, fmt, now, today, feeOn, body, isLive, parseIntake, healthFlags, settings, currentUser, currentAdmin, scope, sendEmail, sendSms, stripeCheckout, slotsFor, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, maybeRewardLoyalty, isPlatform, isOwner, seesAll, therapistOf, visibleWhere, canSeeBooking, isPartner, isEmployee, managesCity, pickLang, userLang } from "./lib.js";
+import { therapistPrices, nameIn, CITY_KEYS, USER_COOKIE, ADMIN_COOKIE, json, clean, normEmail, isDate, isTime, fmt, now, today, feeOn, body, isLive, parseIntake, healthFlags, settings, currentUser, currentAdmin, scope, sendEmail, sendSms, stripeCheckout, slotsFor, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, maybeRewardLoyalty, isPlatform, isOwner, seesAll, therapistOf, visibleWhere, canSeeBooking, isPartner, isEmployee, managesCity, pickLang, userLang } from "./lib.js";
 import { M, paidLineFor } from "./mail.js";
 import { featureRoute, adminFeatureRoute, giftPaid, packagePaid, authFlags } from "./features.js";
 import { runCron } from "./cron.js";
@@ -113,9 +113,9 @@ async function signinTaken(env, names, exceptId) { for (const n of names.filter(
 async function cityMeta(env) { const c = await catalog(env); return Object.fromEntries(CITY_KEYS.map((k) => [k, { name: c[k].name, currency: c[k].currency, services: Object.values(c[k].services).map(({ photo, ...s }) => ({ ...s, has_photo: Boolean(photo) })) }])); }
 // What the website reads on load: services and prices per city (from the admin), address/team/WhatsApp/Maps per city (settings)
 async function publicCatalog(env) {
-  const [c, st] = await Promise.all([catalog(env), settings(env)]);
+  const [c, st, tp] = await Promise.all([catalog(env), settings(env), therapistPrices(env, null)]);
   return json({ cities: Object.fromEntries(CITY_KEYS.map((k) => [k, { name: c[k].name, currency: c[k].currency.toUpperCase(), address: st.address[k] ? st.address[k].split("\n").map((l) => l.trim()).filter(Boolean) : null, team: st.team[k] || null, whatsapp: st.whatsapp[k] || null, gmaps: st.gmaps[k] || null,
-    services: Object.values(c[k].services).map((s) => ({ id: s.id, name: s.short, dur: s.minutes, price: s.amount, desc: s.description, photo: s.photo ? `/api/service-photo/${s.id}?v=${encodeURIComponent((s.updated_at || "").replace(/\D/g, ""))}` : null })) }])) }, 200, { "cache-control": "no-store" });
+    services: Object.values(c[k].services).map((s) => ({ id: s.id, name: s.short, dur: s.minutes, price: s.amount, desc: s.description, i18n: s.i18n || null, prices: tp[s.id] || null, photo: s.photo ? `/api/service-photo/${s.id}?v=${encodeURIComponent((s.updated_at || "").replace(/\D/g, ""))}` : null })) }])) }, 200, { "cache-control": "no-store" });
 }
 const INTAKE_LISTS = ["goals", "pain", "health"], INTAKE_STR = ["activity", "sport", "experience", "health_notes", "contact", "time_pref", "completed_at"];
 function cleanIntake(v) { // whitelist keys, cap sizes; stored as JSON text
@@ -304,10 +304,12 @@ async function checkout(req, env) {
     const want = clean(b.therapist_id, 40) || null;
     if (want && !s.therapists.includes(want)) return json({ error: "That therapist isn't free at that time.", slots: avail.slots }, 409);
     therapist_id = want || s.therapists[0] || null;
-  } else slot = SLOTS[b.slot] ? b.slot : "morning";
+  } else { slot = SLOTS[b.slot] ? b.slot : "morning"; const want = clean(b.therapist_id, 40) || null; if (want && (await env.DB.prepare("SELECT 1 FROM therapists WHERE id = ? AND city = ? AND active = 1").bind(want, cityKey).first())) therapist_id = want; }
+  const chosen = clean(b.therapist_id, 40) || null;   // the client's own choice (not an automatic assignment) → that therapist's price, if they set one
+  const own = chosen && therapist_id === chosen ? await env.DB.prepare("SELECT amount FROM therapist_prices WHERE therapist_id = ? AND service_id = ?").bind(chosen, svc.id).first() : null;
 
   const user = await currentUser(req, env);
-  const list = svc.amount;
+  const list = own ? own.amount : svc.amount;
   let amount = list, discount_kind = null, credit = null, gift = null, partner = null, pack = null;
   if (b.package_id) {
     if (!user) return json({ error: "Sign in to use your package." }, 401);
@@ -429,7 +431,7 @@ async function afterPaid(env, bk) {
         `Client:   ${bk.name}`, `WhatsApp: ${bk.phone}`, `Email:    ${bk.email}`, `Note:     ${bk.note || "—"}`, bk.partner_code ? `Partner:  ${bk.partner_code}` : null, ``, `Paid:     ${paidLine(bk)}`, ``,
         exact ? `The time is fixed. Mark it "Confirmed" in the admin once you've said hello on WhatsApp: ${env.SITE_URL}/admin` : `Confirm the exact hour with the client on WhatsApp, then mark it "Confirmed" in the admin: ${env.SITE_URL}/admin`].filter((l) => l !== null).join("\n"),
     }),
-    sendEmail(env, { to: bk.email, ...M("booking_confirmed", lang, { name: bk.name, city: cityNameIn(bk.city, lang), service: bk.service_name, date: bk.date, slot: slotLabel(bk.slot), therapist: th, paid: paidLineFor(lang, bk, fmt), where: where ? where.replace(/^Where:\s*/, "") : "", exact, phone: bk.phone, site: env.SITE_URL }) }),
+    sendEmail(env, { to: bk.email, ...M("booking_confirmed", lang, { name: bk.name, city: cityNameIn(bk.city, lang), service: nameIn(await serviceOf(env, bk.city, bk.service_id), lang, cityNameIn(bk.city, lang)) || bk.service_name, date: bk.date, slot: slotLabel(bk.slot), therapist: th, paid: paidLineFor(lang, bk, fmt), where: where ? where.replace(/^Where:\s*/, "") : "", exact, phone: bk.phone, site: env.SITE_URL }) }),
   ]);
 }
 const CITY_I18N = { cairo: { it: "Il Cairo", ar: "القاهرة" }, dahab: { it: "Dahab", ar: "دهب" }, florence: { it: "Firenze", ar: "فلورنسا" } };

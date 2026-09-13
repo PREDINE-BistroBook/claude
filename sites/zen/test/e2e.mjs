@@ -42,6 +42,11 @@ await page.click("#pay"); await page.waitForTimeout(1200);
 const err = await page.textContent("#err").catch(() => ""); const dlgOpen = await page.evaluate(() => Boolean(document.querySelector("#dlg")?.open)); ok("booking: API answer surfaced to the client (payments off → dialog or message, not a dead button)", (err || "").length > 5 || dlgOpen || page.url().includes("success"), { err, dlgOpen, url: page.url() }); if (dlgOpen) await page.click("#dlg-close");
 ok("booking: pay button re-enabled after the answer", !(await page.isDisabled("#pay")) || page.url().includes("success"));
 
+// 3b. a therapist's own price: Adham's manual therapy is 1,200 EGP, the city price 1,000 — the card and the summary follow the choice
+await go("booking.html?city=cairo&therapist=th3"); await page.waitForTimeout(600);
+const p1 = await page.$eval("#services .service:first-child .price", (e) => e.textContent.replace(/\s/g, "")); ok("booking: Adham's own price on the card", /1,?200/.test(p1), p1);
+await page.selectOption("#therapist", ""); await page.waitForTimeout(400); const p2 = await page.$eval("#services .service:first-child .price", (e) => e.textContent.replace(/\s/g, "")); ok("booking: city price back with Anyone available", /1,?000/.test(p2), p2);
+
 // 4. language: chosen on one page, kept on every other page, including html lang/dir; the API gets it
 await go("index.html"); await page.click("#lang-slot [data-lang=ar], .lang [data-lang=ar], button:has-text('عربي')"); await page.waitForTimeout(500);
 ok("home switched to Arabic (dir=rtl)", await page.evaluate(() => document.documentElement.dir === "rtl" && document.documentElement.lang === "ar"));
