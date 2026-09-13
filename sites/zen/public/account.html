@@ -125,6 +125,7 @@
 </style>
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <div class="banner" id="demo-banner" hidden>Preview — this is sample data. Sign-in emails and payments switch on when the site goes live.</div>
 <header class="top">
   <a class="brand no-i18n" href="index.html"><img class="logo" src="img/logo-light.png" alt="Zen Recovery" width="112" height="40"></a>
@@ -135,7 +136,7 @@
   </nav>
 </header>
 
-<main class="wrap">
+<main id="main" class="wrap">
 
   <!-- ===== sign in ===== -->
   <section class="login" id="login-view" hidden>
@@ -146,20 +147,20 @@
     <form class="card" id="login-form" novalidate>
       <p class="ok" id="ref-note" hidden></p>
       <p class="err" id="expired-note" hidden>That link has expired. Ask for a fresh one below.</p>
-      <p class="err" id="google-err" hidden>Sign-in with Google didn't work. Try again, or use the email link.</p>
+      <p class="err" id="google-err" role="alert" hidden>Sign-in with Google didn't work. Try again, or use the email link.</p>
       <a class="gbtn" id="google-btn" href="/api/auth/google" hidden><svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.6l6.7-6.7C35.6 2.6 30.2 0 24 0 14.6 0 6.5 5.4 2.5 13.3l7.8 6.1C12.2 13.6 17.6 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.2 5.5-4.7 7.2l7.6 5.9c4.4-4.1 6.9-10.1 6.9-17.6z"/><path fill="#FBBC05" d="M10.3 28.6c-.5-1.5-.8-3-.8-4.6s.3-3.1.8-4.6l-7.8-6.1C.9 16.5 0 20.1 0 24s.9 7.5 2.5 10.7l7.8-6.1z"/><path fill="#34A853" d="M24 48c6.2 0 11.6-2 15.6-5.6l-7.6-5.9c-2.1 1.4-4.8 2.3-8 2.3-6.4 0-11.8-4.1-13.7-9.9l-7.8 6.1C6.5 42.6 14.6 48 24 48z"/></svg><span>Continue with Google</span></a>
       <a class="gbtn apple" id="apple-btn" href="/api/auth/apple" hidden><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M16.4 12.6c0-2.6 2.1-3.8 2.2-3.9-1.2-1.8-3.1-2-3.7-2-1.6-.2-3.1.9-3.9.9-.8 0-2-.9-3.4-.9-1.7 0-3.3 1-4.2 2.6-1.8 3.1-.5 7.8 1.3 10.3.9 1.2 1.9 2.6 3.2 2.6 1.3-.1 1.8-.8 3.3-.8s2 .8 3.4.8c1.4 0 2.3-1.3 3.1-2.5 1-1.4 1.4-2.8 1.4-2.9 0 0-2.7-1-2.7-4.2zM13.9 4.9c.7-.8 1.2-2 1-3.1-1 0-2.2.7-2.9 1.5-.6.7-1.2 1.9-1.1 3 1.1.1 2.3-.6 3-1.4z"/></svg><span>Continue with Apple</span></a>
       <p class="tiny" id="google-off" hidden>Google sign-in isn't set up yet.</p>
       <div class="or" id="or-line" hidden>or</div>
       <div class="field"><label for="l-email">Email</label><input id="l-email" type="email" autocomplete="email" required placeholder="you@example.com"><span class="tiny">We use it only to sign you in and confirm sessions.</span></div>
       <div class="field" id="name-field"><label for="l-name">Your name</label><input id="l-name" autocomplete="name" placeholder="How should we greet you?"><span class="tiny">Only needed the first time.</span></div>
-      <p class="err" id="login-err" hidden></p>
+      <p class="err" id="login-err" role="alert" hidden></p>
       <button class="btn" type="submit" id="login-btn">Email me a sign-in link</button>
       <div class="sms" id="sms-wrap" hidden>
         <b style="font-size:.9rem">Prefer a text?</b>
         <div class="row"><input id="sms-phone" type="tel" placeholder="+20 … or +39 …" style="flex:1;font:inherit;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px"><button class="btn small ghost" type="button" id="sms-btn">Text me the link</button></div>
         <span class="tiny">Works once your account has a phone number (add it in your profile).</span>
-        <span class="ok" id="sms-ok" hidden>Sent. Check your messages.</span><span class="err" id="sms-err" hidden></span>
+        <span class="ok" id="sms-ok" hidden>Sent. Check your messages.</span><span class="err" id="sms-err" role="alert" hidden></span>
       </div>
       <ol class="steps-intro" style="padding-inline-start:18px;margin:0">
         <li>Open the email and tap the link. It works for 20 minutes.</li>
@@ -232,7 +233,7 @@
       <div class="summary-box card" id="w-summary"></div>
       <p class="tiny">You can change any of this later under Profile.</p>
     </div>
-    <p class="err" id="wiz-err" hidden></p>
+    <p class="err" id="wiz-err" role="alert" hidden></p>
     <div class="nav">
       <button class="btn ghost small" type="button" id="wiz-back">Back</button>
       <span class="tiny no-i18n" id="wiz-count"></span>
@@ -300,7 +301,7 @@
       <div class="packs" id="my-packs"></div>
       <div class="section-head"><div><h2>Buy a pack</h2><p class="tiny" id="packs-note">Several sessions at once, less per session, valid for months.</p></div></div>
       <div class="packs" id="packs-shop"></div>
-      <p class="err" id="packs-err" hidden></p>
+      <p class="err" id="packs-err" role="alert" hidden></p>
     </div>
 
     <div id="tab-progress" hidden>
@@ -313,7 +314,7 @@
             <div class="scale"><label for="ci-sleep">Sleep</label><input id="ci-sleep" type="range" min="1" max="5" value="3"><div class="ends"><span>bad</span><span>great</span></div></div>
           </div>
           <div class="field"><label for="ci-note">A note (optional)</label><input id="ci-note" placeholder=""></div>
-          <div class="row"><button class="btn small" type="button" id="ci-save">Save check-in</button><span class="ok" id="ci-ok" hidden>Saved.</span><span class="err" id="ci-err" hidden></span></div>
+          <div class="row"><button class="btn small" type="button" id="ci-save">Save check-in</button><span class="ok" id="ci-ok" hidden>Saved.</span><span class="err" id="ci-err" role="alert" hidden></span></div>
         </div>
         <div class="card">
           <h3>Your pain over time</h3>
@@ -374,7 +375,7 @@
           <div class="row" style="justify-content:space-between"><b>Your answers</b><button class="btn small ghost" type="button" id="redo-intake">Update answers</button></div>
           <div class="chips" id="p-intake" style="margin-top:10px"></div>
         </div>
-        <div class="row"><button class="btn" type="submit" id="save-btn">Save changes</button><span class="ok" id="saved" hidden>Saved</span><span class="err" id="save-err" hidden></span></div>
+        <div class="row"><button class="btn" type="submit" id="save-btn">Save changes</button><span class="ok" id="saved" hidden>Saved</span><span class="err" id="save-err" role="alert" hidden></span></div>
       </form>
       <div class="card" style="margin-top:16px;padding:16px">
         <div class="row" style="justify-content:space-between"><div><b>Your data</b><p class="tiny">Everything we hold about you: profile, answers, sessions, check-ins, rewards. Yours to keep.</p></div><div class="row"><a class="btn small ghost" href="export.html" target="_blank" rel="noopener">Print a summary</a><a class="btn small ghost" href="/api/me/export" download="zen-recovery-data.json">Download (JSON)</a></div></div>
@@ -413,7 +414,6 @@ async function boot() {
   const refq = (params.get("ref") ? "&ref=" + encodeURIComponent(params.get("ref")) : "");
   if (status.google) { $("#google-btn").hidden = false; $("#or-line").hidden = false; $("#google-btn").href = "/api/auth/google?lang=" + I.lang + refq; }
   if (status.apple) { $("#apple-btn").hidden = false; $("#or-line").hidden = false; $("#apple-btn").href = "/api/auth/apple?lang=" + I.lang + refq; }
-  if (!status.google && !status.apple && !ZenAPI.isDemo()) $("#google-off").hidden = false;
   if (status.sms) $("#sms-wrap").hidden = false;
   if (params.get("error") === "apple") { $("#google-err").textContent = t("Sign-in with Apple didn't work. Try again, or use the email link."); $("#google-err").hidden = false; }
   STATUS = status;
@@ -660,14 +660,14 @@ $$(".tabs button").forEach((b) => b.addEventListener("click", () => { $$(".tabs 
 /* login */
 $("#login-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const btn = $("#login-btn"), err = $("#login-err"); err.hidden = true; btn.disabled = true;
+  const btn = $("#login-btn"), err = $("#login-err"), label = btn.textContent; err.hidden = true; btn.disabled = true; btn.setAttribute("aria-busy", "true"); btn.textContent = t("One moment…");
   const ref = new URLSearchParams(location.search).get("ref");
   try {
     const r = await ZenAPI("POST", "/api/auth/request-link", { email: $("#l-email").value.trim(), name: $("#l-name").value.trim(), ref, lang: I.lang });
     if (r.link) { location.href = r.link; return; }
     $("#login-form").hidden = true; $("#sent").hidden = false; $("#sent-email").textContent = $("#l-email").value.trim();
   } catch (ex) { err.textContent = ex.message; err.hidden = false; if (ex.data?.needName) $("#l-name").focus(); }
-  finally { btn.disabled = false; }
+  finally { btn.disabled = false; btn.removeAttribute("aria-busy"); btn.textContent = label; }
 });
 $("#sms-btn").addEventListener("click", async () => {
   $("#sms-ok").hidden = true; $("#sms-err").hidden = true; $("#sms-btn").disabled = true;

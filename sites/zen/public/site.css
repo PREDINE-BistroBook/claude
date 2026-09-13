@@ -95,6 +95,28 @@ footer .wm b{color:#fff}
 .btn:disabled{opacity:.55; cursor:default; transform:none; box-shadow:none}
 @media (max-width:640px){ .nav-links .hide-sm{display:none} }
 
+/* ---------- reach: skip link, touch targets ---------- */
+.skip{position:absolute; left:16px; top:-60px; z-index:200; padding:10px 16px; border-radius:999px; background:var(--ink); color:var(--ground); text-decoration:none; font-weight:500; transition:top .2s}
+.skip:focus-visible{top:12px; outline:2px solid var(--mark); outline-offset:3px}
+.btn, .chip, .lang-switch button, .slot label, .service label, button, [role="button"], a.plain, .field input, .field select{touch-action:manipulation}
+.btn{min-height:44px} .btn.small{min-height:40px}
+.lang-switch button{min-height:34px; padding:7px 11px; font-size:.78rem}
+.lang-switch{align-items:stretch}
+@media (pointer:coarse){ .lang-switch button{min-height:40px; padding:8px 13px} .tm-filter .chip, .chip{min-height:40px} }
+
+/* ---------- nav on phones: nothing wraps ---------- */
+.nav-links .btn{white-space:nowrap}
+.nav-links .signin{min-height:36px}
+@media (max-width:430px){ .nav-links{gap:10px} .nav-links .btn.small{padding:8px 13px; font-size:.82rem} .lang-switch button{padding:7px 9px; min-height:36px; font-size:.74rem} .nav-links .signin{padding:6px 9px} }
+@media (max-width:360px){ .nav-links .btn.small{padding:8px 11px; font-size:.78rem} .lang-switch button{padding:6px 7px} }
+/* press feedback, calm hover */
+.btn:active{transform:translateY(0) scale(.98); transition-duration:.08s} .chip:active, .service label:active, .slot label:active{transform:scale(.985)}
+/* inline validation: only after the person has typed (not on first paint) */
+.field input:user-invalid, .field select:user-invalid, .field textarea:user-invalid{border-color:#c2410c; box-shadow:0 0 0 3px rgba(194,65,12,.12)}
+.field input:user-valid:not(:placeholder-shown){border-color:color-mix(in srgb, var(--mark) 55%, var(--line))}
+.field .hint{font-size:.8rem; color:var(--ink-mute); margin-top:6px} .field .hint.bad{color:#c2410c}
+.btn[aria-busy="true"]{opacity:.7; cursor:progress}
+
 /* ---------- hero ---------- */
 .hero{
   display:grid; grid-template-columns:1.1fr .9fr; gap:clamp(24px, 4vw, 64px); align-items:center;

@@ -8,7 +8,7 @@ $("#g-city").addEventListener("change", giftServices); $("#g-service").addEventL
 $("#gift-form").addEventListener("submit", async (e) => {
   e.preventDefault(); const err = $("#g-err"); err.hidden = true; if (!e.target.reportValidity()) return;
   const c = CITIES[$("#g-city").value], s = c.services.find(x => x.id === $("#g-service").value);
-  const btn = $("#g-pay"); btn.disabled = true;
+  const btn = $("#g-pay"), label = btn.textContent; btn.disabled = true; btn.setAttribute("aria-busy", "true"); btn.textContent = t("One moment…");
   try {
     const r = await fetch("/api/gift/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ lang: I.lang, city: $("#g-city").value, service: s.id, buyer_name: $("#g-buyer").value.trim(), buyer_email: $("#g-buyer-email").value.trim(), recipient_name: $("#g-to").value.trim(), recipient_email: $("#g-to-email").value.trim(), message: $("#g-msg").value.trim() }) });
     const data = (r.headers.get("content-type") || "").includes("json") ? await r.json().catch(() => ({})) : { preview: true };
@@ -16,5 +16,5 @@ $("#gift-form").addEventListener("submit", async (e) => {
     if (data.preview) tell(t("Payments aren't switched on yet"), t("Once Zen's Stripe account is connected, this takes you to a secure card page for {amount} and the gift code goes out by email.", { amount: money(s.price, c.currency) }));
     else { err.textContent = data.error || t("Something went wrong. Try again in a minute."); err.hidden = false; }
   } catch { tell(t("Preview only"), t("Nothing was charged. On the live site this takes you to a secure Stripe card page for {amount}.", { amount: money(s.price, c.currency) })); }
-  finally { btn.disabled = false; }
+  finally { btn.disabled = false; btn.removeAttribute("aria-busy"); btn.textContent = label; }
 });
