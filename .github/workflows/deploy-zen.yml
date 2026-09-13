@@ -126,7 +126,7 @@ jobs:
         run: |
           BASE=$([ -n "${{ steps.zone.outputs.id }}" ] && echo "https://zenrecovery.club" || echo "https://zen-recovery.fetta-amore-business.workers.dev")
           for path in / /account /account.html /booking /find /team /nope-404 "/api/status" "/api/team" "/api/providers?lat=30.02&lng=31.44" "/api/auth/google?lang=en" "/api/auth/google/callback?state=x&code=y"; do
-            printf '%-45s ' "$path"; curl -sS -o /dev/null -m 20 -w '%{http_code}  ->  %{redirect_url}\n' "$BASE$path" || echo "curl failed"
+            printf '%-45s ' "$path"; curl -sS -o /dev/null -m 20 -H 'Accept: text/html' -H 'Sec-Fetch-Mode: navigate' -H 'Sec-Fetch-Dest: document' -H 'User-Agent: Mozilla/5.0 (live check)' -w '%{http_code}  ->  %{redirect_url}\n' "$BASE$path" || echo "curl failed"   # as a browser navigation: the asset layer treats those differently from plain fetches
           done
 
       - name: Where it lives
