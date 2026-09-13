@@ -2,7 +2,7 @@
    Needs GSAP + ScrollTrigger (loaded by the page). Without them, or with "reduce motion" on, nothing here runs and the page is simply static.
    What it does: a short curtain when a page opens and when you leave through a link; the nav slides in; every heading, paragraph,
    card, list item and image rises into place as it scrolls into view (headings word by word); photos drift a little (parallax);
-   buttons lean toward the pointer; numbers count up; a soft blue aura follows the pointer on desktop; marquees roll. */
+   buttons lean toward the pointer; numbers count up; a soft blue aura follows the pointer on desktop; marquees roll. (The floating rings behind the hero were removed on 2026-09-13 at Ash's request: "take off the bubbles".) */
 (() => {
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const html = document.documentElement;
@@ -87,7 +87,5 @@
   /* ---------- marquees ---------- */
   $$(".marquee").forEach((m) => { const track = m.querySelector(".track"); if (!track) return; track.innerHTML += track.innerHTML; const w = track.scrollWidth / 2; gsap.to(track, { x: RTL() ? w : -w, duration: Math.max(18, w / 60), ease: "none", repeat: -1 }); });
 
-  /* ---------- floating cups behind the hero ---------- */
-  $$(".float").forEach((f, i) => { gsap.to(f, { y: () => 14 + i * 6, x: () => (i % 2 ? -1 : 1) * (8 + i * 3), rotate: i % 2 ? 6 : -6, duration: 4 + i, ease: "sine.inOut", yoyo: true, repeat: -1 }); });
   window.Motion = { scan };
 })();
