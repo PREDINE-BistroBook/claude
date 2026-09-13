@@ -46,7 +46,7 @@ function card(p) {
       ${dist}
       <p class="find-meta">${LF(p, "area") ? `<span>${t("Works in {area}", { area: esc(LF(p, "area")) })}${p.maps_url ? ` · <a href="${esc(p.maps_url)}" target="_blank" rel="noopener">${t("Map")}</a>` : ""}</span>` : ""}${LF(p, "languages") ? `<span>${t("Speaks {langs}", { langs: esc(LF(p, "languages")) })}</span>` : ""}${price}</p>
       ${LF(p, "bio") ? `<p class="find-bio">${esc(LF(p, "bio"))}</p>` : ""}
-      <div class="row"><a class="btn small" href="${book}">${t("Book with {name}", { name: esc(p.name.split(" ")[0]) })}</a><a class="plain" href="team.html#${esc(p.id)}">${t("Their story")}</a></div>
+      <div class="row"><a class="btn small" href="${book}">${t("Book with {name}", { name: esc(p.name.split(" ")[0]) })}</a><a class="plain" href="account.html?chat=${esc(p.id)}#messages">${t("Message")}</a><a class="plain" href="team.html#${esc(p.id)}">${t("Their story")}</a></div>
     </div></article>`;
 }
 /* ---------- position ---------- */

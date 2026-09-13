@@ -87,6 +87,15 @@
   .svc-off td{opacity:.55}
   @media (max-width:860px){.settings-grid{grid-template-columns:1fr}}
   @media (max-width:640px){#admins-table thead{display:none} #admins-table tr{display:grid;gap:6px;padding:12px 0;border-bottom:1px solid var(--line)} #admins-table td{display:block;padding:0;border:0;white-space:normal} #admins-table td:last-child .actions{margin-top:4px}}
+
+  /* in-site chat (2026-09-13): client ↔ therapist, in the account and in the admin */
+  .chat-wrap{display:grid;grid-template-columns:260px 1fr;gap:16px;align-items:start} .chat-side{display:grid;gap:10px;align-content:start} .chat-list{display:grid;gap:6px}
+  .chat-item{display:flex;gap:10px;align-items:center;padding:10px;border:1px solid var(--line,#e5e2dc);border-radius:14px;background:var(--ground-3,#fff);cursor:pointer;text-align:start;font:inherit;color:inherit;width:100%} .chat-item[aria-current="true"]{border-color:var(--mark,#8a6a3c)} .chat-item .who{display:grid;gap:2px;min-width:0;flex:1} .chat-item .who b{font-weight:500} .chat-item .who span{font-size:.8rem;color:var(--ink-mute,#777);white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .chat-item .n{background:var(--mark,#8a6a3c);color:#fff;border-radius:999px;font-size:.72rem;padding:2px 7px;flex:none}
+  .chat-main{display:grid;grid-template-rows:auto 1fr auto auto;border:1px solid var(--line,#e5e2dc);border-radius:16px;background:var(--ground-3,#fff);min-height:380px;max-height:72vh} .chat-head{display:flex;gap:10px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line,#e5e2dc)} .chat-head b{display:block;font-weight:500} .chat-head .tiny{display:block} .chat-head > div{flex:1;min-width:0}
+  .chat-msgs{overflow:auto;padding:14px;display:grid;gap:8px;align-content:start} .msg{max-width:78%;padding:9px 12px;border-radius:14px;background:var(--ground,#f6f4f0);border:1px solid var(--line,#e5e2dc);white-space:pre-wrap;overflow-wrap:anywhere;font-size:.95rem;justify-self:start} .msg.me{justify-self:end;background:var(--ink,#1c1a17);color:var(--ground,#f6f4f0);border-color:var(--ink,#1c1a17)} .msg .m{display:block;font-size:.72rem;opacity:.7;margin-top:4px}
+  .chat-form{display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--line,#e5e2dc);align-items:end} .chat-form textarea{flex:1;resize:vertical;min-height:44px;font:inherit;padding:8px 10px;border:1px solid var(--line,#e5e2dc);border-radius:10px;background:var(--ground,#f6f4f0);color:inherit} .chat-note{padding:0 14px 10px;margin:0} .chat-empty{padding:20px;color:var(--ink-mute,#777)} .chat-new{display:grid;gap:6px} .chat-new select{flex:1;min-width:0;font:inherit;padding:8px 10px;border:1px solid var(--line,#e5e2dc);border-radius:10px;background:var(--ground-3,#fff);color:inherit}
+  @media (max-width:700px){.chat-wrap{grid-template-columns:1fr} .chat-main{max-height:none;min-height:0} .chat-msgs{max-height:50vh}}
+  
 </style>
 </head>
 <body>
@@ -123,6 +132,7 @@
       <button role="tab" aria-selected="false" data-tab="team">Team</button>
       <button role="tab" aria-selected="false" data-tab="offers">Packs &amp; partners</button>
       <button role="tab" aria-selected="false" data-tab="money" id="tab-money-btn">Statements</button>
+      <button role="tab" aria-selected="false" data-tab="chat">Messages<span class="count" id="chat-count" hidden></span></button>
       <button role="tab" aria-selected="false" data-tab="review">Needs review<span class="count" id="review-count" hidden></span></button>
       <button role="tab" aria-selected="false" data-tab="platform" hidden>Platform</button>
       <button role="tab" aria-selected="false" data-tab="settings">Settings</button>
@@ -303,6 +313,27 @@
       <div class="scope" id="st-city-pills"></div>
       <div id="st-list" class="grid cols-2" style="margin-bottom:18px"></div>
       <div id="st-sessions" hidden><h3 style="margin:0 0 8px">Sessions this month</h3><div class="table-wrap"><table id="st-table"><thead><tr><th>Date</th><th>Therapist</th><th>Client</th><th>Session</th><th>Status</th><th>How paid</th><th>Amount</th><th>2%</th></tr></thead><tbody></tbody></table></div></div>
+    </div>
+
+    <!-- chat: the therapists' side of the in-site chat -->
+    <div id="tab-chat" hidden>
+      <div class="section-head"><h2>Messages</h2></div>
+      <details class="help"><summary>How the chat works</summary>
+        <ul>
+          <li>Clients write from their account, to a therapist they picked or to the city's room (no therapist picked yet). A therapist sees their own conversations plus the room; the city's partner and the owner see every conversation in the city and can answer too. When someone other than the therapist answers, the client sees "Zen · name".</li>
+          <li>Nobody is online all day: the client gets an email when you answer, and you get one when they write, at most one per half hour per conversation. This page refreshes itself while it's open.</li>
+          <li>Anything medical or urgent: say so in the chat and move it to a call. Keep the booking itself on the site so the record stays clean.</li>
+        </ul>
+      </details>
+      <div class="scope" id="ch-city-pills"></div>
+      <div class="chat-wrap">
+        <aside class="chat-side"><div id="achat-list" class="chat-list"></div><div class="empty" id="achat-empty">No conversations yet. Clients find "Messages" in their account and a "Message" button on every therapist's card.</div></aside>
+        <section class="chat-main" id="achat-main" hidden>
+          <header class="chat-head"><span class="avatar" id="achat-avatar"></span><div><b id="achat-name"></b><span class="tiny" id="achat-sub"></span></div><button class="btn small ghost" id="achat-client" type="button">Open client</button></header>
+          <div class="chat-msgs" id="achat-msgs" aria-live="polite"></div>
+          <form class="chat-form" id="achat-form"><textarea id="achat-input" rows="2" maxlength="2000" placeholder="Write your answer…" aria-label="Answer"></textarea><button class="btn small" type="submit">Send</button></form>
+        </section>
+      </div>
     </div>
 
     <!-- offers: packs, partners, gifts -->
@@ -594,7 +625,7 @@ const isPartner = () => A.level === "partner";                       // runs one
 const isEmployee = () => !isOwner() && !isPlatform() && !isPartner(); // one therapist: own bookings + unassigned, own schedule, own profile
 const managesCity = () => isOwner() || isPartner();
 const canEditTh = (t) => isOwner() || (isPartner() && t.city === A.role) || (isEmployee() && T && t.id === T.id);
-const OPS_TABS = ["bookings", "clients", "services", "calendar", "team", "offers", "review"];
+const OPS_TABS = ["bookings", "clients", "services", "calendar", "team", "offers", "review", "chat"];
 
 const topH = () => document.documentElement.style.setProperty("--top-h", ($(".top")?.offsetHeight || 57) + "px"); topH(); addEventListener("resize", topH);
 async function boot() {
@@ -620,7 +651,9 @@ function start(r) {
   ["av-city-wrap", "bl-city-wrap", "th-city-wrap"].forEach((id) => ($("#" + id).hidden = !isOwner()));
   $("#pv-date").value = new Date().toISOString().slice(0, 10);
   if (isPlatform()) { loadOverview(); return; }
-  loadTeamList().then(() => { loadOverview(); refreshReviewCount(); });
+  loadTeamList().then(() => { loadOverview(); refreshReviewCount(); refreshChatCount(); });
+  if (!window.chatCountTimer) window.chatCountTimer = setInterval(refreshChatCount, 60000);
+  if (location.hash === "#chat") setTimeout(() => $('.tabs button[data-tab="chat"]')?.click(), 200);
 }
 async function refreshReviewCount() { try { const r = await ZenAPI("GET", "/api/admin/review"); const n = r.bookings.length + r.clients.length; $("#review-count").textContent = n; $("#review-count").hidden = !n; } catch {} }
 
@@ -1084,6 +1117,38 @@ async function loadMoney() {
 }
 $("#st-month").addEventListener("change", loadMoney);
 
+
+/* ---------- messages: the therapists' side of the in-site chat (2026-09-13) ---------- */
+let ACHATS = [], aOpen = null, aLastAt = null, aPoll = null, chCity = "";
+const aWhen = (iso) => { if (!iso) return ""; const d = new Date(iso.replace(" ", "T") + (/Z$|[+-]\d\d:\d\d$/.test(iso) ? "" : "Z")); if (isNaN(d)) return ""; const same = d.toDateString() === new Date().toDateString(); return (same ? "" : d.toLocaleDateString("en-GB", { day: "numeric", month: "short" }) + " ") + d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }); };
+async function refreshChatCount() { if (!A || isPlatform()) return; try { const r = await ZenAPI("GET", "/api/admin/chats?count=1"); $("#chat-count").textContent = r.unread; $("#chat-count").hidden = !r.unread; } catch {} }
+async function loadChatTab() {
+  $("#ch-city-pills").innerHTML = isOwner() ? `<span class="tiny">Showing</span><div class="pills">${[["", "All cities"], ["cairo", "Cairo"], ["dahab", "Dahab"], ["florence", "Florence"]].map(([k, l]) => `<button class="pill" data-chcity="${k}" aria-pressed="${chCity === k}">${l}</button>`).join("")}</div>` : "";
+  $$("#ch-city-pills .pill").forEach((p) => (p.onclick = () => { chCity = p.dataset.chcity; loadChatTab(); }));
+  await loadAChatList();
+  if (!aOpen && ACHATS.length) await openAChat(ACHATS[0].id);
+  if (!aPoll) aPoll = setInterval(() => { if (document.hidden || $("#tab-chat").hidden) return; if (aOpen) refreshAThread(true); else loadAChatList(); }, 20000);
+}
+async function loadAChatList() {
+  const r = await ZenAPI("GET", "/api/admin/chats?city=" + chCity); ACHATS = r.chats || [];
+  $("#chat-count").textContent = r.unread || 0; $("#chat-count").hidden = !r.unread;
+  $("#achat-list").innerHTML = ACHATS.map((c) => `<button type="button" class="chat-item" data-aopen="${c.id}" aria-current="${c.id === aOpen}"><span class="avatar">${c.client_photo ? `<img src="${c.client_photo}" alt="">` : initials(c.client || "?")}</span><span class="who"><b>${esc(c.client || "Client")} <span class="badge city-${c.city}">${CITY_NAME[c.city] || esc(c.city)}</span></b><span>${c.therapist ? "with " + esc(c.therapist) : "the " + (CITY_NAME[c.city] || c.city) + " room"} · ${c.last_from === "therapist" ? "you: " : ""}${esc(c.last_body || "")}</span></span>${c.unread ? `<span class="n">${c.unread}</span>` : ""}</button>`).join("");
+  $$("#achat-list [data-aopen]").forEach((b) => (b.onclick = () => openAChat(b.dataset.aopen)));
+  $("#achat-empty").hidden = Boolean(ACHATS.length);
+}
+async function openAChat(id) { aOpen = id; aLastAt = null; $("#achat-main").hidden = false; $("#achat-msgs").innerHTML = ""; $$("#achat-list [data-aopen]").forEach((b) => b.setAttribute("aria-current", b.dataset.aopen === id)); await refreshAThread(false); }
+function appendAMsgs(list) { const box = $("#achat-msgs"); for (const m of list) { const mine = m.sender === "therapist"; const el = document.createElement("div"); el.className = "msg" + (mine ? " me" : ""); el.innerHTML = `${esc(m.body)}<span class="m">${mine ? esc(m.admin_name || "you") : "client"} · ${aWhen(m.created_at)}</span>`; box.appendChild(el); aLastAt = m.created_at; } if (list.length) box.scrollTop = box.scrollHeight; }
+async function refreshAThread(incremental) {
+  if (!aOpen) return;
+  try { const r = await ZenAPI("GET", `/api/admin/chats/${aOpen}` + (incremental && aLastAt ? `?after=${encodeURIComponent(aLastAt)}` : ""));
+    if (!incremental) { const c = r.chat; $("#achat-avatar").innerHTML = c.client_photo ? `<img src="${c.client_photo}" alt="">` : initials(c.client || "?"); $("#achat-name").textContent = c.client || "Client"; $("#achat-sub").textContent = `${c.client_email || ""} · ${c.therapist ? "writing to " + c.therapist : "writing to the " + (CITY_NAME[c.city] || c.city) + " room"}`; $("#achat-client").onclick = () => c.user_id && openClient(c.user_id); $("#achat-client").hidden = !c.user_id; }
+    appendAMsgs(r.messages || []); if (r.messages?.length || !incremental) loadAChatList();
+  } catch (ex) { if (!incremental) await ask({ title: "Couldn't open that", text: ex.message, ok: "OK" }); }
+}
+$("#achat-form").addEventListener("submit", async (e) => { e.preventDefault(); const ta = $("#achat-input"), text = ta.value.trim(); if (!text || !aOpen) return; const btn = e.target.querySelector("button[type=submit]"); btn.disabled = true;
+  try { const r = await ZenAPI("POST", `/api/admin/chats/${aOpen}`, { body: text }); ta.value = ""; appendAMsgs([{ sender: "therapist", admin_name: r.signed, body: text, created_at: r.created_at }]); loadAChatList(); } catch (ex) { await ask({ title: "Couldn't send", text: ex.message, ok: "OK" }); } finally { btn.disabled = false; ta.focus(); } });
+$("#achat-input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("#achat-form").requestSubmit(); } });
+
 /* ---------- needs review ---------- */
 async function loadReview() {
   const r = await ZenAPI("GET", "/api/admin/review");
@@ -1159,7 +1224,7 @@ $("#svc-form").addEventListener("submit", async (e) => { e.preventDefault(); con
   catch (ex) { err.textContent = ex.message; err.hidden = false; } });
 
 /* ---------- tabs, login ---------- */
-$$(".tabs button").forEach((b) => b.addEventListener("click", () => { $$(".tabs button").forEach((x) => x.setAttribute("aria-selected", x === b)); ["overview", "bookings", "clients", "services", "calendar", "team", "money", "offers", "review", "platform", "settings"].forEach((t) => ($("#tab-" + t).hidden = t !== b.dataset.tab)); closeDrawer(); ({ overview: loadOverview, platform: loadPlatform, bookings: loadBookings, clients: loadClients, services: loadServices, calendar: loadCalendar, team: loadTeamTab, money: loadMoney, offers: loadOffers, review: loadReview, settings: loadSettings })[b.dataset.tab](); }));
+$$(".tabs button").forEach((b) => b.addEventListener("click", () => { $$(".tabs button").forEach((x) => x.setAttribute("aria-selected", x === b)); ["overview", "bookings", "clients", "services", "calendar", "team", "money", "chat", "offers", "review", "platform", "settings"].forEach((t) => ($("#tab-" + t).hidden = t !== b.dataset.tab)); closeDrawer(); ({ overview: loadOverview, platform: loadPlatform, bookings: loadBookings, clients: loadClients, services: loadServices, calendar: loadCalendar, team: loadTeamTab, money: loadMoney, chat: loadChatTab, offers: loadOffers, review: loadReview, settings: loadSettings })[b.dataset.tab](); }));
 $("#login-form").addEventListener("submit", async (e) => { e.preventDefault(); const err = $("#login-err"); err.hidden = true; $("#login-btn").disabled = true; try { await ZenAPI("POST", "/api/admin/login", { email: $("#a-email").value.trim(), password: $("#a-pass").value }); start(await ZenAPI("GET", "/api/admin/me")); } catch (ex) { err.textContent = ex.message; err.hidden = false; } finally { $("#login-btn").disabled = false; } });
 let PRICE_ROWS = [];
 async function loadPrices(id) {
