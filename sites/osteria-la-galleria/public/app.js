@@ -82,6 +82,9 @@
     "work.n":         { it: "Opera {n} di {t}", en: "Work {n} of {t}" },
     "work.drawn":     { it: "Disegno", en: "Drawing" },
     "work.photo":     { it: "Fotografia", en: "Photograph" },
+    "work.video":     { it: "Video", en: "Video" },
+    "work.from":      { it: "Dagli ingredienti al piatto", en: "From the ingredients to the dish" },
+    "work.replay":    { it: "Rivedi", en: "Play again" },
 
     /* steak */
     "steak.title":    { it: "La bilancia — Osteria La Galleria", en: "The scale — Osteria La Galleria" },
@@ -185,17 +188,29 @@
   const kgFmt = kg => lang === "it" ? kg.toFixed(2).replace(".", ",") : kg.toFixed(2);
   const slug = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
-  /* The picture of a dish: the owner's photo when one exists in img/dishes/ (listed in photos.js), else the drawing. */
-  function photoFor(d) {
-    if (d.img) return d.img;
+  /* The picture of a dish: the owner's clip or photo when one exists in img/dishes/ (listed in photos.js), else the
+     drawing, built in steps so it can assemble itself from the ingredients to the finished plate. */
+  function mediaFor(d) {
+    if (d.video) return { kind: "video", src: d.video };
+    if (d.img) return { kind: "photo", src: d.img };
     const s = slug(d.it);
-    for (const ext of ["webp", "jpg", "jpeg", "png"]) if (PHOTOS.has(s + "." + ext)) return "img/dishes/" + s + "." + ext;
+    for (const ext of ["mp4", "webm"]) if (PHOTOS.has(s + "." + ext)) return { kind: "video", src: "img/dishes/" + s + "." + ext };
+    for (const ext of ["webp", "jpg", "jpeg", "png"]) if (PHOTOS.has(s + "." + ext)) return { kind: "photo", src: "img/dishes/" + s + "." + ext };
     return null;
   }
-  function pictureHtml(d, room, big) {
-    const photo = photoFor(d);
-    if (photo) return '<img class="dish-photo" src="' + esc(photo) + '" alt="" loading="' + (big ? "eager" : "lazy") + '">';
-    return '<svg class="dish-art" viewBox="0 0 400 300" aria-hidden="true"><rect width="400" height="300" fill="' + room.wall + '"/>' + (ART[d.art] || ART.pasta || "") + "</svg>";
+  function pictureHtml(d, room, mode) {
+    const m = mediaFor(d);
+    if (m && m.kind === "video") return '<video class="dish-video" src="' + esc(m.src) + '" autoplay muted loop playsinline' + (mode === "card" ? "" : ' preload="metadata"') + "></video>";
+    if (m) return '<img class="dish-photo" src="' + esc(m.src) + '" alt="" loading="' + (mode === "stage" ? "eager" : "lazy") + '">';
+    const steps = ART[d.art] || ART.pasta || [];
+    return '<svg class="dish-art' + (mode === "card" ? " still" : "") + '" viewBox="0 0 400 300" aria-hidden="true"><rect width="400" height="300" fill="' + room.wall + '"/>' +
+      steps.map((part, i) => '<g class="step" style="--i:' + i + '">' + part + "</g>").join("") + "</svg>";
+  }
+  /* The ingredient words, from the description, in the order they land. */
+  function ingredients(d) {
+    const desc = lang === "it" ? (d.dit || "") : (d.en || "");
+    if (!desc || desc.trim().toLowerCase() === d.it.trim().toLowerCase()) return [];
+    return desc.replace(/^(per due\.|for two:?)\s*/i, "").split(/,|;|·| e | and | with | con /i).map(x => x.trim()).filter(x => x && x.length < 40).slice(0, 6);
   }
 
   function setWall(wall, ink, gold) {
@@ -294,7 +309,7 @@
       const items = r.groups.flatMap(g => g.items);
       const pick = items.find(d => d.feature) || items[0];
       return '<a class="sala-card" href="menu.html#' + r.id + '" style="--room:' + r.wall + '">' +
-        '<div class="sala-pic">' + pictureHtml(pick, r, false) + "</div>" +
+        '<div class="sala-pic">' + pictureHtml(pick, r, "card") + "</div>" +
         '<div class="sala-plaque plaque"><span class="sala-n">' + r.numeral + '</span><h3 lang="' + lang + '">' + esc(r.title[lang]) + "</h3><p>" + esc(t("salas.count", { n: items.length })) + "</p></div></a>";
     }).join("");
     document.getElementById("teaser-dial").innerHTML = dialSvg(0.45, true);
@@ -335,7 +350,7 @@
       : '<span class="allergens none">—</span>';
     const unit = d.perKg ? "perkg" : (d.per2 ? "per2" : null);
     return '<article class="entry' + (d.feature ? " feature" : "") + '" id="d-' + slug(d.it) + '" data-n="' + n + '" data-a="' + al.join(",") + '" data-v="' + (d.v ? 1 : 0) + '">' +
-      '<div class="entry-pic veduta">' + pictureHtml(d, room, false) + "</div>" +
+      '<div class="entry-pic veduta">' + pictureHtml(d, room, "entry") + "</div>" +
       '<div class="plaque entry-plaque">' +
         '<p class="entry-n">' + esc(t("work.n", { n: n, t: total })) + "</p>" +
         '<h3 class="work-title" lang="it">' + esc(d.it) + star + marks + "</h3>" +
@@ -387,19 +402,30 @@
     const show = n => {
       if (n === shown) return; shown = n;
       const d = all[n - 1];
-      const photo = photoFor(d);
-      const html = '<figure class="stage-fig' + (photo ? " has-photo" : "") + '">' +
-        '<div class="stage-pic veduta">' + pictureHtml(d, room, true) + "</div>" +
-        '<figcaption><span class="stage-n">' + esc(t("work.n", { n: n, t: all.length })) + " · " + esc(photo ? t("work.photo") : t("work.drawn")) + '</span><span class="stage-title" lang="it">' + esc(d.it) + "</span></figcaption></figure>";
-      if (reduced) { stage.innerHTML = html; return; }
+      const photo = mediaFor(d);
+      const ings = ingredients(d);
+      const kind = photo ? (photo.kind === "video" ? t("work.video") : t("work.photo")) : t("work.from");
+      const html = '<figure class="stage-fig play' + (photo ? " has-photo" : "") + '">' +
+        '<div class="stage-pic veduta">' + pictureHtml(d, room, "stage") + "</div>" +
+        '<figcaption><span class="stage-n">' + esc(t("work.n", { n: n, t: all.length })) + " · " + esc(kind) + "</span>" +
+        (photo ? "" : '<span class="ings">' + ings.map((x, i) => '<span class="ing" style="--i:' + (i + 1) + '">' + esc(x) + "</span>").join("") + "</span>") +
+        '<span class="stage-title" lang="it" style="--i:' + (photo ? 0 : Math.max(ings.length, (ART[d.art] || []).length) + 1) + '">' + esc(d.it) + "</span>" +
+        (photo ? "" : '<button type="button" class="replay" id="replay">' + icon("filter", "sm").replace(ICONS.filter, '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/>') + esc(t("work.replay")) + "</button>") +
+        "</figcaption></figure>";
+      const put = () => { stage.innerHTML = html; const b = document.getElementById("replay"); if (b) b.addEventListener("click", () => { shown = -1; show(n); }); };
+      if (reduced) { put(); return; }
       stage.classList.add("swap");
-      setTimeout(() => { stage.innerHTML = html; stage.classList.remove("swap"); }, 160);
+      setTimeout(() => { put(); stage.classList.remove("swap"); }, 160);
     };
     if (stageObs) stageObs.disconnect();
     stageObs = new IntersectionObserver(entries => {
       entries.forEach(e => { if (e.isIntersecting) show(Number(e.target.dataset.n)); });
     }, { rootMargin: "-40% 0px -45% 0px", threshold: 0 });
     document.querySelectorAll("#entries .entry").forEach(el => stageObs.observe(el));
+    const picObs = new IntersectionObserver(entries => {
+      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add("play"); picObs.unobserve(e.target); } });
+    }, { threshold: 0.4 });
+    document.querySelectorAll("#entries .entry-pic").forEach(el => picObs.observe(el));
     show(1);
     if (!reduced) {
       const split = document.getElementById("split");

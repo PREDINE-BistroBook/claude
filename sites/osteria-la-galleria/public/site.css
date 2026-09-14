@@ -155,6 +155,22 @@ section { position: relative; }
 .visit-photos { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 28px 32px; }
 .visit-photos img { aspect-ratio: 4 / 3; object-fit: cover; }
 
+/* ---------- the drawings assemble themselves ---------- */
+.dish-art .step { opacity: 0; transform: translateY(-48px) scale(.92); transform-origin: 200px 160px; }
+.dish-art.still .step { opacity: 1; transform: none; }
+.play .dish-art .step { animation: land .6s cubic-bezier(.2, .8, .3, 1.15) forwards; animation-delay: calc(.15s + var(--i) * .42s); }
+.play .dish-art .step:first-of-type { transform: scale(.96); animation-name: settle; animation-delay: .05s; }
+@keyframes land { to { opacity: 1; transform: none; } }
+@keyframes settle { to { opacity: 1; transform: none; } }
+.ings { display: block; margin: 8px 0 10px; }
+.ing { display: inline-block; font-family: var(--serif); font-style: italic; font-size: 1.1rem; color: var(--muted); opacity: 0; animation: fadeup .5s ease forwards; animation-delay: calc(.15s + var(--i) * .42s); }
+.ing + .ing::before { content: "·"; margin: 0 8px; color: var(--gold); }
+.play .stage-title { opacity: 0; animation: fadeup .7s ease forwards; animation-delay: calc(.3s + var(--i) * .42s); }
+@keyframes fadeup { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.replay { margin-top: 14px; display: inline-flex; align-items: center; gap: 8px; background: transparent; border: 1px solid var(--gold-soft); border-radius: 999px; padding: 8px 14px; cursor: pointer; font-size: .76rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.replay:hover { border-color: var(--gold); color: var(--ink); }
+.dish-video { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: #000; }
+
 /* ---------- the dial ---------- */
 .dial { display: block; width: 100%; height: auto; }
 .dial .arc { fill: none; stroke: rgba(255,255,255,.14); stroke-width: 14; stroke-linecap: butt; }
@@ -350,6 +366,7 @@ section { position: relative; }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   body, .nav, .tabbar, .btn, .chip, .lang button, .room-link, .dial .needle, .dial .arc-fill, .entry, .stage { transition: none; }
+  .dish-art .step, .ing, .play .stage-title { opacity: 1; transform: none; animation: none; }
   .stage { transform: none; }
   .btn:active, .chip:active, .lang button:active, .room-link:active { transform: none; }
 }

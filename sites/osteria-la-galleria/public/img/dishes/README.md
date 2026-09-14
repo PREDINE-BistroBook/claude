@@ -3,7 +3,7 @@
 Drop a photo here named after the dish and it replaces the drawing everywhere on the site, on the next deploy. No code to touch.
 
 Rules:
-- File name = the dish name in lower case, accents removed, spaces and punctuation as `-`, then `.jpg` (also accepted: `.webp`, `.jpeg`, `.png`).
+- File name = the dish name in lower case, accents removed, spaces and punctuation as `-`, then `.jpg` (also accepted: `.webp`, `.jpeg`, `.png`). A short clip works too: same name with `.mp4` or `.webm`, it plays muted on loop; keep it under 10 seconds and 3 MB, filmed 4:3 or 16:9, no sound needed.
 - Landscape, 4:3 works best; the site shows them at up to 1400 px wide. Anything bigger is fine, just slower for guests: aim for under 400 KB.
 - One plate, the real dish as served. The drawings are the placeholders these are meant to replace.
 - The deploy workflow regenerates `photos.js` from this folder. For a local preview, run `ls img/dishes | grep -v README > /dev/null` and list the files in `photos.js` by hand.
