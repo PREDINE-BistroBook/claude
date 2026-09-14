@@ -38,6 +38,12 @@ jobs:
             echo "CLOUDFLARE_ACCOUNT_ID=$ID" >> "$GITHUB_ENV"
           fi
 
+      - name: List the owner's dish photos (img/dishes → photos.js)
+        run: |
+          FILES=$(ls public/img/dishes 2>/dev/null | grep -Ei '\.(jpe?g|png|webp)$' | sed 's/.*/"&"/' | paste -sd, -)
+          printf '/* generated at deploy from img/dishes */\nwindow.DISH_PHOTOS = [%s];\n' "$FILES" > public/photos.js
+          cat public/photos.js
+
       - name: Deploy
         run: wrangler deploy
 

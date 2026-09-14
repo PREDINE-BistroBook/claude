@@ -1,5 +1,6 @@
-/* Osteria La Galleria — shared shell (header, tab bar, footer), language, the floor plan, the icons, and the
-   four page modules: home, menu (one room at a time), steak (the dial), visit. Data lives in menu.js. */
+/* Osteria La Galleria — shared shell (header, tab bar, footer), language, the drawn plates, and the four page
+   modules: home, menu (picture against plaque, one room at a time), steak (the dial), visit. Data lives in menu.js,
+   the drawings in art.js, the owner's own dish photos in img/dishes/ (listed by photos.js). */
 (function () {
   "use strict";
 
@@ -15,6 +16,7 @@
     "footer.prices": { it: "Prezzi in euro.", en: "Prices in euro." },
     "footer.credit": { it: "un sito Locali & Ordinazioni", en: "a Locali & Ordinazioni site" },
     "footer.where": { it: "Di fronte a Palazzo Pitti, Firenze", en: "Opposite Palazzo Pitti, Florence" },
+    "footer.art":   { it: "I piatti disegnati sono illustrazioni, non fotografie dei piatti serviti.", en: "The drawn plates are illustrations, not photographs of the dishes served." },
     "star.note":    { it: "* Prodotto che può essere surgelato all'origine.", en: "* Product may be frozen at origin." },
     "v.note":       { it: "piatto vegetariano.", en: "vegetarian dish." },
     "legend.title": { it: "Allergeni", en: "Allergens" },
@@ -25,8 +27,8 @@
     /* home */
     "home.title":     { it: "Osteria La Galleria — Firenze", en: "Osteria La Galleria — Florence" },
     "hero.eyebrow":   { it: "Firenze · Di fronte a Palazzo Pitti", en: "Florence · Opposite Palazzo Pitti" },
-    "hero.lede":      { it: "Una galleria dove le opere si mangiano. Dieci sale in ordine di portata, ogni piatto con la sua targhetta, e una bilancia per la fiorentina. La visita comincia dalla finestrella sulla facciata.",
-                        en: "A gallery where the works are eaten. Ten rooms in course order, every dish with its own plaque, and a scale for the fiorentina. The visit begins at the little window in the façade." },
+    "hero.lede":      { it: "Una galleria dove le opere si mangiano. Dieci sale in ordine di portata, ogni piatto appeso con la sua targhetta, e una bilancia per la fiorentina. La visita comincia dalla finestrella sulla facciata.",
+                        en: "A gallery where the works are eaten. Ten rooms in course order, every dish hung with its own plaque, and a scale for the fiorentina. The visit begins at the little window in the façade." },
     "hero.cta":       { it: "Visita il menu", en: "Visit the menu" },
     "hero.cta2":      { it: "Pesa la bistecca", en: "Weigh the steak" },
     "cap.pitti":      { it: "Veduta di Palazzo Pitti dai nostri tavoli", en: "Palazzo Pitti, seen from our tables" },
@@ -37,22 +39,17 @@
     "atrio.text":     { it: "Sulla facciata c'è una buchetta: la finestrella da cui, dal Cinquecento, i fiorentini si facevano passare un bicchiere di vino senza entrare. La nostra è ancora aperta. Un bicchiere in piedi, davanti a Palazzo Pitti, e poi si entra.",
                         en: "There is a little window in the façade: the hatch through which, since the 1500s, Florentines have been handed a glass of wine without coming in. Ours is still open. A glass standing up, in front of Palazzo Pitti, and then you come in." },
     "atrio.facts":    { it: "Vino al bicchiere da 7 € · Happy hour: Spritz e Hugo 7 €", en: "Wine by the glass from €7 · Happy hour: Spritz & Hugo €7" },
-    "plan.eyebrow":   { it: "Il percorso", en: "The route" },
-    "plan.title":     { it: "Dieci sale intorno a un cortile", en: "Ten rooms around a courtyard" },
-    "plan.text":      { it: "Si entra dalla buchetta e si gira in senso orario, in ordine di portata: dagli antipasti alla cantina. Tocca una sala per entrarci.",
-                        en: "You come in through the wine window and walk clockwise, in course order: from the antipasti to the cellar. Tap a room to step inside." },
-    "plan.courtyard": { it: "Cortile", en: "Courtyard" },
-    "plan.entrance":  { it: "Ingresso", en: "Entrance" },
-    "plan.exit":      { it: "Uscita", en: "Exit" },
-    "plan.here":      { it: "Sei qui", en: "You are here" },
-    "plan.aria":      { it: "Pianta della galleria: dieci sale, una per portata", en: "Floor plan of the gallery: ten rooms, one per course" },
-    "plan.room":      { it: "Sala {n} · {name}", en: "Room {n} · {name}" },
+    "salas.eyebrow":  { it: "Le sale", en: "The rooms" },
+    "salas.title":    { it: "Dieci sale, in ordine di portata", en: "Ten rooms, in course order" },
+    "salas.text":     { it: "Ogni sala è una portata. Dentro, ogni piatto è appeso con la sua targhetta: nome, cosa c'è dentro, allergeni, prezzo. Entra in una sala.",
+                        en: "Each room is a course. Inside, every dish hangs with its own plaque: name, what's in it, allergens, price. Step into a room." },
+    "salas.count":    { it: "{n} opere", en: "{n} works" },
     "teaser.eyebrow": { it: "Sala VI", en: "Room VI" },
     "teaser.title":   { it: "Una bistecca non si ordina. Si pesa.", en: "You don't order a steak here. You weigh it." },
     "teaser.text":    { it: "La fiorentina si paga al chilo. Sposta l'ago e sai cosa spendi, per quante persone, prima ancora di sederti.",
                         en: "The fiorentina is priced by the kilo. Move the needle and you know what you'll pay, and for how many, before you sit down." },
     "teaser.cta":     { it: "Vai alla bilancia", en: "Go to the scale" },
-    "rooms.eyebrow":  { it: "Le sale", en: "The rooms" },
+    "rooms.eyebrow":  { it: "Da noi", en: "Our place" },
     "rooms.title":    { it: "Dove si mangia", en: "Where you eat" },
     "rooms.cta":      { it: "Orari, indirizzo, recensioni", en: "Hours, address, reviews" },
 
@@ -60,7 +57,8 @@
     "menu.title":     { it: "Il menu — Osteria La Galleria", en: "The menu — Osteria La Galleria" },
     "menu.eyebrow":   { it: "Il menu, sala per sala", en: "The menu, room by room" },
     "menu.h1":        { it: "Il menu", en: "The menu" },
-    "menu.intro":     { it: "Una sala alla volta. Scegli dalla pianta, oppure usa le frecce in fondo.", en: "One room at a time. Pick from the plan, or use the arrows at the bottom." },
+    "menu.intro":     { it: "Da una parte il piatto, dall'altra la sua targhetta. Scegli una sala qui sotto e scorri.", en: "The dish on one side, its plaque on the other. Pick a room below and scroll." },
+    "menu.tabs":      { it: "Le sale", en: "The rooms" },
     "filter.title":   { it: "Cosa non mangi?", en: "What don't you eat?" },
     "filter.note":    { it: "I piatti che non fanno per te restano appesi, ma con la luce spenta. Per gli allergeni chiedi sempre in sala: la cucina è una sola.",
                         en: "Dishes that aren't for you stay on the wall, with the light off. Always ask the staff about allergens: there is only one kitchen." },
@@ -73,6 +71,7 @@
     "filter.tally":   { it: "In questa sala: {n} opere in mostra su {t}", en: "In this room: {n} of {t} works on view" },
     "filter.empty":   { it: "In questa sala niente fa per te. Prova la sala accanto, o chiedi in sala: la cucina adatta molti piatti.", en: "Nothing in this room is for you. Try the next room, or ask the staff: the kitchen adapts many dishes." },
     "room.of":        { it: "Sala {n} di 10", en: "Room {n} of 10" },
+    "plan.exit":      { it: "Uscita", en: "Exit" },
     "room.prev":      { it: "Sala precedente", en: "Previous room" },
     "room.next":      { it: "Sala successiva", en: "Next room" },
     "room.toStart":   { it: "Torna all'ingresso", en: "Back to the entrance" },
@@ -80,6 +79,9 @@
     "room.scaleCard": { it: "La bilancia", en: "The scale" },
     "room.scaleText": { it: "Fiorentina e costola si pagano al chilo. Pesa la tua su una pagina tutta sua.", en: "Fiorentina and costola are priced by the kilo. Weigh yours on a page of its own." },
     "room.scaleCta":  { it: "Apri la bilancia", en: "Open the scale" },
+    "work.n":         { it: "Opera {n} di {t}", en: "Work {n} of {t}" },
+    "work.drawn":     { it: "Disegno", en: "Drawing" },
+    "work.photo":     { it: "Fotografia", en: "Photograph" },
 
     /* steak */
     "steak.title":    { it: "La bilancia — Osteria La Galleria", en: "The scale — Osteria La Galleria" },
@@ -94,7 +96,7 @@
     "steak.etti.note": { it: "un etto è 100 g: a Firenze la bistecca si conta così", en: "an etto is 100 g: that's how Florence counts a steak" },
     "steak.price":    { it: "Prezzo", en: "Price" },
     "steak.each":     { it: "a testa", en: "a head" },
-    "steak.for":      { it: "indicativamente per {p}", en: "roughly for {p}" },
+    "steak.for":      { it: "indicativamente per", en: "roughly for" },
     "steak.one":      { it: "una persona", en: "one person" },
     "steak.many":     { it: "{n} persone", en: "{n} people" },
     "steak.valuetext": { it: "{kg} kg, {eur} €, {for}", en: "{kg} kg, €{eur}, {for}" },
@@ -150,16 +152,16 @@
     pinsa: '<path d="M4 4l16 6-14 10z"/><circle cx="9" cy="10" r="1.2"/><circle cx="8" cy="15" r="1.2"/><circle cx="13" cy="12" r="1.2"/>',
     dolci: '<path d="M4 19h16M5 19v-7l7-4 7 4v7"/><path d="M5 14c2-1 4 1 7 0s5-1 7 0"/><path d="M12 8V5"/>',
     cantina: '<path d="M9 3h4v3l1 2v12a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1V8l1-2z"/><path d="M16 12h5l-1 5h-3zM18 17v4M16 21h4"/>',
-    atrio: '<path d="M6 21V10a6 6 0 0 1 12 0v11"/><path d="M9 21v-9a3 3 0 0 1 6 0v9"/><path d="M4 21h16"/>',
     home: '<path d="M4 21V10l8-6 8 6v11"/><path d="M10 21v-6h4v6"/>',
     menu: '<rect x="3" y="4" width="18" height="16" rx="1"/><rect x="6" y="7" width="12" height="10"/><path d="M8 15h8"/>',
     steak: '<path d="M6 5c4-1 8 0 11 2 2 2 2 5 0 7-1 2-4 3-7 4-3 1-5 0-6-2-1-3-1-8 2-11z"/><path d="M8 5v7l5 4"/>',
     visit: '<path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/>',
+    filter: '<path d="M3 5h18M6 12h12M10 19h4"/>',
   };
   const icon = (id, cls) => '<svg class="ic ' + (cls || "") + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[id] || "") + "</svg>";
 
   /* ============================== state + helpers ============================== */
-  const ROOMS = window.ROOMS, ALLERGENS = window.ALLERGENS, SITE = window.SITE;
+  const ROOMS = window.ROOMS, ALLERGENS = window.ALLERGENS, SITE = window.SITE, ART = window.ART || {}, PHOTOS = new Set(window.DISH_PHOTOS || []);
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const page = document.body.dataset.page;
   const HERO = { wall: "#3E1219", ink: "#F2E8D5", gold: "#C9A55C" };
@@ -181,6 +183,20 @@
   const eur = n => lang === "it" ? num(n).replace(".", ",") + " €" : "€" + num(n);
   const money = (n, unit) => eur(n) + (unit ? "<small>" + esc(t(unit)) + "</small>" : "");
   const kgFmt = kg => lang === "it" ? kg.toFixed(2).replace(".", ",") : kg.toFixed(2);
+  const slug = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+  /* The picture of a dish: the owner's photo when one exists in img/dishes/ (listed in photos.js), else the drawing. */
+  function photoFor(d) {
+    if (d.img) return d.img;
+    const s = slug(d.it);
+    for (const ext of ["webp", "jpg", "jpeg", "png"]) if (PHOTOS.has(s + "." + ext)) return "img/dishes/" + s + "." + ext;
+    return null;
+  }
+  function pictureHtml(d, room, big) {
+    const photo = photoFor(d);
+    if (photo) return '<img class="dish-photo" src="' + esc(photo) + '" alt="" loading="' + (big ? "eager" : "lazy") + '">';
+    return '<svg class="dish-art" viewBox="0 0 400 300" aria-hidden="true"><rect width="400" height="300" fill="' + room.wall + '"/>' + (ART[d.art] || ART.pasta || "") + "</svg>";
+  }
 
   function setWall(wall, ink, gold) {
     const root = document.documentElement;
@@ -224,74 +240,13 @@
 
     const legend = page === "menu" || page === "steak"
       ? '<div class="legend"><span class="legend-title">' + esc(t("legend.title")) + "</span>" + Object.keys(ALLERGENS).map(n => "<span><b>" + n + "</b>" + esc(ALLERGENS[n][lang]) + "</span>").join("") + "</div>" +
-        '<p class="foot-line">' + esc(t("footer.prices")) + " " + esc(t("star.note")) + ' <span class="vmark">V</span> ' + esc(t("v.note")) + "</p>"
+        '<p class="foot-line">' + esc(t("footer.prices")) + " " + esc(t("star.note")) + ' <span class="vmark">V</span> ' + esc(t("v.note")) + (page === "menu" ? " " + esc(t("footer.art")) : "") + "</p>"
       : "";
     document.getElementById("shell-foot").innerHTML = '<footer class="foot">' + legend +
       '<p class="foot-credit"><span class="brand-foot">Osteria La Galleria</span> · ' + esc(t("footer.where")) + " · " + esc(t("footer.credit")) + "</p></footer>";
   }
   function applyStrings(root) {
     (root || document).querySelectorAll("[data-i18n]").forEach(el => { el.textContent = t(el.dataset.i18n); });
-  }
-
-  /* ============================== the floor plan ============================== */
-  /* A ring of ten rooms around a courtyard, clockwise from the entrance: I and II up the left, III to VI across
-     the top, VII and VIII down the right, IX and X back along the bottom, and out past the cellar. */
-  const PLAN = {
-    w: 640, h: 500,
-    rooms: {
-      antipasti: [0, 280, 150, 140], primi: [0, 130, 150, 140],
-      tartufo: [0, 0, 150, 120], secondi: [160, 0, 150, 120], pesce: [320, 0, 150, 120], bistecche: [480, 0, 160, 120],
-      insalate: [480, 130, 160, 140], pinsa: [480, 280, 160, 140],
-      dolci: [320, 280, 150, 140], cantina: [160, 280, 150, 140],
-    },
-    court: [160, 130, 310, 140], atrio: [0, 430, 150, 60],
-  };
-  function planSvg(activeId, hrefFor) {
-    const c = r => [r[0] + r[2] / 2, r[1] + r[3] / 2];
-    const order = ROOMS.map(r => r.id);
-    const pts = [[75, 460]].concat(order.map(id => c(PLAN.rooms[id]))).concat([[235, 470]]);
-    const route = pts.map((p, i) => (i ? "L" : "M") + p[0] + " " + p[1]).join(" ");
-    const rooms = ROOMS.map(r => {
-      const [x, y, w, h] = PLAN.rooms[r.id];
-      const active = r.id === activeId;
-      const label = t("plan.room", { n: r.numeral, name: SHORT[r.id][lang] });
-      return '<a href="' + hrefFor(r.id) + '" class="pr' + (active ? " active" : "") + '" data-room="' + r.id + '" aria-label="' + esc(label) + '"' + (active ? ' aria-current="true"' : "") + ">" +
-        '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="' + r.wall + '"/>' +
-        '<text class="pn" x="' + (x + 12) + '" y="' + (y + 40) + '">' + r.numeral + "</text>" +
-        '<text class="pt" x="' + (x + 12) + '" y="' + (y + h - 16) + '">' + esc(SHORT[r.id][lang]) + "</text>" +
-        '<g transform="translate(' + (x + w - 40) + " " + (y + 12) + ')"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="' + r.ink + '" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".85">' + ICONS[r.id] + "</svg></g>" +
-        "</a>";
-    }).join("");
-    const a = PLAN.atrio, ct = PLAN.court;
-    const here = activeId && PLAN.rooms[activeId] ? (() => { const [cx, cy] = c(PLAN.rooms[activeId]); return '<g class="here" transform="translate(' + cx + " " + (cy - 4) + ')"><path d="M0 0c-9-10-12-16-12-22a12 12 0 0 1 24 0c0 6-3 12-12 22z" /><circle cx="0" cy="-22" r="4"/><text y="14">' + esc(t("plan.here")) + "</text></g>"; })() : "";
-    return '<svg class="plan" viewBox="0 0 ' + PLAN.w + " " + PLAN.h + '" role="img" aria-label="' + esc(t("plan.aria")) + '">' +
-      '<rect x="' + ct[0] + '" y="' + ct[1] + '" width="' + ct[2] + '" height="' + ct[3] + '" class="court"/>' +
-      '<text class="pc" x="' + (ct[0] + ct[2] / 2) + '" y="' + (ct[1] + ct[3] / 2 + 5) + '" text-anchor="middle">' + esc(t("plan.courtyard")) + "</text>" +
-      '<path class="route" d="' + route + '"/>' +
-      rooms +
-      '<path class="atrio-arch" d="M' + a[0] + " " + (a[1] + a[3]) + "V" + (a[1] + 20) + "a75 20 0 0 1 150 0V" + (a[1] + a[3]) + '"/>' +
-      '<text class="pt" x="' + (a[0] + 12) + '" y="' + (a[1] + a[3] - 14) + '">' + esc(t("plan.entrance")) + "</text>" +
-      '<path class="door" d="M235 425v70"/><text class="pt" x="245" y="488">' + esc(t("plan.exit")) + "</text>" +
-      here + "</svg>";
-  }
-
-  /* ============================== dishes ============================== */
-  function dishHtml(d, level) {
-    const marks = d.v ? ' <span class="vmark" title="' + esc(t("v.note")) + '">V</span>' : "";
-    const star = d.star ? "<sup>*</sup>" : "";
-    let desc = lang === "it" ? (d.dit || "") : (d.en || "");
-    if (desc.trim().toLowerCase() === d.it.trim().toLowerCase()) desc = "";
-    const al = (d.a || []).slice().sort((a, b) => a - b);
-    const alHtml = al.length
-      ? '<span class="allergens" title="' + esc(al.map(n => ALLERGENS[n][lang]).join(", ")) + '">' + al.join(" · ") + "</span>"
-      : '<span class="allergens none">—</span>';
-    const unit = d.perKg ? "perkg" : (d.per2 ? "per2" : null);
-    return '<li class="work' + (d.feature ? " feature" : "") + '" data-a="' + al.join(",") + '" data-v="' + (d.v ? 1 : 0) + '">' +
-      '<article class="plaque">' +
-        "<" + level + ' class="work-title" lang="it">' + esc(d.it) + star + marks + "</" + level + ">" +
-        '<p class="work-desc">' + esc(desc) + "</p>" +
-        '<div class="work-meta">' + alHtml + '<span class="price">' + money(d.price, unit) + "</span></div>" +
-      "</article></li>";
   }
 
   /* ============================== filters ============================== */
@@ -308,7 +263,7 @@
     return FILTERS.map(f => '<label class="chip"><input type="checkbox" value="' + f.id + '"' + (active.has(f.id) ? " checked" : "") + "><i></i>" + esc(t(f.key)) + "</label>").join("");
   }
   function applyFilters() {
-    const works = document.querySelectorAll("#room-view .work");
+    const works = document.querySelectorAll("#entries .entry");
     let on = 0;
     works.forEach(w => {
       const al = w.dataset.a ? w.dataset.a.split(",").map(Number) : [];
@@ -334,25 +289,32 @@
     document.title = t("home.title");
     setWall(HERO.wall, HERO.ink, HERO.gold);
     applyStrings();
-    document.getElementById("plan-home").innerHTML = planSvg(null, id => "menu.html#" + id);
     document.getElementById("hh").hidden = !(SITE.happyHour && SITE.happyHour.price);
+    document.getElementById("salas").innerHTML = ROOMS.map(r => {
+      const items = r.groups.flatMap(g => g.items);
+      const pick = items.find(d => d.feature) || items[0];
+      return '<a class="sala-card" href="menu.html#' + r.id + '" style="--room:' + r.wall + '">' +
+        '<div class="sala-pic">' + pictureHtml(pick, r, false) + "</div>" +
+        '<div class="sala-plaque plaque"><span class="sala-n">' + r.numeral + '</span><h3 lang="' + lang + '">' + esc(r.title[lang]) + "</h3><p>" + esc(t("salas.count", { n: items.length })) + "</p></div></a>";
+    }).join("");
     document.getElementById("teaser-dial").innerHTML = dialSvg(0.45, true);
   };
 
+  /* ---------- the menu: picture against plaque ---------- */
+  let current = null, stageObs = null;
   pages.menu = function () {
     document.title = t("menu.title");
     applyStrings();
-    const side = document.getElementById("menu-side");
-    side.innerHTML = '<div class="plan-wrap" id="plan"></div>' +
-      '<details class="filters" id="filters"' + (window.innerWidth >= 900 ? " open" : "") + "><summary>" + icon("menu", "sm") + "<span>" + esc(t("filter.title")) + '</span><span class="filter-count" id="filter-count" hidden></span></summary>' +
-      '<div class="chips" id="chips">' + chipsHtml() + "</div>" +
-      '<p class="filters-note">' + esc(t("filter.note")) + "</p></details>";
+    document.getElementById("rooms-tabs").innerHTML = ROOMS.map(r =>
+      '<a class="tab" href="#' + r.id + '" data-room="' + r.id + '" style="--room:' + r.wall + '">' + icon(r.id, "sm") + "<b>" + r.numeral + "</b><span>" + esc(SHORT[r.id][lang]) + "</span></a>").join("");
+    document.querySelectorAll("#rooms-tabs .tab").forEach(a => a.addEventListener("click", e => { e.preventDefault(); showRoom(a.dataset.room, true); }));
+    const f = document.getElementById("filters");
+    f.innerHTML = "<summary>" + icon("filter", "sm") + "<span>" + esc(t("filter.title")) + '</span><span class="filter-count" id="filter-count" hidden></span></summary>' +
+      '<div class="chips" id="chips">' + chipsHtml() + "</div>" + '<p class="filters-note">' + esc(t("filter.note")) + "</p>";
     document.querySelectorAll("#chips input").forEach(cb => cb.addEventListener("change", () => { cb.checked ? active.add(cb.value) : active.delete(cb.value); applyFilters(); }));
 
     const fromHash = location.hash.replace("#", "");
-    const id = ROOMS.some(r => r.id === fromHash) ? fromHash : ROOMS[0].id;
-    showRoom(id, false);
-
+    showRoom(ROOMS.some(r => r.id === fromHash) ? fromHash : ROOMS[0].id, false);
     window.onhashchange = () => { const h = location.hash.replace("#", ""); if (ROOMS.some(r => r.id === h) && h !== current) showRoom(h, true); };
     document.onkeydown = e => {
       if (e.target.matches("input, textarea, select") || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -362,44 +324,96 @@
     };
   };
 
-  let current = null;
+  function entryHtml(d, room, n, total) {
+    const marks = d.v ? ' <span class="vmark" title="' + esc(t("v.note")) + '">V</span>' : "";
+    const star = d.star ? "<sup>*</sup>" : "";
+    let desc = lang === "it" ? (d.dit || "") : (d.en || "");
+    if (desc.trim().toLowerCase() === d.it.trim().toLowerCase()) desc = "";
+    const al = (d.a || []).slice().sort((a, b) => a - b);
+    const alHtml = al.length
+      ? '<span class="allergens" title="' + esc(al.map(x => ALLERGENS[x][lang]).join(", ")) + '">' + al.join(" · ") + "</span>"
+      : '<span class="allergens none">—</span>';
+    const unit = d.perKg ? "perkg" : (d.per2 ? "per2" : null);
+    return '<article class="entry' + (d.feature ? " feature" : "") + '" id="d-' + slug(d.it) + '" data-n="' + n + '" data-a="' + al.join(",") + '" data-v="' + (d.v ? 1 : 0) + '">' +
+      '<div class="entry-pic veduta">' + pictureHtml(d, room, false) + "</div>" +
+      '<div class="plaque entry-plaque">' +
+        '<p class="entry-n">' + esc(t("work.n", { n: n, t: total })) + "</p>" +
+        '<h3 class="work-title" lang="it">' + esc(d.it) + star + marks + "</h3>" +
+        '<p class="work-desc">' + esc(desc) + "</p>" +
+        '<div class="work-meta">' + alHtml + '<span class="price">' + money(d.price, unit) + "</span></div>" +
+      "</div></article>";
+  }
+
   function showRoom(id, user) {
     const i = ROOMS.findIndex(r => r.id === id); const room = ROOMS[i];
     current = id;
     setWall(room.wall, room.ink, room.id === "pinsa" ? "#F6EBDA" : HERO.gold);
     if (location.hash !== "#" + id) history.replaceState(null, "", "#" + id);
-    document.getElementById("plan").innerHTML = planSvg(id, r => "#" + r);
-    document.querySelectorAll("#plan a.pr").forEach(a => a.addEventListener("click", e => { e.preventDefault(); showRoom(a.dataset.room, true); }));
+    document.querySelectorAll("#rooms-tabs .tab").forEach(a => { const on = a.dataset.room === id; a.classList.toggle("active", on); if (on) a.setAttribute("aria-current", "true"); else a.removeAttribute("aria-current"); if (on) a.scrollIntoView({ block: "nearest", inline: "center", behavior: reduced ? "auto" : "smooth" }); });
 
+    const all = room.groups.flatMap(g => g.items); let n = 0;
     const groups = room.groups.map(g =>
       '<div class="group">' + (g.title ? '<h3 class="group-title">' + esc(g.title[lang]) + "</h3>" : "") +
-      '<ol class="works">' + g.items.map(d => dishHtml(d, g.title ? "h4" : "h3")).join("") + "</ol></div>").join("");
+      g.items.map(d => entryHtml(d, room, ++n, all.length)).join("") + "</div>").join("");
     const scaleCard = room.scale ? '<a class="scale-card" href="bistecca.html">' + dialSvg(0.6, true) + "<div><h3>" + esc(t("room.scaleCard")) + "</h3><p>" + esc(t("room.scaleText")) + '</p><span class="btn small">' + esc(t("room.scaleCta")) + "</span></div></a>" : "";
     const prev = i > 0 ? ROOMS[i - 1] : null, next = i < ROOMS.length - 1 ? ROOMS[i + 1] : null;
     const nav = '<nav class="room-nav" aria-label="' + esc(t("nav.menu")) + '">' +
       (prev ? '<a class="room-link prev" href="#' + prev.id + '" data-room="' + prev.id + '"><small>' + esc(t("room.prev")) + "</small><b>" + prev.numeral + " · " + esc(prev.title[lang]) + "</b></a>" : '<a class="room-link prev" href="index.html#prologo"><small>' + esc(t("room.toStart")) + "</small><b>" + esc(t("atrio.title")) + "</b></a>") +
       (next ? '<a class="room-link next" href="#' + next.id + '" data-room="' + next.id + '"><small>' + esc(t("room.next")) + "</small><b>" + next.numeral + " · " + esc(next.title[lang]) + "</b></a>" : '<a class="room-link next" href="visita.html"><small>' + esc(t("plan.exit")) + "</small><b>" + esc(t("room.exit")) + "</b></a>") +
       "</nav>";
-    const view = document.getElementById("room-view");
-    view.className = "room-view" + (room.compact ? " compact" : "");
+
+    const view = document.getElementById("entries");
     view.innerHTML =
       '<header class="room-head"><span class="numeral" aria-hidden="true">' + room.numeral + "</span>" +
         '<p class="eyebrow">' + icon(room.id, "sm") + esc(t("room.of", { n: room.numeral })) + "</p>" +
         '<h2 id="room-title" tabindex="-1">' + esc(room.title[lang]) + "</h2>" +
         '<p class="blurb">' + esc(room.blurb[lang]) + "</p></header>" +
       '<p class="filters-tally" id="tally" aria-live="polite" aria-atomic="true"></p>' +
-      scaleCard + '<div class="groups">' + groups + "</div>" + nav;
+      scaleCard + groups + nav;
     view.querySelectorAll(".room-link[data-room]").forEach(a => a.addEventListener("click", e => { e.preventDefault(); showRoom(a.dataset.room, true); }));
     applyFilters();
+    wireStage(room, all);
     if (user) {
-      const top = view.getBoundingClientRect().top + window.scrollY - 80;
+      const top = document.getElementById("split").getBoundingClientRect().top + window.scrollY - 120;
       window.scrollTo({ top: Math.max(0, top), behavior: reduced ? "auto" : "smooth" });
       document.getElementById("room-title").focus({ preventScroll: true });
     }
   }
 
+  /* The stage: the picture side. It shows whichever entry is in the middle of the screen, and drifts the other way. */
+  function wireStage(room, all) {
+    const stage = document.getElementById("stage");
+    let shown = -1;
+    const show = n => {
+      if (n === shown) return; shown = n;
+      const d = all[n - 1];
+      const photo = photoFor(d);
+      const html = '<figure class="stage-fig' + (photo ? " has-photo" : "") + '">' +
+        '<div class="stage-pic veduta">' + pictureHtml(d, room, true) + "</div>" +
+        '<figcaption><span class="stage-n">' + esc(t("work.n", { n: n, t: all.length })) + " · " + esc(photo ? t("work.photo") : t("work.drawn")) + '</span><span class="stage-title" lang="it">' + esc(d.it) + "</span></figcaption></figure>";
+      if (reduced) { stage.innerHTML = html; return; }
+      stage.classList.add("swap");
+      setTimeout(() => { stage.innerHTML = html; stage.classList.remove("swap"); }, 160);
+    };
+    if (stageObs) stageObs.disconnect();
+    stageObs = new IntersectionObserver(entries => {
+      entries.forEach(e => { if (e.isIntersecting) show(Number(e.target.dataset.n)); });
+    }, { rootMargin: "-40% 0px -45% 0px", threshold: 0 });
+    document.querySelectorAll("#entries .entry").forEach(el => stageObs.observe(el));
+    show(1);
+    if (!reduced) {
+      const split = document.getElementById("split");
+      const drift = () => {
+        const r = split.getBoundingClientRect();
+        const p = Math.min(1, Math.max(0, -r.top / Math.max(1, r.height - window.innerHeight)));
+        stage.style.setProperty("--drift", (p * -60).toFixed(1) + "px");
+      };
+      window.removeEventListener("scroll", window.__drift);
+      window.__drift = drift; window.addEventListener("scroll", drift, { passive: true }); drift();
+    }
+  }
+
   /* ============================== the dial ============================== */
-  /* A butcher's scale: a half dial from 0.6 to 2 kg, the needle swings to the weight. */
   function dialSvg(frac, mini) {
     const cx = 200, cy = 200, r = 160;
     const ang = a => [cx + r * Math.cos(Math.PI * (1 - a)), cy - r * Math.sin(Math.PI * (1 - a))];
@@ -441,19 +455,19 @@
       '<dl class="readout">' +
         '<div><dt>' + esc(t("steak.weight")) + '</dt><dd class="big" id="ro-kg"></dd><dd class="sub" id="ro-etti"></dd></div>' +
         '<div><dt>' + esc(t("steak.price")) + '</dt><dd class="big gold" id="ro-eur"></dd><dd class="sub" id="ro-each"></dd></div>' +
-        '<div><dt>' + esc(t("steak.for").replace("{p}", "").trim() || "") + '</dt><dd class="big" id="ro-people"></dd><dd class="sub" id="ro-note">' + esc(t("steak.etti.note")) + "</dd></div>" +
+        '<div><dt>' + esc(t("steak.for")) + '</dt><dd class="big" id="ro-people"></dd><dd class="sub">' + esc(t("steak.etti.note")) + "</dd></div>" +
       "</dl>";
     const range = document.getElementById("scale-range");
     const update = () => {
       const g = Number(range.value), perKg = Number(host.querySelector('input[name="cut"]:checked').value);
       const kg = g / 1000, price = Math.round(kg * perKg), people = Math.max(1, Math.round(kg / 0.55));
-      const forWho = t("steak.for", { p: people === 1 ? t("steak.one") : t("steak.many", { n: people }) });
+      const who = people === 1 ? t("steak.one") : t("steak.many", { n: people });
       document.getElementById("ro-kg").textContent = kgFmt(kg) + " kg";
       document.getElementById("ro-etti").textContent = t("steak.etti", { n: (g / 100) % 1 ? (g / 100).toFixed(1).replace(".", lang === "it" ? "," : ".") : g / 100 });
       document.getElementById("ro-eur").textContent = eur(price);
       document.getElementById("ro-each").textContent = eur(Math.round(price / people)) + " " + t("steak.each");
-      document.getElementById("ro-people").textContent = people === 1 ? t("steak.one") : t("steak.many", { n: people });
-      range.setAttribute("aria-valuetext", t("steak.valuetext", { kg: kgFmt(kg), eur: price, for: forWho }));
+      document.getElementById("ro-people").textContent = who;
+      range.setAttribute("aria-valuetext", t("steak.valuetext", { kg: kgFmt(kg), eur: price, for: t("steak.for") + " " + who }));
       const frac = (g - 600) / 1400;
       document.getElementById("needle").style.transform = "rotate(" + (-90 + frac * 180).toFixed(2) + "deg)";
       host.querySelector(".arc-fill").style.strokeDasharray = (frac * 100).toFixed(1) + " 100";
