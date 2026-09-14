@@ -180,3 +180,10 @@ CREATE INDEX IF NOT EXISTS chat_messages_chat ON chat_messages(chat_id, created_
 -- 2026-09-14: where it hurts, over time (Ash: the intake map goes stale; keep a history, show progress, keep the profile current)
 CREATE TABLE IF NOT EXISTS pain_log (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, at TEXT DEFAULT (datetime('now')), areas TEXT NOT NULL, source TEXT NOT NULL, booking_id TEXT, note TEXT);
 CREATE INDEX IF NOT EXISTS pain_log_user ON pain_log(user_id, at);
+
+-- 2026-09-14 hardening batch: tries (login / magic-link / error-report throttling), browser errors reported by the site,
+-- and one booking per therapist per exact slot as a safety net under the availability check.
+CREATE TABLE IF NOT EXISTS attempts (key TEXT NOT NULL, at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS attempts_key ON attempts(key, at);
+CREATE TABLE IF NOT EXISTS client_errors (id TEXT PRIMARY KEY, at TEXT DEFAULT (datetime('now')), page TEXT, msg TEXT, ua TEXT, n INTEGER DEFAULT 1);
+CREATE UNIQUE INDEX IF NOT EXISTS bookings_one_per_slot ON bookings(city, date, slot, therapist_id) WHERE status IN ('pending','paid','confirmed','review') AND therapist_id IS NOT NULL AND slot LIKE '__:__';

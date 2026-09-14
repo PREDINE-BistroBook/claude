@@ -5,13 +5,23 @@ import { randomId, referralCode, signPayload, verifyPayload, getCookie, setCooki
 
 export const CITY_KEYS = Object.keys(CITIES);
 export const USER_COOKIE = "zen_s", ADMIN_COOKIE = "zen_a";
-export const json = (obj, status = 200, headers = {}) => new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json; charset=utf-8", ...headers } });
+export const json = (obj, status = 200, headers = {}) => new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json; charset=utf-8", "x-content-type-options": "nosniff", ...headers } });
 export const clean = (v, max) => String(v ?? "").replace(/[\u0000-\u001f]/g, " ").trim().slice(0, max);
 export const normEmail = (e) => clean(e, 120).toLowerCase();
 export const isDate = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d || "");
 export const isTime = (t) => /^([01]\d|2[0-3]):[0-5]\d$/.test(t || "");
 export const fmt = (minor, cur) => new Intl.NumberFormat("en", { style: "currency", currency: cur.toUpperCase(), maximumFractionDigits: cur === "egp" ? 0 : 2 }).format(minor / 100);
 export const now = () => new Date().toISOString().slice(0, 19).replace("T", " ");
+// Throttling (2026-09-14): a row per try in `attempts`; tooMany() reads, noteAttempt() writes. Keys look like "login:1.2.3.4" or "link:sara@x.com".
+export const ipOf = (req) => req.headers.get("cf-connecting-ip") || req.headers.get("x-forwarded-for") || "local";
+export async function tooMany(env, key, max, minutes) {
+  const since = new Date(Date.now() - minutes * 60000).toISOString().slice(0, 19).replace("T", " ");
+  try { return ((await env.DB.prepare("SELECT COUNT(*) n FROM attempts WHERE key = ? AND at > ?").bind(key, since).first())?.n || 0) >= max; } catch (_) { return false; }
+}
+export async function noteAttempt(env, key) {
+  try { await env.DB.prepare("INSERT INTO attempts (key, at) VALUES (?, ?)").bind(key, now()).run();
+    if (Math.random() < 0.02) await env.DB.prepare("DELETE FROM attempts WHERE at < ?").bind(new Date(Date.now() - 86400000).toISOString().slice(0, 19).replace("T", " ")).run(); } catch (_) {}
+}
 export const today = () => new Date().toISOString().slice(0, 10);
 export const addDays = (d, n) => { const x = new Date(d + "T12:00:00Z"); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 export const feeOn = (amount) => Math.round((amount * PLATFORM_FEE_BPS) / 10000);

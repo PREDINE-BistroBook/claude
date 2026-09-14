@@ -6,7 +6,7 @@ import { CITIES, PLATFORM_FEE_BPS } from "./catalog.js";
 import { randomId, referralCode, signPayload, verifyPayload, getCookie, clearCookie, hashPassword } from "./auth.js";
 import { CITY_KEYS, json, clean, normEmail, isDate, isTime, fmt, now, today, addDays, feeOn, body, isLive, currentUser, scope, sendEmail, stripeCheckout, slotsFor, healthFlags, parseIntake, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, isOwner, therapistOf, visibleWhere, isPartner, isEmployee, managesCity, pickLang, translateProfile, parseI18n } from "./lib.js";
 import { M } from "./mail.js";
-import { translateService, therapistPrices, payProvider, fawryCheckout, cityNameIn, isPlatform, chatEmailHtml } from "./lib.js";
+import { translateService, therapistPrices, payProvider, fawryCheckout, cityNameIn, isPlatform, chatEmailHtml, tooMany, noteAttempt, ipOf } from "./lib.js";
 
 const b64u = (s) => btoa(typeof s === "string" ? unescape(encodeURIComponent(s)) : String.fromCharCode(...new Uint8Array(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const cityOf = (k) => (CITY_KEYS.includes(k) ? k : null);
@@ -481,6 +481,7 @@ async function saveTherapist(req, env, admin, id) {
 const WORDS_APP = ["calm", "cup", "river", "sand", "reef", "olive", "tide", "moon", "lotus", "pine", "salt", "stone"];
 const appPassword = () => { const a = new Uint32Array(3); crypto.getRandomValues(a); return `${WORDS_APP[a[0] % 12]}-${WORDS_APP[a[1] % 12]}-${WORDS_APP[a[2] % 12]}-${(a[0] % 90) + 10}`; };
 async function applyToJoin(req, env) {
+  if (await tooMany(env, "apply:" + ipOf(req), 5, 60)) return json({ error: "That's a few applications in a row. Try again in an hour." }, 429); await noteAttempt(env, "apply:" + ipOf(req));
   const b = await body(req);
   const name = clean(b.name, 80), email = normEmail(b.email), phone = clean(b.phone, 40), city = cityOf(b.city);
   if (!name || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email || "") || !phone || !city) return json({ error: "Your name, a real email, a WhatsApp number and the city." }, 400);
@@ -743,7 +744,7 @@ async function adminSearch(env, admin, url) {
    Late cancellations and no-shows count with the fee kept (cancel_fee). Owner: every therapist in the chosen city; partner: their
    city; employee: only themselves ("Your earnings"). ?format=csv gives one line per session for the accountant. */
 const channelOf = (b) => (b.source === "manual" ? "cash" : (b.status === "cancelled" || b.status === "no_show" ? b.cancel_fee : b.amount) === 0 ? "free" : b.provider === "fawry" ? "fawry" : "card");
-async function statements(env, admin, url) {
+export async function statements(env, admin, url) {
   const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(url.searchParams.get("month") || "") ? url.searchParams.get("month") : today().slice(0, 7);
   const city = scope(admin, url.searchParams.get("city"));   // scope(): owner and platform see every city
   const me = isEmployee(admin) ? await therapistOf(env, admin) : null;

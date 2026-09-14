@@ -12,3 +12,22 @@
   Cache-Control: no-cache
 /img/*
   Cache-Control: public, max-age=86400
+# 2026-09-14: browser hardening on every page (the API sets its own)
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: SAMEORIGIN
+  Permissions-Policy: camera=(), microphone=(), payment=(self), geolocation=(self)
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+/admin.html
+  X-Robots-Tag: noindex
+/admin
+  X-Robots-Tag: noindex
+/account.html
+  X-Robots-Tag: noindex
+/account
+  X-Robots-Tag: noindex
+/export.html
+  X-Robots-Tag: noindex
+/success.html
+  X-Robots-Tag: noindex

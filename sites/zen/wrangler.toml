@@ -41,7 +41,7 @@ database_id = "35c5461a-9065-4552-a6bf-bac39d1ec8f8"   # created 2026-09-12 (WEU
 
 [vars]
 SITE_URL = "https://zenrecovery.club"
-ZEN_STRIPE_ACCOUNT = ""          # acct_... of Zen's connected account. Empty = preview mode (no card payments).
+ZEN_STRIPE_ACCOUNT = "acct_1UFIhGFxTkRNsABQ"          # acct_... of Zen's connected account. Empty = preview mode (no card payments).
 ZEN_NOTIFY_EMAIL = ""   # optional extra address for new bookings / gifts / review requests. Empty: only admins with "email me about bookings" on get them (Amico Mio never does)
 FROM_EMAIL = "Zen Recovery <booking@zenrecovery.club>"   # domain verified on Resend 2026-09-12
 FAWRY_ENV = "staging"            # staging | production — Fawry for Cairo/Dahab (EGP), settled to Zen's Egyptian bank account. Secret: FAWRY_SECURE_KEY

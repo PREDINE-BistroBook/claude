@@ -29,6 +29,7 @@
 // DEV_MAGIC_LINK ("1" returns the sign-in link in the response — local testing only).
 
 import { CITIES, SLOTS, PLATFORM_FEE_BPS } from "./catalog.js";
+import { tooMany, noteAttempt, ipOf } from "./lib.js";
 import { randomId, signPayload, verifyPayload, getCookie, setCookie, clearCookie, hashPassword, verifyPassword } from "./auth.js";
 import { cityNameIn, therapistOffering, offersService, nameIn, hoursUntil, cancelTerms, stripeRefund, fillFromWaitlist, payProvider, fawryOn, fawryCheckout, fawryStatus, fawryNotificationValid, CITY_KEYS, USER_COOKIE, ADMIN_COOKIE, json, clean, normEmail, isDate, isTime, fmt, now, today, feeOn, body, isLive, parseIntake, healthFlags, settings, currentUser, currentAdmin, scope, sendEmail, sendSms, stripeCheckout, slotsFor, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, maybeRewardLoyalty, isPlatform, isOwner, seesAll, therapistOf, visibleWhere, canSeeBooking, isPartner, isEmployee, managesCity, pickLang, userLang } from "./lib.js";
 import { M, paidLineFor } from "./mail.js";
@@ -43,6 +44,7 @@ export default {
       const res = await route(req, env, url, ctx);
       return res || json({ error: "Not found" }, 404);
     } catch (e) {
+      if (e && e.status) return json({ error: e.message }, e.status);
       console.error(e);
       return json({ error: "Something went wrong on our side. Try again in a minute." }, 500);
     }
@@ -53,6 +55,8 @@ export default {
 async function route(req, env, url, ctx) {
   const p = url.pathname, m = req.method;
   if (p === "/api/status") return status(env, req);
+  if (p === "/api/health") return health(env);
+  if (p === "/api/log" && m === "POST") return clientLog(req, env);
   if (p === "/api/reviews" && m === "GET") return publicReviews(env);
   if (p === "/api/fawry/return" && m === "GET") return fawryReturn(env, url);
   if (p === "/api/fawry/notify" && m === "POST") return fawryNotify(req, env);
@@ -79,10 +83,11 @@ async function route(req, env, url, ctx) {
     const admin = await currentAdmin(req, env);
     if (!admin) return json({ error: "Sign in first." }, 401);
     // Platform account (Ash): numbers only. Everything operational belongs to Zen's owner and the city teams.
-    if (isPlatform(admin) && !["/api/admin/me", "/api/admin/stats", "/api/admin/platform", "/api/admin/profile", "/api/admin/password", "/api/admin/statements"].includes(p)) return json({ error: "Your account sees the numbers, not the operations. Ask Zen's owner for anything else." }, 403);
+    if (isPlatform(admin) && !["/api/admin/me", "/api/admin/stats", "/api/admin/platform", "/api/admin/profile", "/api/admin/password", "/api/admin/statements", "/api/admin/errors"].includes(p)) return json({ error: "Your account sees the numbers, not the operations. Ask Zen's owner for anything else." }, 403);
     if (p === "/api/admin/platform" && m === "GET") return isPlatform(admin) ? platformReport(env, admin) : json({ error: "Only the Amico Mio account sees the platform report." }, 403);
-    if (p === "/api/admin/me") return json({ admin: pub(admin), therapist: await env.DB.prepare("SELECT id, name, city, photo, active FROM therapists WHERE admin_id = ?").bind(admin.id).first(), cities: await cityMeta(env), settings: await settings(env), photos: authFlags(env).photos, live: isLive(env) });
+    if (p === "/api/admin/me") return json({ admin: pub(admin), therapist: await env.DB.prepare("SELECT id, name, city, photo, active FROM therapists WHERE admin_id = ?").bind(admin.id).first(), cities: await cityMeta(env), settings: await settings(env), photos: authFlags(env).photos, live: isLive(env), pay: { live: isLive(env), stripe_key: Boolean(env.STRIPE_SECRET_KEY), stripe_account: Boolean(env.ZEN_STRIPE_ACCOUNT), stripe_webhook: Boolean(env.STRIPE_WEBHOOK_SECRET), fawry: fawryOn(env) } });
     if (p === "/api/admin/profile" && m === "PUT") return adminProfile(req, env, admin);
+    if (p === "/api/admin/errors" && m === "GET") return admin.role === "all" || isPlatform(admin) ? json({ rows: (await env.DB.prepare("SELECT id, at, page, msg, ua, n FROM client_errors ORDER BY at DESC LIMIT 40").all()).results }) : json({ error: "The owner and the platform account see site errors." }, 403);
     if (p === "/api/admin/stats" && m === "GET") return adminStats(env, admin, url);
     if (p === "/api/admin/bookings" && m === "GET") return adminBookings(env, admin, url);
     if (p === "/api/admin/bookings" && m === "POST") return adminCreateBooking(req, env, admin);
@@ -148,6 +153,21 @@ const AREAS = ["neck", "shoulder_l", "shoulder_r", "upper_back", "mid_back", "lo
 const AREA_LABELS = {"neck": "Neck", "shoulder_l": "Left shoulder", "shoulder_r": "Right shoulder", "upper_back": "Upper back", "mid_back": "Mid back", "lower_back": "Lower back", "arm_l": "Left arm", "arm_r": "Right arm", "hips": "Hips / glutes", "thigh_l": "Left thigh", "thigh_r": "Right thigh", "calf_l": "Left calf", "calf_r": "Right calf", "face": "Face / jaw"};
 const AREA_LABEL = (a) => AREA_LABELS[a] || a.replace(/_/g, " ");
 
+// 2026-09-14: for uptime checks (Guardiano, the deploy's live check): the database answers or it doesn't
+async function health(env) {
+  try { await env.DB.prepare("SELECT 1").first(); return json({ ok: true, db: true, live: isLive(env), at: now() }, 200, { "cache-control": "no-store" }); }
+  catch (e) { return json({ ok: false, db: false, error: e.message }, 503, { "cache-control": "no-store" }); }
+}
+// 2026-09-14: pages report a broken script here (site.js); the same message on the same page is counted once a day
+async function clientLog(req, env) {
+  const ip = ipOf(req); if (await tooMany(env, "log:" + ip, 20, 60)) return json({ ok: false }, 429); await noteAttempt(env, "log:" + ip);
+  const b = await body(req); const msg = clean(b.msg, 500), page = clean(b.page, 200); if (!msg) return json({ error: "Nothing to log." }, 400);
+  const ua = clean(req.headers.get("user-agent") || "", 200), since = new Date(Date.now() - 86400000).toISOString().slice(0, 19).replace("T", " ");
+  const same = await env.DB.prepare("SELECT id FROM client_errors WHERE msg = ? AND page = ? AND at > ?").bind(msg, page, since).first();
+  if (same) await env.DB.prepare("UPDATE client_errors SET n = n + 1, at = ? WHERE id = ?").bind(now(), same.id).run();
+  else await env.DB.prepare("INSERT INTO client_errors (id, at, page, msg, ua) VALUES (?,?,?,?,?)").bind(randomId(), now(), page, msg, ua).run();
+  return json({ ok: true });
+}
 async function status(env, req) {
   const st = await settings(env);
   const f = authFlags(env);
@@ -162,6 +182,8 @@ async function requestLink(req, env) {
   if (b.via === "sms") return requestSms(env, b);
   const email = normEmail(b.email);
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ error: "That email doesn't look right." }, 400);
+  if (await tooMany(env, "link:" + email, 6, 60) || await tooMany(env, "link:" + ipOf(req), 60, 60)) return json({ error: "Too many sign-in links asked for. Check your inbox (and spam), or try again in an hour." }, 429);
+  await noteAttempt(env, "link:" + email); await noteAttempt(env, "link:" + ipOf(req));
   let user = await env.DB.prepare("SELECT * FROM users WHERE email = ?").bind(email).first();
   let created = false;
   if (!user) {
@@ -301,7 +323,7 @@ async function updateMe(req, env) {
 async function myBookings(req, env) {
   const u = await currentUser(req, env);
   if (!u) return json({ error: "Sign in first." }, 401);
-  const r = await env.DB.prepare("SELECT b.id, b.city, b.service_name, b.date, b.slot, b.amount, b.list_amount, b.currency, b.discount_kind, b.status, b.source, b.created_at, b.rating, b.feedback, b.therapist_note, b.therapist_id, t.name therapist FROM bookings b LEFT JOIN therapists t ON t.id = b.therapist_id WHERE b.user_id = ? AND b.status != 'pending' ORDER BY b.date DESC, b.created_at DESC").bind(u.id).all();
+  const r = await env.DB.prepare("SELECT b.id, b.city, b.service_id, b.service_name, b.date, b.slot, b.amount, b.list_amount, b.currency, b.discount_kind, b.status, b.source, b.created_at, b.rating, b.feedback, b.therapist_note, b.therapist_id, t.name therapist FROM bookings b LEFT JOIN therapists t ON t.id = b.therapist_id WHERE b.user_id = ? AND b.status != 'pending' ORDER BY b.date DESC, b.created_at DESC").bind(u.id).all();
   return json({ bookings: r.results });
 }
 
@@ -365,6 +387,8 @@ async function checkout(req, env) {
   }
   const flagged = Boolean(b.flagged) || Boolean(user && !user.approved && healthFlags(user.intake).length);
   const id = randomId();
+  { const dup = await env.DB.prepare("SELECT id FROM bookings WHERE email = ? AND city = ? AND date = ? AND slot = ? AND status IN ('paid','confirmed','review')").bind(email, cityKey, date, slot).first();
+    if (dup) return json({ error: "You already have this session booked. It's under My account → Sessions." }, 409); }
   const areas = Array.isArray(b.areas) ? [...new Set(b.areas.map((a) => String(a).toLowerCase()).filter((a) => AREAS.includes(a)))].slice(0, 12) : [];
   const base = { lang: pickLang(b.lang, user?.lang), agreed_at: b.agreed ? now() : null, areas: areas.length ? JSON.stringify(areas) : null, id, user_id: account?.id || user?.id || null, email, name, phone, city: cityKey, service_id: svc.id, service_name: svc.name, date, slot, note, list_amount: list, amount, currency: city.currency, discount_kind, credit_id: credit?.id || null, platform_fee: feeOn(amount), therapist_id, package_id: pack?.id || null, gift_code: gift?.code || null, partner_code: partner?.code || null };
 
@@ -402,9 +426,17 @@ async function checkout(req, env) {
   return json({ url: session.url });
 }
 
+// Google Calendar link for a booking with an exact time (2026-09-14); windows ("morning") get none
+function calendarLink(env, bk) {
+  if (!/^\d\d:\d\d$/.test(bk.slot || "")) return "";
+  const [h, m] = bk.slot.split(":").map(Number), d = bk.date.replace(/-/g, ""), pad = (n) => String(n).padStart(2, "0");
+  const end = h * 60 + m + 60, start = d + "T" + pad(h) + pad(m) + "00", fin = d + "T" + pad(Math.floor(end / 60) % 24) + pad(end % 60) + "00";
+  return "https://calendar.google.com/calendar/render?action=TEMPLATE&text=" + encodeURIComponent("Zen Recovery · " + (bk.service_name || "").split(" · ")[0]) + "&dates=" + start + "/" + fin + "&ctz=" + encodeURIComponent(CITIES[bk.city]?.tz || "UTC") + "&details=" + encodeURIComponent(env.SITE_URL + "/account");
+}
 async function insertBooking(env, o) {
   const cols = ["id", "user_id", "email", "name", "phone", "city", "service_id", "service_name", "date", "slot", "note", "list_amount", "amount", "currency", "discount_kind", "credit_id", "platform_fee", "status", "source", "stripe_session", "payment_intent", "paid_at", "done_at", "therapist_id", "package_id", "gift_code", "partner_code", "lang", "agreed_at", "provider", "areas"];
-  await env.DB.prepare(`INSERT INTO bookings (${cols.join(",")}) VALUES (${cols.map(() => "?").join(",")})`).bind(...cols.map((c) => o[c] ?? (c === "source" ? "web" : null))).run();
+  try { await env.DB.prepare(`INSERT INTO bookings (${cols.join(",")}) VALUES (${cols.map(() => "?").join(",")})`).bind(...cols.map((c) => o[c] ?? (c === "source" ? "web" : null))).run(); }
+  catch (e) { if (/UNIQUE/i.test(e.message)) throw Object.assign(new Error("That time was just taken by someone else. Pick another one."), { status: 409 }); throw e; }   // bookings_one_per_slot
 }
 // Use up whatever paid for the booking (reward credit, gift, package session). restore() undoes it on cancel.
 async function consume(env, bk) {
@@ -514,7 +546,7 @@ async function afterPaid(env, bk) {
         `Client:   ${bk.name}`, `WhatsApp: ${bk.phone}`, `Email:    ${bk.email}`, `Note:     ${bk.note || "—"}`, bk.partner_code ? `Partner:  ${bk.partner_code}` : null, ``, `Paid:     ${paidLine(bk)}`, ``,
         exact ? `The time is fixed. Mark it "Confirmed" in the admin once you've said hello on WhatsApp: ${env.SITE_URL}/admin` : `Confirm the exact hour with the client on WhatsApp, then mark it "Confirmed" in the admin: ${env.SITE_URL}/admin`].filter((l) => l !== null).join("\n"),
     }),
-    sendEmail(env, { to: bk.email, ...M("booking_confirmed", lang, { name: bk.name, city: cityNameIn(bk.city, lang), service: nameIn(await serviceOf(env, bk.city, bk.service_id), lang, cityNameIn(bk.city, lang)) || bk.service_name, date: bk.date, slot: slotLabel(bk.slot), therapist: th, paid: paidLineFor(lang, bk, fmt), where: where ? where.replace(/^Where:\s*/, "") : "", exact, phone: bk.phone, site: env.SITE_URL }) }),
+    sendEmail(env, { to: bk.email, ...M("booking_confirmed", lang, { name: bk.name, city: cityNameIn(bk.city, lang), service: nameIn(await serviceOf(env, bk.city, bk.service_id), lang, cityNameIn(bk.city, lang)) || bk.service_name, date: bk.date, slot: slotLabel(bk.slot), therapist: th, paid: paidLineFor(lang, bk, fmt), where: where ? where.replace(/^Where:\s*/, "") : "", exact, phone: bk.phone, site: env.SITE_URL, cal: calendarLink(env, bk) }) }),
   ]);
 }
 async function afterReview(env, bk) {
@@ -540,10 +572,13 @@ async function adminLogin(req, env) {
       a = await env.DB.prepare("SELECT * FROM admins WHERE email = ?").bind(email).first();
     }
   }
-  if (!a || !(await verifyPassword(password, a.pass_hash, a.salt))) return json({ error: "Wrong email/username or password." }, 401);
+  const ip = ipOf(req);
+  if (await tooMany(env, "login:" + email, 8, 15) || await tooMany(env, "login:" + ip, 40, 15)) return json({ error: "Too many tries. Wait 15 minutes, then try again." }, 429);
+  if (!a || !(await verifyPassword(password, a.pass_hash, a.salt))) { await noteAttempt(env, "login:" + email); await noteAttempt(env, "login:" + ip); return json({ error: "Wrong email/username or password." }, 401); }
   await env.DB.prepare("UPDATE admins SET last_login = ? WHERE id = ?").bind(now(), a.id).run();
   const cookie = await signPayload(env.SESSION_SECRET, { aid: a.id, exp: Math.floor(Date.now() / 1000) + 12 * 3600 });
-  return json({ admin: pub(a) }, 200, { "set-cookie": setCookie(ADMIN_COOKIE, cookie, 12 * 3600) });
+  const weak = password.length < 12 && (/^[a-z]+\d{1,6}$/i.test(password) || ["password", "passw0rd", "12345678", "123456789", "1234567890", "qwerty123", "admin1234", "zenrecovery"].includes(password.toLowerCase()));   // 2026-09-14: the page nudges them to change it
+  return json({ admin: pub(a), weak }, 200, { "set-cookie": setCookie(ADMIN_COOKIE, cookie, 12 * 3600) });
 }
 
 async function adminStats(env, admin, url) {
@@ -800,6 +835,7 @@ async function adminProfile(req, env, admin) {
   const taken = await signinTaken(env, [username, email], admin.id); if (taken) return json({ error: `"${taken}" is already another account's sign-in.` }, 409);
   try { await env.DB.prepare("UPDATE admins SET name = ?, phone = ?, photo = ?, notify = ?, username = ?, email = ? WHERE id = ?").bind(clean(b.name, 80) || admin.name, b.phone === undefined ? admin.phone : clean(b.phone, 40), photo, b.notify === undefined ? admin.notify ?? 1 : b.notify ? 1 : 0, username, email, admin.id).run(); }
   catch { return json({ error: "That username or email is already used by another account." }, 409); }
+  if (email.includes("@") && email !== admin.email) await sendEmail(env, { to: email, subject: "Your Zen Recovery notifications now come here", text: [`Hi ${clean(b.name, 80) || admin.name || "there"},`, ``, `This address now receives your Zen Recovery bookings and client messages, and it's your sign-in at ${env.SITE_URL}/admin (same password as before).`, ``, `If that wasn't you, sign in and change it under Settings → your profile.`].join("\n") }).catch(() => false);
   return json({ admin: pub(await env.DB.prepare("SELECT * FROM admins WHERE id = ?").bind(admin.id).first()) });
 }
 // Owner: change another admin's name, role or reset their password
