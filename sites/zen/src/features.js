@@ -321,15 +321,22 @@ const cityFilter = (admin, url) => scope(admin, url.searchParams.get("city"));
 // ---------- services and prices (what the website sells) ----------
 async function listServices(env, admin, url) {
   const city = cityFilter(admin, url);
-  const r = await env.DB.prepare("SELECT s.*, (SELECT COUNT(*) FROM bookings b WHERE b.service_id = s.id AND b.status IN ('paid','confirmed','done','review')) bookings FROM services s WHERE 1=1" + (city ? " AND s.city = ?" : "") + " ORDER BY s.city, s.sort, s.name").bind(...(city ? [city] : [])).all();
-  return json({ rows: r.results, city });
+  const r = await env.DB.prepare("SELECT s.*, t.name therapist_name, (SELECT COUNT(*) FROM bookings b WHERE b.service_id = s.id AND b.status IN ('paid','confirmed','done','review')) bookings FROM services s LEFT JOIN therapists t ON t.id = s.therapist_id WHERE 1=1" + (city ? " AND s.city = ?" : "") + " ORDER BY s.city, s.therapist_id IS NOT NULL, s.sort, s.name").bind(...(city ? [city] : [])).all();
+  const me = isOwner(admin) ? null : await therapistOf(env, admin);   // 2026-09-14: a therapist owns the services they added; the city's list stays the owner's
+  return json({ rows: r.results, city, me: me ? { id: me.id, name: me.name } : null, can_edit_city: isOwner(admin) });
 }
 async function saveService(req, env, admin, id) {
   const b = await body(req);
   const cur = id ? await env.DB.prepare("SELECT * FROM services WHERE id = ?").bind(id).first() : null;
   if (id && !cur) return json({ error: "Not found" }, 404);
-  if (!isOwner(admin)) return json({ error: "Only the owner changes services and prices." }, 403);
-  const city = cur ? cur.city : cityFor(admin, b.city);
+  let ownerTh = cur ? cur.therapist_id || null : null;
+  if (!isOwner(admin)) {   // 2026-09-14: therapists (and partners linked to a profile) add, change and remove their OWN services; the city's list stays the owner's
+    const me = await therapistOf(env, admin);
+    if (!me) return json({ error: "Your sign-in isn't linked to a therapist profile yet. Ask the owner to link it under Team, then you can add your own services." }, 403);
+    if (cur && cur.therapist_id !== me.id) return json({ error: "That one is on the city's list, which the owner keeps. You can add and change your own services." }, 403);
+    if (!cur) ownerTh = me.id;
+  } else if (!cur && b.therapist_id) { const t = await env.DB.prepare("SELECT id FROM therapists WHERE id = ?").bind(String(b.therapist_id)).first(); if (t) ownerTh = t.id; }
+  const city = cur ? cur.city : ownerTh ? (await env.DB.prepare("SELECT city FROM therapists WHERE id = ?").bind(ownerTh).first()).city : cityFor(admin, b.city);
   const name = clean(b.name, 60) || cur?.name;
   const minutes = Number.isInteger(b.minutes) && b.minutes >= 10 && b.minutes <= 240 ? b.minutes : cur?.minutes || 60;
   const amount = Number.isInteger(b.amount) && b.amount >= 0 && b.amount < 100000000 ? b.amount : cur?.amount;
@@ -343,7 +350,7 @@ async function saveService(req, env, admin, id) {
     nid = base; let n = 2; while (await env.DB.prepare("SELECT 1 FROM services WHERE id = ?").bind(nid).first()) nid = `${base}-${n++}`;
     const maxSort = (await env.DB.prepare("SELECT MAX(sort) m FROM services WHERE city = ?").bind(city).first()).m;
     if (!Number.isInteger(b.sort)) vals[6] = (maxSort ?? -1) + 1;
-    await env.DB.prepare("INSERT INTO services (id, city, name, minutes, amount, currency, description, active, sort, updated_at, photo) VALUES (?,?,?,?,?,?,?,?,?,?,?)").bind(nid, city, ...vals, photo).run();
+    await env.DB.prepare("INSERT INTO services (id, city, name, minutes, amount, currency, description, active, sort, updated_at, photo, therapist_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)").bind(nid, city, ...vals, photo, ownerTh).run();
     id = nid;
   }
   { const sid = cur ? id : nid, textsChanged = !cur || [["name", vals[0]], ["description", vals[4]]].some(([kk, v]) => String(v || "").trim() !== String(cur[kk] || "").trim());
@@ -355,7 +362,7 @@ async function saveService(req, env, admin, id) {
 async function deleteService(env, admin, id) {
   const cur = await env.DB.prepare("SELECT * FROM services WHERE id = ?").bind(id).first();
   if (!cur) return json({ error: "Not found" }, 404);
-  if (!isOwner(admin)) return json({ error: "Only the owner changes services and prices." }, 403);
+  if (!isOwner(admin)) { const me = await therapistOf(env, admin); if (!me || cur.therapist_id !== me.id) return json({ error: "That one is on the city's list, which the owner keeps. You can remove your own services." }, 403); }
   const used = (await env.DB.prepare("SELECT COUNT(*) n FROM bookings WHERE service_id = ?").bind(id).first()).n;
   if (used) { await env.DB.prepare("UPDATE services SET active = 0, updated_at = ? WHERE id = ?").bind(now(), id).run(); return json({ ok: true, hidden: true }); }
   await env.DB.prepare("DELETE FROM services WHERE id = ?").bind(id).run();

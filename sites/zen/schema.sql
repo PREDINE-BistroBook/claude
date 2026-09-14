@@ -149,7 +149,7 @@ INSERT OR IGNORE INTO settings VALUES ('review_cairo', '');
 INSERT OR IGNORE INTO settings VALUES ('review_dahab', '');
 INSERT OR IGNORE INTO settings VALUES ('review_florence', '');
 -- Services and prices, editable from the admin (seeded from the original catalog; src/catalog.js is the fallback)
-CREATE TABLE IF NOT EXISTS services (id TEXT PRIMARY KEY, city TEXT NOT NULL, name TEXT NOT NULL, minutes INTEGER NOT NULL DEFAULT 60, amount INTEGER NOT NULL, currency TEXT NOT NULL, description TEXT, active INTEGER DEFAULT 1, sort INTEGER DEFAULT 0, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT, photo TEXT, i18n TEXT);
+CREATE TABLE IF NOT EXISTS services (id TEXT PRIMARY KEY, city TEXT NOT NULL, name TEXT NOT NULL, minutes INTEGER NOT NULL DEFAULT 60, amount INTEGER NOT NULL, currency TEXT NOT NULL, description TEXT, active INTEGER DEFAULT 1, sort INTEGER DEFAULT 0, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT, photo TEXT, i18n TEXT, therapist_id TEXT); -- therapist_id: a therapist's own service (only they get booked for it); NULL = the city's list
 CREATE TABLE IF NOT EXISTS therapist_prices (therapist_id TEXT NOT NULL, service_id TEXT NOT NULL, amount INTEGER NOT NULL, offered INTEGER DEFAULT 1, PRIMARY KEY (therapist_id, service_id)); -- offered = 0: this therapist doesn't do that session (amount ignored)
 INSERT OR IGNORE INTO services (id, city, name, minutes, amount, currency, description, sort) VALUES ('cai-man', 'cairo', 'Manual therapy', 60, 100000, 'egp', 'Deep tissue and sports massage, hands only.', 0);
 INSERT OR IGNORE INTO services (id, city, name, minutes, amount, currency, description, sort) VALUES ('cai-dry', 'cairo', 'Dry cupping', 45, 90000, 'egp', 'Cups placed and left still. The classic session.', 1);

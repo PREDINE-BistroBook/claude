@@ -97,12 +97,14 @@ async function loadTeam() {
 let CARD_LIST = [], CARD_KM = () => null, CARD_KMTXT = (v) => String(v), CARD_NEAR = () => false, CARD_LF = () => "", CARD_SID = null;
 const fmtAmt = (v, cur) => new Intl.NumberFormat({ en: "en-GB", it: "it-IT", ar: "ar-EG" }[I.lang] || "en", { style: "currency", currency: cur, maximumFractionDigits: cur === "EGP" ? 0 : 2 }).format(v / 100);
 function currentService() { const sid = $("input[name=service]:checked")?.value; return sid && CITIES[city] ? CITIES[city].services.find((s) => s.id === sid) || null : null; }
+const ownerName = (s) => (TEAM[city] || []).find((th) => th.id === s.therapist_id)?.name?.split(" ")[0] || t("one therapist");
 function renderTherapistCards() {
   const box = $("#place-therapists"), c = CITIES[city]; if (!box || !c) return;
   const s = currentService(); CARD_SID = s?.id || null;
-  const list = CARD_LIST.filter((th) => !s || !(s.not_offered || []).includes(th.id));
+  const list = CARD_LIST.filter((th) => !s || (s.therapist_id ? th.id === s.therapist_id : !(s.not_offered || []).includes(th.id)));   // a therapist's own service: only them
   const sel = $("#therapist"), km = CARD_KM;
-  if (sel && sel.value && !list.some((th) => th.id === sel.value) && CARD_LIST.length) { sel.value = ""; sel.dispatchEvent(new Event("change")); return; }
+  if (sel && s?.therapist_id && sel.value !== s.therapist_id && list.length) { CARD_SID = null; sel.value = s.therapist_id; sel.dispatchEvent(new Event("change")); return; }   // CARD_SID reset so the change handler's updateSummary re-renders the cards
+  if (sel && sel.value && !list.some((th) => th.id === sel.value) && CARD_LIST.length) { CARD_SID = null; sel.value = ""; sel.dispatchEvent(new Event("change")); return; }
   const stars = (th) => th.rating_n ? `<span class="stars" title="${t("{n} ratings", { n: th.rating_n })}">★ ${Number(th.rating_avg).toFixed(1)}</span><span>· ${t("{n} ratings", { n: th.rating_n })}</span>` : `<span>${t("New on Zen")}</span>`;
   const card = (th) => `<button type="button" class="th-card${CARD_NEAR(th) ? " near" : ""}" data-th="${esc(th.id)}" aria-pressed="${sel?.value === th.id}">
       <span class="ph">${th.photo ? `<img src="${esc(th.photo)}" alt="">` : esc(th.name.slice(0, 1))}</span>
@@ -114,10 +116,11 @@ function renderTherapistCards() {
         <span class="meta">${CARD_LF(th, "area") ? `<span>${t("Works in {area}", { area: esc(CARD_LF(th, "area")) })}</span>` : ""}${km(th) !== null ? `<span class="km">· ${t("{km} km from you", { km: CARD_KMTXT(km(th)) })}${Number(th.radius_km) > 0 && km(th) <= Number(th.radius_km) ? ` · ${t("Comes to you")}` : ""}</span>` : ""}</span>
         <span class="th-links"><a href="team.html#${esc(th.id)}" target="_blank" rel="noopener">${t("Their story")}</a><a href="account.html?chat=${esc(th.id)}#messages">${t("Message")}</a></span>
       </span></button>`;
-  const anyone = CARD_LIST.length >= 2 ? `<button type="button" class="th-card any" data-th="" aria-pressed="${!sel?.value}"><span class="ph">✓</span><span class="body"><span class="l1"><b>${t("Anyone available")}</b>${s ? `<span class="price">${fmtAmt(s.price, c.currency)}</span>` : ""}</span><span class="sub">${t("First free slot, city price. The room picks who's on.")}</span></span></button>` : "";
+  const anyone = CARD_LIST.length >= 2 && !s?.therapist_id ? `<button type="button" class="th-card any" data-th="" aria-pressed="${!sel?.value}"><span class="ph">✓</span><span class="body"><span class="l1"><b>${t("Anyone available")}</b>${s ? `<span class="price">${fmtAmt(s.price, c.currency)}</span>` : ""}</span><span class="sub">${t("First free slot, city price. The room picks who's on.")}</span></span></button>` : "";
   const hidden = CARD_LIST.length - list.length;
-  box.innerHTML = (CARD_LIST.length >= 2 ? `<p class="th-lead">${t("Choose who you'd like to see")}</p>` : "") + anyone + list.map(card).join("") + (hidden > 0 && s ? `<p class="tiny th-note">${t("{n} of the team don't offer this session.", { n: hidden })}</p>` : "");
+  box.innerHTML = (CARD_LIST.length >= 2 ? `<p class="th-lead">${s?.therapist_id ? t("{name} is the only one who offers this session.", { name: esc(ownerName(s)) }) : t("Choose who you'd like to see")}</p>` : "") + anyone + list.map(card).join("") + (hidden > 0 && s && !s.therapist_id ? `<p class="tiny th-note">${t("{n} of the team don't offer this session.", { n: hidden })}</p>` : "");
   box.hidden = !CARD_LIST.length; if (typeof renderSteps === "function") renderSteps();
+  $$("#services .only").forEach((el) => { const sid = el.closest(".service")?.querySelector("input")?.value; const sv = c.services.find((x) => x.id === sid); if (sv) el.textContent = t("With {name} only", { name: ownerName(sv) }); });   // the team arrives after the cards: fill the owner's name in
   $$("#place-therapists [data-th]").forEach((b) => (b.onclick = () => { if (!sel) return; sel.value = b.dataset.th; $$("#place-therapists [data-th]").forEach((x) => x.setAttribute("aria-pressed", x === b)); sel.dispatchEvent(new Event("change")); }));
 }
 /* ---------- live time slots (when the admin has set opening hours for the city) ---------- */
@@ -230,7 +233,7 @@ function renderServices() {
       <input type="radio" name="service" id="svc-${s.id}" value="${s.id}" ${i === keepIdx ? "checked" : ""}>
       <label for="svc-${s.id}">
         <span class="cover ${s.photo ? "" : "k-" + coverKey(s.name)}" aria-hidden="true">${s.photo ? `<img src="${esc(s.photo)}" alt="" loading="lazy">` : COVER_GLYPH[coverKey(s.name)]}</span>
-        <span class="name">${esc(LFS(s, "name") || t(s.name))}</span>
+        <span class="name">${esc(LFS(s, "name") || t(s.name))}</span>${s.therapist_id ? `<span class="only">${t("With {name} only", { name: esc(ownerName(s)) })}</span>` : ""}
         <span class="price num">${money(priceOf(s), c.currency)}</span>
         <span class="desc">${esc(LFS(s, "description") || t(s.desc))}</span>
         <span class="dur">${s.dur} ${t("min")} · <a class="how" href="method.html?m=${methodOf(s.name)}">${t("How it works")}</a></span>

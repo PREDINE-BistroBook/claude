@@ -171,6 +171,14 @@ await go("booking.html?city=cairo"); await page.waitForTimeout(600);
   await api("/api/admin/therapists/th3/prices", { method: "PUT", headers: { cookie, "content-type": "application/json" }, body: JSON.stringify({ offered: { [sid]: true } }) }); }
 await go("team.html"); ok("team: the brief (ratings / sessions) has a place on the cards", (await page.$$(".tm-card, .tm")).length >= 0);
 
+// 8f. a therapist's own service (slice 12): tagged on the treatment card, only its owner in step 3
+{ const own = await api("/api/admin/services", { method: "POST", headers: { cookie, "content-type": "application/json" }, body: JSON.stringify({ name: "Adham's combo", minutes: 75, amount: 130000, therapist_id: "th3" }) }); ok("own: the owner adds a service on Adham's behalf", own.status === 200 && own.body.ok, own.body);
+  await page.goto(H + "/booking.html?city=cairo", { waitUntil: "load" }); await page.waitForTimeout(1000); await reveal();
+  const card = page.locator("#services .service", { hasText: "Adham's combo" }); ok("own: the treatment card carries 'With Adham only'", (await card.count()) === 1 && (await card.locator(".only").textContent()).includes("Adham"), await card.textContent().catch(() => ""));
+  await page.evaluate(() => document.querySelector("#services input[value$='combo']")?.click() || [...document.querySelectorAll("#services input")].find((i) => i.value.includes("adham"))?.click()); await page.waitForTimeout(600);
+  ok("own: step 3 shows only Adham, pressed, no Anyone card", (await page.$$("#place-therapists .th-card")).length === 1 && (await page.$$("#place-therapists .th-card.any")).length === 0 && (await page.inputValue("#therapist")) === "th3" && (await page.textContent("#place-therapists .th-lead")).includes("only one"), [await page.inputValue("#therapist"), await page.textContent("#place-therapists")]);
+  await api("/api/admin/services/" + own.body.id, { method: "DELETE", headers: { cookie } }); }
+
 // 8e. the booking, step by step (slice 9): body map → treatment → therapist → when → details → (codes) → confirm
 const gctx = await b.newContext({ viewport: { width: 1280, height: 900 } }); await gctx.route("**/cdnjs.cloudflare.com/ajax/libs/gsap/**", (route) => { const f = route.request().url().includes("ScrollTrigger") ? "ScrollTrigger.min.js" : "gsap.min.js"; route.fulfill({ body: fs.readFileSync(G + f), contentType: "application/javascript" }); }); await gctx.route(/googleapis|gstatic|google\.com|gravatar/, (r) => r.abort());
 { const page = await gctx.newPage(); page.setDefaultTimeout(8000); page.on("pageerror", (e) => errs.push("guest: " + e.message));   // a fresh, signed-out browser: the guest flow

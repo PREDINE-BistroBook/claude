@@ -562,3 +562,4 @@ footer{background:var(--ink); color:var(--ground); padding:56px var(--gutter) 40
   #place-wa-link, .maps a{display:inline-block; padding:6px 0}
   .slot label, .timeslots label, .chip, .pill{min-height:42px}
 }
+.service .only{display:inline-block; margin-inline-start:8px; font-size:.72rem; letter-spacing:.04em; padding:3px 9px; border-radius:999px; background:color-mix(in srgb,var(--mark) 12%,transparent); color:var(--mark); vertical-align:middle; font-family:var(--body)}   /* a therapist's own service (2026-09-14) */
