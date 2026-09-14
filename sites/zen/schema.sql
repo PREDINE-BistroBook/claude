@@ -176,3 +176,7 @@ CREATE INDEX IF NOT EXISTS chats_user ON chats(user_id, last_at);
 CREATE INDEX IF NOT EXISTS chats_therapist ON chats(therapist_id, last_at);
 CREATE TABLE IF NOT EXISTS chat_messages (id TEXT PRIMARY KEY, chat_id TEXT NOT NULL, sender TEXT NOT NULL, admin_id TEXT, admin_name TEXT, body TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now')));
 CREATE INDEX IF NOT EXISTS chat_messages_chat ON chat_messages(chat_id, created_at);
+
+-- 2026-09-14: where it hurts, over time (Ash: the intake map goes stale; keep a history, show progress, keep the profile current)
+CREATE TABLE IF NOT EXISTS pain_log (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, at TEXT DEFAULT (datetime('now')), areas TEXT NOT NULL, source TEXT NOT NULL, booking_id TEXT, note TEXT);
+CREATE INDEX IF NOT EXISTS pain_log_user ON pain_log(user_id, at);

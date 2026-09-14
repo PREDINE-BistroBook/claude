@@ -52,7 +52,7 @@ export default {
 
 async function route(req, env, url, ctx) {
   const p = url.pathname, m = req.method;
-  if (p === "/api/status") return status(env);
+  if (p === "/api/status") return status(env, req);
   if (p === "/api/reviews" && m === "GET") return publicReviews(env);
   if (p === "/api/fawry/return" && m === "GET") return fawryReturn(env, url);
   if (p === "/api/fawry/notify" && m === "POST") return fawryNotify(req, env);
@@ -79,7 +79,7 @@ async function route(req, env, url, ctx) {
     const admin = await currentAdmin(req, env);
     if (!admin) return json({ error: "Sign in first." }, 401);
     // Platform account (Ash): numbers only. Everything operational belongs to Zen's owner and the city teams.
-    if (isPlatform(admin) && !["/api/admin/me", "/api/admin/stats", "/api/admin/platform", "/api/admin/profile", "/api/admin/password"].includes(p)) return json({ error: "Your account sees the numbers, not the operations. Ask Zen's owner for anything else." }, 403);
+    if (isPlatform(admin) && !["/api/admin/me", "/api/admin/stats", "/api/admin/platform", "/api/admin/profile", "/api/admin/password", "/api/admin/statements"].includes(p)) return json({ error: "Your account sees the numbers, not the operations. Ask Zen's owner for anything else." }, 403);
     if (p === "/api/admin/platform" && m === "GET") return isPlatform(admin) ? platformReport(env, admin) : json({ error: "Only the Amico Mio account sees the platform report." }, 403);
     if (p === "/api/admin/me") return json({ admin: pub(admin), therapist: await env.DB.prepare("SELECT id, name, city, photo, active FROM therapists WHERE admin_id = ?").bind(admin.id).first(), cities: await cityMeta(env), settings: await settings(env), photos: authFlags(env).photos, live: isLive(env) });
     if (p === "/api/admin/profile" && m === "PUT") return adminProfile(req, env, admin);
@@ -122,6 +122,20 @@ async function publicCatalog(env) {
     services: Object.values(c[k].services).map((s) => ({ id: s.id, name: s.short, dur: s.minutes, price: s.amount, desc: s.description, i18n: s.i18n || null, prices: tp[s.id] || null, not_offered: off.off[s.id] || null, therapist_id: s.therapist_id || null, photo: s.photo ? `/api/service-photo/${s.id}?v=${encodeURIComponent((s.updated_at || "").replace(/\D/g, ""))}` : null })) }])) }, 200, { "cache-control": "no-store" });
 }
 const INTAKE_LISTS = ["goals", "pain", "health"], INTAKE_STR = ["activity", "sport", "experience", "health_notes", "contact", "time_pref", "completed_at"];
+// where it hurts, over time (2026-09-14): one row per change, from the intake, a booking or the client's own update; the profile map is always the latest
+const painRow = (r) => { let areas = []; try { areas = JSON.parse(r.areas || "[]"); } catch (_) {} return { at: r.at, areas, source: r.source, booking_id: r.booking_id || null }; };
+async function logPain(env, userId, areas, source, bookingId) {
+  const list = [...new Set((areas || []).map((a) => String(a).toLowerCase()))].sort();
+  const last = await env.DB.prepare("SELECT areas FROM pain_log WHERE user_id = ? ORDER BY at DESC, rowid DESC LIMIT 1").bind(userId).first().catch(() => null);
+  if (last && JSON.stringify(painRow(last).areas.slice().sort()) === JSON.stringify(list)) return false;   // nothing changed: no new entry
+  await env.DB.prepare("INSERT INTO pain_log (id, user_id, at, areas, source, booking_id) VALUES (?,?,?,?,?,?)").bind(randomId(), userId, now(), JSON.stringify(list), source, bookingId || null).run();
+  return true;
+}
+async function painFromBooking(env, userId, areas, bookingId) {
+  try { await logPain(env, userId, areas, "booking", bookingId);
+    const u = await env.DB.prepare("SELECT intake FROM users WHERE id = ?").bind(userId).first(); const it = parseIntake(u?.intake) || {}; it.pain = [...new Set(areas)];
+    await env.DB.prepare("UPDATE users SET intake = ? WHERE id = ?").bind(JSON.stringify(it), userId).run(); } catch (e) { console.error("pain log", e.message); }
+}
 function cleanIntake(v) { // whitelist keys, cap sizes; stored as JSON text
   if (!v || typeof v !== "object") return null;
   const o = {};
@@ -134,10 +148,11 @@ const AREAS = ["neck", "shoulder_l", "shoulder_r", "upper_back", "mid_back", "lo
 const AREA_LABELS = {"neck": "Neck", "shoulder_l": "Left shoulder", "shoulder_r": "Right shoulder", "upper_back": "Upper back", "mid_back": "Mid back", "lower_back": "Lower back", "arm_l": "Left arm", "arm_r": "Right arm", "hips": "Hips / glutes", "thigh_l": "Left thigh", "thigh_r": "Right thigh", "calf_l": "Left calf", "calf_r": "Right calf", "face": "Face / jaw"};
 const AREA_LABEL = (a) => AREA_LABELS[a] || a.replace(/_/g, " ");
 
-async function status(env) {
+async function status(env, req) {
   const st = await settings(env);
   const f = authFlags(env);
-  return json({ live: isLive(env) || fawryOn(env), preview: !isLive(env) && !fawryOn(env), fawry: fawryOn(env), pay: { egp: payProvider(env, "egp"), eur: payProvider(env, "eur") }, google: Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET), apple: f.apple, sms: f.sms,
+  return json({ geo: { country: req?.cf?.country || null, city: req?.cf?.city || null },   // 2026-09-14: the booking page keeps a visitor in their own country's rooms
+    live: isLive(env) || fawryOn(env), preview: !isLive(env) && !fawryOn(env), fawry: fawryOn(env), pay: { egp: payProvider(env, "egp"), eur: payProvider(env, "eur") }, google: Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET), apple: f.apple, sms: f.sms,
     settings: { loyalty_every: st.loyalty_every, referral_pct: st.referral_pct, birthday_pct: st.birthday_pct, package_pct: st.package_pct }, rules: st.rules, gmaps: st.gmaps, whatsapp: st.whatsapp, review: st.review });
 }
 
@@ -263,7 +278,8 @@ async function userBundle(env, u) {
   const { pass_hash, ...user } = u;
   user.intake = parseIntake(user.intake);
   user.flags = healthFlags(u.intake);
-  return { user, credits: credits.results, packages: packages.results, stats: { done: stats.done || 0, upcoming: stats.upcoming || 0 }, settings: s, referrer: referrer?.name || null, invited: invited.results, share_url: `${env.SITE_URL}/account?ref=${u.referral_code}` };
+  const painLog = (await env.DB.prepare("SELECT at, areas, source, booking_id FROM pain_log WHERE user_id = ? ORDER BY at DESC, rowid DESC LIMIT 12").bind(u.id).all().catch(() => ({ results: [] }))).results.map(painRow);
+  return { user, credits: credits.results, packages: packages.results, stats: { done: stats.done || 0, upcoming: stats.upcoming || 0 }, settings: s, referrer: referrer?.name || null, invited: invited.results, share_url: `${env.SITE_URL}/account?ref=${u.referral_code}`, pain_log: painLog };
 }
 
 async function updateMe(req, env) {
@@ -274,6 +290,7 @@ async function updateMe(req, env) {
   const country = ["EG", "IT", "other"].includes(b.country) ? b.country : u.country;
   const nearest = CITY_KEYS.includes(b.nearest_city) ? b.nearest_city : b.nearest_city === null ? null : u.nearest_city;
   const intake = b.intake === undefined ? u.intake : cleanIntake(b.intake);
+  if (b.intake !== undefined) { const np = parseIntake(intake)?.pain; if (Array.isArray(np)) await logPain(env, u.id, np, parseIntake(u.intake)?.pain === undefined ? "intake" : "client", null); }
   const lang = ["en", "it", "ar"].includes(b.lang) ? b.lang : u.lang;
   const therapist = b.preferred_therapist === undefined ? u.preferred_therapist : clean(b.preferred_therapist, 40) || null;
   await env.DB.prepare("UPDATE users SET name = ?, phone = ?, city = ?, notes = ?, birthday = ?, photo = ?, country = ?, city_text = ?, nearest_city = ?, intake = ?, lang = ?, preferred_therapist = ? WHERE id = ?")
@@ -351,6 +368,7 @@ async function checkout(req, env) {
   const areas = Array.isArray(b.areas) ? [...new Set(b.areas.map((a) => String(a).toLowerCase()).filter((a) => AREAS.includes(a)))].slice(0, 12) : [];
   const base = { lang: pickLang(b.lang, user?.lang), agreed_at: b.agreed ? now() : null, areas: areas.length ? JSON.stringify(areas) : null, id, user_id: account?.id || user?.id || null, email, name, phone, city: cityKey, service_id: svc.id, service_name: svc.name, date, slot, note, list_amount: list, amount, currency: city.currency, discount_kind, credit_id: credit?.id || null, platform_fee: feeOn(amount), therapist_id, package_id: pack?.id || null, gift_code: gift?.code || null, partner_code: partner?.code || null };
 
+  if (areas.length && (account?.id || user?.id)) await painFromBooking(env, account?.id || user?.id, areas, id);   // the therapist's view of "where it hurts" stays current
   if (flagged) { // no card: a therapist checks the health answers first
     await insertBooking(env, { ...base, status: "review" });
     await consume(env, base);
@@ -717,7 +735,8 @@ async function adminClient(env, admin, id) {
     env.DB.prepare("SELECT kind, channel, status, detail, created_at FROM messages WHERE user_id = ? ORDER BY created_at DESC LIMIT 20").bind(id).all(),
   ]);
   if (city && bookings.results.length === 0 && u.nearest_city !== city && u.city !== city) return json({ error: "Not found" }, 404); // nothing to do with this admin's city
-  return json({ client: { ...u, intake: parseIntake(u.intake), flags: healthFlags(u.intake), referrer_name: referrer?.name || null }, bookings: bookings.results, credits: credits.results, checkins: checkins.results, packages: packages.results, photos: photos.results, messages: messages.results });
+  const painLog = (await env.DB.prepare("SELECT at, areas, source, booking_id FROM pain_log WHERE user_id = ? ORDER BY at DESC, rowid DESC LIMIT 12").bind(u.id).all().catch(() => ({ results: [] }))).results.map(painRow);
+  return json({ pain_log: painLog, client: { ...u, intake: parseIntake(u.intake), flags: healthFlags(u.intake), referrer_name: referrer?.name || null }, bookings: bookings.results, credits: credits.results, checkins: checkins.results, packages: packages.results, photos: photos.results, messages: messages.results });
 }
 
 async function adminSaveSettings(req, env, admin) {

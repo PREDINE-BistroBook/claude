@@ -92,6 +92,7 @@
   .q-results{position:absolute;top:calc(100% + 6px);inset-inline:0;background:var(--ground-3);border:1px solid var(--line);border-radius:16px;box-shadow:0 30px 60px -30px rgba(0,0,0,.45);max-height:70vh;overflow:auto;z-index:60;padding:6px} .q-group{padding:4px 0} .q-title{font-family:var(--label);font-size:.62rem;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-mute);padding:8px 12px 4px}
   .q-hit{display:flex;gap:10px;align-items:center;width:100%;text-align:start;background:none;border:0;padding:8px 12px;border-radius:10px;font:inherit;color:inherit;cursor:pointer} .q-hit:hover,.q-hit:focus-visible{background:var(--ground-2);outline:none} .q-hit .avatar.sm{width:32px;height:32px;font-size:.7rem;flex:none} .q-main{display:grid;gap:2px;min-width:0} .q-main b{font-weight:500;display:flex;gap:6px;align-items:center} .q-main span{font-size:.8rem;color:var(--ink-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .q-empty{padding:14px;color:var(--ink-mute);font-size:.9rem}
   @media (max-width:760px){.gsearch{order:3;flex-basis:100%;max-width:none} .top{flex-wrap:wrap}}
+  .pain-strip{display:flex;gap:10px;overflow-x:auto;padding:6px 0} .pain-pt{flex:none;width:76px;text-align:center} .pain-mini svg{width:64px;height:auto} .pain-mini .bm-caption{display:none}
 </style>
 </head>
 <body>
@@ -120,6 +121,7 @@
 
   <!-- ===== app ===== -->
   <section id="app-view" hidden>
+    <div class="help" id="email-nudge" hidden style="border-color:var(--bad);background:color-mix(in srgb,var(--bad) 8%,var(--ground-3))"><b>Add your email so clients reach you.</b> Right now your sign-in has no email address, so new bookings and client messages can't be sent to you. Add it under <a href="#" id="email-nudge-go">Settings → your profile</a> (it also becomes your sign-in).</div>
     <div class="tabs" role="tablist">
       <button role="tab" aria-selected="true" data-tab="overview">Overview</button>
       <button role="tab" aria-selected="false" data-tab="bookings">Bookings</button>
@@ -305,7 +307,8 @@
           <li><b>Cash</b>: sessions the team entered by hand (cash, walk-in, bank transfer). The therapist collected it directly; no platform fee.</li>
           <li><b>Free</b>: paid with a pack, a gift or a reward. Counted, no money that day.</li>
           <li><b>Kept</b>: late cancellations and no-shows under the booking rules, counted with the fee that was kept.</li>
-          <li><b>To pay the therapist</b> = card + Fawry takings minus the 10%. Cash they already have. Sessions still to come are included so the month reads the same before and after.</li>
+          <li><b>To pay the team</b> = card + Fawry takings minus the 10%. Cash they already have. Sessions still to come are included so the month reads the same before and after.</li>
+          <li><b>Who sees what.</b> Each therapist sees their own numbers under "Your earnings". Everyone else, the owner and the platform included, sees totals per city: nobody's individual earnings are shown to anyone else.</li>
         </ul>
       </details>
       <div class="scope" id="st-city-pills"></div>
@@ -634,7 +637,8 @@ async function boot() {
 }
 function start(r) {
   A = r.admin; T = r.therapist || null; CITIES = r.cities; SETTINGS = r.settings; DEMO = Boolean(r.demo);
-  $("#tab-money-btn").textContent = isEmployee() ? "Your earnings" : "Statements"; $("#tab-money-btn").hidden = isPlatform();
+  $("#tab-money-btn").textContent = isEmployee() ? "Your earnings" : isPlatform() ? "Platform fee" : "Statements"; $("#tab-money-btn").hidden = false;
+  $("#email-nudge").hidden = isPlatform() || String(A.email || "").includes("@"); $("#email-nudge-go").onclick = (e) => { e.preventDefault(); $('.tabs button[data-tab="settings"]')?.click(); };
   $("#f-mine-wrap").hidden = !T && managesCity(); if (isEmployee()) { $("#f-mine").innerHTML = `<option value="">${T ? "Mine and unassigned" : "Unassigned"}</option>${T ? `<option value="me">Only mine</option><option value="open">Only unassigned</option>` : ""}`; $("#f-mine").value = ""; } else if (T) $("#f-mine").value = "me"; $("#me-profile-note").hidden = !T; if (T) $("#me-profile-note").innerHTML = `You're linked to the therapist profile <b>${esc(T.name)}</b> (${CITY_NAME[T.city]}). The photo and bio clients see are edited under <b>Team</b>; Bookings opens on your own sessions.`;
   $("#login-view").hidden = true; $("#app-view").hidden = false; $("#who").hidden = false; $("#gsearch").hidden = isPlatform();
   $("#admin-name").textContent = A.name; $("#admin-avatar").innerHTML = A.photo ? `<img src="${A.photo}" alt="">` : initials(A.name);
@@ -850,12 +854,12 @@ function ask({ title, text = "", ok = "OK", danger = false, field = null, alt = 
   });
 }
 async function openClient(id) {
-  const { client: c, bookings, credits, checkins = [], packages = [], photos = [], messages = [] } = await ZenAPI("GET", "/api/admin/clients/" + id);
+  const { client: c, bookings, credits, checkins = [], packages = [], photos = [], messages = [], pain_log = [] } = await ZenAPI("GET", "/api/admin/clients/" + id);
   const d = $("#drawer");
   d.innerHTML = `<button class="btn small ghost close" id="dr-close">Close</button><div class="row" style="gap:14px"><span class="avatar">${c.photo ? `<img src="${c.photo}" alt="">` : initials(c.name)}</span><div><h2>${esc(c.name)}</h2><span class="tiny">${c.city ? CITY_NAME[c.city] + " · " : ""}with Zen since ${esc((c.created_at || "").slice(0, 10))}</span></div></div>
     <dl class="kv"><dt>WhatsApp</dt><dd>${esc(c.phone || "—")}${c.phone ? ` · <a href="https://wa.me/${c.phone.replace(/\D/g, "")}" target="_blank" rel="noopener">message</a>` : ""}</dd><dt>Email</dt><dd>${esc(c.email)}</dd><dt>Birthday</dt><dd>${esc(c.birthday || "—")}</dd><dt>Invited by</dt><dd>${esc(c.referrer_name || "—")}</dd><dt>Invite code</dt><dd class="num">${esc(c.referral_code || "")}</dd></dl>
     ${c.flags?.length ? `<div class="help" style="border-color:var(--bad);background:color-mix(in srgb,var(--bad) 7%,var(--ground-3))"><b>Health: ${c.flags.map((f) => G.label("health", f)).join(", ")}.</b> Read before the first session; adapt or ask for a doctor's okay.</div>` : ""}
-    ${c.intake ? `<p class="eyebrow">Their answers</p><div class="intake-grid">${G.bodyMap(c.intake.pain || [], false)}<div class="mini" style="display:grid;gap:6px">
+    ${c.intake ? `<p class="eyebrow">Their answers</p><div class="intake-grid">${G.bodyMap(c.intake.pain || [], false)}<div class="mini" style="display:grid;gap:6px">${painHistoryHtml(pain_log)}
       <div><b>Lives in:</b> ${esc(c.city_text || "—")}${c.country ? " (" + { EG: "Egypt", IT: "Italy", other: "elsewhere" }[c.country] + ")" : ""} · recommended room: ${c.nearest_city ? CITY_NAME[c.nearest_city] : "—"}</div>
       <div><b>Why:</b> ${(c.intake.goals || []).map((g) => G.label("goals", g)).join(", ") || "—"}</div>
       <div><b>Focus areas:</b> ${(c.intake.pain || []).map((p) => G.label("pain", p)).join(", ") || "none given"}</div>
@@ -1000,7 +1004,7 @@ async function loadTeamTab() {
   $("#add-therapist").hidden = !managesCity();
   $("#apps-box").hidden = !isOwner(); if (isOwner()) loadApplications();
   const sorted = [...TEAM].sort((a, b) => a.city.localeCompare(b.city) || (a.sort || 0) - (b.sort || 0) || a.name.localeCompare(b.name));
-  $("#team-list").innerHTML = sorted.length ? sorted.map((t) => `<div class="team-card ${t.active ? "" : "off"}" ${canEditTh(t) ? `data-edit="${t.id}" role="button" tabindex="0"` : `style="cursor:default"`}><span class="avatar">${t.photo ? `<img src="${t.photo}" alt="">` : initials(t.name)}</span><div class="meta"><b>${esc(t.name)}<span class="badge city-${t.city}">${CITY_NAME[t.city]}</span>${t.active ? "" : `<span class="status cancelled">paused</span>`}</b><span class="bio">${t.title ? `<b style="display:inline;font-size:.86rem">${esc(t.title)}</b> · ` : ""}${esc(t.bio || "")}</span><span class="tiny">${esc(t.languages || "")}${t.area ? " · " + esc(t.area) : " · no neighbourhood yet"}${t.photo ? "" : " · no photo yet"}${t.lat !== null && t.lat !== undefined && t.lng !== null && t.lng !== undefined ? "" : " · not pinned on the map"}</span><span class="tiny">${t.admin_id ? (isOwner() ? `signs in as <b>${esc(t.admin_email)}</b>` : "has a sign-in account") : "no sign-in account yet"}${t.id === T?.id ? " · this is you" : ""}</span></div><div class="actions">${canEditTh(t) ? `<button class="btn ghost" data-edit="${t.id}">Edit</button>` : ""}${canEditTh(t) && managesCity() ? `<button class="btn ghost" data-toggle="${t.id}" data-active="${t.active}">${t.active ? "Pause" : "Show"}</button>` : ""}</div></div>`).join("") : `<div class="empty">No therapists yet. Tap "Add a therapist" so clients can see who they'll meet.</div>`;
+  $("#team-list").innerHTML = sorted.length ? sorted.map((t) => `<div class="team-card ${t.active ? "" : "off"}" ${canEditTh(t) ? `data-edit="${t.id}" role="button" tabindex="0"` : `style="cursor:default"`}><span class="avatar">${t.photo ? `<img src="${t.photo}" alt="">` : initials(t.name)}</span><div class="meta"><b>${esc(t.name)}<span class="badge city-${t.city}">${CITY_NAME[t.city]}</span>${t.active ? "" : `<span class="status cancelled">paused</span>`}</b><span class="bio">${t.title ? `<b style="display:inline;font-size:.86rem">${esc(t.title)}</b> · ` : ""}${esc(t.bio || "")}</span><span class="tiny">${esc(t.languages || "")}${t.area ? " · " + esc(t.area) : " · no neighbourhood yet"}${t.photo ? "" : " · no photo yet"}${t.lat !== null && t.lat !== undefined && t.lng !== null && t.lng !== undefined ? "" : " · not pinned on the map"}</span><span class="tiny">${t.admin_id ? (isOwner() ? `signs in as <b>${esc(t.admin_email)}</b>${String(t.admin_email || "").includes("@") ? "" : ` · <span style="color:var(--bad)">no email yet: bookings and client messages can't reach them</span>`}` : "has a sign-in account") : "no sign-in account yet"}${t.id === T?.id ? " · this is you" : ""}</span></div><div class="actions">${canEditTh(t) ? `<button class="btn ghost" data-edit="${t.id}">Edit</button>` : ""}${canEditTh(t) && managesCity() ? `<button class="btn ghost" data-toggle="${t.id}" data-active="${t.active}">${t.active ? "Pause" : "Show"}</button>` : ""}</div></div>`).join("") : `<div class="empty">No therapists yet. Tap "Add a therapist" so clients can see who they'll meet.</div>`;
   $$("#team-list [data-toggle]").forEach((b) => (b.onclick = async (e) => { e.stopPropagation(); await ZenAPI("PATCH", "/api/admin/therapists/" + b.dataset.toggle, { active: b.dataset.active !== "1" }); loadTeamTab(); }));
   $$("#team-list [data-edit]").forEach((el) => { const open = (e) => { e.stopPropagation(); openTherapist(TEAM.find((x) => x.id === el.dataset.edit)); }; el.onclick = open; if (el.tagName === "DIV") el.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(e); } }; });
 }
@@ -1099,18 +1103,18 @@ const KIND_LABEL = { partner: "Partner", hostel: "Hotel / hostel", gym: "Gym", c
 const CH_LABEL = { card: "Card", fawry: "Fawry", cash: "Cash", free: "Free" };
 async function loadMoney() {
   if (!$("#st-month").value) $("#st-month").value = new Date().toISOString().slice(0, 7);
-  const month = $("#st-month").value; $("#money-title").textContent = isEmployee() ? "Your earnings" : "Statements";
-  $("#st-city-pills").innerHTML = isOwner() ? `<span class="tiny">Showing</span><div class="pills">${[["", "All cities"], ["cairo", "Cairo"], ["dahab", "Dahab"], ["florence", "Florence"]].map(([k, l]) => `<button class="pill" data-stcity="${k}" aria-pressed="${stCity === k}">${l}</button>`).join("")}</div>` : "";
+  const month = $("#st-month").value; $("#money-title").textContent = isEmployee() ? "Your earnings" : isPlatform() ? "Platform fee" : "Statements";
+  $("#st-city-pills").innerHTML = isOwner() || isPlatform() ? `<span class="tiny">Showing</span><div class="pills">${[["", "All cities"], ["cairo", "Cairo"], ["dahab", "Dahab"], ["florence", "Florence"]].map(([k, l]) => `<button class="pill" data-stcity="${k}" aria-pressed="${stCity === k}">${l}</button>`).join("")}</div>` : "";
   $$("#st-city-pills .pill").forEach((p) => (p.onclick = () => { stCity = p.dataset.stcity; loadMoney(); }));
-  const q = `month=${month}&city=${stCity}`; $("#st-csv").href = `/api/admin/statements?${q}&format=csv`; $("#st-csv").hidden = DEMO;
+  const q = `month=${month}&city=${stCity}`; $("#st-csv").href = `/api/admin/statements?${q}&format=csv`; $("#st-csv").hidden = DEMO || isPlatform();
   let r; try { r = await ZenAPI("GET", `/api/admin/statements?${q}&detail=1`); } catch (ex) { $("#st-list").innerHTML = `<div class="empty">${esc(ex.message)}</div>`; return; }
   const pct = (r.fee_bps || 200) / 100;
   if (r.note) { $("#st-list").innerHTML = `<div class="empty">${esc(r.note)}</div>`; $("#st-sessions").hidden = true; return; }
-  $("#st-list").innerHTML = r.rows.length ? r.rows.map((g) => `<div class="card statement"><div class="row" style="justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><b style="font-size:1.05rem">${esc(g.therapist)}</b><span class="badge city-${g.city}">${CITY_NAME[g.city] || esc(g.city)}</span></div>
+  $("#st-list").innerHTML = r.rows.length ? r.rows.map((g) => `<div class="card statement"><div class="row" style="justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><b style="font-size:1.05rem">${esc(g.therapist)}</b><span class="badge city-${g.city}">${CITY_NAME[g.city] || esc(g.city)}</span></div>${isPlatform() ? `<div class="tiny" style="margin-top:6px">Amico Mio's ${pct}% this month: <b>${money(g.fee, g.currency)}</b> (of which on Fawry, to be settled: ${money(g.platform_due_on_fawry || 0, g.currency)})</div>` : ""}
       <dl class="kv" style="margin-top:8px"><dt>Sessions</dt><dd>${g.sessions} <span class="tiny">(${g.done} done${g.upcoming ? `, ${g.upcoming} to come` : ""}${g.kept ? `, ${g.kept} kept fee` : ""})</span></dd>
       <dt>Card</dt><dd>${g.card ? `${money(g.card_amount, g.currency)} <span class="tiny">· ${g.card}</span>` : "—"}</dd><dt>Fawry</dt><dd>${g.fawry ? `${money(g.fawry_amount, g.currency)} <span class="tiny">· ${g.fawry}</span>` : "—"}</dd><dt>Cash</dt><dd>${g.cash ? `${money(g.cash_amount, g.currency)} <span class="tiny">· ${g.cash}</span>` : "—"}</dd><dt>Free</dt><dd>${g.free || "—"}</dd>
       <dt>Gross</dt><dd><b>${money(g.gross, g.currency)}</b>${g.refunded ? ` <span class="tiny">· refunded ${money(g.refunded, g.currency)}</span>` : ""}</dd><dt>Amico Mio ${pct}%</dt><dd>${money(g.fee, g.currency)}</dd>
-      <dt>${isEmployee() ? "Coming to you from the site" : "To pay the therapist"}</dt><dd><b>${money(g.to_therapist, g.currency)}</b>${g.cash_amount ? ` <span class="tiny">+ ${money(g.cash_amount, g.currency)} collected in cash</span>` : ""}</dd></dl></div>`).join("") : `<div class="empty">No sessions in ${month}${stCity ? " in " + CITY_NAME[stCity] : ""}.</div>`;
+      <dt>${isEmployee() ? "Coming to you from the site" : isPlatform() ? "Left for the team after the fee" : "To pay the team"}</dt><dd><b>${money(g.to_therapist, g.currency)}</b>${g.cash_amount ? ` <span class="tiny">+ ${money(g.cash_amount, g.currency)} collected in cash</span>` : ""}</dd></dl></div>`).join("") : `<div class="empty">No sessions in ${month}${stCity ? " in " + CITY_NAME[stCity] : ""}.</div>`;
   const rows = r.sessions || []; $("#st-sessions").hidden = !rows.length;
   $("#st-table tbody").innerHTML = rows.map((x) => `<tr><td class="num">${fmtDate(x.date)}${x.slot ? ` <span class="tiny">${esc(x.slot)}</span>` : ""}</td><td>${esc(x.therapist || "—")}</td><td>${esc(x.client || "")}</td><td>${esc((x.service || "").split(" · ")[0])}</td><td><span class="status ${x.status}">${x.status === "no_show" ? "no-show" : x.status}</span></td><td>${CH_LABEL[x.channel] || x.channel}${x.paid_with ? ` <span class="tiny">${esc(x.paid_with)}</span>` : ""}${x.partner_code ? ` <span class="tiny">${esc(x.partner_code)}</span>` : ""}</td><td class="num">${money(x.amount, x.currency)}</td><td class="num">${x.fee ? money(x.fee, x.currency) : "—"}</td></tr>`).join("");
 }
@@ -1197,6 +1201,17 @@ $("#q").addEventListener("focus", () => { if ($("#q").value.trim().length >= 2) 
 $("#q").addEventListener("keydown", (e) => { if (e.key === "Escape") { $("#q").value = ""; closeSearch(); $("#q").blur(); } if (e.key === "Enter") { e.preventDefault(); $("#q-results .q-hit")?.click(); } });
 document.addEventListener("keydown", (e) => { if ((e.key === "/" || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k")) && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || "") && !$("#gsearch").hidden) { e.preventDefault(); $("#q").focus(); $("#q").select(); } });
 document.addEventListener("click", (e) => { if (!e.target.closest("#gsearch")) closeSearch(); });
+
+/* ---------- where it hurts, over time (2026-09-14): the map on the left is the latest; this is the trail behind it ---------- */
+function painHistoryHtml(log) {
+  if (!log || !log.length) return "";
+  const rows = log.slice(0, 6), first = log[log.length - 1], latest = log[0];
+  const lab = (a) => G.label("pain", a), gone = first.areas.filter((a) => !latest.areas.includes(a)), added = latest.areas.filter((a) => !first.areas.includes(a));
+  const src = { intake: "first answers", booking: "a booking", client: "updated by the client" };
+  return `<div><b>Where it hurts, over time</b> <span class="tiny">(${log.length} ${log.length === 1 ? "entry" : "entries"})</span></div>
+    <div class="pain-strip">${rows.map((r) => `<div class="pain-pt"><div class="pain-mini">${G.bodyMap(r.areas, false)}</div><div class="tiny">${fmtDate(r.at.slice(0, 10))}<br>${src[r.source] || r.source}</div></div>`).join("")}</div>
+    ${log.length > 1 ? `<div class="tiny">${gone.length ? `<span style="color:var(--good,#2c8a4b)">Better since the first visit: ${gone.map(lab).join(", ")}.</span> ` : ""}${added.length ? `<span style="color:var(--bad)">New: ${added.map(lab).join(", ")}.</span>` : ""}${!gone.length && !added.length ? "Same areas as the first visit." : ""}</div>` : ""}`;
+}
 
 /* ---------- needs review ---------- */
 async function loadReview() {

@@ -147,12 +147,12 @@ await page.click("#chat-list [data-open]:last-child"); await page.waitForTimeout
 // phone: the thread takes the whole screen with a back button; the list is what you see first
 await page.setViewportSize({ width: 390, height: 844 }); await go("account.html#messages"); await page.waitForTimeout(1200);
 ok("phone: the list shows first, no thread auto-opened", (await page.$$("#chat-list .chat-item")).length === 2 && !(await page.isVisible("#chat-main")), await page.isVisible("#chat-main"));
-await page.screenshot({ path: (process.env.SHOTS || ".") + "/shot-chat-list-m.png" });
+await page.screenshot({ path: S + "/shot-chat-list-m.png" });
 await page.click("#chat-list [data-open]:last-child"); await page.waitForTimeout(900);
 ok("phone: the thread is full-screen (fixed) with a back button", await page.isVisible("#chat-back") && (await page.$eval("#chat-main", (e) => getComputedStyle(e).position)) === "fixed", await page.$eval("#chat-main", (e) => getComputedStyle(e).position));
-await page.screenshot({ path: (process.env.SHOTS || ".") + "/shot-chat-thread-m.png" });
+await page.screenshot({ path: S + "/shot-chat-thread-m.png" });
 await page.click("#chat-back"); await page.waitForTimeout(500); ok("phone: back returns to the list", !(await page.isVisible("#chat-main")) && await page.isVisible("#chat-list"));
-await page.setViewportSize({ width: 1280, height: 900 }); await go("account.html#messages"); await page.waitForTimeout(1200); await page.screenshot({ path: (process.env.SHOTS || ".") + "/shot-chat-desktop.png" });
+await page.setViewportSize({ width: 1280, height: 900 }); await go("account.html#messages"); await page.waitForTimeout(1200); await page.screenshot({ path: S + "/shot-chat-desktop.png" });
 await page.click(`.tabs button[data-tab="sessions"]`); await page.waitForTimeout(400); ok("account: sessions carry a Message button for the assigned therapist (or none when unassigned)", (await page.$$("#tab-sessions [data-chat]")).length >= 0);
 
 // 8d. choose who you'd like to see (slice 8): Cairo has several therapists → cards with a brief and the price for the chosen session
@@ -198,7 +198,33 @@ await page.goto(H + "/booking.html?city=cairo", { waitUntil: "load" }); await pa
   await page.click("#wiz-codes"); await page.waitForTimeout(400); ok("wizard: 'Have a code?' opens the codes step with the gift and partner fields", (await vis()).join() === "6" && await page.isVisible("#partner-code") && await page.isVisible("#gift-code"));
   await page.click("#wiz-next"); await page.waitForTimeout(300); ok("wizard: back on confirm; Back walks to the previous step", (await vis()).join() === "7"); await page.click("#wiz-back"); await page.waitForTimeout(300); ok("wizard: back from confirm goes to codes (now wanted)", (await vis()).join() === "6"); await page.click("#wiz-back"); await page.waitForTimeout(300); ok("wizard: …then details", (await vis()).join() === "5");
   await page.click('#wiz-steps li.done[data-step="2"]'); await page.waitForTimeout(300); ok("wizard: a done step in the bar is a shortcut back", (await vis()).join() === "2"); }
-await page.setViewportSize({ width: 390, height: 844 }); await page.goto(H + "/booking.html?city=cairo", { waitUntil: "load" }); await page.waitForTimeout(900); await page.screenshot({ path: (process.env.SHOTS || ".") + "/shot-wiz-m1.png" }); await page.click("#wiz-next"); await page.waitForTimeout(400); await page.click("#wiz-next"); await page.waitForTimeout(600); await page.screenshot({ path: (process.env.SHOTS || ".") + "/shot-wiz-m3.png" }); await gctx.close(); }
+await page.setViewportSize({ width: 390, height: 844 }); await page.goto(H + "/booking.html?city=cairo", { waitUntil: "load" }); await page.waitForTimeout(900); await page.screenshot({ path: S + "/shot-wiz-m1.png" }); await page.click("#wiz-next"); await page.waitForTimeout(400); await page.click("#wiz-next"); await page.waitForTimeout(600); await page.screenshot({ path: S + "/shot-wiz-m3.png" }); await gctx.close(); }
+
+// 8f. the right country's rooms (2026-09-14): Egypt sees Cairo + Dahab, Italy sees Florence; travellers unlock the rest
+const geoCtx = async (cc) => { const c = await b.newContext({ viewport: { width: 1280, height: 900 }, extraHTTPHeaders: { "x-e2e-country": cc } }); await c.route("**/cdnjs.cloudflare.com/ajax/libs/gsap/**", (route) => { const f = route.request().url().includes("ScrollTrigger") ? "ScrollTrigger.min.js" : "gsap.min.js"; route.fulfill({ body: fs.readFileSync(G + f), contentType: "application/javascript" }); }); await c.route(/googleapis|gstatic|google\.com|gravatar/, (r) => r.abort()); const p = await c.newPage(); p.setDefaultTimeout(8000); p.on("pageerror", (e) => errs.push("geo: " + e.message)); return [c, p]; };
+{ const [c, p] = await geoCtx("EG"); await p.goto(H + "/booking.html", { waitUntil: "load" }); await p.waitForTimeout(900);
+  const far = async () => p.$$eval("#panels .panel", (els) => els.filter((e) => e.classList.contains("far")).map((e) => e.dataset.city));
+  ok("geo: in Egypt, Florence is dimmed and the note says the studio exists", (await far()).join() === "florence" && await p.isVisible("#geo-note") && /Egypt/.test(await p.textContent("#geo-note")) && /Florence/.test(await p.textContent("#geo-note")), [await far(), await p.textContent("#geo-note")]);
+  await p.click('#panels .panel[data-city="florence"]', { force: true }); await p.waitForTimeout(400); ok("geo: tapping Florence from Egypt doesn't open the booking", (await p.$eval('#panels .panel[data-city="florence"]', (e) => e.getAttribute("aria-pressed"))) !== "true" && await p.isHidden("#booking") && await p.isHidden("#chosen-line"), await p.evaluate(() => [document.querySelector("#booking")?.hidden, document.querySelector("#chosen-line")?.hidden]));
+  await p.click('#panels .panel[data-city="cairo"]'); await p.waitForTimeout(600); ok("geo: Cairo opens as usual", (await p.$eval('#panels .panel[data-city="cairo"]', (e) => e.getAttribute("aria-pressed"))) === "true");
+  await p.click("#geo-all"); await p.waitForTimeout(400); ok("geo: 'Show all cities' lifts the dimming, remembers it, and offers the way back", (await far()).length === 0 && (await p.evaluate(() => localStorage.getItem("zen:travel"))) === "1" && await p.isVisible("#geo-home"), await p.textContent("#geo-note"));
+  await p.evaluate(() => changeCity()); await p.waitForTimeout(300); await p.click('#panels .panel[data-city="florence"]'); await p.waitForTimeout(600); ok("geo: …and Florence can be booked by the traveller", (await p.$eval('#panels .panel[data-city="florence"]', (e) => e.getAttribute("aria-pressed"))) === "true");
+  await p.click("#geo-home"); await p.waitForTimeout(400); ok("geo: 'Back to the rooms near me' dims Florence again", (await far()).join() === "florence"); await c.close(); }
+{ const [c, p] = await geoCtx("EG"); await p.goto(H + "/booking.html?city=florence", { waitUntil: "load" }); await p.waitForTimeout(1000);
+  ok("geo: a Florence deep link from Egypt is held back with the note, not opened", (await p.$eval('#panels .panel[data-city="florence"]', (e) => e.getAttribute("aria-pressed"))) !== "true" && await p.isVisible("#geo-all"), await p.textContent("#geo-note"));
+  await p.click("#geo-all"); await p.waitForTimeout(700); ok("geo: unlocking then opens the linked city", (await p.$eval('#panels .panel[data-city="florence"]', (e) => e.getAttribute("aria-pressed"))) === "true"); await c.close(); }
+{ const [c, p] = await geoCtx("IT"); await p.goto(H + "/booking.html", { waitUntil: "load" }); await p.waitForTimeout(900);
+  ok("geo: in Italy, Cairo and Dahab are dimmed and the note mentions Egypt", (await p.$$eval("#panels .panel.far", (els) => els.map((e) => e.dataset.city).sort().join())) === "cairo,dahab" && /Italy/.test(await p.textContent("#geo-note")) && /Egypt/.test(await p.textContent("#geo-note")), await p.textContent("#geo-note")); await c.close(); }
+{ const [c, p] = await geoCtx("DE"); await p.goto(H + "/booking.html", { waitUntil: "load" }); await p.waitForTimeout(900);
+  ok("geo: anywhere else, every city is open and no note", (await p.$$("#panels .panel.far")).length === 0 && !(await p.$("#geo-note:not([hidden])"))); await c.close(); }
+
+// 8g. where it hurts, over time (2026-09-14): the Progress tab keeps the history and lets the client update the map
+await go("account.html"); await page.waitForTimeout(900); await page.click('[role="tab"][data-tab="progress"]'); await page.waitForTimeout(500);
+ok("progress: the 'Where it hurts, over time' card shows the first answers as a mini body", await page.isVisible("#pain-card") && (await page.$$("#pain-strip .pain-pt")).length >= 1 && /first answers/.test(await page.textContent("#pain-strip")), await page.textContent("#pain-strip"));
+{ const n0 = (await page.$$("#pain-strip .pain-pt")).length; ok("progress: Save is off until something changes", await page.isDisabled("#pain-save"));
+  await page.click("#pain-now-map .part >> nth=2"); await page.waitForTimeout(200); ok("progress: tapping the body marks the part and turns Save on", (await page.$$eval('#pain-now-map .part[aria-pressed="true"]', (e) => e.length)) >= 1 && !(await page.isDisabled("#pain-save")));
+  await page.click("#pain-save"); await page.waitForTimeout(1200); ok("progress: saved → a new point on the strip marked as your update, and a line comparing with the first visit", (await page.$$("#pain-strip .pain-pt")).length === n0 + 1 && /your update/.test(await page.textContent("#pain-strip")) && (await page.textContent("#pain-diff")).length > 5, [await page.textContent("#pain-strip"), await page.textContent("#pain-diff")]);
+  const me2 = await page.evaluate(async () => (await fetch("/api/me")).json()); ok("progress: the profile map (what the therapist sees) is the latest", me2.pain_log[0].source === "client" && me2.user.intake.pain.slice().sort().join() === me2.pain_log[0].areas.slice().sort().join(), [me2.pain_log[0], me2.user.intake.pain]); }
 
 // 9. success page + no JS errors anywhere
 await go("success.html?free=1"); ok("success page renders", (await page.textContent("body")).length > 200);

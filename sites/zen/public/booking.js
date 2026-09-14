@@ -7,7 +7,7 @@ Zen.on("me", (d) => {
   $("#rewards-guest").hidden = true; $("#rewards-user").hidden = false;
   const cr = d.credits.filter(c => c.status === "available");
   $("#rewards-who").textContent = cr.length ? t("Signed in as {name}. Pick a reward to use on this session:", { name: d.user.name }) : t("Signed in as {name}. {n}/{every} toward your free session.", { name: d.user.name, n: d.stats.done % d.settings.loyalty_every, every: d.settings.loyalty_every });
-  if (d.user.nearest_city && !city) choose(d.user.nearest_city, true);
+  geoReady().then(() => { if (d.user.nearest_city && !city && geoAllows(d.user.nearest_city)) choose(d.user.nearest_city, true); });   // after the country is known
   renderDiscounts();
   $("#health-box").hidden = Boolean(d.user.intake?.completed_at);
   $("#review-note").hidden = !(d.user.flags?.length && !d.user.approved);
@@ -30,6 +30,7 @@ let city = null;
 const panels = $("#panels");
 panels.addEventListener("click", (e) => {
   const btn = e.target.closest(".panel"); if (!btn) return;
+  if (!geoAllows(btn.dataset.city)) { geoNote(true); return; }   // the wrong country: explain, don't book
   choose(btn.dataset.city);
 });
 function choose(key, quiet) {
@@ -205,7 +206,7 @@ function renderPrep() {
 { const q = new URLSearchParams(location.search); const pre = q.get("city");
   if (q.get("date") && /^\d{4}-\d{2}-\d{2}$/.test(q.get("date"))) $("#date").value = q.get("date");
   if (q.get("gift")) $("#gift-code").value = q.get("gift");
-  if (pre && CITIES[pre]) setTimeout(() => { choose(pre, true); if (q.get("gift")) applyGift(); if (q.get("svc")) preselectService(q.get("svc")); }, 50); }
+  if (pre && CITIES[pre]) setTimeout(() => geoReady().then(() => { if (!geoAllows(pre)) { PRE_BLOCKED = pre; return; } choose(pre, true); if (q.get("gift")) applyGift(); if (q.get("svc")) preselectService(q.get("svc")); }), 50); }
 let SVC_PRE = null;
 function preselectService(method) { SVC_PRE = method; const c = CITIES[city]; const hit = c?.services.find(s => methodOf(s.name) === method); if (hit) { const el = $("#svc-" + hit.id); if (el) { el.checked = true; updateSummary(); renderPrep(); } } }
 
@@ -306,7 +307,9 @@ $("#booking").addEventListener("submit", async (e) => {
 
 /* booking rules: numbers from the owner's settings; which provider takes the money per currency */
 let PAY = {};
-fetch("/api/status").then((r) => r.json()).then((s) => { PAY = s.pay || {}; if (s.rules) $$("[data-rule]").forEach((el) => { el.textContent = s.rules[el.dataset.rule]; }); if (city) updateSummary(); }).catch(() => {});
+// the country comes with the status; anything that picks a city on its own (a ?city= link, the profile's nearest room) waits for it, at most 2.5 s
+var GEO_P = Promise.race([fetch("/api/status").then((r) => r.json()).then((s) => { PAY = s.pay || {}; GEO = s.geo || null; applyGeo(); if (s.rules) $$("[data-rule]").forEach((el) => { el.textContent = s.rules[el.dataset.rule]; }); if (city) updateSummary(); }).catch(() => {}), new Promise((res) => setTimeout(res, 2500))]);
+function geoReady() { return GEO_P || Promise.resolve(); }
 
 /* where it hurts: the same body map as the client's intake, tap to toggle; the therapist sees it on the booking */
 let AREAS = [];
@@ -344,3 +347,28 @@ function prevStep() { let n = STEP; do { n--; } while (n > 1 && !stepOn(n)); sho
 $("#wiz-next").addEventListener("click", nextStep); $("#wiz-back").addEventListener("click", prevStep);
 $("#wiz-codes").addEventListener("click", (e) => { e.preventDefault(); CODES_WANTED = true; showStep(6); });
 $("#booking").addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.tagName !== "TEXTAREA" && STEP < 7) { e.preventDefault(); nextStep(); } });   // Enter moves on, never submits early
+
+/* ---------- the right country's rooms (2026-09-14, Ash: "based on location force the client to be either in Egypt or in Florence") ----------
+   The Worker tells us the visitor's country (Cloudflare). In Egypt we show Cairo and Dahab, in Italy Florence; the other rooms are
+   dimmed with a line saying they exist. Travelling? One tap on "Show all cities" unlocks them (remembered on this phone). */
+var GEO = GEO || null, PRE_BLOCKED = PRE_BLOCKED || null;
+const GEO_ROOMS = { EG: ["cairo", "dahab"], IT: ["florence"] };
+function travelling() { try { return localStorage.getItem("zen:travel") === "1"; } catch (_) { return false; } }
+function geoAllowed() { const rooms = GEO && GEO.country && GEO_ROOMS[GEO.country]; return rooms && !travelling() ? rooms : null; }
+function geoAllows(k) { const a = geoAllowed(); return !a || a.includes(k); }
+function geoNote(shake) {
+  let el = $("#geo-note"); const a = geoAllowed();
+  if (!el) { el = document.createElement("p"); el.id = "geo-note"; el.className = "geo-note"; panels.insertAdjacentElement("afterend", el); }
+  if (!a) { el.hidden = !GEO?.country || !GEO_ROOMS[GEO.country]; el.innerHTML = GEO?.country && GEO_ROOMS[GEO.country] ? `${t("Showing all cities.")} <a href="#" id="geo-home">${t("Back to the rooms near me")}</a>` : ""; $("#geo-home")?.addEventListener("click", (e) => { e.preventDefault(); try { localStorage.removeItem("zen:travel"); } catch (_) {} applyGeo(); }); return; }
+  const here = GEO.country === "EG" ? t("You're in Egypt, so we show the rooms in Egypt: Cairo and Dahab.") : t("You're in Italy, so we show the studio in Florence.");
+  const also = GEO.country === "EG" ? t("Zen also has a studio in Florence, Italy.") : t("Zen also has rooms in Cairo and Dahab, Egypt.");
+  el.hidden = false; el.innerHTML = `${here} ${also} <a href="#" id="geo-all">${t("Travelling there? Show all cities")}</a>`;
+  $("#geo-all").addEventListener("click", (e) => { e.preventDefault(); try { localStorage.setItem("zen:travel", "1"); } catch (_) {} applyGeo(); if (PRE_BLOCKED) { const p = PRE_BLOCKED; PRE_BLOCKED = null; choose(p); } });
+  if (shake) { el.classList.remove("pulse"); void el.offsetWidth; el.classList.add("pulse"); el.scrollIntoView({ block: "center", behavior: reduced ? "auto" : "smooth" }); }
+}
+function applyGeo() {
+  const a = geoAllowed();
+  $$(".panel").forEach((p) => { const far = Boolean(a) && !a.includes(p.dataset.city); p.classList.toggle("far", far); p.setAttribute("aria-disabled", String(far)); });
+  geoNote(false);
+  if (!a && PRE_BLOCKED) { const p = PRE_BLOCKED; PRE_BLOCKED = null; choose(p, true); }
+}

@@ -123,6 +123,7 @@
   .review-cta{margin-top:8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:.9rem}
   .waiting{padding:10px 14px;border-radius:12px;background:var(--ground-2);font-size:.88rem;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
   .tabs .count{display:inline-block;margin-inline-start:6px;background:var(--mark,#8a6a3c);color:#fff;border-radius:999px;font-size:.7rem;padding:1px 7px;vertical-align:middle}
+  .pain-wrap{display:grid;grid-template-columns:1fr 200px;gap:18px;align-items:start} .pain-strip{display:flex;gap:10px;overflow-x:auto;padding:6px 0;scrollbar-width:thin} .pain-pt{flex:none;width:78px;text-align:center} .pain-mini svg{width:66px;height:auto} .pain-mini .bm-caption{display:none} .pain-now{display:grid;gap:10px} .pain-now .areas-map{max-width:200px} .pain-now .areas-map .bodymap{width:100%;height:auto;display:block} .pain-now .part{cursor:pointer;fill:color-mix(in srgb,var(--mark) 12%,transparent);stroke:color-mix(in srgb,var(--mark) 45%,transparent)} .pain-now .part[aria-pressed="true"]{fill:color-mix(in srgb,var(--mark) 55%,transparent)} @media (max-width:640px){.pain-wrap{grid-template-columns:1fr} .pain-now .areas-map{margin-inline:auto}}
 </style>
 </head>
 <body>
@@ -329,6 +330,12 @@
           <h3>Before and after</h3>
           <p class="tiny">Photos your therapist took, with your permission, so you can see the change over time. Only you and the team can see them.</p>
           <div class="gallery" id="gallery"></div>
+        </div>
+        <div class="card" style="grid-column:1/-1" id="pain-card">
+          <h3 id="pain-title">Where it hurts, over time</h3>
+          <p class="tiny" id="pain-lead">From your first answers and every booking since. Tap the body on the right to update where it hurts now; your therapist sees the latest.</p>
+          <div class="pain-wrap"><div class="pain-strip" id="pain-strip"></div><div class="pain-now"><div id="pain-now-map" class="areas-map"></div><div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><button class="btn small" type="button" id="pain-save" disabled>Save where it hurts now</button><span class="ok" id="pain-ok" hidden>Saved.</span></div></div></div>
+          <p class="tiny" id="pain-diff"></p>
         </div>
         <div class="card" style="grid-column:1/-1">
           <h3>Exercises for your focus areas</h3>
@@ -682,6 +689,7 @@ function drawChart() {
   $("#ci-latest").innerHTML = `<b class="tiny">${t("Latest")}</b>` + checkinsCache.slice(-5).reverse().map((r) => `<div><span>${new Date(r.date + "T12:00:00").toLocaleDateString(LOCALE(), { day: "numeric", month: "short" })}${r.note ? ` · <span class="tiny">${esc(r.note)}</span>` : ""}</span><span class="num">${t("pain")} ${r.pain} · ${t("energy")} ${r.energy ?? "–"} · ${t("sleep")} ${r.sleep ?? "–"}</span></div>`).join("");
 }
 function renderExercises() {
+  renderPain();
   const ex = G.exercisesFor(me.user.intake?.pain || []);
   $("#ex-list").innerHTML = ex.length ? ex.map((e) => `<li><b>${t(G.label("pain", e.area))}</b> · ${t(e.text)}</li>`).join("") : `<li class="tiny" style="list-style:none;margin-inline-start:-18px">${t("Tell us where it hurts in your profile and we'll suggest exercises here.")}</li>`;
 }
@@ -698,6 +706,20 @@ function renderGuide(key) {
 
 /* tabs */
 const TABS = ["rewards", "sessions", "messages", "packages", "progress", "guide", "profile"];
+
+/* ---------- where it hurts, over time (2026-09-14) ---------- */
+let PAIN_NOW = null;
+function renderPain() {
+  const log = me?.pain_log || []; const cur = me?.user?.intake?.pain || [];
+  $("#pain-title").textContent = t("Where it hurts, over time"); $("#pain-lead").textContent = t("From your first answers and every booking since. Tap the body on the right to update where it hurts now; your therapist sees the latest."); $("#pain-save").textContent = t("Save where it hurts now");
+  const src = { intake: t("first answers"), booking: t("a booking"), client: t("your update") };
+  $("#pain-strip").innerHTML = log.length ? log.slice(0, 8).map((r) => `<div class="pain-pt"><div class="pain-mini">${G.bodyMap(r.areas, false)}</div><div class="tiny">${new Date(r.at.replace(" ", "T") + "Z").toLocaleDateString(LOCALE(), { day: "numeric", month: "short" })}<br>${src[r.source] || r.source}</div></div>`).join("") : `<p class="tiny">${t("Nothing yet. Tap the body to tell us where it hurts.")}</p>`;
+  if (PAIN_NOW === null) PAIN_NOW = cur.slice();
+  const box = $("#pain-now-map"); box.innerHTML = G.bodyMap(PAIN_NOW, true);
+  $$("#pain-now-map .part").forEach((p) => { p.setAttribute("role", "button"); p.setAttribute("tabindex", "0"); p.setAttribute("aria-pressed", String(PAIN_NOW.includes(p.dataset.part))); const tg = () => { const id = p.dataset.part; PAIN_NOW = PAIN_NOW.includes(id) ? PAIN_NOW.filter((x) => x !== id) : [...PAIN_NOW, id]; $("#pain-save").disabled = JSON.stringify(PAIN_NOW.slice().sort()) === JSON.stringify(cur.slice().sort()); renderPain(); }; p.addEventListener("click", tg); p.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); tg(); } }); });
+  if (log.length > 1) { const first = log[log.length - 1].areas, latest = log[0].areas, gone = first.filter((a) => !latest.includes(a)), added = latest.filter((a) => !first.includes(a)); const lab = (a) => t(G.label("pain", a)); $("#pain-diff").textContent = (gone.length ? t("Better since your first visit: {list}.", { list: gone.map(lab).join(", ") }) + " " : "") + (added.length ? t("New: {list}.", { list: added.map(lab).join(", ") }) : "") || t("Same areas as your first visit."); } else $("#pain-diff").textContent = "";
+}
+$("#pain-save").addEventListener("click", async () => { const btn = $("#pain-save"); btn.disabled = true; try { const data = await ZenAPI("PUT", "/api/me", { intake: { ...(me.user.intake || {}), pain: PAIN_NOW } }); me = data; PAIN_NOW = null; renderPain(); $("#pain-ok").hidden = false; setTimeout(() => ($("#pain-ok").hidden = true), 2500); } catch (ex) { btn.disabled = false; alert(ex.message); } });
 
 /* ---------- messages: in-site chat with a therapist (2026-09-13; rebuilt WhatsApp-style the same evening) ---------- */
 let CHATS = [], CAN_MSG = [], OPEN = null, MSGS = [], chatPoll = null, chatBusy = false;

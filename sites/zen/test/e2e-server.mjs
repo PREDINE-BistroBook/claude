@@ -23,7 +23,9 @@ http.createServer(async (req, res) => {
   if (url.pathname.startsWith("/api/")) {
     const chunks = []; for await (const c of req) chunks.push(c);
     const body = chunks.length ? Buffer.concat(chunks) : undefined;
-    const r = await worker.fetch(new Request(url, { method: req.method, headers: req.headers, body: ["GET", "HEAD"].includes(req.method) ? undefined : body, redirect: "manual" }), env, { waitUntil() {} });
+    const wreq = new Request(url, { method: req.method, headers: req.headers, body: ["GET", "HEAD"].includes(req.method) ? undefined : body, redirect: "manual" });
+    if (req.headers["x-e2e-country"]) Object.defineProperty(wreq, "cf", { value: { country: req.headers["x-e2e-country"], city: null } });   // stands in for Cloudflare's geo on production
+    const r = await worker.fetch(wreq, env, { waitUntil() {} });
     const h = {}; r.headers.forEach((v, k) => { h[k] = k === "set-cookie" ? r.headers.getSetCookie?.() || v : v; });
     res.writeHead(r.status, h); res.end(Buffer.from(await r.arrayBuffer())); return;
   }

@@ -745,8 +745,9 @@ async function adminSearch(env, admin, url) {
 const channelOf = (b) => (b.source === "manual" ? "cash" : (b.status === "cancelled" || b.status === "no_show" ? b.cancel_fee : b.amount) === 0 ? "free" : b.provider === "fawry" ? "fawry" : "card");
 async function statements(env, admin, url) {
   const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(url.searchParams.get("month") || "") ? url.searchParams.get("month") : today().slice(0, 7);
-  const city = scope(admin, url.searchParams.get("city"));
+  const city = scope(admin, url.searchParams.get("city"));   // scope(): owner and platform see every city
   const me = isEmployee(admin) ? await therapistOf(env, admin) : null;
+  if (isPlatform(admin) && url.searchParams.get("detail") === "1") url.searchParams.delete("detail");
   if (isEmployee(admin) && !me) return json({ month, city, rows: [], sessions: [], mine: true, note: "Your sign-in isn't linked to a therapist profile yet. Ask the owner to link it under Team." });
   const where = ["b.date >= ? AND b.date < ?", "b.status IN ('paid','confirmed','done','cancelled','no_show')", "(b.status IN ('paid','confirmed','done') OR b.cancel_fee > 0)"], args = [month + "-01", month + "-32"];
   if (city) { where.push("b.city = ?"); args.push(city); }
@@ -762,13 +763,19 @@ async function statements(env, admin, url) {
     groups.set(key(s), g);
   }
   const out = [...groups.values()].map((g) => ({ ...g, site_takings: g.card_amount + g.fawry_amount, to_therapist: g.card_amount + g.fawry_amount - g.fee, therapist_keeps: g.cash_amount, platform_due_on_fawry: g.fawry_amount ? feeSum(sessions, g, "fawry") : 0 })).sort((a, b) => (a.city || "").localeCompare(b.city || "") || (a.therapist || "").localeCompare(b.therapist || ""));
+  // 2026-09-14 (Ash): nobody sees an individual's earnings but that person. Owner and partner get one row per city and currency
+  // ("Cairo · team"); the platform account gets the same totals and no client names; only an employee sees their own line.
+  const team = !me;
+  const rows_out = team ? Object.values(out.reduce((acc, g) => { const k = g.city + "|" + g.currency; const a = acc[k] || (acc[k] = { ...g, therapist_id: null, therapist: `${CITIES[g.city]?.name || g.city} · team`, sessions: 0, done: 0, upcoming: 0, kept: 0, card: 0, fawry: 0, cash: 0, free: 0, card_amount: 0, fawry_amount: 0, cash_amount: 0, kept_amount: 0, gross: 0, fee: 0, net: 0, refunded: 0, site_takings: 0, to_therapist: 0, therapist_keeps: 0, platform_due_on_fawry: 0 }); for (const f of ["sessions", "done", "upcoming", "kept", "card", "fawry", "cash", "free", "card_amount", "fawry_amount", "cash_amount", "kept_amount", "gross", "fee", "net", "refunded", "site_takings", "to_therapist", "therapist_keeps", "platform_due_on_fawry"]) a[f] += g[f] || 0; return acc; }, {})).sort((a, b) => a.city.localeCompare(b.city)) : out;
+  const sessions_out = team ? sessions.map(({ therapist, therapist_id, ...rest }) => rest) : sessions;   // no therapist column outside "Your earnings"
   if (url.searchParams.get("format") === "csv") {
+    if (isPlatform(admin)) return json({ error: "The platform account sees totals, not sessions." }, 403);
     const esc = (v) => { const t = v === null || v === undefined ? "" : String(v); return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
-    const head = ["date", "time", "city", "therapist", "client", "service", "status", "channel", "currency", "amount", "platform_fee", "net", "refunded", "paid_with", "partner_code"];
-    const lines = [head.join(",")].concat(sessions.map((s) => [s.date, s.slot, s.city, s.therapist || "", s.client, s.service, s.status, s.channel, s.currency, (s.amount / 100).toFixed(2), (s.fee / 100).toFixed(2), (s.net / 100).toFixed(2), (s.refunded / 100).toFixed(2), s.paid_with || "", s.partner_code || ""].map(esc).join(",")));
+    const head = ["date", "time", "city", ...(team ? [] : ["therapist"]), "client", "service", "status", "channel", "currency", "amount", "platform_fee", "net", "refunded", "paid_with", "partner_code"];
+    const lines = [head.join(",")].concat(sessions_out.map((s) => [s.date, s.slot, s.city, ...(team ? [] : [s.therapist || ""]), s.client, s.service, s.status, s.channel, s.currency, (s.amount / 100).toFixed(2), (s.fee / 100).toFixed(2), (s.net / 100).toFixed(2), (s.refunded / 100).toFixed(2), s.paid_with || "", s.partner_code || ""].map(esc).join(",")));
     return new Response("\ufeff" + lines.join("\n") + "\n", { headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": `attachment; filename="zen-statement-${month}${city ? "-" + city : ""}${me ? "-" + me.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase() : ""}.csv"` } });
   }
-  return json({ month, city, mine: Boolean(me), therapist: me || null, fee_bps: PLATFORM_FEE_BPS, rows: out, sessions: me || url.searchParams.get("detail") === "1" ? sessions : undefined });
+  return json({ month, city, mine: Boolean(me), team, therapist: me || null, fee_bps: PLATFORM_FEE_BPS, rows: rows_out, sessions: isPlatform(admin) ? undefined : me || url.searchParams.get("detail") === "1" ? sessions_out : undefined });
 }
 const feeSum = (sessions, g, ch) => sessions.filter((s) => (s.therapist_id || null) === (g.therapist_id || null) && s.currency === g.currency && s.channel === ch).reduce((a, s) => a + s.fee, 0);
 async function listGifts(env, admin, url) {
