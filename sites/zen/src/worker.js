@@ -119,7 +119,7 @@ async function cityMeta(env) { const c = await catalog(env); return Object.fromE
 async function publicCatalog(env) {
   const [c, st, off] = await Promise.all([catalog(env), settings(env), therapistOffering(env, null)]); const tp = off.prices;
   return json({ cities: Object.fromEntries(CITY_KEYS.map((k) => [k, { name: c[k].name, currency: c[k].currency.toUpperCase(), address: st.address[k] ? st.address[k].split("\n").map((l) => l.trim()).filter(Boolean) : null, team: st.team[k] || null, whatsapp: st.whatsapp[k] || null, gmaps: st.gmaps[k] || null,
-    services: Object.values(c[k].services).map((s) => ({ id: s.id, name: s.short, dur: s.minutes, price: s.amount, desc: s.description, i18n: s.i18n || null, prices: tp[s.id] || null, not_offered: off.off[s.id] || null, photo: s.photo ? `/api/service-photo/${s.id}?v=${encodeURIComponent((s.updated_at || "").replace(/\D/g, ""))}` : null })) }])) }, 200, { "cache-control": "no-store" });
+    services: Object.values(c[k].services).map((s) => ({ id: s.id, name: s.short, dur: s.minutes, price: s.amount, desc: s.description, i18n: s.i18n || null, prices: tp[s.id] || null, not_offered: off.off[s.id] || null, therapist_id: s.therapist_id || null, photo: s.photo ? `/api/service-photo/${s.id}?v=${encodeURIComponent((s.updated_at || "").replace(/\D/g, ""))}` : null })) }])) }, 200, { "cache-control": "no-store" });
 }
 const INTAKE_LISTS = ["goals", "pain", "health"], INTAKE_STR = ["activity", "sport", "experience", "health_notes", "contact", "time_pref", "completed_at"];
 function cleanIntake(v) { // whitelist keys, cap sizes; stored as JSON text
@@ -312,7 +312,7 @@ async function checkout(req, env) {
     const want = clean(b.therapist_id, 40) || null;
     if (want && !s.therapists.includes(want)) return json({ error: "That therapist isn't free at that time.", slots: avail.slots }, 409);
     therapist_id = want || s.therapists[0] || null;
-  } else { slot = SLOTS[b.slot] ? b.slot : "morning"; const want = clean(b.therapist_id, 40) || null; if (want && (await env.DB.prepare("SELECT 1 FROM therapists WHERE id = ? AND city = ? AND active = 1").bind(want, cityKey).first())) therapist_id = want; }
+  } else { slot = SLOTS[b.slot] ? b.slot : "morning"; const want = clean(b.therapist_id, 40) || svc.therapist_id || null; if (want && (await env.DB.prepare("SELECT 1 FROM therapists WHERE id = ? AND city = ? AND active = 1").bind(want, cityKey).first())) therapist_id = want; }
   const chosen = clean(b.therapist_id, 40) || null;   // the client's own choice (not an automatic assignment) → that therapist's price, if they set one
   const own = chosen && therapist_id === chosen ? await env.DB.prepare("SELECT amount FROM therapist_prices WHERE therapist_id = ? AND service_id = ? AND offered = 1").bind(chosen, svc.id).first() : null;
 

@@ -58,7 +58,7 @@ export async function catalog(env, { all = false } = {}) {
   let rows = [];
   try { rows = (await env.DB.prepare("SELECT * FROM services" + (all ? "" : " WHERE active = 1") + " ORDER BY city, sort, name").all()).results; } catch (e) { console.error("services table missing, using static catalog", e.message); }
   if (!rows.length) { for (const k of CITY_KEYS) for (const [id, s] of Object.entries(CITIES[k].services)) out[k].services[id] = { id, name: s.name, amount: s.amount, minutes: 60, description: "", active: 1, sort: 0, short: s.name.split(" · ")[0] }; return out; }
-  for (const r of rows) { if (!out[r.city]) continue; out[r.city].services[r.id] = { id: r.id, name: `${r.name} · ${r.minutes} min · ${CITIES[r.city].name}`, short: r.name, amount: r.amount, minutes: r.minutes, description: r.description || "", active: r.active, sort: r.sort, photo: r.photo || null, i18n: parseI18n(r.i18n), updated_at: r.updated_at || "" }; }
+  for (const r of rows) { if (!out[r.city]) continue; out[r.city].services[r.id] = { id: r.id, name: `${r.name} · ${r.minutes} min · ${CITIES[r.city].name}`, short: r.name, amount: r.amount, minutes: r.minutes, description: r.description || "", active: r.active, sort: r.sort, photo: r.photo || null, i18n: parseI18n(r.i18n), updated_at: r.updated_at || "", therapist_id: r.therapist_id || null }; }
   return out;
 }
 // { service_id: { therapist_id: amount } } for a city's active therapists — a therapist's own price beats the city price when the client chose them
@@ -69,7 +69,7 @@ export async function therapistOffering(env, city) {   // { prices: { service_id
   return { prices, off };
 }
 export async function therapistPrices(env, city) { return (await therapistOffering(env, city)).prices; }
-export async function offersService(env, therapistId, serviceId) { const r = await env.DB.prepare("SELECT offered FROM therapist_prices WHERE therapist_id = ? AND service_id = ?").bind(therapistId, serviceId).first(); return !r || r.offered !== 0; }
+export async function offersService(env, therapistId, serviceId) { const own = await env.DB.prepare("SELECT therapist_id FROM services WHERE id = ?").bind(serviceId).first(); if (own?.therapist_id && own.therapist_id !== therapistId) return false; const r = await env.DB.prepare("SELECT offered FROM therapist_prices WHERE therapist_id = ? AND service_id = ?").bind(therapistId, serviceId).first(); return !r || r.offered !== 0; }
 export const nameIn = (svc, lang, cityName) => { const n = (lang !== "en" && svc?.i18n?.[lang]?.name) || svc?.short || ""; return n ? `${n} · ${svc.minutes} min · ${cityName}` : svc?.name || ""; };
 export async function serviceOf(env, city, id) { if (!CITY_KEYS.includes(city) || !id) return null; const c = await catalog(env); return c[city].services[id] || null; }
 // Who hears about a new booking / gift / pack in a city: ZEN_NOTIFY_EMAIL (if set) plus every admin with a real email who asked for it
@@ -329,7 +329,8 @@ export async function slotsFor(env, city, date, therapistId, serviceId = null) {
   if (!configured) return { mode: "windows", slots: [] };
   const blocked = (await env.DB.prepare("SELECT * FROM blocked WHERE city = ? AND date = ?").bind(city, date).all()).results;
   const taken = (await env.DB.prepare("SELECT slot, therapist_id FROM bookings WHERE city = ? AND date = ? AND status IN ('paid','confirmed','done','review')").bind(city, date).all()).results;
-  const therapists = (serviceId ? await env.DB.prepare("SELECT id FROM therapists WHERE city = ? AND active = 1 AND id NOT IN (SELECT therapist_id FROM therapist_prices WHERE service_id = ? AND offered = 0)").bind(city, serviceId).all() : await env.DB.prepare("SELECT id FROM therapists WHERE city = ? AND active = 1").bind(city).all()).results.map((t) => t.id);
+  const ownerOf = serviceId ? (await env.DB.prepare("SELECT therapist_id FROM services WHERE id = ?").bind(serviceId).first())?.therapist_id : null;   // a therapist's own service: only they get booked for it
+  const therapists = (ownerOf ? await env.DB.prepare("SELECT id FROM therapists WHERE id = ? AND city = ? AND active = 1").bind(ownerOf, city).all() : serviceId ? await env.DB.prepare("SELECT id FROM therapists WHERE city = ? AND active = 1 AND id NOT IN (SELECT therapist_id FROM therapist_prices WHERE service_id = ? AND offered = 0)").bind(city, serviceId).all() : await env.DB.prepare("SELECT id FROM therapists WHERE city = ? AND active = 1").bind(city).all()).results.map((t) => t.id);
   const out = new Map();
   for (const r of rules) {
     const who = r.therapist_id ? [r.therapist_id] : therapists.length ? therapists : [null];
