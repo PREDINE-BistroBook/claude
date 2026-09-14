@@ -7,10 +7,15 @@
 //              POST /api/reservation/cancel           the guest cancels (up to 2 h before)
 //              POST /api/preorder                     choose dishes for that reservation → Stripe Checkout (paid online)
 //              POST /api/stripe-webhook               Stripe tells us the pre-order was paid
+//              GET  /api/menu                         the live menu (owner-edited), contact details, which photos exist
+//              GET  /media/<id>?v=                    room covers and dish photos uploaded from the admin
+//              GET  /t/7A  (or /7A)                   table QR codes → menu.html?t=7A
 //   Staff      POST /api/admin/login · /logout · GET /api/admin/me · POST /api/admin/password
 //              GET  /api/admin/reservations?from=&to=&status=&q=   · POST (manual) · PATCH /api/admin/reservations/:id
 //              GET  /api/admin/orders?from=&to=       · PATCH /api/admin/orders/:id
 //              GET  /api/admin/stats · GET/PUT /api/admin/settings (owner) · GET/POST /api/admin/admins (owner)
+//              GET  /api/admin/menu · PATCH /api/admin/menu/item (sold out: any staff; price, hidden: owner)
+//              PUT  /api/admin/menu · PUT /api/admin/site · PUT/DELETE /api/admin/media/:id   (owner)
 //
 // Money: Stripe Connect, direct charge on the osteria's connected account (OSTERIA_STRIPE_ACCOUNT) with a
 // PLATFORM_FEE_BPS (2%) application fee to Amico Mio. Until STRIPE_SECRET_KEY + OSTERIA_STRIPE_ACCOUNT are set, the
@@ -20,11 +25,15 @@
 // ADMIN_BOOTSTRAP_EMAIL + ADMIN_BOOTSTRAP_PASSWORD (first owner login, only while the admins table is empty).
 
 import { randomId, hashPassword, verifyPassword, setCookie, clearCookie } from "./auth.js";
-import { ADMIN_COOKIE, json, clean, normEmail, isDate, isTime, now, body, fmtEur, feeOn, isLive, localNow, toMin, addDays, settings, saveSettings, availability, currentAdmin, pubAdmin, isOwner, isPlatform, adminSession, notifyList, sendEmail, stripeCheckout, verifyStripeSignature, dishBySlug, slug } from "./lib.js";
+import { ADMIN_COOKIE, json, clean, normEmail, isDate, isTime, now, body, fmtEur, feeOn, isLive, localNow, toMin, addDays, settings, saveSettings, availability, currentAdmin, pubAdmin, isOwner, isPlatform, adminSession, notifyList, sendEmail, stripeCheckout, verifyStripeSignature, slug, menuDoc, saveMenu, sanitizeMenu, publicRooms, findDish, siteDoc, saveSite, sanitizeSite, happyHourPrice, mediaMap } from "./lib.js";
 
 export default {
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
+    // Table QR codes point at /t/7A (or just /7A): land on the menu with the table remembered.
+    const tc = /^\/(?:t\/)?(\d{1,2}[A-Za-z])\/?$/.exec(url.pathname);
+    if (tc) return Response.redirect(url.origin + "/menu.html?t=" + tc[1].toUpperCase(), 302);
+    if (url.pathname.startsWith("/media/")) return media(env, url.pathname.slice(7));
     if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(req);
     try {
       return await route(req, env, url, ctx);
@@ -38,6 +47,7 @@ export default {
 async function route(req, env, url, ctx) {
   const p = url.pathname, m = req.method;
   if (p === "/api/status" && m === "GET") return status(env);
+  if (p === "/api/menu" && m === "GET") return publicMenu(env);
   if (p === "/api/availability" && m === "GET") return json(await availability(env, await settings(env), url.searchParams.get("date"), Math.max(1, Number(url.searchParams.get("party") || 2))));
   if (p === "/api/reserve" && m === "POST") return reserve(req, env, ctx);
   if (p === "/api/reservation" && m === "GET") return guestView(env, url.searchParams.get("id"), url.searchParams.get("t"));
@@ -60,8 +70,14 @@ async function route(req, env, url, ctx) {
     if (p === "/api/admin/orders" && m === "GET") return listOrders(env, url);
     if (p.startsWith("/api/admin/orders/") && m === "PATCH") return patchOrder(req, env, p.split("/")[4]);
     if (p === "/api/admin/settings" && m === "GET") return json({ settings: await settings(env), live: isLive(env) });
+    if (p === "/api/admin/menu" && m === "GET") return adminMenu(env);
+    if (p === "/api/admin/menu/item" && m === "PATCH") return patchDish(req, env, admin);
     if (!isOwner(admin)) return json({ error: "Solo il titolare può farlo." }, 403);
     if (p === "/api/admin/settings" && m === "PUT") return putSettings(req, env);
+    if (p === "/api/admin/menu" && m === "PUT") return putMenu(req, env);
+    if (p === "/api/admin/site" && m === "PUT") return putSite(req, env);
+    if (p.startsWith("/api/admin/media/") && m === "PUT") return putMedia(req, env, p.split("/")[4]);
+    if (p.startsWith("/api/admin/media/") && m === "DELETE") return delMedia(env, p.split("/")[4]);
     if (p === "/api/admin/admins" && m === "GET") return json({ admins: (await env.DB.prepare("SELECT * FROM admins ORDER BY created_at").all()).results.map(pubAdmin) });
     if (p === "/api/admin/admins" && m === "POST") return addAdmin(req, env);
     if (p.startsWith("/api/admin/admins/") && m === "DELETE") return removeAdmin(env, admin, p.split("/")[4]);
@@ -70,9 +86,22 @@ async function route(req, env, url, ctx) {
 }
 
 // ---------- public ----------
+// The menu the site renders: the owner's live document (hidden dishes stripped), contact details, and which photos exist.
+async function publicMenu(env) {
+  const [menu, site, media] = await Promise.all([menuDoc(env), siteDoc(env), mediaMap(env)]);
+  const { tables, wifi, ...pub } = site;
+  return json({ ver: menu.ver, rooms: publicRooms(menu.rooms), site: { ...pub, wifi }, media }, 200, { "cache-control": "public, max-age=30" });
+}
+// Photos: /media/<id>?v=<ver>. The version in the URL changes on every upload, so the file itself can be cached for a year.
+async function media(env, id) {
+  const r = await env.DB.prepare("SELECT mime, data, ver FROM media WHERE id = ?").bind(clean(id, 80)).first();
+  if (!r) return new Response("not found", { status: 404 });
+  const bin = Uint8Array.from(atob(r.data), (c) => c.charCodeAt(0));
+  return new Response(bin, { headers: { "content-type": r.mime, "cache-control": "public, max-age=31536000, immutable", etag: `"${id}-${r.ver}"` } });
+}
 async function status(env) {
   const s = await settings(env);
-  return json({ live: isLive(env), preorder: s.preorder && isLive(env), services: s.services, days: s.days, closed: s.closed, slot_minutes: s.slot_minutes, max_party: s.max_party, horizon_days: s.horizon_days, today: localNow().date, phone: globalThis.SITE?.phone || "" });
+  return json({ live: isLive(env), preorder: s.preorder && isLive(env), services: s.services, days: s.days, closed: s.closed, slot_minutes: s.slot_minutes, max_party: s.max_party, horizon_days: s.horizon_days, today: localNow().date, phone: (await siteDoc(env)).phone || "" });
 }
 
 async function reserve(req, env, ctx) {
@@ -155,12 +184,15 @@ async function preorder(req, env) {
   const ln = localNow();
   if (!["requested", "confirmed"].includes(r.status) || !(r.date > ln.date || (r.date === ln.date && toMin(r.time) - ln.minutes >= 120))) return json({ error: en ? "Pre-orders close two hours before the table." : "I pre-ordini chiudono due ore prima del tavolo." }, 409);
   const items = Array.isArray(b.items) ? b.items.slice(0, 40) : [];
+  const [menu, site] = await Promise.all([menuDoc(env), siteDoc(env)]);
+  const rooms = publicRooms(menu.rooms);
   const lines = [];
   for (const it of items) {
-    const d = dishBySlug(clean(it.slug, 120)); const qty = Math.floor(Number(it.qty));
-    if (!d || d.perKg || !(qty >= 1 && qty <= 20)) continue;
-    const unit = Math.round(d.price * 100);
-    lines.push({ slug: slug(d.it), name: d.it, qty, unit, line: unit * qty });
+    const d = findDish(rooms, clean(it.slug || it.id, 120)); const qty = Math.floor(Number(it.qty));
+    if (!d || d.perKg || d.out || !(qty >= 1 && qty <= 20)) continue;
+    const hh = happyHourPrice(site, d, toMin(r.time));
+    const unit = Math.round((hh ?? d.price) * 100);
+    lines.push({ slug: d.id, name: d.it, qty, unit, line: unit * qty });
   }
   if (!lines.length) return json({ error: en ? "Choose at least one dish." : "Scegli almeno un piatto." }, 400);
   const amount = lines.reduce((a, l) => a + l.line, 0);
@@ -340,4 +372,63 @@ async function stats(env, admin) {
   const out = { today: { reservations: todayRows.n || 0, covers: todayRows.covers || 0 }, week: { reservations: weekRows.n || 0, covers: weekRows.covers || 0 }, requested: requested.n || 0, preorders_month: { n: month.n || 0, amount: month.a || 0 }, preorders_upcoming: { n: upcoming.n || 0, amount: upcoming.a || 0 }, live: isLive(env), date: ln.date };
   if (isPlatform(admin)) out.platform_fee_month = month.fee || 0;
   return json(out);
+}
+
+// ---------- the menu, the locale, the photos (admin) ----------
+async function adminMenu(env) {
+  const [menu, site, media] = await Promise.all([menuDoc(env), siteDoc(env), mediaMap(env)]);
+  return json({ ver: menu.ver, rooms: menu.rooms, site, media });
+}
+// The owner saves the whole document; the version guards against two people editing at once.
+async function putMenu(req, env) {
+  const b = await body(req);
+  const cur = await menuDoc(env);
+  if (b.ver !== undefined && Number(b.ver) !== cur.ver) return json({ error: "Qualcun altro ha modificato il menu nel frattempo: ricarica la pagina.", ver: cur.ver }, 409);
+  const { rooms } = sanitizeMenu(b);
+  const n = rooms.reduce((a, r) => a + r.groups.reduce((c, g) => c + g.items.length, 0), 0);
+  if (!rooms.length || !n) return json({ error: "Un menu vuoto non si salva." }, 400);
+  const ver = cur.ver + 1;
+  await saveMenu(env, rooms, ver);
+  return json({ ok: true, ver });
+}
+// Quick changes from the floor: sold out (any staff), price or hidden (owner only).
+async function patchDish(req, env, admin) {
+  const b = await body(req);
+  const cur = await menuDoc(env);
+  const id = clean(b.id, 120);
+  let hit = null;
+  for (const r of cur.rooms) for (const g of r.groups) for (const d of g.items) if (d.id === id) hit = d;
+  if (!hit) return json({ error: "Piatto non trovato." }, 404);
+  if (b.out !== undefined) { if (b.out) hit.out = true; else delete hit.out; }
+  if (isOwner(admin)) {
+    if (b.off !== undefined) { if (b.off) hit.off = true; else delete hit.off; }
+    if (b.price !== undefined) { const p = Number(b.price); if (Number.isFinite(p) && p >= 0) hit.price = Math.round(p * 100) / 100; }
+  } else if (b.off !== undefined || b.price !== undefined) return json({ error: "Solo il titolare cambia prezzi e visibilità." }, 403);
+  const ver = cur.ver + 1;
+  await saveMenu(env, cur.rooms, ver);
+  return json({ ok: true, ver, dish: hit });
+}
+async function putSite(req, env) {
+  const site = sanitizeSite(await body(req));
+  await saveSite(env, site);
+  return json({ ok: true, site });
+}
+// Photos come from the admin already resized (webp/jpeg, ≤ 900 KB). Ids: room_<roomId> or dish_<dishId>.
+async function putMedia(req, env, id) {
+  if (!/^(room|dish)_[a-z0-9-]{1,100}$/.test(id)) return json({ error: "id non valido" }, 400);
+  const b = await body(req);
+  const data = String(b.data || "").replace(/^data:[^,]*,/, "");
+  if (!/^[A-Za-z0-9+/=]+$/.test(data) || data.length < 100) return json({ error: "Immagine non valida." }, 400);
+  const bytes = Math.round(data.length * 0.75);
+  if (bytes > 900000) return json({ error: "Immagine troppo grande (max 900 KB)." }, 413);
+  const head = atob(data.slice(0, 24));
+  const mime = head.startsWith("\xff\xd8") ? "image/jpeg" : head.startsWith("\x89PNG") ? "image/png" : head.startsWith("RIFF") && head.slice(8, 12) === "WEBP" ? "image/webp" : null;
+  if (!mime) return json({ error: "Formato non riconosciuto: serve JPEG, PNG o WEBP." }, 400);
+  const ver = Date.now();
+  await env.DB.prepare("INSERT INTO media (id, mime, data, bytes, ver) VALUES (?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET mime = excluded.mime, data = excluded.data, bytes = excluded.bytes, ver = excluded.ver").bind(id, mime, data, bytes, ver).run();
+  return json({ ok: true, id, ver, bytes, url: `/media/${id}?v=${ver}` });
+}
+async function delMedia(env, id) {
+  await env.DB.prepare("DELETE FROM media WHERE id = ?").bind(clean(id, 80)).run();
+  return json({ ok: true });
 }

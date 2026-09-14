@@ -42,6 +42,7 @@ main { max-width: 1180px; margin: 0 auto; padding: 22px 20px 80px; }
 label.f { display: grid; gap: 4px; font-size: .74rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 label.f input, label.f select, label.f textarea { background: #1E1A17; border: 1px solid rgba(255,255,255,.14); border-radius: 3px; padding: 9px 11px; color: var(--ink); min-width: 0; font-size: .95rem; text-transform: none; letter-spacing: 0; }
 label.f input[type="date"] { color-scheme: dark; }
+label.f input[type="color"] { height: 44px; width: 90px; padding: 4px; cursor: pointer; }
 label.f.grow { flex: 1; min-width: 160px; }
 .btn { background: var(--paper); color: #1E1A17; border: 1px solid var(--paper); border-radius: 3px; padding: 9px 16px; cursor: pointer; font-weight: 600; font-size: .82rem; letter-spacing: .1em; text-transform: uppercase; }
 .btn:hover { background: var(--gold); border-color: var(--gold); }
@@ -86,6 +87,65 @@ td .sub { display: block; font-size: .8rem; color: var(--muted); }
 .ticket .items li { border-color: rgba(0,0,0,.2); }
 .ticket .meta { font-size: .8rem; color: #6E6459; }
 @media print { .top, .bar, .actions, .btn, .tiles, .help { display: none !important; } body { background: #fff; color: #000; } .ticket { border: 1px solid #000; page-break-inside: avoid; } }
+/* menu editor */
+.savestate { margin-left: auto; font-size: .8rem; color: var(--muted); align-self: center; }
+.savestate.ok { color: var(--ok); } .savestate.warn { color: var(--warn); } .savestate.bad { color: #F0B8A8; }
+details.room { background: var(--panel); border: 1px solid rgba(255,255,255,.06); border-radius: 4px; margin-bottom: 12px; }
+details.room.off { opacity: .6; }
+details.room > summary { display: flex; align-items: baseline; gap: 12px; padding: 14px 18px; cursor: pointer; list-style: none; }
+details.room > summary::-webkit-details-marker { display: none; }
+details.room > summary .rn { font-family: "Bodoni Moda", Georgia, serif; font-size: 1.4rem; color: var(--gold); min-width: 2.2em; }
+details.room > summary b { font-family: "Bodoni Moda", Georgia, serif; font-weight: 400; font-size: 1.3rem; }
+details.room > summary .sub { font-size: .8rem; color: var(--muted); margin-left: auto; text-align: right; }
+.roomedit { padding: 0 18px 14px; border-bottom: 1px solid rgba(255,255,255,.06); margin-bottom: 8px; }
+.cover { display: grid; grid-template-columns: 200px 1fr; gap: 14px; align-items: start; margin: 4px 0 14px; }
+.cover img, .cover .nocover { display: block; width: 200px; aspect-ratio: 4 / 3; object-fit: cover; border: 1px solid var(--gold-soft); background: #000; }
+.cover .nocover svg { display: block; width: 100%; height: 100%; }
+.cover.dish { grid-template-columns: 240px 1fr; } .cover.dish img, .cover.dish .nocover { width: 240px; }
+.group { padding: 4px 18px 8px; }
+.group h3 { font-size: 1.1rem; color: var(--gold); margin: 8px 0 4px; }
+.group .gt { margin: 6px 0 4px; }
+tr.dish.out .name, tr.dish.out .tdth { opacity: .45; } tr.dish.out .name { text-decoration: line-through; }
+tr.dish.off .name, tr.dish.off .tdth { opacity: .45; }
+.tdth { width: 76px; } .th { display: block; width: 64px; aspect-ratio: 4 / 3; overflow: hidden; border: 1px solid var(--gold-soft); background: #000; }
+.th img, .th svg { display: block; width: 100%; height: 100%; object-fit: cover; }
+.tdname input.name { width: 100%; background: transparent; border: 0; border-bottom: 1px dashed rgba(255,255,255,.2); padding: 4px 0; font-family: "Bodoni Moda", Georgia, serif; font-size: 1.1rem; }
+.tdname input.name:focus { outline: none; border-bottom-color: var(--gold); }
+.tdname .name { font-family: "Bodoni Moda", Georgia, serif; font-size: 1.1rem; }
+.tdprice { width: 110px; white-space: nowrap; font-family: "Bodoni Moda", Georgia, serif; font-size: 1.15rem; }
+.tdprice input { width: 90px; background: #1E1A17; border: 1px solid rgba(255,255,255,.14); border-radius: 3px; padding: 6px 8px; font-family: "Bodoni Moda", Georgia, serif; font-size: 1.1rem; text-align: right; }
+.tdout { width: 120px; white-space: nowrap; }
+.sw { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: .8rem; color: var(--muted); }
+.sw input { position: absolute; opacity: 0; width: 0; height: 0; }
+.sw span { width: 38px; height: 22px; border-radius: 999px; background: rgba(255,255,255,.15); position: relative; transition: background .2s; flex: none; }
+.sw span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--paper); transition: left .2s; }
+.sw input:checked + span { background: #B04A3A; } .sw input:checked + span::after { left: 19px; }
+.sw input:focus-visible + span { outline: 2px solid var(--gold); }
+.tdact { width: 210px; }
+.steps { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.chip { display: inline-flex; align-items: center; gap: 2px; padding: 4px 6px 4px 10px; border: 1px solid var(--gold-soft); border-radius: 999px; font-size: .85rem; }
+.chip b { font-weight: 500; margin-right: 4px; }
+.chip button { background: transparent; border: 0; color: var(--muted); cursor: pointer; padding: 2px 5px; font-size: .95rem; }
+.chip button:hover:not(:disabled) { color: var(--ink); } .chip button:disabled { opacity: .3; cursor: default; }
+.inglist { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; margin-top: 8px; }
+.ingbtn { display: grid; gap: 4px; background: #1E1A17; border: 1px solid rgba(255,255,255,.12); border-radius: 3px; padding: 6px; cursor: pointer; font-size: .78rem; text-align: center; }
+.ingbtn:hover { border-color: var(--gold); }
+.ingbtn svg { display: block; width: 100%; aspect-ratio: 4 / 3; background: #3E1219; }
+.grid3 { display: grid; grid-template-columns: 1fr 90px 110px auto; gap: 10px; align-items: end; margin-bottom: 8px; }
+.hhitems { margin-top: 12px; } .hhitems summary { cursor: pointer; color: var(--gold); }
+.hhitems input#hh-filter { width: 100%; margin: 10px 0; background: #1E1A17; border: 1px solid rgba(255,255,255,.14); border-radius: 3px; padding: 8px 10px; }
+.hhitems .chk { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); max-height: 320px; overflow: auto; }
+.hhitems .chk small { color: var(--muted); }
+/* QR cards */
+.qrgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; margin-bottom: 10px; }
+.qrcard { background: var(--panel); border: 1px solid rgba(255,255,255,.06); border-radius: 4px; padding: 12px; text-align: center; display: grid; gap: 6px; justify-items: center; }
+.qrcard canvas { width: 100%; max-width: 180px; height: auto; border: 1px solid var(--gold-soft); }
+.qrcard.casa canvas { max-width: 240px; }
+.qcod { font-family: "Bodoni Moda", Georgia, serif; font-size: 1.5rem; }
+.qdove { font-size: .72rem; color: var(--muted); word-break: break-all; }
+.svc small { font-family: "Work Sans"; font-style: normal; font-size: .75rem; color: var(--muted); letter-spacing: .1em; margin-left: 8px; }
+@media print { .qrgrid { grid-template-columns: repeat(3, 1fr); gap: 10mm; } .qrcard { background: #fff; color: #000; border: 1px dashed #999; break-inside: avoid; } .qrcard canvas { max-width: 100%; border: 0; } .qdove { color: #666; } .svc { color: #000; } .savestate { display: none; } }
+@media (max-width: 700px) { .tdname .sub { display: none; } .tdth { width: 56px; } .th { width: 48px; } .tdprice { width: 84px; } .tdprice input { width: 72px; padding: 6px 4px; font-size: 1rem; } .tdout { width: 60px; } .sw { font-size: 0; gap: 0; } td { padding: 8px 4px; } .tdact .actions { flex-direction: column; } .cover, .cover.dish { grid-template-columns: 1fr; } .cover img, .cover .nocover, .cover.dish img, .cover.dish .nocover { width: 100%; } .tdact { width: auto; } .grid3 { grid-template-columns: 1fr 70px 80px auto; } details.room > summary .sub { margin-left: 0; text-align: left; width: 100%; } details.room > summary { flex-wrap: wrap; } }
 @media (max-width: 700px) { .grid2 { grid-template-columns: 1fr; } .top { flex-wrap: wrap; } .tabs { margin-left: 0; width: 100%; } td, th { padding: 8px 6px; } }
 </style>
 </head>
@@ -96,6 +156,8 @@ td .sub { display: block; font-size: .8rem; color: var(--muted); }
   <span class="who" id="who"></span>
 </div>
 <main id="main"></main>
+<script src="art.js"></script>
+<script src="qrcode.min.js"></script>
 <script>
 (function () {
   "use strict";
@@ -115,7 +177,7 @@ td .sub { display: block; font-size: .8rem; color: var(--muted); }
   /* ---------- login ---------- */
   function loginView(msg) {
     $("#tabs").innerHTML = ""; $("#who").innerHTML = "";
-    $("#main").innerHTML = '<div class="login card"><h1>Sala</h1><p>Prenotazioni, pre-ordini e impostazioni dell\'Osteria La Galleria. Solo per il personale.</p>' +
+    $("#main").innerHTML = '<div class="login card"><h1>Sala</h1><p>Prenotazioni, pre-ordini, il menu e le impostazioni dell\'Osteria La Galleria. Solo per il personale.</p>' +
       '<form id="login"><label class="f">Email o nome utente<input name="email" autocomplete="username" required></label><br><label class="f">Password<input name="password" type="password" autocomplete="current-password" required></label><br><button class="btn" type="submit">Entra</button><p class="err" id="lerr">' + esc(msg || "") + "</p></form></div>";
     $("#login").addEventListener("submit", async e => {
       e.preventDefault(); const f = new FormData(e.target);
@@ -124,9 +186,9 @@ td .sub { display: block; font-size: .8rem; color: var(--muted); }
   }
 
   /* ---------- shell ---------- */
-  const TABS = [["oggi", "Oggi"], ["prenotazioni", "Prenotazioni"], ["ordini", "Pre-ordini"], ["impostazioni", "Impostazioni"], ["accessi", "Accessi"]];
+  const TABS = [["oggi", "Oggi"], ["prenotazioni", "Prenotazioni"], ["ordini", "Pre-ordini"], ["menu", "Menu"], ["locale", "Il locale"], ["qr", "QR"], ["impostazioni", "Impostazioni"], ["accessi", "Accessi"]];
   function boot() {
-    const allowed = me.role === "platform" ? ["oggi"] : me.role === "owner" ? TABS.map(t => t[0]) : ["oggi", "prenotazioni", "ordini", "accessi"];
+    const allowed = me.role === "platform" ? ["oggi"] : me.role === "owner" ? TABS.map(t => t[0]) : ["oggi", "prenotazioni", "ordini", "menu", "qr", "accessi"];
     $("#tabs").innerHTML = TABS.filter(t => allowed.includes(t[0])).map(t => '<button data-tab="' + t[0] + '">' + t[1] + "</button>").join("");
     $("#who").innerHTML = esc(me.name || me.email || me.username) + ' <span class="live' + (live ? " on" : "") + '"><i></i>' + (live ? "pagamenti attivi" : "pagamenti spenti") + '</span><button id="logout">Esci</button>';
     $("#logout").addEventListener("click", async () => { await post("/api/admin/logout", {}); me = null; loginView(); });
@@ -137,7 +199,7 @@ td .sub { display: block; font-size: .8rem; color: var(--muted); }
   function show(tab) {
     document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
     history.replaceState(null, "", "#" + tab);
-    ({ oggi, prenotazioni, ordini, impostazioni, accessi })[tab]();
+    ({ oggi, prenotazioni, ordini, menu, locale, qr, impostazioni, accessi })[tab]();
   }
 
   /* ---------- Oggi ---------- */
@@ -253,7 +315,7 @@ td .sub { display: block; font-size: .8rem; color: var(--muted); }
     const m = $("#main");
     const admins = me.role === "owner" ? (await api("/api/admin/admins")).admins : null;
     const ROLE = { owner: "Titolare", staff: "Sala", platform: "Piattaforma" };
-    m.innerHTML = '<h1>Accessi</h1>' + (admins ? '<div class="card"><h2>Chi può entrare</h2><p class="help">Titolare: tutto. Sala: prenotazioni e pre-ordini. Piattaforma: solo i numeri (Amico Mio).</p><table><thead><tr><th>Nome</th><th>Accesso</th><th>Ruolo</th><th>Avvisi</th><th></th></tr></thead><tbody>' +
+    m.innerHTML = '<h1>Accessi</h1>' + (admins ? '<div class="card"><h2>Chi può entrare</h2><p class="help">Titolare: tutto. Sala: prenotazioni, pre-ordini, “esaurito” sul menu e i QR. Piattaforma: solo i numeri (Amico Mio).</p><table><thead><tr><th>Nome</th><th>Accesso</th><th>Ruolo</th><th>Avvisi</th><th></th></tr></thead><tbody>' +
       admins.map(a => "<tr><td>" + esc(a.name || "—") + "</td><td>" + esc(a.email || a.username) + "</td><td>" + ROLE[a.role] + "</td><td>" + (a.notify ? "sì" : "no") + "</td><td>" + (a.id !== me.id && a.role !== "platform" ? '<button class="btn sm danger" data-del="' + a.id + '">Rimuovi</button>' : "") + "</td></tr>").join("") + "</tbody></table>" +
       '<form id="add" style="margin-top:16px"><div class="grid2"><label class="f">Nome<input name="name"></label><label class="f">Email<input name="email" type="email"></label><label class="f">oppure nome utente<input name="username"></label><label class="f">Ruolo<select name="role"><option value="staff">Sala</option><option value="owner">Titolare</option></select></label><label class="f">Password (min. 8)<input name="password" type="password" required></label></div><div class="chk" style="margin:10px 0"><label><input type="checkbox" name="notify" checked> Riceve gli avvisi via email</label></div><div class="actions"><button class="btn" type="submit">Aggiungi</button></div><p class="err" id="aerr"></p></form></div>' : "") +
       '<div class="card"><h2>La tua password</h2><form id="pw"><div class="grid2"><label class="f">Attuale<input name="current" type="password" autocomplete="current-password" required></label><label class="f">Nuova (min. 8)<input name="next" type="password" autocomplete="new-password" required></label></div><div class="actions" style="margin-top:10px"><button class="btn" type="submit">Cambia</button></div><p class="okmsg" id="pmsg"></p><p class="err" id="perr"></p></form></div>';
@@ -261,6 +323,242 @@ td .sub { display: block; font-size: .8rem; color: var(--muted); }
     const add = $("#add"); if (add) add.addEventListener("submit", async e => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); f.notify = !!f.notify; try { await post("/api/admin/admins", f); accessi(); } catch (err) { $("#aerr").textContent = err.message; } });
     $("#pw").addEventListener("submit", async e => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); try { await post("/api/admin/password", f); $("#pmsg").textContent = "Cambiata."; $("#perr").textContent = ""; e.target.reset(); } catch (err) { $("#perr").textContent = err.message; $("#pmsg").textContent = ""; } });
   }
+
+  /* ==================== Menu (the owner's live menu; the floor only marks sold out) ==================== */
+  let MENU = null, saveTimer = null, saving = false;
+  const AL = { 1: "Glutine", 2: "Crostacei", 3: "Uova", 4: "Pesce", 5: "Arachidi", 6: "Soia", 7: "Latte", 8: "Frutta a guscio", 9: "Sedano", 10: "Senape", 11: "Sesamo", 12: "Solfiti", 13: "Lupini", 14: "Molluschi" };
+  const ART = window.ART || { BASE: {}, ING: {} };
+  const mediaUrl = id => (MENU && MENU.media[id] ? "/media/" + id + "?v=" + MENU.media[id] : null);
+  const drawing = (d, wall) => { const base = ART.BASE[d.base] || ART.BASE.plate || { svg: "" }; return '<svg viewBox="0 0 400 300" aria-hidden="true"><rect width="400" height="300" fill="' + esc(wall) + '"/>' + [base.svg].concat((d.steps || []).map(k => (ART.ING[k] || { svg: "" }).svg)).join("") + "</svg>"; };
+  const thumb = (d, room) => { const u = mediaUrl("dish_" + d.id); return '<span class="th">' + (u ? '<img src="' + esc(u) + '" alt="">' : drawing(d, room.wall)) + "</span>"; };
+  const count = r => r.groups.reduce((a, g) => a + g.items.length, 0);
+  const countOut = r => r.groups.reduce((a, g) => a + g.items.filter(d => d.out).length, 0);
+  const dishId = it => { const base = String(it).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "piatto"; const all = new Set(MENU.rooms.flatMap(r => r.groups.flatMap(g => g.items.map(d => d.id)))); let id = base, i = 2; while (all.has(id)) id = base + "-" + i++; return id; };
+
+  function setSaveState(txt, cls) { const el = $("#savestate"); if (el) { el.textContent = txt; el.className = "savestate " + (cls || ""); } }
+  function scheduleSave() { if (me.role !== "owner") return; setSaveState("Modifiche non salvate…", "warn"); clearTimeout(saveTimer); saveTimer = setTimeout(saveMenu, 1200); }
+  async function saveMenu() {
+    if (saving) { scheduleSave(); return; }
+    saving = true; setSaveState("Salvataggio…", "");
+    try { const j = await put("/api/admin/menu", { ver: MENU.ver, rooms: MENU.rooms }); MENU.ver = j.ver; setSaveState("Salvato ✓", "ok"); }
+    catch (err) { setSaveState(err.message, "bad"); if (/ricarica/.test(err.message)) setTimeout(() => menu(), 2500); }
+    saving = false;
+  }
+  // A photo from the owner's phone: cover-cropped and shrunk in the browser, then stored by the Worker.
+  function pickImage(W, H) {
+    return new Promise(resolve => {
+      const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*";
+      inp.onchange = () => {
+        const f = inp.files[0]; if (!f) return resolve(null);
+        const img = new Image(); const url = URL.createObjectURL(f);
+        img.onload = () => {
+          const c = document.createElement("canvas"); c.width = W; c.height = H; const g = c.getContext("2d");
+          const s = Math.max(W / img.width, H / img.height), w = img.width * s, h = img.height * s;
+          g.fillStyle = "#1E1A17"; g.fillRect(0, 0, W, H); g.drawImage(img, (W - w) / 2, (H - h) / 2, w, h);
+          let q = 0.84, data; do { data = c.toDataURL("image/webp", q); q -= 0.1; } while (data.length > 1100000 && q > 0.3);
+          if (!data.startsWith("data:image/webp")) { q = 0.8; do { data = c.toDataURL("image/jpeg", q); q -= 0.1; } while (data.length > 1100000 && q > 0.3); }
+          URL.revokeObjectURL(url); resolve(data);
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); alert("Non riesco a leggere questa immagine. Prova con un JPEG o un PNG (le foto HEIC dell'iPhone vanno prima convertite: Impostazioni → Fotocamera → Formati → Più compatibile)."); resolve(null); };
+        img.src = url;
+      };
+      inp.click();
+    });
+  }
+  async function uploadMedia(id, W, H) {
+    const data = await pickImage(W, H); if (!data) return false;
+    try { const j = await put("/api/admin/media/" + id, { data }); MENU.media[id] = j.ver; return true; } catch (err) { alert(err.message); return false; }
+  }
+  async function removeMedia(id) { if (!confirm("Togliere questa foto?")) return false; await api("/api/admin/media/" + id, { method: "DELETE" }); delete MENU.media[id]; return true; }
+
+  async function menu() {
+    const m = $("#main"); m.innerHTML = '<p class="help">Un attimo…</p>';
+    MENU = await api("/api/admin/menu");
+    const owner = me.role === "owner";
+    m.innerHTML = '<h1>Il menu</h1><p class="help">' + (owner
+      ? "Quello che i clienti vedono sul sito, sala per sala. Cambia un prezzo o un nome e si salva da solo; “Esaurito” lo toglie subito dai pre-ordini e lo segna sul sito. “Modifica” apre la scheda completa: descrizione, allergeni, foto, il disegno."
+      : "Segna “Esaurito” quando un piatto finisce: sparisce dai pre-ordini e si vede sul sito. Prezzi, nomi e foto li cambia il titolare.") + "</p>" +
+      '<div class="bar"><label class="f grow">Cerca<input id="mfilter" placeholder="nome del piatto…"></label>' + (owner ? '<button class="btn ghost" id="addroom" type="button">＋ Nuova sala</button>' : "") + '<span class="savestate" id="savestate"></span></div>' +
+      '<div id="rooms"></div>';
+    renderRooms();
+    $("#mfilter").addEventListener("input", () => filterRooms($("#mfilter").value));
+    if (owner) $("#addroom").addEventListener("click", () => { const n = MENU.rooms.length + 1; MENU.rooms.push({ id: "sala-" + Date.now().toString(36), numeral: String(n), wall: "#3E1219", ink: "#F2E8D5", title: { it: "Nuova sala", en: "New room" }, blurb: { it: "", en: "" }, groups: [{ items: [] }] }); renderRooms(); scheduleSave(); $("#rooms details:last-of-type").open = true; });
+  }
+  function filterRooms(q) {
+    q = q.trim().toLowerCase();
+    document.querySelectorAll("#rooms tr.dish").forEach(tr => { tr.hidden = q.length > 0 && !tr.dataset.name.includes(q); });
+    document.querySelectorAll("#rooms details.room").forEach(dt => { if (q) dt.open = [...dt.querySelectorAll("tr.dish")].some(tr => !tr.hidden); });
+  }
+  function renderRooms() {
+    const owner = me.role === "owner";
+    const open = new Set([...document.querySelectorAll("#rooms details.room")].filter(d => d.open).map(d => d.dataset.r));
+    $("#rooms").innerHTML = MENU.rooms.map((r, ri) => {
+      const cover = mediaUrl("room_" + r.id);
+      return '<details class="room' + (r.hidden ? " off" : "") + '" data-r="' + ri + '"' + (open.has(String(ri)) ? " open" : "") + '><summary><span class="rn">' + esc(r.numeral) + "</span><b>" + esc(r.title.it) + "</b><span class=\"sub\">" + count(r) + " piatti" + (countOut(r) ? " · " + countOut(r) + " esauriti" : "") + (r.hidden ? " · nascosta" : "") + "</span></summary>" +
+        (owner ? '<div class="roomedit"><div class="cover">' + (cover ? '<img src="' + esc(cover) + '" alt="">' : '<span class="nocover">' + drawing((r.groups[0] && r.groups[0].items[0]) || { steps: [] }, r.wall) + "</span>") +
+            '<div class="actions"><button class="btn sm ghost" type="button" data-cover="' + ri + '">' + (cover ? "Cambia la foto di copertina" : "Carica una foto di copertina") + "</button>" + (cover ? '<button class="btn sm danger" type="button" data-uncover="' + ri + '">Togli</button>' : "") + '</div><p class="help">La copertina appare sulla home e in cima alla sala. Senza, resta il disegno del piatto in evidenza.</p></div>' +
+            '<div class="grid2"><label class="f">Titolo<input data-rf="title.it" data-r="' + ri + '" value="' + esc(r.title.it) + '"></label><label class="f">Titolo (inglese)<input data-rf="title.en" data-r="' + ri + '" value="' + esc(r.title.en) + '"></label>' +
+            '<label class="f">Nome breve (linguetta)<input data-rf="short.it" data-r="' + ri + '" value="' + esc(r.short ? r.short.it : "") + '" maxlength="24"></label><label class="f">Nome breve (inglese)<input data-rf="short.en" data-r="' + ri + '" value="' + esc(r.short ? r.short.en : "") + '" maxlength="24"></label>' +
+            '<label class="f">Sottotitolo<textarea data-rf="blurb.it" data-r="' + ri + '" rows="2">' + esc(r.blurb.it) + '</textarea></label><label class="f">Sottotitolo (inglese)<textarea data-rf="blurb.en" data-r="' + ri + '" rows="2">' + esc(r.blurb.en) + "</textarea></label>" +
+            '<label class="f">Numero romano<input data-rf="numeral" data-r="' + ri + '" value="' + esc(r.numeral) + '" maxlength="8"></label><label class="f">Colore della parete<input type="color" data-rf="wall" data-r="' + ri + '" value="' + esc(r.wall) + '"></label></div>' +
+            '<div class="actions" style="margin-top:10px"><button class="btn sm ghost" type="button" data-rmove="-1" data-r="' + ri + '"' + (ri === 0 ? " disabled" : "") + '>↑ Prima</button><button class="btn sm ghost" type="button" data-rmove="1" data-r="' + ri + '"' + (ri === MENU.rooms.length - 1 ? " disabled" : "") + '>↓ Dopo</button><button class="btn sm ghost" type="button" data-rhide="' + ri + '">' + (r.hidden ? "Mostra sul sito" : "Nascondi dal sito") + '</button><button class="btn sm ghost" type="button" data-addgroup="' + ri + '">＋ Gruppo</button><button class="btn sm danger" type="button" data-rdel="' + ri + '">Elimina la sala</button></div></div>' : "") +
+        r.groups.map((g, gi) => '<div class="group">' +
+          (owner ? '<div class="grid2 gt"><label class="f">Gruppo (vuoto = nessun titolo)<input data-gf="it" data-r="' + ri + '" data-g="' + gi + '" value="' + esc(g.title ? g.title.it : "") + '"></label><label class="f">Gruppo (inglese)<input data-gf="en" data-r="' + ri + '" data-g="' + gi + '" value="' + esc(g.title ? g.title.en : "") + '"></label></div>' : (g.title && g.title.it ? "<h3>" + esc(g.title.it) + "</h3>" : "")) +
+          '<table><tbody>' + g.items.map((d, ii) => '<tr class="dish' + (d.out ? " out" : "") + (d.off ? " off" : "") + '" data-name="' + esc((d.it + " " + d.en).toLowerCase()) + '"><td class="tdth">' + thumb(d, r) + "</td>" +
+            '<td class="tdname">' + (owner ? '<input class="name" data-df="it" data-r="' + ri + '" data-g="' + gi + '" data-i="' + ii + '" value="' + esc(d.it) + '">' : '<span class="name">' + esc(d.it) + "</span>") + '<span class="sub">' + esc(d.en) + (d.off ? " · nascosto" : "") + (d.v ? " · V" : "") + (d.perKg ? " · al kg" : d.per2 ? " · per due" : "") + "</span></td>" +
+            '<td class="tdprice">' + (owner ? '<input class="price" type="number" min="0" step="0.5" data-df="price" data-r="' + ri + '" data-g="' + gi + '" data-i="' + ii + '" value="' + d.price + '">' : eur(d.price * 100)) + "</td>" +
+            '<td class="tdout"><label class="sw"><input type="checkbox" data-out="' + esc(d.id) + '"' + (d.out ? " checked" : "") + "><span></span>Esaurito</label></td>" +
+            (owner ? '<td class="tdact"><div class="actions"><button class="btn sm ghost" type="button" data-edit="' + ri + "," + gi + "," + ii + '">Modifica</button><button class="btn sm ghost" type="button" data-imove="-1" data-p="' + ri + "," + gi + "," + ii + '"' + (ii === 0 ? " disabled" : "") + '>↑</button><button class="btn sm ghost" type="button" data-imove="1" data-p="' + ri + "," + gi + "," + ii + '"' + (ii === g.items.length - 1 ? " disabled" : "") + ">↓</button></div></td>" : "") + "</tr>").join("") +
+          "</tbody></table>" + (owner ? '<div class="actions" style="margin:8px 0 4px"><button class="btn sm ghost" type="button" data-additem="' + ri + "," + gi + '">＋ Aggiungi un piatto</button>' + (g.items.length === 0 && r.groups.length > 1 ? '<button class="btn sm danger" type="button" data-gdel="' + ri + "," + gi + '">Togli il gruppo</button>' : "") + "</div>" : "") + "</div>").join("") +
+        "</details>";
+    }).join("");
+    wireRooms();
+  }
+  const pathOf = el => el.dataset.p.split(",").map(Number);
+  function wireRooms() {
+    const root = $("#rooms");
+    root.querySelectorAll("[data-out]").forEach(cb => cb.addEventListener("change", async () => {
+      const id = cb.dataset.out; let hit = null; MENU.rooms.forEach(r => r.groups.forEach(g => g.items.forEach(d => { if (d.id === id) hit = d; })));
+      try { const j = await patch("/api/admin/menu/item", { id, out: cb.checked }); MENU.ver = j.ver; if (hit) { if (cb.checked) hit.out = true; else delete hit.out; } cb.closest("tr").classList.toggle("out", cb.checked); setSaveState(cb.checked ? "Segnato esaurito" : "Di nuovo in carta", "ok"); }
+      catch (err) { cb.checked = !cb.checked; alert(err.message); }
+    }));
+    if (me.role !== "owner") return;
+    root.querySelectorAll("[data-rf]").forEach(inp => inp.addEventListener("input", () => { const r = MENU.rooms[inp.dataset.r]; const [a, b] = inp.dataset.rf.split("."); if (b) { r[a] = r[a] || { it: "", en: "" }; r[a][b] = inp.value; } else r[a] = inp.value; if (a === "title" && b === "it") inp.closest("details").querySelector("summary b").textContent = inp.value; scheduleSave(); }));
+    root.querySelectorAll("[data-gf]").forEach(inp => inp.addEventListener("input", () => { const g = MENU.rooms[inp.dataset.r].groups[inp.dataset.g]; g.title = g.title || { it: "", en: "" }; g.title[inp.dataset.gf] = inp.value; scheduleSave(); }));
+    root.querySelectorAll("[data-df]").forEach(inp => inp.addEventListener("input", () => { const d = MENU.rooms[inp.dataset.r].groups[inp.dataset.g].items[inp.dataset.i]; d[inp.dataset.df] = inp.dataset.df === "price" ? Math.max(0, Number(inp.value) || 0) : inp.value; scheduleSave(); }));
+    root.querySelectorAll("[data-cover]").forEach(b => b.addEventListener("click", async () => { const r = MENU.rooms[b.dataset.cover]; if (await uploadMedia("room_" + r.id, 1400, 1050)) renderRooms(); }));
+    root.querySelectorAll("[data-uncover]").forEach(b => b.addEventListener("click", async () => { const r = MENU.rooms[b.dataset.uncover]; if (await removeMedia("room_" + r.id)) renderRooms(); }));
+    root.querySelectorAll("[data-rmove]").forEach(b => b.addEventListener("click", () => { const i = Number(b.dataset.r), j = i + Number(b.dataset.rmove); [MENU.rooms[i], MENU.rooms[j]] = [MENU.rooms[j], MENU.rooms[i]]; renderRooms(); scheduleSave(); }));
+    root.querySelectorAll("[data-rhide]").forEach(b => b.addEventListener("click", () => { const r = MENU.rooms[b.dataset.rhide]; if (r.hidden) delete r.hidden; else r.hidden = true; renderRooms(); scheduleSave(); }));
+    root.querySelectorAll("[data-rdel]").forEach(b => b.addEventListener("click", () => { const r = MENU.rooms[b.dataset.rdel]; if (MENU.rooms.length < 2) return alert("Deve restare almeno una sala."); if (!confirm("Eliminare la sala “" + r.title.it + "” con i suoi " + count(r) + " piatti?")) return; MENU.rooms.splice(Number(b.dataset.rdel), 1); renderRooms(); scheduleSave(); }));
+    root.querySelectorAll("[data-addgroup]").forEach(b => b.addEventListener("click", () => { MENU.rooms[b.dataset.addgroup].groups.push({ title: { it: "Nuovo gruppo", en: "New group" }, items: [] }); renderRooms(); scheduleSave(); }));
+    root.querySelectorAll("[data-gdel]").forEach(b => b.addEventListener("click", () => { const [ri, gi] = b.dataset.gdel.split(",").map(Number); MENU.rooms[ri].groups.splice(gi, 1); renderRooms(); scheduleSave(); }));
+    root.querySelectorAll("[data-additem]").forEach(b => b.addEventListener("click", () => { const [ri, gi] = b.dataset.additem.split(",").map(Number); const d = { id: dishId("nuovo-piatto-" + Date.now().toString(36)), it: "Nuovo piatto", en: "", dit: "", price: 0, a: [], base: "plate", steps: [] }; MENU.rooms[ri].groups[gi].items.push(d); editDish(ri, gi, MENU.rooms[ri].groups[gi].items.length - 1, true); }));
+    root.querySelectorAll("[data-imove]").forEach(b => b.addEventListener("click", () => { const [ri, gi, ii] = pathOf(b); const items = MENU.rooms[ri].groups[gi].items; const j = ii + Number(b.dataset.imove); [items[ii], items[j]] = [items[j], items[ii]]; renderRooms(); scheduleSave(); }));
+    root.querySelectorAll("[data-edit]").forEach(b => b.addEventListener("click", () => { const [ri, gi, ii] = b.dataset.edit.split(",").map(Number); editDish(ri, gi, ii, false); }));
+  }
+  /* The full card of one dish: names, description, price, allergens, flags, the photo, and the drawing's recipe. */
+  function editDish(ri, gi, ii, isNew) {
+    const room = MENU.rooms[ri], d = MENU.rooms[ri].groups[gi].items[ii];
+    const w = { ...d, a: (d.a || []).slice(), steps: (d.steps || []).slice() };
+    const ingList = Object.entries(ART.ING).map(([k, v]) => ({ k, it: v.it, en: v.en })).sort((a, b) => a.it.localeCompare(b.it, "it"));
+    const bases = Object.entries(ART.BASE).map(([k, v]) => '<option value="' + k + '"' + (k === (w.base || "plate") ? " selected" : "") + ">" + esc(v.it) + "</option>").join("");
+    const dr = drawer('<h2>' + (isNew ? "Nuovo piatto" : esc(d.it)) + '</h2><p class="help">Sala ' + esc(room.numeral) + " · " + esc(room.title.it) + "</p>" +
+      '<div class="grid2"><label class="f">Nome<input id="e-it" value="' + esc(w.it) + '" maxlength="120"></label><label class="f">Nome inglese / descrizione inglese<input id="e-en" value="' + esc(w.en || "") + '" maxlength="200"></label></div>' +
+      '<label class="f">Descrizione (ingredienti, come sul menu di carta)<input id="e-dit" value="' + esc(w.dit || "") + '" maxlength="300"></label>' +
+      '<div class="grid2"><label class="f">Prezzo €<input id="e-price" type="number" min="0" step="0.5" value="' + w.price + '"></label><label class="f">Prezzo<select id="e-unit"><option value=""' + (!w.per2 && !w.perKg ? " selected" : "") + '>a porzione</option><option value="per2"' + (w.per2 ? " selected" : "") + '>per due persone</option><option value="perKg"' + (w.perKg ? " selected" : "") + ">al chilo (si pesa al tavolo, niente pre-ordine)</option></select></label></div>" +
+      '<p class="help" style="margin:12px 0 4px">Allergeni</p><div class="chk">' + Object.entries(AL).map(([n, name]) => '<label><input type="checkbox" data-al="' + n + '"' + (w.a.includes(Number(n)) ? " checked" : "") + "> " + n + " " + name + "</label>").join("") + "</div>" +
+      '<div class="chk" style="margin-top:12px"><label><input type="checkbox" id="e-v"' + (w.v ? " checked" : "") + "> Vegetariano (V)</label><label><input type=\"checkbox\" id=\"e-star\"" + (w.star ? " checked" : "") + "> * prodotto surgelato all'origine</label><label><input type=\"checkbox\" id=\"e-feature\"" + (w.feature ? " checked" : "") + "> Piatto in evidenza della sala</label><label><input type=\"checkbox\" id=\"e-off\"" + (w.off ? " checked" : "") + "> Nascosto dal sito</label></div>" +
+      '<h3 style="margin-top:22px">La foto</h3><p class="help">Una foto vera del piatto sostituisce il disegno ovunque. Dal telefono va benissimo: viene ridotta prima di partire.</p><div class="cover dish"><div id="e-pic">' + (mediaUrl("dish_" + d.id) ? '<img src="' + esc(mediaUrl("dish_" + d.id)) + '" alt="">' : '<span class="nocover" id="e-draw">' + drawing(w, room.wall) + "</span>") + '</div><div class="actions"><button class="btn sm ghost" type="button" id="e-photo">' + (mediaUrl("dish_" + d.id) ? "Cambia la foto" : "Carica una foto") + "</button>" + (mediaUrl("dish_" + d.id) ? '<button class="btn sm danger" type="button" id="e-unphoto">Togli la foto</button>' : "") + "</div></div>" +
+      '<h3 style="margin-top:22px">Il disegno</h3><p class="help">Finché non c\'è la foto, il sito disegna il piatto dagli ingredienti, uno alla volta. Scegli la base e aggiungi gli ingredienti nell\'ordine in cui vanno nel piatto.</p>' +
+      '<label class="f">Base<select id="e-base">' + bases + '</select></label><div class="steps" id="e-steps"></div><label class="f" style="margin-top:8px">Aggiungi un ingrediente<input id="e-ing" placeholder="cerca: pomodoro, pecorino, tartufo…" autocomplete="off"></label><div class="inglist" id="e-inglist"></div>' +
+      '<div class="actions" style="margin-top:22px"><button class="btn" type="button" id="e-save">Salva</button><button class="btn ghost" type="button" id="close">Annulla</button>' + (isNew ? "" : '<button class="btn danger" type="button" id="e-del">Elimina il piatto</button>') + "</div>");
+    const redraw = () => { const el = $("#e-draw", dr); if (el) el.innerHTML = drawing(w, room.wall); };
+    const steps = () => { $("#e-steps", dr).innerHTML = w.steps.length ? w.steps.map((k, i) => '<span class="chip"><b>' + esc((ART.ING[k] || { it: k }).it) + '</b><button type="button" data-sm="-1" data-i="' + i + '"' + (i === 0 ? " disabled" : "") + ' aria-label="prima">‹</button><button type="button" data-sm="1" data-i="' + i + '"' + (i === w.steps.length - 1 ? " disabled" : "") + ' aria-label="dopo">›</button><button type="button" data-sx="' + i + '" aria-label="togli">✕</button></span>').join("") : '<span class="help">Nessun ingrediente: solo la base.</span>';
+      dr.querySelectorAll("[data-sm]").forEach(b => b.addEventListener("click", () => { const i = Number(b.dataset.i), j = i + Number(b.dataset.sm); [w.steps[i], w.steps[j]] = [w.steps[j], w.steps[i]]; steps(); redraw(); }));
+      dr.querySelectorAll("[data-sx]").forEach(b => b.addEventListener("click", () => { w.steps.splice(Number(b.dataset.sx), 1); steps(); redraw(); })); };
+    const ingSearch = () => { const q = $("#e-ing", dr).value.trim().toLowerCase(); const host = $("#e-inglist", dr); if (q.length < 2) { host.innerHTML = ""; return; }
+      const hits = ingList.filter(x => (x.it + " " + x.en + " " + x.k).toLowerCase().includes(q)).slice(0, 24);
+      host.innerHTML = hits.length ? hits.map(x => '<button type="button" class="ingbtn" data-add="' + x.k + '"><svg viewBox="0 0 400 300">' + (ART.ING[x.k] || { svg: "" }).svg + "</svg><span>" + esc(x.it) + "</span></button>").join("") : '<span class="help">Nessun ingrediente disegnato con questo nome. Puoi aggiungerne uno nuovo in art.js.</span>';
+      host.querySelectorAll("[data-add]").forEach(b => b.addEventListener("click", () => { if (w.steps.length >= 14) return alert("Al massimo 14 ingredienti."); w.steps.push(b.dataset.add); steps(); redraw(); $("#e-ing", dr).value = ""; host.innerHTML = ""; })); };
+    steps(); $("#e-ing", dr).addEventListener("input", ingSearch);
+    $("#e-base", dr).addEventListener("change", () => { w.base = $("#e-base", dr).value; redraw(); });
+    $("#close", dr).addEventListener("click", () => { if (isNew) MENU.rooms[ri].groups[gi].items.splice(ii, 1); dr.remove(); renderRooms(); });
+    $("#e-photo", dr).addEventListener("click", async () => { if (await uploadMedia("dish_" + d.id, 1200, 900)) { $("#e-pic", dr).innerHTML = '<img src="' + esc(mediaUrl("dish_" + d.id)) + '" alt="">'; $("#e-photo", dr).textContent = "Cambia la foto"; } });
+    const un = $("#e-unphoto", dr); if (un) un.addEventListener("click", async () => { if (await removeMedia("dish_" + d.id)) { $("#e-pic", dr).innerHTML = '<span class="nocover" id="e-draw">' + drawing(w, room.wall) + "</span>"; un.remove(); $("#e-photo", dr).textContent = "Carica una foto"; } });
+    const del = $("#e-del", dr); if (del) del.addEventListener("click", () => { if (!confirm("Eliminare “" + d.it + "” dal menu?")) return; MENU.rooms[ri].groups[gi].items.splice(ii, 1); dr.remove(); renderRooms(); scheduleSave(); });
+    $("#e-save", dr).addEventListener("click", () => {
+      const v = id => $(id, dr).value;
+      d.it = v("#e-it").trim() || "—"; d.en = v("#e-en").trim(); d.dit = v("#e-dit").trim(); d.price = Math.max(0, Number(v("#e-price")) || 0);
+      d.a = [...dr.querySelectorAll("[data-al]:checked")].map(c => Number(c.dataset.al));
+      for (const [f, id] of [["v", "#e-v"], ["star", "#e-star"], ["feature", "#e-feature"], ["off", "#e-off"]]) { if ($(id, dr).checked) d[f] = true; else delete d[f]; }
+      delete d.per2; delete d.perKg; if (v("#e-unit") === "per2") d.per2 = true; if (v("#e-unit") === "perKg") d.perKg = true;
+      d.base = w.base || "plate"; d.steps = w.steps.slice();
+      dr.remove(); renderRooms(); scheduleSave();
+    });
+  }
+
+  /* ==================== Locale: contact details, happy hour, Wi-Fi, the tables ==================== */
+  async function locale() {
+    const m = $("#main"); m.innerHTML = '<p class="help">Un attimo…</p>';
+    MENU = await api("/api/admin/menu"); const s = MENU.site;
+    const dishes = MENU.rooms.flatMap(r => r.groups.flatMap(g => g.items.map(d => ({ ...d, room: r.title.it }))));
+    m.innerHTML = '<h1>Il locale</h1><p class="help">Quello che il sito dice di voi: recapiti, orari, happy hour, Wi-Fi per gli ospiti, e i tavoli per i codici QR. Le caselle vuote non compaiono sul sito.</p><form id="site">' +
+      '<div class="card"><h2>Recapiti</h2><div class="grid2"><label class="f">Nome del locale<input name="name" value="' + esc(s.name) + '"></label><label class="f">Indirizzo<input name="address" value="' + esc(s.address) + '"></label>' +
+      '<label class="f">Telefono<input name="phone" value="' + esc(s.phone) + '" placeholder="+39 055 …"></label><label class="f">WhatsApp (solo cifre, con 39)<input name="whatsapp" value="' + esc(s.whatsapp) + '" placeholder="39333…"></label>' +
+      '<label class="f">Email<input name="email" type="email" value="' + esc(s.email) + '"></label><label class="f">Instagram (senza @)<input name="instagram" value="' + esc(s.instagram) + '"></label>' +
+      '<label class="f">Link Google Maps<input name="mapsUrl" value="' + esc(s.mapsUrl) + '" placeholder="https://maps.app.goo.gl/…"></label><label class="f">Link per lasciare una recensione<input name="reviewUrl" value="' + esc(s.reviewUrl) + '" placeholder="https://g.page/r/…/review"></label>' +
+      '<label class="f">Orari<input name="hours_it" value="' + esc(s.hours.it) + '" placeholder="Tutti i giorni 11:30 – 23:00"></label><label class="f">Orari (inglese)<input name="hours_en" value="' + esc(s.hours.en) + '" placeholder="Every day 11:30 – 23:00"></label></div></div>' +
+      '<div class="card"><h2>Wi-Fi per gli ospiti</h2><p class="help">Compare sulla pagina “Visita” e, a chi inquadra il QR del tavolo, in cima al menu.</p><div class="grid2"><label class="f">Nome della rete<input name="wifi_name" value="' + esc(s.wifi.name) + '"></label><label class="f">Password<input name="wifi_pass" value="' + esc(s.wifi.pass) + '"></label></div></div>' +
+      '<div class="card"><h2>Happy hour</h2><p class="help">Come sulla lavagna: un prezzo fisso su alcune bevande in una fascia oraria. Nella fascia il sito mostra il prezzo happy hour barrando quello normale, e i pre-ordini per un tavolo in quell\'ora lo applicano.</p>' +
+      '<div class="chk"><label><input type="checkbox" name="hh_on"' + (s.happyHour.on ? " checked" : "") + "> Happy hour attivo</label></div>" +
+      '<div class="grid2" style="margin-top:10px"><label class="f">Cosa (testo sulla home)<input name="hh_drinks" value="' + esc(s.happyHour.drinks) + '" placeholder="Spritz · Hugo"></label><label class="f">Prezzo happy hour €<input name="hh_price" type="number" min="0" step="0.5" value="' + s.happyHour.price + '"></label>' +
+      '<label class="f">Dalle<input name="hh_from" type="time" value="' + esc(s.happyHour.from) + '"></label><label class="f">Alle<input name="hh_to" type="time" value="' + esc(s.happyHour.to) + '"></label>' +
+      '<label class="f">Quando (testo)<input name="hh_when_it" value="' + esc(s.happyHour.when.it) + '" placeholder="Tutti i giorni dalle 18 alle 20"></label><label class="f">Quando (inglese)<input name="hh_when_en" value="' + esc(s.happyHour.when.en) + '" placeholder="Every day 6 – 8 pm"></label></div>' +
+      '<details class="hhitems"><summary>Bevande in happy hour · <span id="hh-n">' + s.happyHour.items.length + "</span> scelte</summary><input id=\"hh-filter\" placeholder=\"cerca…\"><div class=\"chk\" id=\"hh-list\">" + dishes.map(d => '<label data-name="' + esc((d.it + " " + d.room).toLowerCase()) + '"><input type="checkbox" name="hh_item" value="' + esc(d.id) + '"' + (s.happyHour.items.includes(d.id) ? " checked" : "") + "> " + esc(d.it) + ' <small>' + esc(d.room) + " · " + eur(d.price * 100) + "</small></label>").join("") + "</div></details></div>" +
+      '<div class="card"><h2>I tavoli</h2><p class="help">Per i codici QR: ogni sala ha una lettera e un numero di tavoli. I codici sono 1A, 2A… La pagina “QR” li disegna da sola.</p><div id="tables"></div><button class="btn sm ghost" type="button" id="addtable">＋ Aggiungi una sala di tavoli</button></div>' +
+      '<div class="actions"><button class="btn" type="submit">Salva</button></div><p class="okmsg" id="lmsg"></p><p class="err" id="lerr2"></p></form>';
+    const tables = s.tables.map(t => ({ ...t }));
+    const drawTables = () => { $("#tables").innerHTML = tables.map((t, i) => '<div class="grid3"><label class="f">Sala<input data-t="name" data-i="' + i + '" value="' + esc(t.name) + '"></label><label class="f">Lettera<input data-t="sigla" data-i="' + i + '" value="' + esc(t.sigla) + '" maxlength="1" style="text-transform:uppercase"></label><label class="f">Tavoli<input data-t="n" data-i="' + i + '" type="number" min="0" max="60" value="' + t.n + '"></label><button class="btn sm danger" type="button" data-tdel="' + i + '">✕</button></div>').join("");
+      $("#tables").querySelectorAll("[data-t]").forEach(inp => inp.addEventListener("input", () => { tables[inp.dataset.i][inp.dataset.t] = inp.dataset.t === "n" ? Number(inp.value) : inp.value; }));
+      $("#tables").querySelectorAll("[data-tdel]").forEach(b => b.addEventListener("click", () => { tables.splice(Number(b.dataset.tdel), 1); drawTables(); })); };
+    drawTables();
+    $("#addtable").addEventListener("click", () => { tables.push({ name: "Sala " + (tables.length + 1), sigla: "ABCDEFGHIJKL"[tables.length] || "Z", n: 8 }); drawTables(); });
+    $("#hh-filter").addEventListener("input", () => { const q = $("#hh-filter").value.trim().toLowerCase(); $("#hh-list").querySelectorAll("label").forEach(l => { l.hidden = q && !l.dataset.name.includes(q); }); });
+    $("#hh-list").addEventListener("change", () => { $("#hh-n").textContent = $("#hh-list").querySelectorAll("input:checked").length; });
+    $("#site").addEventListener("submit", async e => {
+      e.preventDefault(); const f = new FormData(e.target); const v = k => f.get(k) || "";
+      const b = { name: v("name"), address: v("address"), phone: v("phone"), whatsapp: v("whatsapp"), email: v("email"), instagram: v("instagram"), mapsUrl: v("mapsUrl"), reviewUrl: v("reviewUrl"), hours: { it: v("hours_it"), en: v("hours_en") }, wifi: { name: v("wifi_name"), pass: v("wifi_pass") },
+        happyHour: { on: !!f.get("hh_on"), drinks: v("hh_drinks"), price: Number(v("hh_price")) || 0, from: v("hh_from"), to: v("hh_to"), when: { it: v("hh_when_it"), en: v("hh_when_en") }, items: f.getAll("hh_item") }, tables };
+      try { const j = await put("/api/admin/site", b); MENU.site = j.site; $("#lmsg").textContent = "Salvato."; $("#lerr2").textContent = ""; } catch (err) { $("#lerr2").textContent = err.message; $("#lmsg").textContent = ""; }
+    });
+  }
+
+  /* ==================== QR: one code per table, one for the door ==================== */
+  async function qr() {
+    const m = $("#main"); m.innerHTML = '<p class="help">Un attimo…</p>';
+    MENU = await api("/api/admin/menu"); const s = MENU.site;
+    const BASE = location.origin.replace(/^http:/, "https:");
+    const tables = s.tables.filter(t => t.n > 0);
+    const tot = tables.reduce((a, t) => a + t.n, 0);
+    m.innerHTML = '<h1>Codici QR</h1><p class="help">Un codice per ogni tavolo: chi lo inquadra apre il menu con il tavolo già segnato (e il Wi-Fi, se l\'avete messo). Il codice “Menu” è per la vetrina e il banco. Scarica i PNG o stampa il foglio; se aggiungi tavoli in “Il locale”, torna qui: i codici nuovi sono già pronti.</p>' +
+      '<div class="bar"><button class="btn" type="button" id="qr-all">Scarica tutti i PNG</button><button class="btn ghost" type="button" id="qr-print">Stampa il foglio</button><span class="help">' + tot + " tavoli · i codici portano a " + esc(BASE.replace(/^https?:\/\//, "")) + "/&lt;tavolo&gt;</span></div>" +
+      '<h2 class="svc">La porta e il banco</h2><div class="qrgrid"><div class="qrcard casa" data-code="" data-file="qr-menu.png"><canvas></canvas><div class="qcod">MENU</div><div class="qdove">' + esc(BASE.replace(/^https?:\/\//, "")) + '</div><button class="btn sm ghost" type="button" data-dl>Scarica PNG</button></div></div>' +
+      (tables.length ? tables.map(t => '<h2 class="svc">' + esc(t.name) + ' <small>' + t.n + " tavoli · 1" + esc(t.sigla) + "–" + t.n + esc(t.sigla) + "</small></h2><div class=\"qrgrid\">" + Array.from({ length: t.n }, (_, i) => { const c = (i + 1) + t.sigla; return '<div class="qrcard" data-code="' + c + '" data-file="qr-' + c + '.png"><canvas></canvas><div class="qcod">' + c + '</div><div class="qdove">' + esc(BASE.replace(/^https?:\/\//, "")) + "/" + c + '</div><button class="btn sm ghost" type="button" data-dl>Scarica PNG</button></div>'; }).join("") + "</div>").join("") : '<p class="empty">Nessun tavolo: aggiungili in “Il locale”.</p>');
+    const cards = [...document.querySelectorAll(".qrcard")];
+    cards.forEach(card => paintQr(card.querySelector("canvas"), card.dataset.code, s.name, BASE));
+    const dl = card => { card.querySelector("canvas").toBlob(b => { const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = card.dataset.file; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }, "image/png"); };
+    cards.forEach(card => card.querySelector("[data-dl]").addEventListener("click", () => dl(card)));
+    $("#qr-all").addEventListener("click", () => cards.forEach((c, i) => setTimeout(() => dl(c), i * 350)));
+    $("#qr-print").addEventListener("click", () => window.print());
+  }
+  // The card, drawn like a gallery plaque: cream, a double gold frame, the name, the code, the table.
+  function paintQr(canvas, code, name, BASE) {
+    const q = qrcode(0, code ? "M" : "Q"); q.addData(BASE + "/" + code); q.make();
+    const N = q.getModuleCount(), W = 1000, H = 1400, scale = Math.floor(600 / N), side = scale * N, ox = (W - side) / 2, top = 260;
+    canvas.width = W; canvas.height = H;
+    const g = canvas.getContext("2d");
+    g.fillStyle = "#F6EFE1"; g.fillRect(0, 0, W, H);
+    g.strokeStyle = "#C9A55C"; g.lineWidth = 6; g.strokeRect(24, 24, W - 48, H - 48); g.lineWidth = 2; g.strokeRect(40, 40, W - 80, H - 80);
+    const spaced = t => t.toUpperCase().split("").join(" ");
+    g.textAlign = "center";
+    g.fillStyle = "#8A6A2E"; g.font = "500 28px 'Work Sans', system-ui, sans-serif"; g.fillText(spaced(name || "Osteria La Galleria"), W / 2, 120);
+    g.fillStyle = "#1E1A17"; g.font = "italic 400 60px 'Bodoni Moda', Georgia, serif"; g.fillText(code ? "Il menu di questo tavolo" : "Il menu", W / 2, 200);
+    g.fillStyle = "#FFFFFF"; g.fillRect(ox - 32, top - 32, side + 64, side + 64);
+    g.strokeStyle = "#C9A55C"; g.lineWidth = 2; g.strokeRect(ox - 32, top - 32, side + 64, side + 64);
+    g.fillStyle = "#000000";
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (q.isDark(r, c)) g.fillRect(ox + c * scale, top + r * scale, scale, scale);
+    const below = top + side + 32;
+    if (code) {
+      g.fillStyle = "#1E1A17"; g.font = "500 170px 'Bodoni Moda', Georgia, serif"; g.fillText(code, W / 2, below + 190);
+      g.fillStyle = "#6E6459"; g.font = "500 26px 'Work Sans', system-ui, sans-serif"; g.fillText(spaced("Tavolo · Table"), W / 2, below + 240);
+    } else {
+      g.fillStyle = "#1E1A17"; g.font = "500 26px 'Work Sans', system-ui, sans-serif"; g.fillText(spaced("Inquadra · Scan"), W / 2, below + 80);
+    }
+    g.fillStyle = "#6E6459"; g.font = "400 30px 'Work Sans', system-ui, sans-serif";
+    g.fillText(code ? "Inquadra per il menu · Scan for the menu" : BASE.replace(/^https?:\/\//, ""), W / 2, H - 96);
+  }
+
 
   /* ---------- boot ---------- */
   api("/api/admin/me").then(j => { me = j.admin; live = j.live; boot(); }).catch(() => loginView());

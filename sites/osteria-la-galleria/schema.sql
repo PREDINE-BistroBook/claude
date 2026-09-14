@@ -54,8 +54,19 @@ CREATE TABLE IF NOT EXISTS admins (
   last_login TEXT
 );
 
--- Opening hours, covers per slot, closed days, whether pre-ordering is on. One JSON row.
+-- One JSON row each: "main" (hours, covers, pre-order switches), "menu" (the live menu the owner edits — seeded from
+-- public/menu.js the first time the admin opens it), "site" (contact details, happy hour, tables for the QR codes).
 CREATE TABLE IF NOT EXISTS settings (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
+);
+
+-- Photos uploaded from the admin: room covers (room_<id>) and dish photos (dish_<id>). Resized in the browser before
+-- upload (≤ 900 KB), stored base64 like the Sergio Bar system, served at /media/<id>?v=<ver> with immutable caching.
+CREATE TABLE IF NOT EXISTS media (
+  id    TEXT PRIMARY KEY,
+  mime  TEXT NOT NULL,
+  data  TEXT NOT NULL,                     -- base64, no data: prefix
+  bytes INTEGER NOT NULL,
+  ver   INTEGER NOT NULL                   -- ms timestamp, doubles as the cache-buster
 );

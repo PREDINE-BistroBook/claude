@@ -75,6 +75,15 @@
     "star.note":    { it: "* Prodotto che può essere surgelato all'origine.", en: "* Product may be frozen at origin." },
     "v.note":       { it: "piatto vegetariano.", en: "vegetarian dish." },
     "legend.title": { it: "Allergeni", en: "Allergens" },
+    "soldout":      { it: "Esaurito", en: "Sold out" },
+    "search.ph":    { it: "Cerca un piatto…", en: "Search a dish…" },
+    "search.none":  { it: "Nessun piatto con questo nome.", en: "No dish by that name." },
+    "hh.badge":     { it: "happy hour", en: "happy hour" },
+    "table.label":  { it: "Tavolo {n}", en: "Table {n}" },
+    "table.title":  { it: "Il tavolo del codice che hai inquadrato", en: "The table from the code you scanned" },
+    "wifi.label":   { it: "Wi-Fi", en: "Wi-Fi" },
+    "wifi.pass":    { it: "password", en: "password" },
+    "visit.wifi":   { it: "Wi-Fi", en: "Wi-Fi" },
     "per2":         { it: "per due", en: "for two" },
     "perkg":        { it: "al kg", en: "per kg" },
     "hh":           { it: "Happy hour · Spritz e Hugo · 7 €", en: "Happy hour · Spritz & Hugo · €7" },
@@ -198,6 +207,8 @@
     insalate: { it: "Insalate", en: "Salads" }, pinsa: { it: "Pinsa", en: "Pinsa" }, dolci: { it: "Dolci", en: "Desserts" }, cantina: { it: "Cantina", en: "Cellar" },
   };
 
+  const shortName = r => (r.short && r.short[lang]) || (SHORT[r.id] && SHORT[r.id][lang]) || r.title[lang];
+
   /* Line icons, one per room, drawn like the little engravings on the paper menu. 24×24, stroke 1.5. */
   const ICONS = {
     antipasti: '<path d="M4 9l8-4 8 4-8 4z"/><path d="M4 9v3l8 4 8-4V9"/><circle cx="12" cy="9" r="1.6"/>',
@@ -216,11 +227,20 @@
     visit: '<path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/>',
     book: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="5"/><path d="M3 12h1M20 12h1"/>',
     filter: '<path d="M3 5h18M6 12h12M10 19h4"/>',
+    wifi: '<path d="M3 9a14 14 0 0 1 18 0"/><path d="M6.5 12.5a9 9 0 0 1 11 0"/><path d="M10 16a4 4 0 0 1 4 0"/><circle cx="12" cy="19" r="1"/>',
   };
-  const icon = (id, cls) => '<svg class="ic ' + (cls || "") + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[id] || "") + "</svg>";
+  const icon = (id, cls) => '<svg class="ic ' + (cls || "") + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[id] || ICONS.menu) + "</svg>";
 
   /* ============================== state + helpers ============================== */
-  const ROOMS = window.ROOMS, ALLERGENS = window.ALLERGENS, SITE = window.SITE, ART = window.ART || {}, PHOTOS = new Set(window.DISH_PHOTOS || []);
+  /* Data: menu.js is the fallback; the Worker's /api/menu (the owner's live menu, contact details, uploaded photos)
+     replaces it when the site is served by the Worker. Every dish has a stable id (the slug of its Italian name). */
+  let ROOMS = window.ROOMS, SITE = window.SITE, MEDIA = {};
+  const ALLERGENS = window.ALLERGENS, ART = window.ART || {}, PHOTOS = new Set(window.DISH_PHOTOS || []);
+  const withIds = rooms => { const seen = new Set(); rooms.forEach(r => r.groups.forEach(g => g.items.forEach(d => { if (!d.id) { let id = slug(d.it), i = 2; while (seen.has(id)) id = slug(d.it) + "-" + i++; d.id = id; } seen.add(d.id); }))); return rooms; };
+  const TABLE = (() => {
+    const q = new URLSearchParams(location.search).get("t");
+    try { if (q && /^\d{1,2}[A-Za-z]$/.test(q)) { sessionStorage.setItem("galleria.table", q.toUpperCase()); return q.toUpperCase(); } return sessionStorage.getItem("galleria.table") || ""; } catch (e) { return q ? q.toUpperCase() : ""; }
+  })();
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const page = document.body.dataset.page;
   const HERO = { wall: "#3E1219", ink: "#F2E8D5", gold: "#C9A55C" };
@@ -247,6 +267,7 @@
   /* The picture of a dish: the owner's clip or photo when one exists in img/dishes/ (listed in photos.js), else the
      drawing, built in steps so it can assemble itself from the ingredients to the finished plate. */
   function mediaFor(d) {
+    if (d.id && MEDIA["dish_" + d.id]) return { kind: "photo", src: "/media/dish_" + d.id + "?v=" + MEDIA["dish_" + d.id] };
     if (d.video) return { kind: "video", src: d.video };
     if (d.img) return { kind: "photo", src: d.img };
     const s = slug(d.it);
@@ -254,6 +275,7 @@
     for (const ext of ["webp", "jpg", "jpeg", "png"]) if (PHOTOS.has(s + "." + ext)) return { kind: "photo", src: "img/dishes/" + s + "." + ext };
     return null;
   }
+  const coverFor = r => (MEDIA["room_" + r.id] ? "/media/room_" + r.id + "?v=" + MEDIA["room_" + r.id] : null);
   function pictureHtml(d, room, mode) {
     const m = mediaFor(d);
     if (m && m.kind === "video") return '<video class="dish-video" src="' + esc(m.src) + '" autoplay muted loop playsinline' + (mode === "card" ? "" : ' preload="metadata"') + "></video>";
@@ -298,7 +320,7 @@
       '<a class="skip" href="#main">' + esc(t("skip")) + "</a>" +
       '<header class="nav"><a class="brand" href="index.html" aria-label="Osteria La Galleria"><span class="brand-a">Osteria</span><span class="brand-b">La Galleria</span></a>' +
       '<nav class="nav-links" aria-label="Sito">' + links + "</nav>" +
-      '<div class="nav-right"><div class="lang" role="group" aria-label="Lingua / Language">' +
+      '<div class="nav-right">' + (TABLE ? '<span class="table-pill" title="' + esc(t("table.title")) + '">' + esc(t("table.label", { n: TABLE })) + "</span>" : "") + '<div class="lang" role="group" aria-label="Lingua / Language">' +
         '<button type="button" data-lang="it" aria-pressed="' + (lang === "it") + '">IT</button><button type="button" data-lang="en" aria-pressed="' + (lang === "en") + '">EN</button></div>' +
         ctaHtml("hide-sm") + "</div></header>" +
       '<nav class="tabbar" aria-label="Sito">' + NAV.filter(n => n.id !== "visit" || page === "visit").map(n => '<a href="' + n.href + '"' + (n.id === page ? ' aria-current="page"' : "") + ">" + icon(n.ic) + "<span>" + esc(t(n.key)) + "</span></a>").join("") + "</nav>";
@@ -365,7 +387,7 @@
       const items = r.groups.flatMap(g => g.items);
       const pick = items.find(d => d.feature) || items[0];
       return '<a class="sala-card" href="menu.html#' + r.id + '" style="--room:' + r.wall + '">' +
-        '<div class="sala-pic">' + pictureHtml(pick, r, "card") + "</div>" +
+        '<div class="sala-pic">' + (coverFor(r) ? '<img class="dish-photo" src="' + esc(coverFor(r)) + '" alt="" loading="lazy">' : pictureHtml(pick, r, "card")) + "</div>" +
         '<div class="sala-plaque plaque"><span class="sala-n">' + r.numeral + '</span><h3 lang="' + lang + '">' + esc(r.title[lang]) + "</h3><p>" + esc(t("salas.count", { n: items.length })) + "</p></div></a>";
     }).join("");
     document.getElementById("teaser-dial").innerHTML = dialSvg(0.45, true);
@@ -377,12 +399,15 @@
     document.title = t("menu.title");
     applyStrings();
     document.getElementById("rooms-tabs").innerHTML = ROOMS.map(r =>
-      '<a class="tab" href="#' + r.id + '" data-room="' + r.id + '" style="--room:' + r.wall + '">' + icon(r.id, "sm") + "<b>" + r.numeral + "</b><span>" + esc(SHORT[r.id][lang]) + "</span></a>").join("");
+      '<a class="tab" href="#' + r.id + '" data-room="' + r.id + '" style="--room:' + r.wall + '">' + icon(r.id, "sm") + "<b>" + r.numeral + "</b><span>" + esc(shortName(r)) + "</span></a>").join("");
     document.querySelectorAll("#rooms-tabs .tab").forEach(a => a.addEventListener("click", e => { e.preventDefault(); showRoom(a.dataset.room, true); }));
     const f = document.getElementById("filters");
     f.innerHTML = "<summary>" + icon("filter", "sm") + "<span>" + esc(t("filter.title")) + '</span><span class="filter-count" id="filter-count" hidden></span></summary>' +
       '<div class="chips" id="chips">' + chipsHtml() + "</div>" + '<p class="filters-note">' + esc(t("filter.note")) + "</p>";
     document.querySelectorAll("#chips input").forEach(cb => cb.addEventListener("change", () => { cb.checked ? active.add(cb.value) : active.delete(cb.value); applyFilters(); }));
+    wireSearch();
+    const wifi = document.getElementById("wifi");
+    if (wifi) { wifi.hidden = !(TABLE && SITE.wifi && SITE.wifi.name); if (!wifi.hidden) wifi.innerHTML = icon("wifi", "sm") + "<span>" + esc(t("wifi.label")) + " <b>" + esc(SITE.wifi.name) + "</b>" + (SITE.wifi.pass ? " · " + esc(t("wifi.pass")) + " <b>" + esc(SITE.wifi.pass) + "</b>" : "") + "</span>"; }
 
     const fromHash = location.hash.replace("#", "");
     showRoom(ROOMS.some(r => r.id === fromHash) ? fromHash : ROOMS[0].id, false);
@@ -395,6 +420,44 @@
     };
   };
 
+  /* Search across every room: name and description in both languages, two letters or more. */
+  function wireSearch() {
+    const box = document.getElementById("search"), out = document.getElementById("search-results");
+    if (!box || !out) return;
+    box.placeholder = t("search.ph"); box.setAttribute("aria-label", t("search.ph"));
+    const all = ROOMS.flatMap(r => r.groups.flatMap(g => g.items.map(d => ({ d, r }))));
+    const norm = x => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const run = () => {
+      const q = norm(box.value.trim());
+      if (q.length < 2) { out.hidden = true; out.innerHTML = ""; return; }
+      const hits = all.filter(({ d }) => norm(d.it + " " + d.en + " " + (d.dit || "")).includes(q)).slice(0, 30);
+      out.hidden = false;
+      out.innerHTML = hits.length
+        ? hits.map(({ d, r }) => '<button type="button" class="hit' + (d.out ? " out" : "") + '" data-room="' + r.id + '" data-id="' + d.id + '"><span class="hit-pic">' + pictureHtml(d, r, "card") + '</span><span class="hit-txt"><b lang="it">' + esc(d.it) + "</b><small>" + esc(shortName(r)) + (d.out ? " · " + esc(t("soldout")) : "") + "</small></span><span class=\"hit-price\">" + (d.perKg ? esc(t("pre.table")) : eur(d.price)) + "</span></button>").join("")
+        : '<p class="hint">' + esc(t("search.none")) + "</p>";
+      out.querySelectorAll(".hit").forEach(b => b.addEventListener("click", () => {
+        out.hidden = true; box.value = "";
+        if (b.dataset.room !== current) showRoom(b.dataset.room, false);
+        const el = document.getElementById("d-" + b.dataset.id);
+        if (el) { el.scrollIntoView({ block: "center", behavior: reduced ? "auto" : "smooth" }); el.classList.add("found"); setTimeout(() => el.classList.remove("found"), 2600); }
+      }));
+    };
+    box.addEventListener("input", run);
+    box.addEventListener("keydown", e => { if (e.key === "Escape") { box.value = ""; run(); } });
+  }
+  /* The price cell: happy hour price inside its window on the listed drinks, "sold out" when the kitchen said so. */
+  function hhNow() {
+    const h = SITE.happyHour; if (!h || !h.on || !h.price || !h.items || !h.items.length) return null;
+    const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Rome" })); const m = now.getHours() * 60 + now.getMinutes();
+    const toM = x => Number(x.slice(0, 2)) * 60 + Number(x.slice(3, 5)); const a = toM(h.from), b = toM(h.to);
+    return (a <= b ? m >= a && m < b : m >= a || m < b) ? h : null;
+  }
+  function priceHtml(d, unit) {
+    const h = hhNow();
+    if (h && h.items.includes(d.id)) return '<span class="price hhp"><s>' + eur(d.price) + "</s>" + eur(h.price) + '<small>' + esc(t("hh.badge")) + "</small></span>";
+    return '<span class="price">' + money(d.price, unit) + "</span>";
+  }
+
   function entryHtml(d, room, n, total) {
     const marks = d.v ? ' <span class="vmark" title="' + esc(t("v.note")) + '">V</span>' : "";
     const star = d.star ? "<sup>*</sup>" : "";
@@ -405,14 +468,15 @@
       ? '<span class="allergens" title="' + esc(al.map(x => ALLERGENS[x][lang]).join(", ")) + '">' + al.join(" · ") + "</span>"
       : '<span class="allergens none">—</span>';
     const unit = d.perKg ? "perkg" : (d.per2 ? "per2" : null);
-    return '<article class="entry' + (d.feature ? " feature" : "") + '" id="d-' + slug(d.it) + '" data-n="' + n + '" data-a="' + al.join(",") + '" data-v="' + (d.v ? 1 : 0) + '">' +
+    return '<article class="entry' + (d.feature ? " feature" : "") + (d.out ? " out" : "") + '" id="d-' + d.id + '" data-n="' + n + '" data-a="' + al.join(",") + '" data-v="' + (d.v ? 1 : 0) + '">' +
       '<div class="entry-pic veduta">' + pictureHtml(d, room, "entry") + "</div>" +
       '<div class="plaque entry-plaque">' +
         '<p class="entry-n">' + esc(t("work.n", { n: n, t: total })) + "</p>" +
         (mediaFor(d) ? "" : ingsHtml(d, "entry-ings")) +
         '<h3 class="work-title" lang="it">' + esc(d.it) + star + marks + "</h3>" +
         '<p class="work-desc">' + esc(desc) + "</p>" +
-        '<div class="work-meta">' + alHtml + '<span class="price">' + money(d.price, unit) + "</span></div>" +
+        (d.out ? '<p class="soldout">' + esc(t("soldout")) + "</p>" : "") +
+        '<div class="work-meta">' + alHtml + priceHtml(d, unit) + "</div>" +
       "</div></article>";
   }
 
@@ -436,6 +500,7 @@
 
     const view = document.getElementById("entries");
     view.innerHTML =
+      (coverFor(room) ? '<div class="room-cover veduta"><img src="' + esc(coverFor(room)) + '" alt=""></div>' : "") +
       '<header class="room-head"><span class="numeral" aria-hidden="true">' + room.numeral + "</span>" +
         '<p class="eyebrow">' + icon(room.id, "sm") + esc(t("room.of", { n: room.numeral })) + "</p>" +
         '<h2 id="room-title" tabindex="-1">' + esc(room.title[lang]) + "</h2>" +
@@ -571,9 +636,10 @@
     const addr = esc(t("visit.where")) + (SITE.address ? "<br>" + esc(SITE.address) : "") + (SITE.mapsUrl ? '<br><a href="' + esc(SITE.mapsUrl) + '" rel="noopener" target="_blank">' + esc(t("visit.maps")) + "</a>" : "");
     const ig = SITE.instagram ? '<a href="https://instagram.com/' + esc(SITE.instagram) + '" rel="noopener" target="_blank">@' + esc(SITE.instagram) + "</a>" : "";
     const hh = SITE.happyHour && SITE.happyHour.price ? esc(SITE.happyHour.drinks) + " · " + eur(SITE.happyHour.price) + (SITE.happyHour.when[lang] ? "<br>" + esc(SITE.happyHour.when[lang]) : "") : "";
+    const wifi = SITE.wifi && SITE.wifi.name ? esc(SITE.wifi.name) + (SITE.wifi.pass ? "<br>" + esc(t("wifi.pass")) + " " + esc(SITE.wifi.pass) : "") : "";
     document.getElementById("visit-grid").innerHTML =
       cell("visit.hours", hours) + cell("visit.address", addr) + cell("visit.phone", tel + (tel && wa ? "<br>" : "") + wa) +
-      (ig ? cell("visit.ig", ig) : "") + (hh ? cell("visit.hh", hh) : "");
+      (ig ? cell("visit.ig", ig) : "") + (hh ? cell("visit.hh", hh) : "") + (wifi ? cell("visit.wifi", wifi) : "");
     const link = SITE.reviewUrl ? '<a class="btn small" href="' + esc(SITE.reviewUrl) + '" rel="noopener" target="_blank">' + esc(t("review.cta")) + "</a>" : "";
     document.getElementById("review").innerHTML = '<div class="qr" aria-hidden="true">' + icon("visit") + "</div><div><h3>" + esc(t("review.title")) + "</h3><p>" + esc(t("review.text")) + "</p>" + link + "</div>";
   };
@@ -656,10 +722,10 @@
     const host = document.getElementById("picker"), cart = new Map();
     host.innerHTML = ROOMS.map((room, i) => '<details class="pick-room"' + (i === 0 ? " open" : "") + "><summary>" + icon(room.id, "sm") + "<b>" + room.numeral + "</b><span>" + esc(room.title[lang]) + "</span></summary>" +
       room.groups.map(g => (g.title ? '<p class="pick-group">' + esc(g.title[lang]) + "</p>" : "") + g.items.map(d => {
-        const sl = slug(d.it), desc = lang === "it" ? (d.dit || "") : (d.en || "");
-        return '<div class="pick-item" data-slug="' + sl + '"><div class="pick-txt"><span class="pick-name" lang="it">' + esc(d.it) + (d.v ? ' <span class="vmark">V</span>' : "") + "</span>" + (desc && desc.toLowerCase() !== d.it.toLowerCase() ? '<span class="pick-desc">' + esc(desc) + "</span>" : "") + "</div>" +
-          '<span class="pick-price">' + (d.perKg ? esc(t("pre.table")) : eur(d.price) + (d.per2 ? "<small>" + esc(t("per2")) + "</small>" : "")) + "</span>" +
-          (d.perKg ? "" : '<div class="stepper sm"><button type="button" data-d="-1" aria-label="−">−</button><output>0</output><button type="button" data-d="1" aria-label="+">+</button></div>') + "</div>";
+        const sl = d.id, desc = lang === "it" ? (d.dit || "") : (d.en || "");
+        return '<div class="pick-item' + (d.out ? " out" : "") + '" data-slug="' + sl + '"><div class="pick-txt"><span class="pick-name" lang="it">' + esc(d.it) + (d.v ? ' <span class="vmark">V</span>' : "") + "</span>" + (desc && desc.toLowerCase() !== d.it.toLowerCase() ? '<span class="pick-desc">' + esc(desc) + "</span>" : "") + "</div>" +
+          '<span class="pick-price">' + (d.out ? esc(t("soldout")) : d.perKg ? esc(t("pre.table")) : eur(d.price) + (d.per2 ? "<small>" + esc(t("per2")) + "</small>" : "")) + "</span>" +
+          (d.perKg || d.out ? "" : '<div class="stepper sm"><button type="button" data-d="-1" aria-label="−">−</button><output>0</output><button type="button" data-d="1" aria-label="+">+</button></div>') + "</div>";
       }).join("")).join("") + "</details>").join("");
     const total = () => { let n = 0, sum = 0; cart.forEach((qty, sl) => { const d = dishBy(sl); n += qty; sum += Math.round(d.price * 100) * qty; }); return { n, sum }; };
     const render = () => { const { n, sum } = total(); const bar = document.getElementById("cart"); bar.hidden = n === 0; document.getElementById("cart-count").textContent = t("pre.count", { n }); document.getElementById("cart-total").textContent = eurM(sum) + (min && sum < min ? " · " + t("pre.min", { x: eurM(min) }) : ""); document.getElementById("pay").disabled = min ? sum < min : false; };
@@ -673,12 +739,29 @@
       catch (e) { err.hidden = false; err.textContent = e.message; btn.disabled = false; }
     });
   }
-  function dishBy(sl) { for (const r of ROOMS) for (const g of r.groups) for (const d of g.items) if (slug(d.it) === sl) return d; return null; }
+  function dishBy(sl) { for (const r of ROOMS) for (const g of r.groups) for (const d of g.items) if (d.id === sl) return d; return null; }
 
   /* ============================== boot ============================== */
   function render() {
     renderShell();
     if (pages[page]) pages[page]();
   }
-  render();
+  /* The live menu from the Worker, when there is one (the static preview has none): the owner's edits, sold-out
+     dishes, uploaded photos and contact details. Waits at most 2.5 s, then falls back to menu.js. */
+  async function boot() {
+    withIds(ROOMS);
+    if (!/^https?:/.test(location.protocol)) return render();
+    try {
+      const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), 2500);
+      const r = await fetch("/api/menu", { signal: ctl.signal }); clearTimeout(timer);
+      if (r.ok) {
+        const j = await r.json();
+        if (Array.isArray(j.rooms) && j.rooms.length) { ROOMS = withIds(j.rooms); window.ROOMS = ROOMS; }
+        if (j.site) { SITE = { ...SITE, ...j.site }; window.SITE = SITE; }
+        MEDIA = j.media || {};
+      }
+    } catch (e) { /* offline or static: menu.js it is */ }
+    render();
+  }
+  boot();
 })();
