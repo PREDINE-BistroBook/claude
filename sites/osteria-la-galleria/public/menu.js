@@ -5,7 +5,8 @@
    languages); it stands in until the owner's own photo or clip of that dish is dropped into img/dishes/ (file named after
    the dish, see img/dishes/README.md). Keep this file in sync with the kitchen: it is the only place prices live. */
 
-window.ALLERGENS = {
+const G = typeof window !== "undefined" ? window : globalThis;
+G.ALLERGENS = {
   1:  { it: "Glutine",        en: "Gluten" },
   2:  { it: "Crostacei",      en: "Crustaceans" },
   3:  { it: "Uova",           en: "Eggs" },
@@ -23,7 +24,7 @@ window.ALLERGENS = {
 };
 
 /* Rooms of the gallery, in visiting order. `wall` is the painted wall colour of that room. */
-window.ROOMS = [
+G.ROOMS = [
   {
     id: "antipasti", numeral: "I", wall: "#1F3A2F", ink: "#F2E8D5",
     title: { it: "Antipasti & Zuppe", en: "Appetizers & Soups" },
@@ -253,7 +254,7 @@ window.ROOMS = [
 ];
 
 /* Contact details. Empty strings hide the corresponding element on the page — fill in once confirmed by the owner. */
-window.SITE = {
+G.SITE = {
   name: "Osteria La Galleria",
   city: "Firenze",
   address: "Piazza de' Pitti, Firenze",   // in front of Palazzo Pitti (Ash, 2026-09-12); street number still to confirm

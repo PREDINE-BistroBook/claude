@@ -11,6 +11,61 @@
     "nav.steak":    { it: "La bistecca", en: "The steak" },
     "nav.visit":    { it: "Visita", en: "Visit" },
     "nav.reserve":  { it: "Prenota", en: "Reserve" },
+    "nav.book":     { it: "Prenota", en: "Book" },
+    /* booking */
+    "book.title":     { it: "Prenota — Osteria La Galleria", en: "Book — Osteria La Galleria" },
+    "book.eyebrow":   { it: "Prenota un tavolo", en: "Book a table" },
+    "book.h1":        { it: "Il tuo tavolo davanti a Palazzo Pitti", en: "Your table in front of Palazzo Pitti" },
+    "book.lede":      { it: "Scegli giorno, ora e quanti siete. Se vuoi, dopo puoi pre-ordinare i piatti e pagare online: li trovi pronti quando ti siedi.", en: "Pick a day, a time and how many you are. Afterwards, if you like, pre-order your dishes and pay online: they'll be ready when you sit down." },
+    "book.party":     { it: "Quante persone", en: "How many people" },
+    "book.party.hint": { it: "Oltre {n} persone, chiamateci.", en: "For more than {n}, please call us." },
+    "book.date":      { it: "Quando", en: "When" },
+    "book.time":      { it: "A che ora", en: "What time" },
+    "book.name":      { it: "Nome", en: "Name" },
+    "book.phone":     { it: "Telefono", en: "Phone" },
+    "book.email":     { it: "Email", en: "Email" },
+    "book.email.hint": { it: "Per la conferma e per gestire la prenotazione.", en: "For the confirmation and to manage the booking." },
+    "book.note":      { it: "Note per noi", en: "Notes for us" },
+    "book.note.hint": { it: "Allergie, un seggiolone, un compleanno…", en: "Allergies, a high chair, a birthday…" },
+    "book.submit":    { it: "Prenota il tavolo", en: "Book the table" },
+    "book.sending":   { it: "Un attimo…", en: "One moment…" },
+    "book.pick":      { it: "Scegli prima giorno e persone.", en: "Pick a day and how many you are first." },
+    "book.closed":    { it: "Quel giorno siamo chiusi.", en: "We're closed that day." },
+    "book.full":      { it: "Nessun orario libero per {n} persone quel giorno.", en: "No free time for {n} that day." },
+    "book.past":      { it: "Scegli una data da oggi in poi.", en: "Pick today or a later date." },
+    "book.offline":   { it: "In questa anteprima la prenotazione online non è attiva. Chiamaci, o scrivici su WhatsApp.", en: "Online booking isn't active in this preview. Call us, or message us on WhatsApp." },
+    "book.call":      { it: "Preferisci il telefono?", en: "Prefer to call?" },
+    "res.confirmed":  { it: "Tavolo confermato", en: "Table confirmed" },
+    "res.requested":  { it: "Richiesta ricevuta, la confermiamo a breve", en: "Request received, we'll confirm shortly" },
+    "res.seated":     { it: "Al tavolo", en: "At the table" },
+    "res.done":       { it: "Conclusa", en: "Done" },
+    "res.cancelled":  { it: "Prenotazione disdetta", en: "Reservation cancelled" },
+    "res.no_show":    { it: "Non presentati", en: "No show" },
+    "res.when":       { it: "Quando", en: "When" },
+    "res.who":        { it: "Persone", en: "People" },
+    "res.name":       { it: "A nome di", en: "Under the name" },
+    "res.note":       { it: "Le tue note", en: "Your notes" },
+    "res.keep":       { it: "Tieni questa pagina: è il tuo link per vedere o disdire la prenotazione. Se hai lasciato l'email, l'hai anche lì.", en: "Keep this page: it's your link to see or cancel the booking. If you left an email, it's there too." },
+    "res.cancel":     { it: "Disdici la prenotazione", en: "Cancel the reservation" },
+    "res.cancel.ask": { it: "Disdire davvero la prenotazione?", en: "Really cancel the reservation?" },
+    "res.cancel.late": { it: "Per disdire a meno di due ore dal tavolo, chiamaci.", en: "To cancel less than two hours before, please call us." },
+    "res.notfound":   { it: "Prenotazione non trovata. Controlla il link nell'email.", en: "Reservation not found. Check the link in your email." },
+    "res.new":        { it: "Prenota un altro tavolo", en: "Book another table" },
+    "pre.eyebrow":    { it: "Pre-ordina e paga online", en: "Pre-order and pay online" },
+    "pre.title":      { it: "Trova i piatti pronti quando ti siedi", en: "Find your dishes ready when you sit down" },
+    "pre.text":       { it: "Scegli dal menu, paga con carta, e la cucina sa cosa preparare per il tuo tavolo. La fiorentina no: quella si pesa al momento.", en: "Choose from the menu, pay by card, and the kitchen knows what to prepare for your table. Not the fiorentina: that one is weighed on the spot." },
+    "pre.note":       { it: "Note per la cucina", en: "Notes for the kitchen" },
+    "pre.pay":        { it: "Paga con carta", en: "Pay by card" },
+    "pre.hint":       { it: "Pagamento sicuro con carta tramite Stripe. I piatti pre-ordinati risultano già pagati al tavolo.", en: "Secure card payment through Stripe. Pre-ordered dishes show as already paid at the table." },
+    "pre.table":      { it: "si pesa al tavolo", en: "weighed at the table" },
+    "pre.count":      { it: "{n} piatti", en: "{n} dishes" },
+    "pre.paid":       { it: "Pre-ordine pagato", en: "Pre-order paid" },
+    "pre.pending":    { it: "Pagamento in corso", en: "Payment in progress" },
+    "pre.thanks":     { it: "Grazie, il pagamento è andato a buon fine. I piatti saranno pronti al tavolo.", en: "Thank you, the payment went through. Your dishes will be ready at the table." },
+    "pre.canceled":   { it: "Pagamento non completato. Puoi riprovare quando vuoi.", en: "Payment not completed. You can try again whenever you like." },
+    "pre.min":        { it: "Pre-ordine minimo: {x}", en: "Minimum pre-order: {x}" },
+    "pre.more":       { it: "Aggiungi altro", en: "Add more" },
+    "pre.soon":       { it: "Il pre-ordine online arriva presto. Intanto ordini al tavolo.", en: "Online pre-ordering is coming soon. For now, order at the table." },
     "nav.findus":   { it: "Dove siamo", en: "Find us" },
     "skip":         { it: "Vai al contenuto", en: "Skip to content" },
     "footer.prices": { it: "Prezzi in euro.", en: "Prices in euro." },
@@ -159,6 +214,7 @@
     menu: '<rect x="3" y="4" width="18" height="16" rx="1"/><rect x="6" y="7" width="12" height="10"/><path d="M8 15h8"/>',
     steak: '<path d="M6 5c4-1 8 0 11 2 2 2 2 5 0 7-1 2-4 3-7 4-3 1-5 0-6-2-1-3-1-8 2-11z"/><path d="M8 5v7l5 4"/>',
     visit: '<path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/>',
+    book: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="5"/><path d="M3 12h1M20 12h1"/>',
     filter: '<path d="M3 5h18M6 12h12M10 19h4"/>',
   };
   const icon = (id, cls) => '<svg class="ic ' + (cls || "") + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[id] || "") + "</svg>";
@@ -230,11 +286,10 @@
     { href: "menu.html", key: "nav.menu", id: "menu", ic: "menu" },
     { href: "bistecca.html", key: "nav.steak", id: "steak", ic: "steak" },
     { href: "visita.html", key: "nav.visit", id: "visit", ic: "visit" },
+    { href: "prenota.html", key: "nav.book", id: "book", ic: "book" },
   ];
   function ctaHtml(cls) {
-    if (SITE.whatsapp) return '<a class="btn small ' + cls + '" href="https://wa.me/' + esc(SITE.whatsapp) + '" rel="noopener">' + esc(t("nav.reserve")) + "</a>";
-    if (SITE.phone) return '<a class="btn small ' + cls + '" href="tel:' + esc(SITE.phone.replace(/\s+/g, "")) + '">' + esc(t("nav.reserve")) + "</a>";
-    return '<a class="btn small ' + cls + '" href="visita.html">' + esc(t("nav.findus")) + "</a>";
+    return '<a class="btn small ' + cls + '" href="prenota.html">' + esc(t("nav.reserve")) + "</a>";
   }
   function renderShell() {
     document.documentElement.lang = lang;
@@ -246,7 +301,7 @@
       '<div class="nav-right"><div class="lang" role="group" aria-label="Lingua / Language">' +
         '<button type="button" data-lang="it" aria-pressed="' + (lang === "it") + '">IT</button><button type="button" data-lang="en" aria-pressed="' + (lang === "en") + '">EN</button></div>' +
         ctaHtml("hide-sm") + "</div></header>" +
-      '<nav class="tabbar" aria-label="Sito">' + NAV.map(n => '<a href="' + n.href + '"' + (n.id === page ? ' aria-current="page"' : "") + ">" + icon(n.ic) + "<span>" + esc(t(n.key)) + "</span></a>").join("") + "</nav>";
+      '<nav class="tabbar" aria-label="Sito">' + NAV.filter(n => n.id !== "visit" || page === "visit").map(n => '<a href="' + n.href + '"' + (n.id === page ? ' aria-current="page"' : "") + ">" + icon(n.ic) + "<span>" + esc(t(n.key)) + "</span></a>").join("") + "</nav>";
     document.querySelectorAll(".lang button").forEach(b => b.addEventListener("click", () => {
       if (b.dataset.lang === lang) return;
       lang = b.dataset.lang;
@@ -522,6 +577,103 @@
     const link = SITE.reviewUrl ? '<a class="btn small" href="' + esc(SITE.reviewUrl) + '" rel="noopener" target="_blank">' + esc(t("review.cta")) + "</a>" : "";
     document.getElementById("review").innerHTML = '<div class="qr" aria-hidden="true">' + icon("visit") + "</div><div><h3>" + esc(t("review.title")) + "</h3><p>" + esc(t("review.text")) + "</p>" + link + "</div>";
   };
+
+  /* ============================== booking + pre-order ============================== */
+  const api = async (path, opts) => { const r = await fetch(path, { headers: { "content-type": "application/json" }, ...opts }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || "error"); return j; };
+  const eurM = m => eur(m / 100);
+  pages.book = async function () {
+    document.title = t("book.title");
+    setWall(HERO.wall, HERO.ink, HERO.gold);
+    applyStrings();
+    const q = new URLSearchParams(location.search);
+    let st = null;
+    try { st = await api("/api/status"); } catch (e) { st = null; }
+    if (q.get("id") && q.get("t")) return showReservation(q.get("id"), q.get("t"), q.get("paid"), st);
+    bookingForm(st);
+  };
+
+  function bookingForm(st) {
+    const form = document.getElementById("reserve"), err = document.getElementById("form-error");
+    const callHint = document.getElementById("call-hint");
+    if (SITE.phone) callHint.innerHTML = esc(t("book.call")) + ' <a href="tel:' + esc(SITE.phone.replace(/\s+/g, "")) + '">' + esc(SITE.phone) + "</a>";
+    if (!st) { err.hidden = false; err.textContent = t("book.offline"); form.querySelector("#submit").disabled = true; return; }
+    const party = document.getElementById("party"), date = document.getElementById("date"), slots = document.getElementById("slots"), sHint = document.getElementById("slots-hint");
+    party.max = st.max_party; document.getElementById("party-hint").textContent = t("book.party.hint", { n: st.max_party });
+    date.min = st.today; date.max = addDaysISO(st.today, st.horizon_days);
+    document.querySelectorAll(".stepper button").forEach(b => b.addEventListener("click", () => { party.value = Math.min(st.max_party, Math.max(1, Number(party.value || 1) + Number(b.dataset.step))); loadSlots(); }));
+    party.addEventListener("change", loadSlots); date.addEventListener("change", loadSlots);
+    let chosen = null;
+    async function loadSlots() {
+      chosen = null; slots.innerHTML = ""; sHint.textContent = "";
+      if (!date.value || !party.value) { sHint.textContent = t("book.pick"); return; }
+      if (date.value < st.today) { sHint.textContent = t("book.past"); return; }
+      const av = await api("/api/availability?date=" + date.value + "&party=" + party.value).catch(() => null);
+      if (!av || !av.open) { sHint.textContent = av && av.reason === "closed" ? t("book.closed") : t("book.past"); return; }
+      const bySvc = {}; av.slots.forEach(x => (bySvc[x.service] ||= []).push(x));
+      slots.innerHTML = st.services.filter(sv => bySvc[sv.id]).map(sv => '<div class="slot-group"><span class="slot-name">' + esc(sv.name[lang]) + "</span>" +
+        bySvc[sv.id].map(x => '<label class="slot' + (x.ok ? "" : " off") + '"><input type="radio" name="time" value="' + x.time + '"' + (x.ok ? "" : " disabled") + ">" + x.time + "</label>").join("") + "</div>").join("");
+      if (!av.slots.some(x => x.ok)) sHint.textContent = t("book.full", { n: party.value });
+      slots.querySelectorAll("input").forEach(i => i.addEventListener("change", () => { chosen = i.value; }));
+    }
+    sHint.textContent = t("book.pick");
+    form.addEventListener("submit", async e => {
+      e.preventDefault(); err.hidden = true;
+      const btn = document.getElementById("submit"); btn.disabled = true; btn.textContent = t("book.sending");
+      try {
+        const j = await api("/api/reserve", { method: "POST", body: JSON.stringify({ name: form.name.value, email: form.email.value, phone: form.phone.value, note: form.note.value, date: date.value, time: chosen, party: party.value, lang }) });
+        location.replace("prenota.html?id=" + j.id + "&t=" + j.token);
+      } catch (ex) { err.hidden = false; err.textContent = ex.message === "error" ? t("book.offline") : ex.message; btn.disabled = false; btn.textContent = t("book.submit"); if (/orario|time/i.test(ex.message)) loadSlots(); }
+    });
+  }
+  const addDaysISO = (d, n) => { const x = new Date(d + "T12:00:00Z"); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
+  const longDate = d => new Date(d + "T12:00:00Z").toLocaleDateString(lang === "en" ? "en-GB" : "it-IT", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
+
+  async function showReservation(id, tok, paid, st) {
+    document.getElementById("book-form").hidden = true;
+    const done = document.getElementById("book-done"); done.hidden = false;
+    const card = document.getElementById("res-card");
+    document.getElementById("book-lede").textContent = "";
+    let j; try { j = await api("/api/reservation?id=" + encodeURIComponent(id) + "&t=" + encodeURIComponent(tok)); } catch (e) { card.innerHTML = "<p>" + esc(t("res.notfound")) + '</p><p><a class="btn ghost" href="prenota.html">' + esc(t("res.new")) + "</a></p>"; return; }
+    const r = j.reservation;
+    document.getElementById("book-title").textContent = t("res." + r.status);
+    const paidOrders = j.orders.filter(o => o.status === "paid" || o.status === "served"), pending = j.orders.filter(o => o.status === "pending");
+    card.innerHTML =
+      '<span class="status ' + r.status + '">' + esc(t("res." + r.status)) + "</span>" +
+      '<dl class="res-dl"><div><dt>' + esc(t("res.when")) + "</dt><dd>" + esc(longDate(r.date)) + " · " + r.time + "</dd></div><div><dt>" + esc(t("res.who")) + "</dt><dd>" + r.party + "</dd></div><div><dt>" + esc(t("res.name")) + "</dt><dd>" + esc(r.name) + "</dd></div>" + (r.note ? "<div><dt>" + esc(t("res.note")) + "</dt><dd>" + esc(r.note) + "</dd></div>" : "") + "</dl>" +
+      (paid === "1" ? '<p class="okline">' + esc(t("pre.thanks")) + "</p>" : paid === "0" ? '<p class="form-error" style="display:block">' + esc(t("pre.canceled")) + "</p>" : "") +
+      (paidOrders.length ? paidOrders.map(o => '<div class="order"><b>' + esc(t("pre.paid")) + " · " + eurM(o.amount) + '</b><ul>' + o.items.map(i => "<li>" + i.qty + " × <span lang=\"it\">" + esc(i.name) + "</span><span>" + eurM(i.line) + "</span></li>").join("") + "</ul></div>").join("") : "") +
+      (pending.length && paid !== "0" ? '<p class="hint">' + esc(t("pre.pending")) + "</p>" : "") +
+      '<p class="hint">' + esc(t("res.keep")) + "</p>" +
+      '<div class="res-actions">' + (j.can_cancel ? '<button class="btn ghost" type="button" id="cancel">' + esc(t("res.cancel")) + "</button>" : "") + '<a class="btn ghost" href="prenota.html">' + esc(t("res.new")) + "</a></div>";
+    const c = document.getElementById("cancel");
+    if (c) c.addEventListener("click", async () => { if (!confirm(t("res.cancel.ask"))) return; try { await api("/api/reservation/cancel", { method: "POST", body: JSON.stringify({ id, t: tok }) }); location.reload(); } catch (e) { alert(t("res.cancel.late")); } });
+    const pre = document.getElementById("preorder");
+    if (j.preorder) { pre.hidden = false; picker(id, tok, j.preorder_min); }
+    else if (st && !st.live && ["requested", "confirmed"].includes(r.status)) { pre.hidden = false; document.getElementById("picker").innerHTML = '<p class="hint">' + esc(t("pre.soon")) + "</p>"; }
+  }
+
+  function picker(id, tok, min) {
+    const host = document.getElementById("picker"), cart = new Map();
+    host.innerHTML = ROOMS.map((room, i) => '<details class="pick-room"' + (i === 0 ? " open" : "") + "><summary>" + icon(room.id, "sm") + "<b>" + room.numeral + "</b><span>" + esc(room.title[lang]) + "</span></summary>" +
+      room.groups.map(g => (g.title ? '<p class="pick-group">' + esc(g.title[lang]) + "</p>" : "") + g.items.map(d => {
+        const sl = slug(d.it), desc = lang === "it" ? (d.dit || "") : (d.en || "");
+        return '<div class="pick-item" data-slug="' + sl + '"><div class="pick-txt"><span class="pick-name" lang="it">' + esc(d.it) + (d.v ? ' <span class="vmark">V</span>' : "") + "</span>" + (desc && desc.toLowerCase() !== d.it.toLowerCase() ? '<span class="pick-desc">' + esc(desc) + "</span>" : "") + "</div>" +
+          '<span class="pick-price">' + (d.perKg ? esc(t("pre.table")) : eur(d.price) + (d.per2 ? "<small>" + esc(t("per2")) + "</small>" : "")) + "</span>" +
+          (d.perKg ? "" : '<div class="stepper sm"><button type="button" data-d="-1" aria-label="−">−</button><output>0</output><button type="button" data-d="1" aria-label="+">+</button></div>') + "</div>";
+      }).join("")).join("") + "</details>").join("");
+    const total = () => { let n = 0, sum = 0; cart.forEach((qty, sl) => { const d = dishBy(sl); n += qty; sum += Math.round(d.price * 100) * qty; }); return { n, sum }; };
+    const render = () => { const { n, sum } = total(); const bar = document.getElementById("cart"); bar.hidden = n === 0; document.getElementById("cart-count").textContent = t("pre.count", { n }); document.getElementById("cart-total").textContent = eurM(sum) + (min && sum < min ? " · " + t("pre.min", { x: eurM(min) }) : ""); document.getElementById("pay").disabled = min ? sum < min : false; };
+    host.querySelectorAll(".pick-item").forEach(el => {
+      const out = el.querySelector("output"); if (!out) return;
+      el.querySelectorAll("button").forEach(b => b.addEventListener("click", () => { const sl = el.dataset.slug, q = Math.max(0, Math.min(20, (cart.get(sl) || 0) + Number(b.dataset.d))); q ? cart.set(sl, q) : cart.delete(sl); out.textContent = q; el.classList.toggle("in", q > 0); render(); }));
+    });
+    document.getElementById("pay").addEventListener("click", async () => {
+      const btn = document.getElementById("pay"), err = document.getElementById("pre-error"); btn.disabled = true; err.hidden = true;
+      try { const j = await api("/api/preorder", { method: "POST", body: JSON.stringify({ id, t: tok, items: [...cart].map(([slug, qty]) => ({ slug, qty })), note: document.getElementById("pre-note").value, lang }) }); location.href = j.url; }
+      catch (e) { err.hidden = false; err.textContent = e.message; btn.disabled = false; }
+    });
+  }
+  function dishBy(sl) { for (const r of ROOMS) for (const g of r.groups) for (const d of g.items) if (slug(d.it) === sl) return d; return null; }
 
   /* ============================== boot ============================== */
   function render() {

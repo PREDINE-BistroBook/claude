@@ -1,10 +1,15 @@
 name: Deploy Osteria La Galleria
 
-# Deploys sites/osteria-la-galleria (static assets, no Worker code) to Cloudflare from GitHub's runners.
+# Deploys sites/osteria-la-galleria (Worker + static assets + D1) to Cloudflare from GitHub's runners.
 # Trigger by hand from the Actions tab, or automatically on a push to the default branch that touches the site.
-# Needs the same repository secret as Zen: CLOUDFLARE_API_TOKEN (Workers Scripts:Edit; plus Workers Routes:Edit,
-# Zone:Read and DNS:Edit on the osteria's zone once a custom domain is set in wrangler.toml).
-# CLOUDFLARE_ACCOUNT_ID is optional — read from the token when absent.
+#
+# Repository secrets (Settings → Secrets and variables → Actions) — the same ones Zen uses:
+#   CLOUDFLARE_API_TOKEN      Workers Scripts:Edit, D1:Edit (plus Workers Routes:Edit, Zone:Read, DNS:Edit once a custom domain exists)
+#   CLOUDFLARE_ACCOUNT_ID     optional — read from the token when absent
+#   RESEND_API_KEY            reservation / pre-order emails
+#   ADMIN_BOOTSTRAP_PASSWORD  first owner login on /admin.html (only honoured while no admin exists)
+#   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET   optional until the osteria's Stripe account is connected
+# SESSION_SECRET is generated on the first run and kept as a Worker secret.
 
 on:
   workflow_dispatch:
@@ -38,6 +43,17 @@ jobs:
             echo "CLOUDFLARE_ACCOUNT_ID=$ID" >> "$GITHUB_ENV"
           fi
 
+      - name: Database (create on first run, then apply the schema)
+        run: |
+          ID=$(wrangler d1 list --json | jq -r '.[] | select(.name=="osteria-la-galleria") | .uuid')
+          if [ -z "$ID" ]; then
+            wrangler d1 create osteria-la-galleria
+            ID=$(wrangler d1 list --json | jq -r '.[] | select(.name=="osteria-la-galleria") | .uuid')
+          fi
+          [ -n "$ID" ] || { echo "::error::could not create or find the D1 database"; exit 1; }
+          sed -i "s/^database_id = .*/database_id = \"$ID\"/" wrangler.toml
+          wrangler d1 execute osteria-la-galleria --remote --file=schema.sql
+
       - name: List the owner's dish photos (img/dishes → photos.js)
         run: |
           FILES=$(ls public/img/dishes 2>/dev/null | grep -Ei '\.(jpe?g|png|webp|mp4|webm)$' | sed 's/.*/"&"/' | paste -sd, -)
@@ -46,6 +62,23 @@ jobs:
 
       - name: Deploy
         run: wrangler deploy
+
+      - name: Worker secrets
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          ADMIN_BOOTSTRAP_PASSWORD: ${{ secrets.ADMIN_BOOTSTRAP_PASSWORD }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          ADMIN_BOOTSTRAP_EMAIL: fetta.amore.business@gmail.com
+        run: |
+          put() { if [ -n "${!1:-}" ]; then printf '%s' "${!1}" | wrangler secret put "$1"; else echo "  (skip $1 — secret not set)"; fi; }
+          put RESEND_API_KEY
+          put ADMIN_BOOTSTRAP_EMAIL
+          put ADMIN_BOOTSTRAP_PASSWORD
+          put STRIPE_SECRET_KEY
+          put STRIPE_WEBHOOK_SECRET
+          if wrangler secret list | grep -q '"SESSION_SECRET"'; then echo "  SESSION_SECRET already set"; else
+            openssl rand -hex 32 | tr -d '\n' | wrangler secret put SESSION_SECRET; fi
 
       - name: Where it is
         run: |

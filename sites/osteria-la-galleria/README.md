@@ -2,7 +2,7 @@
 
 A Locali & Ordinazioni build for **Osteria La Galleria**, Florence. Started 2026-09-12 from ten photos Ash took on site: seven pages of the paper menu, the happy-hour board, the chalk steak board, and the "leave us a review" sticker on the door. Downscaled copies are in `reference/` so any future edit can check a price or an allergen against the original.
 
-Status: **built, not deployed, not yet shown to the owner.** Location known (in front of Palazzo Pitti, per Ash 2026-09-12); street number, phone, hours and domain still missing — see "Before it goes live".
+Status: **built and tested locally, not deployed, not yet shown to the owner.** Location known (in front of Palazzo Pitti, per Ash 2026-09-12); street number, phone, hours and domain still missing — see "Before it goes live". Since 2026-09-14 it is a Cloudflare Worker with a D1 database: reservations, pre-orders paid through Stripe, and a staff admin.
 
 ## The pages (restructured 2026-09-13, menu redone 2026-09-14)
 
@@ -25,6 +25,24 @@ The floor-plan map from 2026-09-13 was dropped at Ash's request the next day.
 - **Real clips work the same way.** An `.mp4` or `.webm` named after the dish in `img/dishes/` plays muted on loop in that dish's spot instead of the drawing, a photo (`.jpg` / `.webp` / `.png`) shows still. The video wins if both exist.
 - **Real photos replace them file by file, with no code change.** Drop a photo into `public/img/dishes/` named after the dish (`img/dishes/README.md` lists the exact file name for all 110 dishes, e.g. `tagliatelle-al-tartufo-fresco.jpg`). The deploy workflow regenerates `photos.js` from the folder; the site then shows the photo instead of the drawing for that dish, on the menu and on the home page cards.
 - AI-generated placeholder photos were the first idea (2026-09-14). The Higgsfield workspace on this account had 0 credits and no free allowance, so it was not possible in that session; each image costs 1 credit. With credits, one photo per plate type (about 50) or one per dish (110) can be generated in a single pass and dropped into the same folder.
+
+## Reservations, pre-orders, admin (added 2026-09-14)
+
+Same architecture as Zen: a Worker serves the static site and an `/api/`, D1 holds the data, Resend sends the emails, Stripe Connect takes the money as a **direct charge on the osteria's connected account with a 2% application fee to Amico Mio**. Nothing is charged until `STRIPE_SECRET_KEY` and `OSTERIA_STRIPE_ACCOUNT` are set; until then the site takes reservations and hides the pre-order.
+
+**Guests — `prenota.html`** (IT/EN, the site's own look):
+1. Party size, date, time. Times come from `/api/availability`: every slot of every service that day, greyed out when the covers left in that slot are fewer than the party, when the day is closed, or when the slot is inside the lead time. Over `max_party` → "call us".
+2. Name, phone, email, notes → `/api/reserve`. Status is `confirmed` at once when the owner leaves auto-confirm on (default), otherwise `requested`. The guest gets an email with their private link (`prenota.html?id=…&t=…`), the staff get one too.
+3. That link is the guest's page: status, details, **cancel** (until two hours before), and the **pre-order**: the whole menu as a picker with quantities (per-kilo steaks excluded, "weighed at the table"), a note for the kitchen, "Paga con carta" → Stripe Checkout with one line per dish, prices taken server-side from `menu.js`. The webhook marks the order paid and emails both sides; the guest page then shows the paid order.
+
+**Staff — `admin.html`** (Italian, dark, phone-friendly, sign-in with email or username):
+- *Oggi*: covers today and this week, requests waiting, paid pre-orders coming up and this month; today's tables by service with one-tap **Conferma / Rifiuta / Seduti / Non venuti / Concluso**.
+- *Prenotazioni*: any date range, status filter, search; grouped by day with covers; a drawer to edit everything (date, time, party, table, notes, internal note, status); **Nuova** for phone bookings and walk-ins. Changing date, time or status emails the guest.
+- *Pre-ordini*: paid orders as kitchen tickets by date, **Servito**, and a print view.
+- *Impostazioni* (owner): services (up to four windows), slot length, covers per slot, open days, closed dates, max party, lead time, horizon, auto-confirm, the notification address, pre-order on/off and minimum, and whether Stripe is connected.
+- *Accessi*: roles **owner** (everything), **staff** (reservations and orders), **platform** (Amico Mio: numbers only, including the fee); add and remove logins, change password. First owner: `ADMIN_BOOTSTRAP_EMAIL` + `ADMIN_BOOTSTRAP_PASSWORD`, honoured only while the admins table is empty.
+
+Code: `src/worker.js` (routes), `src/lib.js` (settings, availability, sessions, email, Stripe, server-side menu), `src/auth.js` (copied from Zen), `schema.sql`. Local run: `npx wrangler dev --local` with `--var SESSION_SECRET:… --var ADMIN_BOOTSTRAP_EMAIL:… --var ADMIN_BOOTSTRAP_PASSWORD:…`, then `wrangler d1 execute osteria-la-galleria --local --file=schema.sql`. Tested that way on 2026-09-14 end to end with curl and a headless browser: availability, reservation, capacity counting, guest cancel rules, admin login and roles, status changes, manual bookings, settings, the pre-order picker (with dummy Stripe keys, the payment call fails cleanly).
 
 ## The idea
 
@@ -54,7 +72,13 @@ sites/osteria-la-galleria/
   public/site.css       the gallery: shell, tabs, split menu, plaques, dial, responsive + reduced-motion
   public/menu.js        THE MENU. Every dish, price, allergen list, and the contact details (SITE)
   reference/            downscaled photos of the paper menu and the boards (the source of truth for prices)
-  wrangler.toml         Cloudflare static-assets deploy, no Worker code yet
+  public/prenota.html   book a table, then pre-order and pay
+  public/admin.html     staff: today, reservations, pre-orders, settings, logins
+  src/worker.js         the API (guests, Stripe webhook, staff)
+  src/lib.js            settings, availability, sessions, email, Stripe, server-side menu
+  src/auth.js           signed cookies + PBKDF2 passwords (WebCrypto)
+  schema.sql            D1 tables: reservations, orders, admins, settings
+  wrangler.toml         Worker + assets + D1 (id filled in at deploy)
 ```
 
 ## Editing the menu
@@ -85,4 +109,6 @@ Everything is transcribed exactly as printed, including a few things that look l
 2. **Domain** — pick one, add it as a zone on the Amico Mio Cloudflare account, uncomment `routes` in `wrangler.toml`.
 3. **Deploy** — `.github/workflows/deploy-osteria.yml` deploys on push to the default branch touching this folder (same token as Zen). Until a domain exists it deploys to `osteria-la-galleria.<account>.workers.dev`.
 4. **Photos** — three from Ash (2026-09-12), hung as numbered *vedute* in gold frames with caption plaques: the terrace facing Palazzo Pitti (the hero; cropped to the palace and the umbrellas so no guest's face is published without consent), the dining room and the corridor to the counter. `public/img/` holds resized copies. A photo of the buchetta del vino itself would go in the prologue. Dish photos: see "Every dish has a picture" above.
-5. **Ordering / reservations** — not built. The "Prenota" button scrolls to the contact block. A booking form or a table-ordering flow is the Locali & Ordinazioni upsell, on top of this.
+5. **Stripe** — the osteria needs a connected account under the AmicoMioFlorence platform (same onboarding link flow as Zen); put its `acct_…` in `OSTERIA_STRIPE_ACCOUNT` in `wrangler.toml`, set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` (webhook endpoint `/api/stripe-webhook`, events `checkout.session.completed` and `checkout.session.expired`, on the connected account). Until then pre-ordering stays hidden.
+6. **Email sender** — `FROM_EMAIL` in `wrangler.toml` points at the Zen domain as a placeholder; switch it to the osteria's own verified Resend domain.
+7. **First staff login** — set the `ADMIN_BOOTSTRAP_PASSWORD` repository secret before the first deploy; the deploy workflow passes `ADMIN_BOOTSTRAP_EMAIL` as Ash's address. Sign in once on `/admin.html`, add the owner's own login from *Accessi*, and optionally a *platform* login for Amico Mio.

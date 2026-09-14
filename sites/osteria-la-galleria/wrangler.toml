@@ -1,14 +1,30 @@
 name = "osteria-la-galleria"
+main = "src/worker.js"
 compatibility_date = "2025-06-01"
-
-# Static site only for now: no Worker code, no database. Cloudflare serves ./public as-is.
-# When the ordering system is added, set `main = "src/worker.js"` and bind D1 here, as in sites/zen.
-[assets]
-directory = "./public"
-not_found_handling = "single-page-application"
 
 # Custom domain — uncomment once the owner has picked a domain and it is a zone on this Cloudflare account.
 # routes = [
 #   { pattern = "osterialagalleria.it", custom_domain = true },
 #   { pattern = "www.osterialagalleria.it", custom_domain = true },
 # ]
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+not_found_handling = "404-page"
+
+# Reservations, pre-orders, staff logins, settings. The deploy workflow creates the database on first run and
+# writes its id here; locally `wrangler dev` uses a throwaway copy.
+[[d1_databases]]
+binding = "DB"
+database_name = "osteria-la-galleria"
+database_id = "00000000-0000-0000-0000-000000000000"   # replaced at deploy
+
+# Secrets (never committed) — set by the deploy workflow from repository secrets, or by hand with `npx wrangler secret put NAME`:
+#   SESSION_SECRET, RESEND_API_KEY, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, ADMIN_BOOTSTRAP_EMAIL, ADMIN_BOOTSTRAP_PASSWORD
+[vars]
+SITE_URL = "https://osteria-la-galleria.fetta-amore-business.workers.dev"   # becomes the custom domain once it exists
+OSTERIA_STRIPE_ACCOUNT = ""      # acct_… of the osteria's connected Stripe account. Empty = pre-ordering hidden, reservations still work.
+PLATFORM_FEE_BPS = "200"         # 2% application fee to Amico Mio on every pre-order
+FROM_EMAIL = "Osteria La Galleria <prenotazioni@zenrecovery.club>"   # placeholder sender on a verified Resend domain; switch to the osteria's own domain once verified
+NOTIFY_EMAIL = ""                # extra address for new reservations / paid pre-orders (the admin's own "avvisi" flag does the rest)

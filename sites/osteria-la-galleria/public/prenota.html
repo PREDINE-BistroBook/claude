@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Prenota — Osteria La Galleria</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Prenota un tavolo all'Osteria La Galleria, di fronte a Palazzo Pitti, Firenze. Se vuoi, pre-ordina i piatti e paga online: li trovi pronti quando ti siedi.">
+<meta name="theme-color" content="#3E1219">
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%233E1219'/%3E%3Crect x='11' y='11' width='42' height='42' fill='none' stroke='%23C9A55C' stroke-width='3'/%3E%3Crect x='18' y='18' width='28' height='28' fill='%23F6EFE1'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,500;1,6..96,400;1,6..96,500&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=Work+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="site.css">
+</head>
+<body data-page="book">
+<div id="shell-top"></div>
+
+<main id="main" class="book-page">
+  <header class="book-head">
+    <div class="rail" aria-hidden="true"></div>
+    <p class="eyebrow" data-i18n="book.eyebrow">Prenota un tavolo</p>
+    <h1 id="book-title" data-i18n="book.h1">Il tuo tavolo davanti a Palazzo Pitti</h1>
+    <p class="lede" id="book-lede" data-i18n="book.lede"></p>
+  </header>
+
+  <!-- Step 1: the form. Hidden when the page opens a reservation (?id=&t=). -->
+  <section class="book-form plaque" id="book-form" aria-labelledby="book-title">
+    <form id="reserve" novalidate>
+      <div class="frow">
+        <div class="field">
+          <label for="party" data-i18n="book.party">Quante persone</label>
+          <div class="stepper"><button type="button" data-step="-1" aria-label="−">−</button><input id="party" name="party" type="number" min="1" max="8" value="2" inputmode="numeric"><button type="button" data-step="1" aria-label="+">+</button></div>
+          <small id="party-hint" class="hint"></small>
+        </div>
+        <div class="field">
+          <label for="date" data-i18n="book.date">Quando</label>
+          <input id="date" name="date" type="date" required>
+          <small class="hint" id="date-hint"></small>
+        </div>
+      </div>
+      <div class="field">
+        <span class="label" data-i18n="book.time">A che ora</span>
+        <div class="slots" id="slots" role="radiogroup" aria-label="Orario"></div>
+        <small class="hint" id="slots-hint"></small>
+      </div>
+      <div class="frow">
+        <div class="field"><label for="name" data-i18n="book.name">Nome</label><input id="name" name="name" type="text" autocomplete="name" required maxlength="80"></div>
+        <div class="field"><label for="phone" data-i18n="book.phone">Telefono</label><input id="phone" name="phone" type="tel" autocomplete="tel" inputmode="tel" maxlength="40" placeholder="+39 …"></div>
+      </div>
+      <div class="field"><label for="email" data-i18n="book.email">Email</label><input id="email" name="email" type="email" autocomplete="email" maxlength="120"><small class="hint" data-i18n="book.email.hint"></small></div>
+      <div class="field"><label for="note" data-i18n="book.note">Note per noi</label><textarea id="note" name="note" rows="2" maxlength="500"></textarea><small class="hint" data-i18n="book.note.hint"></small></div>
+      <p class="form-error" id="form-error" role="alert" hidden></p>
+      <div class="form-actions">
+        <button class="btn" type="submit" id="submit" data-i18n="book.submit">Prenota il tavolo</button>
+        <span class="hint" id="call-hint"></span>
+      </div>
+    </form>
+  </section>
+
+  <!-- Step 2: the reservation, and the pre-order. -->
+  <section class="book-done" id="book-done" hidden>
+    <div class="plaque res-card" id="res-card"></div>
+    <section class="preorder" id="preorder" hidden aria-labelledby="preorder-title">
+      <div class="rail" aria-hidden="true"></div>
+      <p class="eyebrow" data-i18n="pre.eyebrow">Pre-ordina e paga online</p>
+      <h2 id="preorder-title" data-i18n="pre.title">Trova i piatti pronti quando ti siedi</h2>
+      <p class="blurb" data-i18n="pre.text"></p>
+      <div class="picker" id="picker"></div>
+      <div class="cart" id="cart" hidden>
+        <div class="cart-sum"><span id="cart-count"></span><b id="cart-total"></b></div>
+        <label class="cart-note"><span data-i18n="pre.note">Note per la cucina</span><input id="pre-note" type="text" maxlength="300"></label>
+        <button class="btn" type="button" id="pay" data-i18n="pre.pay">Paga con carta</button>
+        <p class="hint" data-i18n="pre.hint"></p>
+        <p class="form-error" id="pre-error" role="alert" hidden></p>
+      </div>
+    </section>
+  </section>
+</main>
+
+<div id="shell-foot"></div>
+<script src="menu.js"></script>
+<script src="art.js"></script>
+<script src="photos.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Sala — Osteria La Galleria</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#1E1A17">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%231E1A17'/%3E%3Crect x='11' y='11' width='42' height='42' fill='none' stroke='%23C9A55C' stroke-width='3'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;1,6..96,400&family=Work+Sans:wght@400;500;600&display=swap">
+<style>
+:root { --bg: #1E1A17; --panel: #2A2320; --paper: #F6EFE1; --ink: #F2E8D5; --muted: rgba(242,232,213,.7); --gold: #C9A55C; --gold-soft: rgba(201,165,92,.4); --ok: #6FA46A; --warn: #E8A64A; --bad: #D9584A; --blue: #6C9BD2; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 "Work Sans", system-ui, sans-serif; }
+a { color: inherit; }
+button, input, select, textarea { font: inherit; color: inherit; }
+h1, h2, h3 { font-family: "Bodoni Moda", Georgia, serif; font-weight: 400; margin: 0; }
+.hide { display: none !important; }
+.top { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 14px; padding: 10px 20px; background: var(--panel); border-bottom: 1px solid rgba(255,255,255,.08); }
+.top .brand { font-family: "Bodoni Moda", Georgia, serif; font-style: italic; font-size: 1.25rem; }
+.top .brand small { font-family: "Work Sans"; font-style: normal; font-size: .7rem; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); margin-left: 8px; }
+.tabs { display: flex; gap: 4px; margin-left: auto; overflow-x: auto; }
+.tabs button { background: transparent; border: 1px solid transparent; border-radius: 999px; padding: 8px 14px; cursor: pointer; color: var(--muted); white-space: nowrap; }
+.tabs button.on { background: var(--paper); color: #1E1A17; }
+.tabs button:hover { border-color: var(--gold-soft); color: var(--ink); }
+.who { font-size: .8rem; color: var(--muted); }
+.who button { background: none; border: 1px solid var(--gold-soft); border-radius: 999px; padding: 6px 12px; cursor: pointer; margin-left: 8px; }
+main { max-width: 1180px; margin: 0 auto; padding: 22px 20px 80px; }
+.live { display: inline-flex; align-items: center; gap: 8px; font-size: .74rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.live i { width: 9px; height: 9px; border-radius: 50%; background: var(--bad); }
+.live.on i { background: var(--ok); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 16px 0 26px; }
+.tile { background: var(--panel); border: 1px solid rgba(255,255,255,.06); border-radius: 4px; padding: 14px 16px; }
+.tile b { display: block; font-family: "Bodoni Moda", Georgia, serif; font-size: 2rem; line-height: 1; font-weight: 400; }
+.tile span { font-size: .74rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.tile.warn b { color: var(--warn); }
+.card { background: var(--panel); border: 1px solid rgba(255,255,255,.06); border-radius: 4px; padding: 18px; margin-bottom: 18px; }
+.card h2 { font-size: 1.5rem; margin-bottom: 10px; }
+.help { font-size: .84rem; color: var(--muted); margin: 0 0 12px; }
+.bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-bottom: 14px; }
+label.f { display: grid; gap: 4px; font-size: .74rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+label.f input, label.f select, label.f textarea { background: #1E1A17; border: 1px solid rgba(255,255,255,.14); border-radius: 3px; padding: 9px 11px; color: var(--ink); min-width: 0; font-size: .95rem; text-transform: none; letter-spacing: 0; }
+label.f input[type="date"] { color-scheme: dark; }
+label.f.grow { flex: 1; min-width: 160px; }
+.btn { background: var(--paper); color: #1E1A17; border: 1px solid var(--paper); border-radius: 3px; padding: 9px 16px; cursor: pointer; font-weight: 600; font-size: .82rem; letter-spacing: .1em; text-transform: uppercase; }
+.btn:hover { background: var(--gold); border-color: var(--gold); }
+.btn.ghost { background: transparent; color: var(--ink); border-color: var(--gold-soft); }
+.btn.ghost:hover { border-color: var(--gold); }
+.btn.sm { padding: 6px 10px; font-size: .72rem; }
+.btn.danger { background: transparent; color: #F0B8A8; border-color: rgba(217,88,74,.5); }
+.btn:disabled { opacity: .5; cursor: default; }
+.pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; border: 1px solid; }
+.pill.requested { color: var(--warn); border-color: var(--warn); }
+.pill.confirmed { color: var(--blue); border-color: var(--blue); }
+.pill.seated { color: var(--ok); border-color: var(--ok); }
+.pill.done { color: var(--muted); border-color: var(--muted); }
+.pill.cancelled, .pill.no_show { color: #F0B8A8; border-color: rgba(217,88,74,.6); }
+.pill.paid { color: var(--gold); border-color: var(--gold); }
+.pill.served { color: var(--muted); border-color: var(--muted); }
+table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+th { text-align: left; font-size: .7rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-weight: 500; padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,.1); }
+td { padding: 10px; border-bottom: 1px solid rgba(255,255,255,.06); vertical-align: top; }
+tr.row { cursor: pointer; }
+tr.row:hover td { background: rgba(255,255,255,.03); }
+td .sub { display: block; font-size: .8rem; color: var(--muted); }
+.time { font-family: "Bodoni Moda", Georgia, serif; font-size: 1.25rem; }
+.svc { font-family: "Bodoni Moda", Georgia, serif; font-style: italic; font-size: 1.3rem; color: var(--gold); margin: 22px 0 8px; }
+.empty { padding: 30px 10px; text-align: center; color: var(--muted); font-style: italic; }
+.actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.err { color: #F0B8A8; font-size: .86rem; margin: 8px 0 0; }
+.okmsg { color: var(--ok); font-size: .86rem; margin: 8px 0 0; }
+.drawer { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; justify-content: flex-end; z-index: 20; }
+.drawer .panel { width: min(520px, 100%); background: var(--panel); height: 100%; overflow: auto; padding: 22px; border-left: 1px solid rgba(255,255,255,.08); }
+.drawer h2 { margin-bottom: 4px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.items { margin: 6px 0 0; padding: 0; list-style: none; font-size: .9rem; }
+.items li { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; border-bottom: 1px dotted rgba(255,255,255,.12); }
+.chk { display: flex; flex-wrap: wrap; gap: 8px 14px; }
+.chk label { display: inline-flex; align-items: center; gap: 6px; font-size: .9rem; text-transform: none; letter-spacing: 0; }
+.login { max-width: 400px; margin: 60px auto; }
+.login h1 { font-size: 2rem; margin-bottom: 6px; }
+.login p { color: var(--muted); font-size: .9rem; }
+.ticket { background: var(--paper); color: #1E1A17; border-radius: 4px; padding: 14px 16px; margin-bottom: 12px; display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; }
+.ticket h3 { font-size: 1.2rem; }
+.ticket .items li { border-color: rgba(0,0,0,.2); }
+.ticket .meta { font-size: .8rem; color: #6E6459; }
+@media print { .top, .bar, .actions, .btn, .tiles, .help { display: none !important; } body { background: #fff; color: #000; } .ticket { border: 1px solid #000; page-break-inside: avoid; } }
+@media (max-width: 700px) { .grid2 { grid-template-columns: 1fr; } .top { flex-wrap: wrap; } .tabs { margin-left: 0; width: 100%; } td, th { padding: 8px 6px; } }
+</style>
+</head>
+<body>
+<div class="top" id="top">
+  <span class="brand">La Galleria<small>Sala</small></span>
+  <nav class="tabs" id="tabs"></nav>
+  <span class="who" id="who"></span>
+</div>
+<main id="main"></main>
+<script>
+(function () {
+  "use strict";
+  const $ = (s, r) => (r || document).querySelector(s);
+  const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const eur = m => new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format((m || 0) / 100);
+  const api = async (path, opts) => { const r = await fetch(path, { headers: { "content-type": "application/json" }, ...opts }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || ("Errore " + r.status)); return j; };
+  const post = (p, b) => api(p, { method: "POST", body: JSON.stringify(b) });
+  const patch = (p, b) => api(p, { method: "PATCH", body: JSON.stringify(b) });
+  const put = (p, b) => api(p, { method: "PUT", body: JSON.stringify(b) });
+  const today = () => new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Rome" })).toISOString().slice(0, 10);
+  const addDays = (d, n) => { const x = new Date(d + "T12:00:00Z"); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
+  const dateIt = d => new Date(d + "T12:00:00Z").toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+  const ST = { requested: "Da confermare", confirmed: "Confermata", seated: "Al tavolo", done: "Conclusa", cancelled: "Disdetta", no_show: "Non venuti" };
+  let me = null, live = false, settings = null;
+
+  /* ---------- login ---------- */
+  function loginView(msg) {
+    $("#tabs").innerHTML = ""; $("#who").innerHTML = "";
+    $("#main").innerHTML = '<div class="login card"><h1>Sala</h1><p>Prenotazioni, pre-ordini e impostazioni dell\'Osteria La Galleria. Solo per il personale.</p>' +
+      '<form id="login"><label class="f">Email o nome utente<input name="email" autocomplete="username" required></label><br><label class="f">Password<input name="password" type="password" autocomplete="current-password" required></label><br><button class="btn" type="submit">Entra</button><p class="err" id="lerr">' + esc(msg || "") + "</p></form></div>";
+    $("#login").addEventListener("submit", async e => {
+      e.preventDefault(); const f = new FormData(e.target);
+      try { const j = await post("/api/admin/login", { email: f.get("email"), password: f.get("password") }); me = j.admin; live = j.live; boot(); } catch (err) { $("#lerr").textContent = err.message; }
+    });
+  }
+
+  /* ---------- shell ---------- */
+  const TABS = [["oggi", "Oggi"], ["prenotazioni", "Prenotazioni"], ["ordini", "Pre-ordini"], ["impostazioni", "Impostazioni"], ["accessi", "Accessi"]];
+  function boot() {
+    const allowed = me.role === "platform" ? ["oggi"] : me.role === "owner" ? TABS.map(t => t[0]) : ["oggi", "prenotazioni", "ordini", "accessi"];
+    $("#tabs").innerHTML = TABS.filter(t => allowed.includes(t[0])).map(t => '<button data-tab="' + t[0] + '">' + t[1] + "</button>").join("");
+    $("#who").innerHTML = esc(me.name || me.email || me.username) + ' <span class="live' + (live ? " on" : "") + '"><i></i>' + (live ? "pagamenti attivi" : "pagamenti spenti") + '</span><button id="logout">Esci</button>';
+    $("#logout").addEventListener("click", async () => { await post("/api/admin/logout", {}); me = null; loginView(); });
+    document.querySelectorAll("#tabs button").forEach(b => b.addEventListener("click", () => show(b.dataset.tab)));
+    const h = location.hash.replace("#", "");
+    show(allowed.includes(h) ? h : "oggi");
+  }
+  function show(tab) {
+    document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
+    history.replaceState(null, "", "#" + tab);
+    ({ oggi, prenotazioni, ordini, impostazioni, accessi })[tab]();
+  }
+
+  /* ---------- Oggi ---------- */
+  async function oggi() {
+    const m = $("#main"); m.innerHTML = '<p class="help">Un attimo…</p>';
+    const [s, r] = await Promise.all([api("/api/admin/stats"), me.role === "platform" ? null : api("/api/admin/reservations?from=" + today() + "&to=" + today())]);
+    let h = '<h1>Oggi, ' + dateIt(s.date) + "</h1>" +
+      '<div class="tiles"><div class="tile"><b>' + s.today.covers + "</b><span>coperti oggi · " + s.today.reservations + " tavoli</span></div>" +
+      '<div class="tile"><b>' + s.week.covers + "</b><span>coperti nei prossimi 7 giorni</span></div>" +
+      '<div class="tile' + (s.requested ? " warn" : "") + '"><b>' + s.requested + "</b><span>richieste da confermare</span></div>" +
+      '<div class="tile"><b>' + eur(s.preorders_upcoming.amount) + "</b><span>pre-ordini pagati in arrivo · " + s.preorders_upcoming.n + "</span></div>" +
+      '<div class="tile"><b>' + eur(s.preorders_month.amount) + "</b><span>pre-ordini pagati questo mese</span></div>" +
+      (s.platform_fee_month !== undefined ? '<div class="tile"><b>' + eur(s.platform_fee_month) + "</b><span>commissione piattaforma, mese</span></div>" : "") + "</div>";
+    if (!r) { m.innerHTML = h + '<p class="help">Questo accesso vede solo i numeri.</p>'; return; }
+    h += '<p class="help">I tavoli di oggi in ordine di orario. Un tocco su un tavolo apre la scheda; i bottoni cambiano lo stato al volo.</p>' + timeline(r.reservations);
+    m.innerHTML = h; wireRows(() => oggi());
+  }
+  function timeline(list) {
+    if (!list.length) return '<p class="empty">Nessuna prenotazione.</p>';
+    const groups = {}; for (const r of list) { const k = Number(r.time.slice(0, 2)) < 17 ? "Pranzo" : "Cena"; (groups[k] ||= []).push(r); }
+    return Object.entries(groups).map(([k, rows]) => '<p class="svc">' + k + " · " + rows.reduce((a, r) => a + (["cancelled", "no_show"].includes(r.status) ? 0 : r.party), 0) + " coperti</p>" + table(rows)).join("");
+  }
+  function table(rows) {
+    return '<table><thead><tr><th>Ora</th><th>Nome</th><th>Persone</th><th>Tavolo</th><th>Stato</th><th>Pre-ordine</th><th></th></tr></thead><tbody>' + rows.map(r =>
+      '<tr class="row" data-id="' + r.id + '"><td class="time">' + r.time + '</td><td>' + esc(r.name) + '<span class="sub">' + esc([r.phone, r.email].filter(Boolean).join(" · ")) + (r.note ? '<br>“' + esc(r.note) + "”" : "") + (r.source === "manual" ? " · telefono" : "") + "</span></td><td>" + r.party + "</td><td>" + esc(r.table_no || "—") + '</td><td><span class="pill ' + r.status + '">' + ST[r.status] + "</span></td><td>" +
+      (r.orders.length ? r.orders.map(o => '<span class="pill ' + o.status + '">' + (o.status === "paid" ? "pagato " : "servito ") + eur(o.amount) + "</span>").join(" ") : '<span class="sub">—</span>') + '</td><td class="actions">' + quick(r) + "</td></tr>").join("") + "</tbody></table>";
+  }
+  function quick(r) {
+    const b = (st, label, cls) => '<button class="btn sm ' + (cls || "ghost") + '" data-act="' + st + '" data-id="' + r.id + '">' + label + "</button>";
+    if (r.status === "requested") return b("confirmed", "Conferma") + b("cancelled", "Rifiuta", "danger");
+    if (r.status === "confirmed") return b("seated", "Seduti") + b("no_show", "Non venuti", "danger");
+    if (r.status === "seated") return b("done", "Concluso");
+    return "";
+  }
+  function wireRows(reload) {
+    document.querySelectorAll("[data-act]").forEach(b => b.addEventListener("click", async e => { e.stopPropagation(); b.disabled = true; try { await patch("/api/admin/reservations/" + b.dataset.id, { status: b.dataset.act }); reload(); } catch (err) { alert(err.message); b.disabled = false; } }));
+    document.querySelectorAll("tr.row").forEach(tr => tr.addEventListener("click", () => openReservation(tr.dataset.id, reload)));
+  }
+
+  /* ---------- Prenotazioni ---------- */
+  let q = { from: today(), to: addDays(today(), 6), status: "all", q: "" };
+  async function prenotazioni() {
+    const m = $("#main");
+    m.innerHTML = '<h1>Prenotazioni</h1><p class="help">Cerca per data, stato o nome. “Nuova” registra una prenotazione presa al telefono o un tavolo senza prenotazione.</p>' +
+      '<div class="bar"><label class="f">Dal<input type="date" id="from" value="' + q.from + '"></label><label class="f">Al<input type="date" id="to" value="' + q.to + '"></label>' +
+      '<label class="f">Stato<select id="status"><option value="all">Tutte</option>' + Object.entries(ST).map(([k, v]) => '<option value="' + k + '"' + (q.status === k ? " selected" : "") + ">" + v + "</option>").join("") + "</select></label>" +
+      '<label class="f grow">Cerca<input id="q" value="' + esc(q.q) + '" placeholder="nome, telefono, email"></label><button class="btn ghost" id="go">Cerca</button><button class="btn" id="new">Nuova</button></div><div id="list"></div>';
+    const load = async () => { q = { from: $("#from").value, to: $("#to").value, status: $("#status").value, q: $("#q").value }; const j = await api("/api/admin/reservations?from=" + q.from + "&to=" + q.to + "&status=" + q.status + "&q=" + encodeURIComponent(q.q)); $("#list").innerHTML = j.reservations.length ? byDay(j.reservations) : '<p class="empty">Nessuna prenotazione in questo periodo.</p>'; wireRows(load); };
+    $("#go").addEventListener("click", load); $("#q").addEventListener("keydown", e => { if (e.key === "Enter") load(); });
+    $("#new").addEventListener("click", () => newReservation(load));
+    load();
+  }
+  function byDay(rows) { const d = {}; for (const r of rows) (d[r.date] ||= []).push(r); return Object.entries(d).map(([k, v]) => '<p class="svc">' + dateIt(k) + " · " + v.reduce((a, r) => a + (["cancelled", "no_show"].includes(r.status) ? 0 : r.party), 0) + " coperti</p>" + table(v)).join(""); }
+
+  function drawer(html) { const d = document.createElement("div"); d.className = "drawer"; d.innerHTML = '<div class="panel">' + html + "</div>"; d.addEventListener("click", e => { if (e.target === d) d.remove(); }); document.body.appendChild(d); return d; }
+  async function openReservation(id, reload) {
+    const j = await api("/api/admin/reservations?from=2000-01-01&to=2100-01-01&q=");
+    const r = j.reservations.find(x => x.id === id); if (!r) return;
+    const d = drawer('<h2>' + esc(r.name) + '</h2><p class="help">' + dateIt(r.date) + " · " + r.time + " · " + r.party + " persone · " + (r.source === "manual" ? "presa al telefono" : "dal sito") + "</p>" +
+      '<form id="edit"><div class="grid2"><label class="f">Nome<input name="name" value="' + esc(r.name) + '"></label><label class="f">Telefono<input name="phone" value="' + esc(r.phone || "") + '"></label>' +
+      '<label class="f">Email<input name="email" value="' + esc(r.email || "") + '"></label><label class="f">Persone<input name="party" type="number" min="1" max="60" value="' + r.party + '"></label>' +
+      '<label class="f">Data<input name="date" type="date" value="' + r.date + '"></label><label class="f">Ora<input name="time" type="time" value="' + r.time + '"></label>' +
+      '<label class="f">Tavolo<input name="table_no" value="' + esc(r.table_no || "") + '"></label><label class="f">Stato<select name="status">' + Object.entries(ST).map(([k, v]) => '<option value="' + k + '"' + (r.status === k ? " selected" : "") + ">" + v + "</option>").join("") + "</select></label></div>" +
+      '<label class="f">Nota del cliente<textarea name="note" rows="2">' + esc(r.note || "") + '</textarea></label><label class="f">Nota interna (non la vede il cliente)<textarea name="admin_note" rows="2">' + esc(r.admin_note || "") + "</textarea></label>" +
+      (r.orders.length ? "<h3>Pre-ordine</h3>" + r.orders.map(o => '<ul class="items">' + o.items.map(i => "<li><span>" + i.qty + " × " + esc(i.name) + "</span><span>" + eur(i.line) + "</span></li>").join("") + '<li><b>Totale</b><b>' + eur(o.amount) + "</b></li></ul>").join("") : "") +
+      '<p class="help">Se cambi data, ora o stato, il cliente riceve un\'email (quando ha lasciato l\'email).</p><div class="actions"><button class="btn" type="submit">Salva</button><button class="btn ghost" type="button" id="close">Chiudi</button></div><p class="err" id="eerr"></p></form>');
+    $("#close", d).addEventListener("click", () => d.remove());
+    $("#edit", d).addEventListener("submit", async e => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); try { await patch("/api/admin/reservations/" + id, f); d.remove(); reload(); } catch (err) { $("#eerr", d).textContent = err.message; } });
+  }
+  function newReservation(reload) {
+    const d = drawer('<h2>Nuova prenotazione</h2><p class="help">Per chi chiama o entra senza prenotare. Viene registrata come confermata.</p><form id="new"><div class="grid2"><label class="f">Nome<input name="name" required></label><label class="f">Telefono<input name="phone"></label><label class="f">Persone<input name="party" type="number" min="1" max="60" value="2"></label><label class="f">Tavolo<input name="table_no"></label><label class="f">Data<input name="date" type="date" value="' + today() + '" required></label><label class="f">Ora<input name="time" type="time" value="20:00" required></label></div><label class="f">Email (facoltativa)<input name="email"></label><label class="f">Nota<textarea name="note" rows="2"></textarea></label><div class="actions"><button class="btn" type="submit">Registra</button><button class="btn ghost" type="button" id="close">Annulla</button></div><p class="err" id="nerr"></p></form>');
+    $("#close", d).addEventListener("click", () => d.remove());
+    $("#new", d).addEventListener("submit", async e => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); try { await post("/api/admin/reservations", f); d.remove(); reload(); } catch (err) { $("#nerr", d).textContent = err.message; } });
+  }
+
+  /* ---------- Pre-ordini ---------- */
+  async function ordini() {
+    const m = $("#main");
+    m.innerHTML = '<h1>Pre-ordini</h1><p class="help">I piatti pagati online, tavolo per tavolo, in ordine di arrivo. “Servito” toglie il tavolo dalla lista della cucina. “Stampa” fa i biglietti per la cucina.</p>' +
+      '<div class="bar"><label class="f">Dal<input type="date" id="from" value="' + today() + '"></label><label class="f">Al<input type="date" id="to" value="' + addDays(today(), 6) + '"></label><button class="btn ghost" id="go">Aggiorna</button><button class="btn ghost" id="print">Stampa</button></div><div id="list"></div>';
+    const load = async () => { const j = await api("/api/admin/orders?from=" + $("#from").value + "&to=" + $("#to").value); $("#list").innerHTML = j.orders.length ? j.orders.map(ticket).join("") : '<p class="empty">Nessun pre-ordine in questo periodo.</p>'; document.querySelectorAll("[data-served]").forEach(b => b.addEventListener("click", async () => { await patch("/api/admin/orders/" + b.dataset.served, { status: "served" }); load(); })); };
+    $("#go").addEventListener("click", load); $("#print").addEventListener("click", () => window.print()); load();
+  }
+  function ticket(o) {
+    const r = o.reservation;
+    return '<div class="ticket"><div><h3>' + dateIt(r.date) + " · " + r.time + " · " + esc(r.name) + " · " + r.party + " p" + (r.table_no ? " · tav. " + esc(r.table_no) : "") + '</h3><p class="meta">' + (r.phone ? esc(r.phone) + " · " : "") + "pagato " + (o.paid_at || "").slice(0, 16) + (o.note ? ' · nota: “' + esc(o.note) + "”" : "") + '</p><ul class="items">' + o.items.map(i => "<li><span>" + i.qty + " × " + esc(i.name) + "</span><span>" + eur(i.line) + "</span></li>").join("") + "<li><b>Totale</b><b>" + eur(o.amount) + '</b></li></ul></div><div class="actions"><span class="pill ' + o.status + '">' + (o.status === "paid" ? "pagato" : "servito") + "</span>" + (o.status === "paid" ? '<button class="btn sm" data-served="' + o.id + '">Servito</button>' : "") + "</div></div>";
+  }
+
+  /* ---------- Impostazioni ---------- */
+  async function impostazioni() {
+    const m = $("#main"); const j = await api("/api/admin/settings"); settings = j.settings; const s = settings;
+    const days = ["Dom", "Lun", "Mar", "Mer", "Gio", "Ven", "Sab"];
+    m.innerHTML = '<h1>Impostazioni</h1><p class="help">Cosa il sito offre ai clienti. Le prenotazioni dal sito rispettano questi orari e questi posti; al telefono potete sempre andare oltre.</p>' +
+      '<form id="set"><div class="card"><h2>Orari</h2><p class="help">Fino a quattro servizi (pranzo, cena…). Gli orari prenotabili vanno dal primo all\'ultimo, ogni tot minuti.</p><div id="services">' +
+      s.services.map((x, i) => '<div class="grid2" style="margin-bottom:8px"><label class="f">Nome<input name="svc_name_' + i + '" value="' + esc(x.name.it) + '"></label><label class="f">Nome (inglese)<input name="svc_en_' + i + '" value="' + esc(x.name.en) + '"></label><label class="f">Dalle<input name="svc_from_' + i + '" type="time" value="' + x.from + '"></label><label class="f">Ultima prenotazione<input name="svc_to_' + i + '" type="time" value="' + x.to + '"></label></div>').join("") +
+      '</div><div class="grid2"><label class="f">Ogni quanti minuti un orario<input name="slot_minutes" type="number" min="15" step="15" value="' + s.slot_minutes + '"></label><label class="f">Coperti prenotabili per orario<input name="covers_per_slot" type="number" min="1" value="' + s.covers_per_slot + '"></label></div>' +
+      '<p class="help" style="margin-top:12px">Giorni di apertura</p><div class="chk">' + days.map((d, i) => '<label><input type="checkbox" name="day_' + i + '"' + (s.days.includes(i) ? " checked" : "") + ">" + d + "</label>").join("") + "</div>" +
+      '<label class="f" style="margin-top:12px">Giorni di chiusura straordinaria (una data per riga, AAAA-MM-GG)<textarea name="closed" rows="3">' + esc(s.closed.join("\n")) + "</textarea></label></div>" +
+      '<div class="card"><h2>Prenotazioni dal sito</h2><div class="grid2"><label class="f">Persone al massimo (oltre: “chiamateci”)<input name="max_party" type="number" min="1" value="' + s.max_party + '"></label><label class="f">Preavviso minimo, minuti<input name="lead_minutes" type="number" min="0" value="' + s.lead_minutes + '"></label><label class="f">Quanti giorni avanti<input name="horizon_days" type="number" min="1" value="' + s.horizon_days + '"></label><label class="f">Email che riceve gli avvisi<input name="notify_email" value="' + esc(s.notify_email || "") + '"></label></div>' +
+      '<div class="chk" style="margin-top:12px"><label><input type="checkbox" name="auto_confirm"' + (s.auto_confirm ? " checked" : "") + "> Conferma automatica quando c'è posto (altrimenti arrivano come “da confermare”)</label></div></div>" +
+      '<div class="card"><h2>Pre-ordine e pagamento online</h2><p class="help">Il cliente sceglie i piatti dal menu e paga con carta prima di venire. I soldi arrivano sul conto Stripe dell\'osteria; la piattaforma trattiene il 2%. <span class="live' + (j.live ? " on" : "") + '"><i></i>' + (j.live ? "Stripe collegato" : "Stripe non ancora collegato: il pre-ordine resta nascosto ai clienti") + "</span></p>" +
+      '<div class="chk"><label><input type="checkbox" name="preorder"' + (s.preorder ? " checked" : "") + "> Offri il pre-ordine online</label></div>" + '<label class="f" style="margin-top:10px;max-width:260px">Pre-ordine minimo, in euro (0 = nessuno)<input name="preorder_min" type="number" min="0" step="1" value="' + (s.preorder_min / 100) + '"></label></div>' +
+      '<div class="actions"><button class="btn" type="submit">Salva</button></div><p class="okmsg" id="smsg"></p><p class="err" id="serr"></p></form>';
+    $("#set").addEventListener("submit", async e => {
+      e.preventDefault(); const f = Object.fromEntries(new FormData(e.target));
+      const b = { services: s.services.map((x, i) => ({ id: x.id, name: { it: f["svc_name_" + i], en: f["svc_en_" + i] }, from: f["svc_from_" + i], to: f["svc_to_" + i] })), days: days.map((_, i) => i).filter(i => f["day_" + i]), closed: f.closed.split(/\n/).map(x => x.trim()).filter(Boolean), slot_minutes: f.slot_minutes, covers_per_slot: f.covers_per_slot, max_party: f.max_party, lead_minutes: f.lead_minutes, horizon_days: f.horizon_days, notify_email: f.notify_email, auto_confirm: !!f.auto_confirm, preorder: !!f.preorder, preorder_min: Math.round(Number(f.preorder_min || 0) * 100) };
+      try { await put("/api/admin/settings", b); $("#smsg").textContent = "Salvato."; $("#serr").textContent = ""; } catch (err) { $("#serr").textContent = err.message; $("#smsg").textContent = ""; }
+    });
+  }
+
+  /* ---------- Accessi ---------- */
+  async function accessi() {
+    const m = $("#main");
+    const admins = me.role === "owner" ? (await api("/api/admin/admins")).admins : null;
+    const ROLE = { owner: "Titolare", staff: "Sala", platform: "Piattaforma" };
+    m.innerHTML = '<h1>Accessi</h1>' + (admins ? '<div class="card"><h2>Chi può entrare</h2><p class="help">Titolare: tutto. Sala: prenotazioni e pre-ordini. Piattaforma: solo i numeri (Amico Mio).</p><table><thead><tr><th>Nome</th><th>Accesso</th><th>Ruolo</th><th>Avvisi</th><th></th></tr></thead><tbody>' +
+      admins.map(a => "<tr><td>" + esc(a.name || "—") + "</td><td>" + esc(a.email || a.username) + "</td><td>" + ROLE[a.role] + "</td><td>" + (a.notify ? "sì" : "no") + "</td><td>" + (a.id !== me.id && a.role !== "platform" ? '<button class="btn sm danger" data-del="' + a.id + '">Rimuovi</button>' : "") + "</td></tr>").join("") + "</tbody></table>" +
+      '<form id="add" style="margin-top:16px"><div class="grid2"><label class="f">Nome<input name="name"></label><label class="f">Email<input name="email" type="email"></label><label class="f">oppure nome utente<input name="username"></label><label class="f">Ruolo<select name="role"><option value="staff">Sala</option><option value="owner">Titolare</option></select></label><label class="f">Password (min. 8)<input name="password" type="password" required></label></div><div class="chk" style="margin:10px 0"><label><input type="checkbox" name="notify" checked> Riceve gli avvisi via email</label></div><div class="actions"><button class="btn" type="submit">Aggiungi</button></div><p class="err" id="aerr"></p></form></div>' : "") +
+      '<div class="card"><h2>La tua password</h2><form id="pw"><div class="grid2"><label class="f">Attuale<input name="current" type="password" autocomplete="current-password" required></label><label class="f">Nuova (min. 8)<input name="next" type="password" autocomplete="new-password" required></label></div><div class="actions" style="margin-top:10px"><button class="btn" type="submit">Cambia</button></div><p class="okmsg" id="pmsg"></p><p class="err" id="perr"></p></form></div>';
+    document.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", async () => { if (!confirm("Rimuovere questo accesso?")) return; await api("/api/admin/admins/" + b.dataset.del, { method: "DELETE" }); accessi(); }));
+    const add = $("#add"); if (add) add.addEventListener("submit", async e => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); f.notify = !!f.notify; try { await post("/api/admin/admins", f); accessi(); } catch (err) { $("#aerr").textContent = err.message; } });
+    $("#pw").addEventListener("submit", async e => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); try { await post("/api/admin/password", f); $("#pmsg").textContent = "Cambiata."; $("#perr").textContent = ""; e.target.reset(); } catch (err) { $("#perr").textContent = err.message; $("#pmsg").textContent = ""; } });
+  }
+
+  /* ---------- boot ---------- */
+  api("/api/admin/me").then(j => { me = j.admin; live = j.live; boot(); }).catch(() => loginView());
+})();
+</script>
+</body>
+</html>
