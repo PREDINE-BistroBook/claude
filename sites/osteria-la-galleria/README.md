@@ -17,10 +17,11 @@ Four pages, one shell (`app.js` renders the header, the phone tab bar and the fo
 
 The floor-plan map from 2026-09-13 was dropped at Ash's request the next day.
 
-### Every dish has a picture: drawings now, the owner's photos whenever they like
+### Every dish has a picture: a recipe that draws itself, until the owner's photos arrive
 
-- `art.js` holds 53 drawn plates in the flat engraved manner of the pictures on the paper menu (bruschetta, tagliere, soup, pasta, truffle pasta, ravioli, gnocchi, lasagna, risotto, seafood, lobster, T-bone, tagliata, fillet, lamb, chicken, salad, sides, pinsa, cakes, tiramisù, panna cotta, cantucci, fruit, wines, beer, spritz, liqueur, coffee, cappuccino, hot chocolate, water, juice, tea, soda). Every dish in `menu.js` has an `art` key pointing at one. They are illustrations and the footer of the menu says so.
-- **They assemble themselves (added 2026-09-14, Ash's idea).** Every drawing is a list of steps in cooking order, plate first, then each ingredient. When a dish comes into view the parts land one after another until the finished plate, and on the menu's picture side the ingredient words from the description appear in step, ending with the dish name. A "Rivedi / Play again" button replays it. With reduced motion the finished drawing is shown at once.
+- `art.js` is an **ingredient library**: 13 bases (plate, bowl, board, pinsa base, wine glass, flute, mug, cups, tumbler…) and 200 drawn ingredients, each with its name in Italian and English. Every dish in `menu.js` carries a `base` and a `steps` list, its recipe in cooking order, e.g. `["pici", "guanciale", "crema-uovo-pecorino", "pepe-nero"]`. The picture is built from that, so a Nizzarda shows tuna, onion, olives, mozzarella, eggs and tomato, and a Napoli pinsa shows oregano, capers and anchovies. A scripted check confirms every recipe key exists.
+- **They assemble themselves (2026-09-14, Ash's idea; slowed and detailed the same day).** The base lands first, then each ingredient, 0.85 s apart, each one named as it lands, on the menu's picture side and under the picture on phones alike. The dish name arrives last. A "Rivedi / Play again" button replays it. With reduced motion the finished drawing and all the names show at once.
+- To check all 110 plates at a glance, render a contact sheet: a throwaway page that loads `menu.js` + `art.js` and draws every recipe still (the 2026-09-14 session did this and fixed what didn't read: slice sizes, a bone, sauces landing after the pasta they should sit under).
 - **Real clips work the same way.** An `.mp4` or `.webm` named after the dish in `img/dishes/` plays muted on loop in that dish's spot instead of the drawing, a photo (`.jpg` / `.webp` / `.png`) shows still. The video wins if both exist.
 - **Real photos replace them file by file, with no code change.** Drop a photo into `public/img/dishes/` named after the dish (`img/dishes/README.md` lists the exact file name for all 110 dishes, e.g. `tagliatelle-al-tartufo-fresco.jpg`). The deploy workflow regenerates `photos.js` from the folder; the site then shows the photo instead of the drawing for that dish, on the menu and on the home page cards.
 - AI-generated placeholder photos were the first idea (2026-09-14). The Higgsfield workspace on this account had 0 credits and no free allowance, so it was not possible in that session; each image costs 1 credit. With credits, one photo per plate type (about 50) or one per dish (110) can be generated in a single pass and dropped into the same folder.
@@ -47,7 +48,7 @@ sites/osteria-la-galleria/
   public/bistecca.html  La bistecca: the dial
   public/visita.html    Visita: photos + contacts
   public/app.js         shared shell, language, icons, dial, the four page modules
-  public/art.js         the 53 drawn plates
+  public/art.js         the ingredient library: 13 bases + 200 drawn, named ingredients
   public/photos.js      list of the owner's photos in img/dishes (regenerated at deploy)
   public/img/dishes/    drop the real dish photos here, named as in its README.md
   public/site.css       the gallery: shell, tabs, split menu, plaques, dial, responsive + reduced-motion
@@ -64,7 +65,7 @@ Everything lives in `public/menu.js`. A dish is one line:
 { it: "Tagliatelle al tartufo fresco", en: "Home-made pasta with fresh truffle", dit: "Pasta fatta in casa e tartufo fresco", price: 24, a: [1,3,7], v: true, feature: true },
 ```
 
-`it` is the name (always shown), `en` the English description, `dit` the Italian description, `a` the allergen numbers, `v` vegetarian, `star` the menu's asterisk (may be frozen), `per2` for-two dishes, `perKg` priced by weight, `feature` gold frame. Rooms have a `wall` colour and an `ink` text colour.
+`it` is the name (always shown), `en` the English description, `dit` the Italian description, `a` the allergen numbers, `v` vegetarian, `star` the menu's asterisk (may be frozen), `per2` for-two dishes, `perKg` priced by weight, `feature` gold frame, `base` + `steps` the recipe the drawing builds from (keys from `art.js`). Rooms have a `wall` colour and an `ink` text colour.
 
 ## Transcription notes — check with the kitchen
 

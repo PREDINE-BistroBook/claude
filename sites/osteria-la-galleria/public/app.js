@@ -202,16 +202,17 @@
     const m = mediaFor(d);
     if (m && m.kind === "video") return '<video class="dish-video" src="' + esc(m.src) + '" autoplay muted loop playsinline' + (mode === "card" ? "" : ' preload="metadata"') + "></video>";
     if (m) return '<img class="dish-photo" src="' + esc(m.src) + '" alt="" loading="' + (mode === "stage" ? "eager" : "lazy") + '">';
-    const steps = ART[d.art] || ART.pasta || [];
+    const base = (ART.BASE && ART.BASE[d.base]) || (ART.BASE && ART.BASE.plate);
+    const parts = [base ? base.svg : ""].concat((d.steps || []).map(k => (ART.ING[k] || { svg: "" }).svg));
     return '<svg class="dish-art' + (mode === "card" ? " still" : "") + '" viewBox="0 0 400 300" aria-hidden="true"><rect width="400" height="300" fill="' + room.wall + '"/>' +
-      steps.map((part, i) => '<g class="step" style="--i:' + i + '">' + part + "</g>").join("") + "</svg>";
+      parts.map((part, i) => '<g class="step" style="--i:' + i + '">' + part + "</g>").join("") + "</svg>";
   }
-  /* The ingredient words, from the description, in the order they land. */
+  /* The ingredient names, in the order they land: the base first, then each step. */
   function ingredients(d) {
-    const desc = lang === "it" ? (d.dit || "") : (d.en || "");
-    if (!desc || desc.trim().toLowerCase() === d.it.trim().toLowerCase()) return [];
-    return desc.replace(/^(per due\.|for two:?)\s*/i, "").split(/,|;|·| e | and | with | con /i).map(x => x.trim()).filter(x => x && x.length < 40).slice(0, 6);
+    const base = ART.BASE && ART.BASE[d.base] || ART.BASE.plate;
+    return [base ? base[lang] : ""].concat((d.steps || []).map(k => (ART.ING[k] || {})[lang] || k));
   }
+  const ingsHtml = (d, cls) => '<span class="ings ' + (cls || "") + '">' + ingredients(d).map((x, i) => '<span class="ing" style="--i:' + i + '">' + esc(x) + "</span>").join("") + "</span>";
 
   function setWall(wall, ink, gold) {
     const root = document.documentElement;
@@ -353,6 +354,7 @@
       '<div class="entry-pic veduta">' + pictureHtml(d, room, "entry") + "</div>" +
       '<div class="plaque entry-plaque">' +
         '<p class="entry-n">' + esc(t("work.n", { n: n, t: total })) + "</p>" +
+        (mediaFor(d) ? "" : ingsHtml(d, "entry-ings")) +
         '<h3 class="work-title" lang="it">' + esc(d.it) + star + marks + "</h3>" +
         '<p class="work-desc">' + esc(desc) + "</p>" +
         '<div class="work-meta">' + alHtml + '<span class="price">' + money(d.price, unit) + "</span></div>" +
@@ -408,8 +410,8 @@
       const html = '<figure class="stage-fig play' + (photo ? " has-photo" : "") + '">' +
         '<div class="stage-pic veduta">' + pictureHtml(d, room, "stage") + "</div>" +
         '<figcaption><span class="stage-n">' + esc(t("work.n", { n: n, t: all.length })) + " · " + esc(kind) + "</span>" +
-        (photo ? "" : '<span class="ings">' + ings.map((x, i) => '<span class="ing" style="--i:' + (i + 1) + '">' + esc(x) + "</span>").join("") + "</span>") +
-        '<span class="stage-title" lang="it" style="--i:' + (photo ? 0 : Math.max(ings.length, (ART[d.art] || []).length) + 1) + '">' + esc(d.it) + "</span>" +
+        (photo ? "" : ingsHtml(d)) +
+        '<span class="stage-title" lang="it" style="--i:' + (photo ? 0 : (d.steps || []).length + 1) + '">' + esc(d.it) + "</span>" +
         (photo ? "" : '<button type="button" class="replay" id="replay">' + icon("filter", "sm").replace(ICONS.filter, '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/>') + esc(t("work.replay")) + "</button>") +
         "</figcaption></figure>";
       const put = () => { stage.innerHTML = html; const b = document.getElementById("replay"); if (b) b.addEventListener("click", () => { shown = -1; show(n); }); };
@@ -424,8 +426,8 @@
     document.querySelectorAll("#entries .entry").forEach(el => stageObs.observe(el));
     const picObs = new IntersectionObserver(entries => {
       entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add("play"); picObs.unobserve(e.target); } });
-    }, { threshold: 0.4 });
-    document.querySelectorAll("#entries .entry-pic").forEach(el => picObs.observe(el));
+    }, { threshold: 0.25 });
+    document.querySelectorAll("#entries .entry").forEach(el => picObs.observe(el));
     show(1);
     if (!reduced) {
       const split = document.getElementById("split");

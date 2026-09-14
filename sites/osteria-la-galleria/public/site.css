@@ -158,14 +158,18 @@ section { position: relative; }
 /* ---------- the drawings assemble themselves ---------- */
 .dish-art .step { opacity: 0; transform: translateY(-48px) scale(.92); transform-origin: 200px 160px; }
 .dish-art.still .step { opacity: 1; transform: none; }
-.play .dish-art .step { animation: land .6s cubic-bezier(.2, .8, .3, 1.15) forwards; animation-delay: calc(.15s + var(--i) * .42s); }
+.play .dish-art .step { animation: land .9s cubic-bezier(.2, .8, .3, 1.12) forwards; animation-delay: calc(.2s + var(--i) * .85s); }
 .play .dish-art .step:first-of-type { transform: scale(.96); animation-name: settle; animation-delay: .05s; }
 @keyframes land { to { opacity: 1; transform: none; } }
 @keyframes settle { to { opacity: 1; transform: none; } }
-.ings { display: block; margin: 8px 0 10px; }
-.ing { display: inline-block; font-family: var(--serif); font-style: italic; font-size: 1.1rem; color: var(--muted); opacity: 0; animation: fadeup .5s ease forwards; animation-delay: calc(.15s + var(--i) * .42s); }
+.ings { display: block; margin: 8px 0 10px; line-height: 1.7; }
+.ing { display: inline-block; font-family: var(--serif); font-style: italic; font-size: 1.1rem; color: var(--muted); opacity: 0; }
+.play .ing { animation: fadeup .6s ease forwards; animation-delay: calc(.2s + var(--i) * .85s); }
 .ing + .ing::before { content: "·"; margin: 0 8px; color: var(--gold); }
-.play .stage-title { opacity: 0; animation: fadeup .7s ease forwards; animation-delay: calc(.3s + var(--i) * .42s); }
+.play .stage-title { opacity: 0; animation: fadeup .8s ease forwards; animation-delay: calc(.4s + var(--i) * .85s); }
+.entry-ings { display: none; margin: 0 0 10px; font-size: .95rem; }
+.entry-ings .ing { font-size: 1rem; color: var(--paper-muted); }
+.entry-ings .ing + .ing::before { color: #8A6A2E; }
 @keyframes fadeup { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .replay { margin-top: 14px; display: inline-flex; align-items: center; gap: 8px; background: transparent; border: 1px solid var(--gold-soft); border-radius: 999px; padding: 8px 14px; cursor: pointer; font-size: .76rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 .replay:hover { border-color: var(--gold); color: var(--ink); }
@@ -330,6 +334,7 @@ section { position: relative; }
   .split { grid-template-columns: 1fr; }
   .stage { display: none; }
   .entry-pic { display: block; padding: 6px; margin-bottom: -14px; }
+  .entry-ings { display: block; }
   .entry-pic svg, .entry-pic img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
   .entry-plaque { margin: 0 12px; }
   .entry { margin-bottom: 34px; }
@@ -366,7 +371,7 @@ section { position: relative; }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   body, .nav, .tabbar, .btn, .chip, .lang button, .room-link, .dial .needle, .dial .arc-fill, .entry, .stage { transition: none; }
-  .dish-art .step, .ing, .play .stage-title { opacity: 1; transform: none; animation: none; }
+  .dish-art .step, .ing, .play .ing, .play .stage-title { opacity: 1; transform: none; animation: none; }
   .stage { transform: none; }
   .btn:active, .chip:active, .lang button:active, .room-link:active { transform: none; }
 }
