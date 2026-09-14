@@ -226,6 +226,15 @@ ok("progress: the 'Where it hurts, over time' card shows the first answers as a 
   await page.click("#pain-save"); await page.waitForTimeout(1200); ok("progress: saved → a new point on the strip marked as your update, and a line comparing with the first visit", (await page.$$("#pain-strip .pain-pt")).length === n0 + 1 && /your update/.test(await page.textContent("#pain-strip")) && (await page.textContent("#pain-diff")).length > 5, [await page.textContent("#pain-strip"), await page.textContent("#pain-diff")]);
   const me2 = await page.evaluate(async () => (await fetch("/api/me")).json()); ok("progress: the profile map (what the therapist sees) is the latest", me2.pain_log[0].source === "client" && me2.user.intake.pain.slice().sort().join() === me2.pain_log[0].areas.slice().sort().join(), [me2.pain_log[0], me2.user.intake.pain]); }
 
+// 8h. hardening batch (2026-09-14): privacy page, "Book again" on a past session, health
+await go("privacy.html"); ok("privacy: the page renders in English with the three language buttons", (await page.textContent("main")).includes("What we keep about you") && (await page.$$("[data-pick]")).length === 3);
+await page.click('[data-pick="it"]'); await page.waitForTimeout(200); ok("privacy: Italian shows, English hides, page direction stays ltr", await page.isVisible('[data-l="it"]') && await page.isHidden('[data-l="en"]') && (await page.evaluate(() => document.documentElement.dir)) === "ltr");
+await page.click('[data-pick="ar"]'); await page.waitForTimeout(200); ok("privacy: Arabic flips to rtl", (await page.evaluate(() => document.documentElement.dir)) === "rtl" && await page.isVisible('[data-l="ar"]'));
+await go("index.html"); ok("privacy: linked from the footer", (await page.$$("footer a[href='privacy.html']")).length === 1);
+{ const h = await api("/api/health"); ok("health: /api/health answers ok", h.status === 200 && h.body.ok === true && h.body.db === true, h.body); }
+await go("account.html"); await page.waitForTimeout(900); await page.click('[role="tab"][data-tab="sessions"]'); await page.waitForTimeout(500);
+{ const again = await page.$$eval("#tab-sessions a[data-again]", (as) => as.map((a) => a.getAttribute("href"))); ok("account: a past session carries 'Book again' with the city and service prefilled", again.length >= 1 && /booking\.html\?city=cairo&svc=/.test(again[0]), again); }
+
 // 9. success page + no JS errors anywhere
 await go("success.html?free=1"); ok("success page renders", (await page.textContent("body")).length > 200);
 ok("no JS errors across the flow", errs.length === 0, errs);

@@ -121,6 +121,8 @@
 
   <!-- ===== app ===== -->
   <section id="app-view" hidden>
+    <div class="help" id="weak-nudge" hidden style="border-color:var(--bad);background:color-mix(in srgb,var(--bad) 8%,var(--ground-3))"><b>Your password is easy to guess.</b> Anyone who knows the pattern could get in. Change it under <a href="#" id="weak-nudge-go">Settings → your profile</a>.</div>
+    <div class="help" id="pay-nudge" hidden><b>Card payments are off.</b> <span id="pay-nudge-text"></span></div>
     <div class="help" id="email-nudge" hidden style="border-color:var(--bad);background:color-mix(in srgb,var(--bad) 8%,var(--ground-3))"><b>Add your email so clients reach you.</b> Right now your sign-in has no email address, so new bookings and client messages can't be sent to you. Add it under <a href="#" id="email-nudge-go">Settings → your profile</a> (it also becomes your sign-in).</div>
     <div class="tabs" role="tablist">
       <button role="tab" aria-selected="true" data-tab="overview">Overview</button>
@@ -148,6 +150,7 @@
           <li><b>Share the site</b>: put zenrecovery.club in the Instagram bio. Clients who register get their invite link and rewards automatically.</li>
         </ol>
       </div>
+      <div id="errors-box" hidden><h3>Site errors</h3><p class="tiny">Browser errors visitors hit on the site, reported by the pages themselves. The same message on the same page is counted once a day. Empty is good.</p><div id="errors-list" class="mini"></div></div>
       <details class="help"><summary>How to read this page</summary>
         <ul>
           <li><b>Sessions</b> counts bookings that are reserved, confirmed or done. Cancelled and missed ones are not counted.</li>
@@ -638,7 +641,11 @@ async function boot() {
 function start(r) {
   A = r.admin; T = r.therapist || null; CITIES = r.cities; SETTINGS = r.settings; DEMO = Boolean(r.demo);
   $("#tab-money-btn").textContent = isEmployee() ? "Your earnings" : isPlatform() ? "Platform fee" : "Statements"; $("#tab-money-btn").hidden = false;
-  $("#email-nudge").hidden = isPlatform() || String(A.email || "").includes("@"); $("#email-nudge-go").onclick = (e) => { e.preventDefault(); $('.tabs button[data-tab="settings"]')?.click(); };
+  { let weak = false; try { weak = sessionStorage.getItem("zen:weak") === "1"; } catch (_) {} $("#weak-nudge").hidden = !weak; $("#weak-nudge-go").onclick = (e) => { e.preventDefault(); $('.tabs button[data-tab="settings"]')?.click(); }; }
+  { const pay = r.pay || {}; const miss = [!pay.stripe_account && "Zen's Stripe account id", !pay.stripe_key && "the Stripe secret key", !pay.stripe_webhook && "the Stripe webhook secret"].filter(Boolean);
+    $("#pay-nudge").hidden = !(isOwner() || isPlatform()) || Boolean(pay.live); $("#pay-nudge-text").textContent = miss.length ? `Missing: ${miss.join(", ")}. Egypt: ${pay.fawry ? "Fawry is on" : "Fawry is off too (no secure key yet)"}. Until then Cairo and Dahab book on the review path (pay at the session) and Florence stays in preview.` : ""; }
+  $("#email-nudge").hidden = isPlatform() || String(A.email || "").includes("@");
+  if (isOwner()) loadErrors(); $("#email-nudge-go").onclick = (e) => { e.preventDefault(); $('.tabs button[data-tab="settings"]')?.click(); };
   $("#f-mine-wrap").hidden = !T && managesCity(); if (isEmployee()) { $("#f-mine").innerHTML = `<option value="">${T ? "Mine and unassigned" : "Unassigned"}</option>${T ? `<option value="me">Only mine</option><option value="open">Only unassigned</option>` : ""}`; $("#f-mine").value = ""; } else if (T) $("#f-mine").value = "me"; $("#me-profile-note").hidden = !T; if (T) $("#me-profile-note").innerHTML = `You're linked to the therapist profile <b>${esc(T.name)}</b> (${CITY_NAME[T.city]}). The photo and bio clients see are edited under <b>Team</b>; Bookings opens on your own sessions.`;
   $("#login-view").hidden = true; $("#app-view").hidden = false; $("#who").hidden = false; $("#gsearch").hidden = isPlatform();
   $("#admin-name").textContent = A.name; $("#admin-avatar").innerHTML = A.photo ? `<img src="${A.photo}" alt="">` : initials(A.name);
@@ -661,6 +668,7 @@ function start(r) {
 async function refreshReviewCount() { try { const r = await ZenAPI("GET", "/api/admin/review"); const n = r.bookings.length + r.clients.length; $("#review-count").textContent = n; $("#review-count").hidden = !n; } catch {} }
 
 /* ---------- overview ---------- */
+async function loadErrors() { try { const { rows } = await ZenAPI("GET", "/api/admin/errors"); $("#errors-box").hidden = !rows.length; $("#errors-list").innerHTML = rows.map((e) => `<div><b>${fmtDate(e.at.slice(0, 10))}</b> · ${esc(e.page || "")} · ${esc(e.msg)}${e.n > 1 ? ` <span class="tiny">×${e.n}</span>` : ""}<br><span class="tiny">${esc((e.ua || "").slice(0, 90))}</span></div>`).join(""); } catch (_) {} }
 async function loadOverview() {
   const s = await ZenAPI("GET", "/api/admin/stats?city=" + cityFilter);
   const tm = s.this_month, lm = s.last_month;
@@ -1291,7 +1299,7 @@ $("#svc-form").addEventListener("submit", async (e) => { e.preventDefault(); con
 
 /* ---------- tabs, login ---------- */
 $$(".tabs button").forEach((b) => b.addEventListener("click", () => { $$(".tabs button").forEach((x) => x.setAttribute("aria-selected", x === b)); ["overview", "bookings", "clients", "services", "calendar", "team", "money", "chat", "offers", "review", "platform", "settings"].forEach((t) => ($("#tab-" + t).hidden = t !== b.dataset.tab)); closeDrawer(); ({ overview: loadOverview, platform: loadPlatform, bookings: loadBookings, clients: loadClients, services: loadServices, calendar: loadCalendar, team: loadTeamTab, money: loadMoney, chat: loadChatTab, offers: loadOffers, review: loadReview, settings: loadSettings })[b.dataset.tab](); }));
-$("#login-form").addEventListener("submit", async (e) => { e.preventDefault(); const err = $("#login-err"); err.hidden = true; $("#login-btn").disabled = true; try { await ZenAPI("POST", "/api/admin/login", { email: $("#a-email").value.trim(), password: $("#a-pass").value }); start(await ZenAPI("GET", "/api/admin/me")); } catch (ex) { err.textContent = ex.message; err.hidden = false; } finally { $("#login-btn").disabled = false; } });
+$("#login-form").addEventListener("submit", async (e) => { e.preventDefault(); const err = $("#login-err"); err.hidden = true; $("#login-btn").disabled = true; try { const lr = await ZenAPI("POST", "/api/admin/login", { email: $("#a-email").value.trim(), password: $("#a-pass").value }); try { sessionStorage.setItem("zen:weak", lr.weak ? "1" : ""); } catch (_) {} start(await ZenAPI("GET", "/api/admin/me")); } catch (ex) { err.textContent = ex.message; err.hidden = false; } finally { $("#login-btn").disabled = false; } });
 let PRICE_ROWS = [];
 async function loadPrices(id) {
   const box = $("#th-prices-box"); PRICE_ROWS = []; box.hidden = true; if (!id) return;

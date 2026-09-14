@@ -102,6 +102,12 @@ fetch("/api/me", { credentials: "same-origin" }).then(r => (r.headers.get("conte
   Zen.emit("me", d);
 }).catch(() => {});
 
+/* ---------- a broken page tells us (2026-09-14): at most three reports per page view, only from the live site ---------- */
+(() => { if (location.hostname !== "zenrecovery.club") return; let n = 0;
+  const report = (msg) => { if (n++ >= 3 || !msg) return; try { navigator.sendBeacon("/api/log", new Blob([JSON.stringify({ page: location.pathname + location.search, msg: String(msg).slice(0, 500) })], { type: "application/json" })); } catch (_) {} };
+  addEventListener("error", (e) => report((e.message || "error") + (e.filename ? " @ " + String(e.filename).split("/").pop() + ":" + e.lineno : "")));
+  addEventListener("unhandledrejection", (e) => report("unhandled: " + (e.reason && e.reason.message || e.reason))); })();
+
 /* ---------- small dialog ---------- */
 const dlg = $("#dlg");
 $("#dlg-close").addEventListener("click", () => dlg.close());

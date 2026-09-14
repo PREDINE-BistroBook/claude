@@ -5,17 +5,42 @@
 //   · waitlist: tell people when a slot opens on the day they asked for
 import { M } from "./mail.js";
 import { CITIES, SLOTS } from "./catalog.js";
-import { settings, sendEmail, sendWhatsApp, logMessage, slotsFor, today, addDays, now , pickLang, translateProfile, translateService } from "./lib.js";
+import { settings, sendEmail, sendWhatsApp, logMessage, slotsFor, today, addDays, now , pickLang, translateProfile, translateService, localNow, fmt } from "./lib.js";
+import { statements } from "./features.js";
 
 export async function runCron(env) {
   const results = {};
-  for (const [name, fn] of Object.entries({ reminders, followups, birthdays, waitlist, translations })) {
+  for (const [name, fn] of Object.entries({ reminders, followups, birthdays, waitlist, translations, monthly })) {
     try { results[name] = await fn(env); } catch (e) { console.error(name, e); results[name] = "error: " + e.message; }
   }
   console.log("cron", JSON.stringify(results));
   return results;
 }
 
+// 2026-09-14: on the 1st, everyone with an email gets last month by email: a therapist their own line, the owner / partner / platform the
+// totals per city (the same privacy rule as the Money tab). One email per person per month, recorded in `messages` (kind "statement").
+async function monthly(env) {
+  const ln = localNow("Africa/Cairo");
+  if (ln.date.slice(8) !== "01" || ln.minutes < 8 * 60 || ln.minutes >= 9 * 60) return 0;
+  const d = new Date(ln.date + "T12:00:00Z"); d.setUTCDate(0);   // last day of the previous month
+  return sendStatements(env, d.toISOString().slice(0, 7));
+}
+export async function sendStatements(env, month) {
+  const admins = (await env.DB.prepare("SELECT * FROM admins WHERE email LIKE '%@%' AND (notify IS NULL OR notify = 1)").all()).results;
+  let n = 0;
+  for (const a of admins) {
+    const key = month + ":" + a.id;
+    if (await env.DB.prepare("SELECT 1 FROM messages WHERE kind = 'statement' AND detail = ? LIMIT 1").bind(key).first()) continue;
+    let d; try { d = await (await statements(env, a, new URL(`https://zen/api/admin/statements?month=${month}`))).json(); } catch (e) { console.error("statement", a.email, e.message); continue; }
+    if (!d.rows || !d.rows.length) { await logMessage(env, { user_id: null, kind: "statement", channel: "email", status: "skipped", detail: key }); continue; }
+    const mine = Boolean(d.mine);
+    const lines = d.rows.map((r) => `${r.therapist || r.city} · ${r.sessions} session${r.sessions === 1 ? "" : "s"} (${r.done} done, ${r.upcoming} to come${r.kept ? ", " + r.kept + " fee kept" : ""})\n  gross ${fmt(r.gross, r.currency)} · site takings ${fmt(r.site_takings, r.currency)} · platform fee ${fmt(r.fee, r.currency)} · ${mine ? "coming to you" : "to pay the team"} ${fmt(r.to_therapist, r.currency)}${r.cash_amount ? ` · collected in cash ${fmt(r.cash_amount, r.currency)}` : ""}`);
+    const ok = await sendEmail(env, { to: a.email, subject: `Zen Recovery · ${mine ? "your earnings" : "statements"} · ${month}`, text: [`Hi ${(a.name || "").split(" ")[0] || "there"},`, ``, mine ? `Here is your month at Zen Recovery (${month}):` : `Here are last month's totals per city (${month}). Each therapist gets their own line by email; nobody else sees individual earnings.`, ``, ...lines, ``, `Details and the CSV: ${env.SITE_URL}/admin.html (Money tab).`].join("\n") }).catch(() => false);
+    await logMessage(env, { user_id: null, kind: "statement", channel: "email", status: ok ? "sent" : "failed", detail: key });
+    n++;
+  }
+  return n;
+}
 async function reminders(env) {
   const date = addDays(today(), 1);
   const rows = (await env.DB.prepare("SELECT b.*, b.lang AS blang, u.lang FROM bookings b LEFT JOIN users u ON u.id = b.user_id WHERE b.date = ? AND b.status IN ('paid','confirmed') AND b.reminded_at IS NULL LIMIT 50").bind(date).all()).results;
