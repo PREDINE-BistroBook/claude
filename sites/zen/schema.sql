@@ -129,7 +129,7 @@ CREATE TABLE IF NOT EXISTS checkins (            -- "how do you feel today" betw
   created_at TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS checkins_user ON checkins(user_id, date);
-CREATE TABLE IF NOT EXISTS therapists (id TEXT PRIMARY KEY, city TEXT NOT NULL, name TEXT NOT NULL, bio TEXT, photo TEXT, languages TEXT, active INTEGER DEFAULT 1, sort INTEGER DEFAULT 0, created_at TEXT DEFAULT (datetime('now')), admin_id TEXT, area TEXT, address TEXT, maps_url TEXT, title TEXT, story TEXT, certs TEXT, instagram TEXT, i18n TEXT, lat REAL, lng REAL, radius_km REAL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS therapists (id TEXT PRIMARY KEY, city TEXT NOT NULL, name TEXT NOT NULL, bio TEXT, photo TEXT, languages TEXT, active INTEGER DEFAULT 1, sort INTEGER DEFAULT 0, created_at TEXT DEFAULT (datetime('now')), admin_id TEXT, area TEXT, address TEXT, maps_url TEXT, title TEXT, story TEXT, certs TEXT, instagram TEXT, i18n TEXT, lat REAL, lng REAL, radius_km REAL DEFAULT 0, captain_id TEXT, invite_code TEXT);
 CREATE TABLE IF NOT EXISTS availability (id TEXT PRIMARY KEY, city TEXT NOT NULL, therapist_id TEXT, weekday INTEGER NOT NULL, start TEXT NOT NULL, end TEXT NOT NULL, slot_minutes INTEGER DEFAULT 60);
 CREATE TABLE IF NOT EXISTS blocked (id TEXT PRIMARY KEY, city TEXT NOT NULL, therapist_id TEXT, date TEXT NOT NULL, start TEXT, end TEXT, reason TEXT);
 CREATE TABLE IF NOT EXISTS packages (id TEXT PRIMARY KEY, city TEXT NOT NULL, name TEXT NOT NULL, sessions INTEGER NOT NULL, amount INTEGER NOT NULL, currency TEXT NOT NULL, months_valid INTEGER DEFAULT 6, active INTEGER DEFAULT 1, sort INTEGER DEFAULT 0);
@@ -167,7 +167,7 @@ INSERT OR IGNORE INTO services (id, city, name, minutes, amount, currency, descr
 INSERT OR IGNORE INTO services (id, city, name, minutes, amount, currency, description, sort) VALUES ('flo-slide', 'florence', 'Sliding cupping', 60, 7000, 'eur', 'Oiled skin, gliding cups. Massage with the lift built in.', 2);
 INSERT OR IGNORE INTO services (id, city, name, minutes, amount, currency, description, sort) VALUES ('flo-fire', 'florence', 'Fire cupping', 45, 6500, 'eur', 'Glass cups, a flash of flame, deeper warmth.', 3);
 INSERT OR IGNORE INTO services (id, city, name, minutes, amount, currency, description, sort) VALUES ('flo-face', 'florence', 'Facial cupping', 30, 4500, 'eur', 'Light, gliding, no marks.', 4);
-CREATE TABLE IF NOT EXISTS applications (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL, phone TEXT, city TEXT NOT NULL, area TEXT, address TEXT, maps_url TEXT, title TEXT, bio TEXT, story TEXT, certs TEXT, instagram TEXT, languages TEXT, photo TEXT, lat REAL, lng REAL, radius_km REAL DEFAULT 0, lang TEXT, status TEXT DEFAULT 'new', note TEXT, therapist_id TEXT, created_at TEXT DEFAULT (datetime('now')), decided_at TEXT);
+CREATE TABLE IF NOT EXISTS applications (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL, phone TEXT, city TEXT NOT NULL, area TEXT, address TEXT, maps_url TEXT, title TEXT, bio TEXT, story TEXT, certs TEXT, instagram TEXT, languages TEXT, photo TEXT, lat REAL, lng REAL, radius_km REAL DEFAULT 0, lang TEXT, status TEXT DEFAULT 'new', note TEXT, therapist_id TEXT, created_at TEXT DEFAULT (datetime('now')), decided_at TEXT, captain_id TEXT, city_text TEXT);
 CREATE INDEX IF NOT EXISTS applications_status ON applications(status, created_at);
 
 -- 2026-09-13: in-site chat between a client and a therapist (or a city's room when no therapist is picked).
@@ -187,3 +187,4 @@ CREATE TABLE IF NOT EXISTS attempts (key TEXT NOT NULL, at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS attempts_key ON attempts(key, at);
 CREATE TABLE IF NOT EXISTS client_errors (id TEXT PRIMARY KEY, at TEXT DEFAULT (datetime('now')), page TEXT, msg TEXT, ua TEXT, n INTEGER DEFAULT 1);
 CREATE UNIQUE INDEX IF NOT EXISTS bookings_one_per_slot ON bookings(city, date, slot, therapist_id) WHERE status IN ('pending','paid','confirmed','review') AND therapist_id IS NOT NULL AND slot LIKE '__:__';
+CREATE UNIQUE INDEX IF NOT EXISTS therapists_invite ON therapists(invite_code) WHERE invite_code IS NOT NULL;

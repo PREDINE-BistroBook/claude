@@ -47,11 +47,13 @@
 
 <section class="join" aria-labelledby="join-title">
   <form class="card join-form" id="join-form" novalidate>
+    <p class="help" id="j-captain" hidden></p>
     <div class="grid cols-2">
       <div class="field"><label for="j-name">Full name</label><input id="j-name" autocomplete="name" required></div>
       <div class="field"><label for="j-email">Email <span class="tiny">(your sign-in if approved)</span></label><input id="j-email" type="email" autocomplete="email" required></div>
       <div class="field"><label for="j-phone">WhatsApp number</label><input id="j-phone" type="tel" autocomplete="tel" required></div>
-      <div class="field"><label for="j-city">City</label><select id="j-city" required><option value="cairo">Cairo</option><option value="dahab">Dahab</option><option value="florence">Florence</option></select></div>
+      <div class="field"><label for="j-city">City</label><select id="j-city" required><option value="cairo">Cairo</option><option value="dahab">Dahab</option><option value="florence">Florence</option><option value="other">Somewhere else…</option></select></div>
+      <div class="field" id="j-city-other" hidden><label for="j-city-text">Which city and country?</label><input id="j-city-text" placeholder="Alexandria, Egypt" maxlength="80"></div>
       <div class="field"><label for="j-title">Title <span class="tiny">(as shown to clients)</span></label><input id="j-title" placeholder="Recovery specialist · Gold's Gym"></div>
       <div class="field"><label for="j-langs">Languages you speak</label><input id="j-langs" placeholder="Arabic, English"></div>
       <div class="field"><label for="j-area">Neighbourhood where you work <span class="tiny">(shown to clients)</span></label><input id="j-area" placeholder="Sheikh Zayed, Maadi, New Cairo…" required></div>

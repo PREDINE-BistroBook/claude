@@ -42,6 +42,10 @@ await page.click("#add-cancel"); await page.waitForTimeout(300);
 // team: add dialog has the pin controls; existing card opens prefilled with its pin; cancel
 await tab("team");
 const cards = await page.$$("#team-list .team-card"); ok("team: the seeded cards", cards.length >= 6, cards.length);
+await page.locator("#team-list .team-card", { hasText: "Anas" }).click(); await page.waitForTimeout(500); ok("captain: the owner's dialog has 'Trained by' with the rest of the team, not Anas himself", await page.isVisible("#th-captain-wrap") && (await page.$$("#th-captain option")).length >= 6 && !/Anas/.test(await page.textContent("#th-captain")), await page.textContent("#th-captain"));
+await page.selectOption("#th-captain", "th2"); await page.click("#th-save"); await page.waitForTimeout(1200); ok("captain: saved: Anas's card now says trained by Hesham", /Anas[\s\S]*trained by Hesham/.test((await page.textContent("#team-list")).replace(/\s+/g, " ")), (await page.locator("#team-list .team-card", { hasText: "Anas" }).textContent()).replace(/\s+/g, " ").slice(0, 300));
+{ const t = await (await fetch(H + "/api/team?city=cairo")).json(); ok("captain: the public team API carries it", t.therapists.find((x) => x.name.startsWith("Anas"))?.captain_name?.startsWith("Hesham"), t.therapists.map((x) => [x.name, x.captain_name])); }
+await tab("settings"); ok("settings: the captain share field reads 10", (await page.inputValue("#s-captain")) === "10"); await tab("team");
 await page.click("#add-therapist"); await page.waitForTimeout(400); ok("team: add dialog with pin controls + radius", await openDlg("#dlg-th") && await page.isVisible("#th-locate") && await page.isVisible("#th-lat") && await page.isVisible("#th-radius"));
 await page.click("#th-cancel"); await page.waitForTimeout(300);
 await page.locator("#team-list .team-card", { hasText: "Adham" }).click(); await page.waitForTimeout(400);
@@ -144,7 +148,7 @@ await page.click("#email-nudge-go"); await page.waitForTimeout(500); ok("email: 
   await page.goto(H + "/admin.html", { waitUntil: "load" }); await page.waitForTimeout(1000); ok("email: the nudge is gone once the email is in", await page.isHidden("#email-nudge")); }
 await page.evaluate(() => fetch("/api/admin/logout", { method: "POST" })); await page.goto(H + "/admin.html", { waitUntil: "load" }); await page.waitForTimeout(600);
 await page.fill("#a-email", "owner@x.com"); await page.fill("#a-pass", "Owner-pass-12345"); await page.click("#login-btn"); await page.waitForTimeout(1500);
-await tab("team"); await page.locator("#team-list .team-card", { hasText: "Hesham" }).click(); await page.waitForTimeout(400);
+await tab("team"); await page.locator('#team-list .team-card[data-edit="th2"]').click(); await page.waitForTimeout(400);
 await page.selectOption("#th-admin", "new"); await page.waitForTimeout(200); await page.fill("#th-new-email", "hesham@x.com"); await page.fill("#th-new-pass", "Hesham-pass-12345"); await page.click("#th-save"); await page.waitForTimeout(1200);
 ok("owner: created Hesham's sign-in, credentials dialog shows the typed password with Got it as the main button", await openDlg("#dlg-ask") && (await page.textContent("#ask-text")).includes("Hesham-pass-12345") && (await page.textContent("#ask-yes")) === "Got it" && (await page.textContent("#ask-alt")) === "Also email it to them", [await page.textContent("#ask-yes"), await page.textContent("#ask-alt")]);
 await page.click("#ask-alt"); await page.waitForTimeout(900);   // no mail key here → "tell them in person", and the password must be unchanged
@@ -155,6 +159,8 @@ await page.fill("#a-email", "hesham@x.com"); await page.fill("#a-pass", "Hesham-
 ok("employee: signs in with the password the owner typed", await page.isVisible(".tabs") && !(await page.isVisible("#login-form")), await page.textContent("#login-err").catch(() => ""));
 await tab("calendar"); ok("employee: own calendar badge, no therapist pills", (await page.textContent("#cal-th")).includes("Your calendar") && (await page.$$("#cal-th [data-calth]")).length === 0, await page.textContent("#cal-th"));
 await tab("team"); const editable = await page.$$eval("#team-list [data-edit]", (els) => [...new Set(els.map((e) => e.dataset.edit))]); ok("employee: can open only their own profile", editable.length === 1, editable);
+ok("captain: Hesham's Team tab opens with 'Your team': the invite link, the 10% line, and Anas (linked by the owner above) on his team", await page.isVisible("#my-team") && /\/join\?ref=/.test(await page.inputValue("#my-team-link")) && /10% of what they make/.test(await page.textContent("#my-team-lead")) && /Anas/.test(await page.textContent("#my-team-list")), await page.textContent("#my-team-list"));
+await page.locator("#team-list [data-edit]").first().click(); await page.waitForTimeout(500); ok("captain: an employee doesn't see 'Trained by' in their own dialog", await page.isHidden("#th-captain-wrap")); await page.keyboard.press("Escape"); await page.waitForTimeout(300);
 ok("employee: no Applications box", !(await page.isVisible("#apps-box")));
 await tab("team"); await page.locator("#team-list [data-edit]").first().click(); await page.waitForTimeout(700);
 ok("employee: own dialog shows 'Your list and prices' with editable checkboxes", await page.isVisible("#th-prices-box") && (await page.textContent("#th-prices-title")).includes("Your list") && (await page.$$("#th-prices [data-offered]:not([disabled])")).length >= 2, await page.textContent("#th-prices-title"));
