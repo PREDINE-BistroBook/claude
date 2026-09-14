@@ -2,6 +2,8 @@
 // waitlist, data export, before/after photos, Apple sign-in, message log, referral leaderboard, health-flag review.
 // Public routes come through featureRoute(); admin routes through adminFeatureRoute() (the caller has already
 // checked the admin cookie). Everything money-related goes through stripeCheckout() in lib.js (10% platform fee).
+import { settings } from "./lib.js";
+import { PLATFORM_ON_CAPTAIN_BPS } from "./catalog.js";
 import { CITIES, PLATFORM_FEE_BPS } from "./catalog.js";
 import { randomId, referralCode, signPayload, verifyPayload, getCookie, clearCookie, hashPassword } from "./auth.js";
 import { CITY_KEYS, json, clean, normEmail, isDate, isTime, fmt, now, today, addDays, feeOn, body, isLive, currentUser, scope, sendEmail, stripeCheckout, slotsFor, healthFlags, parseIntake, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, isOwner, therapistOf, visibleWhere, isPartner, isEmployee, managesCity, pickLang, translateProfile, parseI18n } from "./lib.js";
@@ -19,6 +21,7 @@ export async function featureRoute(req, env, url, ctx) {
   const p = url.pathname, m = req.method;
   if (p === "/api/slots" && m === "GET") return slots(env, url);
   if (p === "/api/team" && m === "GET") return team(env, url);
+  if (p.startsWith("/api/captain/") && m === "GET") return captainLookup(env, decodeURIComponent(p.slice("/api/captain/".length)));
   if (p === "/api/providers" && m === "GET") return providers(env, url);
   if (p === "/api/apply" && m === "POST") return applyToJoin(req, env);
   if (p === "/api/me/chats" && m === "GET") return myChats(req, env);
@@ -87,7 +90,7 @@ async function providers(env, url) {
 }
 async function team(env, url) {
   const city = cityOf(url.searchParams.get("city"));
-  const r = await env.DB.prepare("SELECT id, city, name, bio, photo, languages, area, maps_url, title, story, certs, instagram, i18n, sort, lat, lng, radius_km FROM therapists WHERE active = 1" + (city ? " AND city = ?" : "") + " ORDER BY city, sort, name").bind(...(city ? [city] : [])).all();
+  const r = await env.DB.prepare("SELECT id, city, name, bio, photo, languages, area, maps_url, title, story, certs, instagram, i18n, sort, lat, lng, radius_km, captain_id, (SELECT c.name FROM therapists c WHERE c.id = therapists.captain_id) captain_name FROM therapists WHERE active = 1" + (city ? " AND city = ?" : "") + " ORDER BY city, sort, name").bind(...(city ? [city] : [])).all();
   // the brief a client chooses by (2026-09-13): real numbers only — sessions done here and the average of the ratings clients left
   const stats = Object.fromEntries((await env.DB.prepare("SELECT therapist_id, COUNT(*) done, AVG(rating) avg, COUNT(rating) n FROM bookings WHERE status = 'done' AND therapist_id IS NOT NULL GROUP BY therapist_id").all().catch(() => ({ results: [] }))).results.map((x) => [x.therapist_id, x]));
   const off = {}; for (const x of (await env.DB.prepare("SELECT therapist_id, service_id FROM therapist_prices WHERE offered = 0").all().catch(() => ({ results: [] }))).results) (off[x.therapist_id] ||= []).push(x.service_id);
@@ -288,6 +291,8 @@ export async function adminFeatureRoute(req, env, url, admin) {
   if ((mm = p.match(/^\/api\/admin\/blocked\/([a-z0-9]+)$/)) && m === "DELETE") return deleteRow(env, admin, "blocked", mm[1]);
   if (p === "/api/admin/therapists" && m === "GET") return listTherapists(env, admin, url);
   if (p === "/api/admin/therapists" && m === "POST") return saveTherapist(req, env, admin, null);
+  if (p === "/api/admin/my-team" && m === "GET") return myTeam(env, admin, url);
+  { const mm = p.match(/^\/api\/admin\/therapists\/([^/]+)\/captain$/); if (mm && m === "PATCH") return setCaptain(req, env, admin, mm[1]); }
   if ((mm = p.match(/^\/api\/admin\/therapists\/([a-z0-9]+)$/)) && m === "PATCH") return saveTherapist(req, env, admin, mm[1]);
   if (mm && m === "DELETE") return deleteRow(env, admin, "therapists", mm[1]);
   if (p === "/api/admin/packages" && m === "GET") return listRows(env, admin, url, "packages", "ORDER BY city, sort, sessions");
@@ -424,7 +429,7 @@ async function addBlocked(req, env, admin) {
 // Team list with the sign-in account each person is linked to (email/username shown to the owner only).
 async function listTherapists(env, admin, url) {
   const city = cityFilter(admin, url);
-  const r = await env.DB.prepare("SELECT t.*, a.email admin_email, a.name admin_name, a.role admin_role FROM therapists t LEFT JOIN admins a ON a.id = t.admin_id WHERE 1=1" + (city ? " AND t.city = ?" : "") + " ORDER BY t.city, t.sort, t.name").bind(...(city ? [city] : [])).all();
+  const r = await env.DB.prepare("SELECT t.*, (SELECT c.name FROM therapists c WHERE c.id = t.captain_id) captain_name, a.email admin_email, a.name admin_name, a.role admin_role FROM therapists t LEFT JOIN admins a ON a.id = t.admin_id WHERE 1=1" + (city ? " AND t.city = ?" : "") + " ORDER BY t.city, t.sort, t.name").bind(...(city ? [city] : [])).all();
   return json({ rows: r.results.map((t) => (isOwner(admin) ? t : { ...t, admin_email: t.admin_id ? "linked" : null })), city });
 }
 // Owner links a therapist to the account they sign in with: an existing admin (role "all" or this city), a brand-new
@@ -483,8 +488,10 @@ const appPassword = () => { const a = new Uint32Array(3); crypto.getRandomValues
 async function applyToJoin(req, env) {
   if (await tooMany(env, "apply:" + ipOf(req), 5, 60)) return json({ error: "That's a few applications in a row. Try again in an hour." }, 429); await noteAttempt(env, "apply:" + ipOf(req));
   const b = await body(req);
-  const name = clean(b.name, 80), email = normEmail(b.email), phone = clean(b.phone, 40), city = cityOf(b.city);
+  const cityText = clean(b.city_text, 80), city = cityOf(b.city) || (b.city === "other" && cityText ? "other" : null);   // "other" (2026-09-14): a city Zen isn't in yet, kept as text so the owner sees where people want to open
+  const name = clean(b.name, 80), email = normEmail(b.email), phone = clean(b.phone, 40);
   if (!name || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email || "") || !phone || !city) return json({ error: "Your name, a real email, a WhatsApp number and the city." }, 400);
+  const ref = clean(b.ref, 40), captain = ref ? await env.DB.prepare("SELECT id, name, admin_id FROM therapists WHERE invite_code = ? AND active = 1").bind(ref).first() : null;
   if (!b.agree) return json({ error: "Please accept the terms first." }, 400);
   const open = await env.DB.prepare("SELECT id FROM applications WHERE email = ? AND status = 'new'").bind(email).first();
   if (open) return json({ error: "We already have an open application from this email. The owner will answer soon." }, 409);
@@ -492,17 +499,19 @@ async function applyToJoin(req, env) {
   const num = (v, max) => { if (v === null || v === undefined || v === "") return null; const n = Number(v); return Number.isFinite(n) && Math.abs(n) <= max ? n : null; };
   const lat = num(b.lat, 90), lng = num(b.lng, 180);
   const id = randomId();
-  await env.DB.prepare("INSERT INTO applications (id, name, email, phone, city, area, address, maps_url, title, bio, story, certs, instagram, languages, photo, lat, lng, radius_km, lang) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-    .bind(id, name, email, phone, city, clean(b.area, 80), clean(b.address, 200), /^https:\/\/[^\s"<>]{6,300}$/.test(String(b.maps_url || "")) ? String(b.maps_url).trim() : "", clean(b.title, 80), clean(b.bio, 400), ml("story", 2000), ml("certs", 1200), String(b.instagram || "").trim().replace(/^@|^https?:\/\/(www\.)?instagram\.com\//i, "").replace(/\/.*$/, "").slice(0, 40), clean(b.languages, 60), validPhoto(b.photo) || null, lat !== null && lng !== null ? lat : null, lat !== null && lng !== null ? lng : null, Math.min(100, Math.max(0, Number(b.radius_km) || 0)), pickLang(b.lang)).run();
-  const lang = pickLang(b.lang);
-  sendEmail(env, { to: email, ...M("application_received", lang, { first: name.split(" ")[0], city: cityNameIn(city, lang) }) }).catch(() => {});
+  await env.DB.prepare("INSERT INTO applications (id, name, email, phone, city, area, address, maps_url, title, bio, story, certs, instagram, languages, photo, lat, lng, radius_km, lang, captain_id, city_text) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+    .bind(id, name, email, phone, city, clean(b.area, 80), clean(b.address, 200), /^https:\/\/[^\s"<>]{6,300}$/.test(String(b.maps_url || "")) ? String(b.maps_url).trim() : "", clean(b.title, 80), clean(b.bio, 400), ml("story", 2000), ml("certs", 1200), String(b.instagram || "").trim().replace(/^@|^https?:\/\/(www\.)?instagram\.com\//i, "").replace(/\/.*$/, "").slice(0, 40), clean(b.languages, 60), validPhoto(b.photo) || null, lat !== null && lng !== null ? lat : null, lat !== null && lng !== null ? lng : null, Math.min(100, Math.max(0, Number(b.radius_km) || 0)), pickLang(b.lang), captain?.id || null, city === "other" ? cityText : null).run();
+  const lang = pickLang(b.lang), cityLabel = city === "other" ? cityText : cityNameIn(city, lang), cityEn = city === "other" ? cityText : CITIES[city].name;
+  sendEmail(env, { to: email, ...M("application_received", lang, { first: name.split(" ")[0], city: cityLabel }) }).catch(() => {});
+  if (captain?.admin_id) { const ca = await env.DB.prepare("SELECT email, name FROM admins WHERE id = ? AND email LIKE '%@%'").bind(captain.admin_id).first();
+    if (ca) sendEmail(env, { to: ca.email, subject: `${name} applied through your invite link`, text: [`Hi ${(ca.name || captain.name).split(" ")[0]},`, ``, `${name} (${cityEn}) just applied to join Zen Recovery through your link, as part of your team.`, `The owner reads every application and approves or declines it; you'll see them under Team → Your team once approved.`, ``, `${env.SITE_URL}/admin.html`].join("\n") }).catch(() => {}); }
   const owners = (await env.DB.prepare("SELECT email FROM admins WHERE role = 'all' AND email LIKE '%@%'").all()).results.map((r) => r.email);
-  if (owners.length) sendEmail(env, { to: owners, subject: `New therapist application · ${CITIES[city].name} · ${name}`, text: [`${name} applied to join Zen Recovery in ${CITIES[city].name}.`, ``, `Title:     ${clean(b.title, 80)}`, `Area:      ${clean(b.area, 80)}`, `Phone:     ${phone}`, `Email:     ${email}`, `Instagram: ${clean(b.instagram, 40)}`, ``, `Bio: ${clean(b.bio, 400)}`, ``, `Approve or decline under Team → Applications: ${env.SITE_URL}/admin`].join("\n") }).catch(() => {});
+  if (owners.length) sendEmail(env, { to: owners, subject: `New therapist application · ${cityEn} · ${name}`, text: [`${name} applied to join Zen Recovery in ${cityEn}.${city === "other" ? " Zen isn't open there yet: this is someone asking to open it." : ""}`, captain ? `Trained by / invited by: ${captain.name} (captain share applies).` : ``, ``, `Title:     ${clean(b.title, 80)}`, `Area:      ${clean(b.area, 80)}`, `Phone:     ${phone}`, `Email:     ${email}`, `Instagram: ${clean(b.instagram, 40)}`, ``, `Bio: ${clean(b.bio, 400)}`, ``, `Approve or decline under Team → Applications: ${env.SITE_URL}/admin`].join("\n") }).catch(() => {});
   return json({ ok: true, id });
 }
 async function listApplications(env, url) {
   const status = ["new", "approved", "declined"].includes(url.searchParams.get("status")) ? url.searchParams.get("status") : "new";
-  const r = await env.DB.prepare("SELECT id, name, email, phone, city, area, address, maps_url, title, bio, story, certs, instagram, languages, photo, lat, lng, radius_km, lang, status, note, therapist_id, created_at, decided_at FROM applications WHERE status = ? ORDER BY created_at DESC LIMIT 100").bind(status).all();
+  const r = await env.DB.prepare("SELECT id, name, email, phone, city, area, address, maps_url, title, bio, story, certs, instagram, languages, photo, lat, lng, radius_km, lang, status, note, therapist_id, created_at, decided_at, captain_id, city_text, (SELECT c.name FROM therapists c WHERE c.id = applications.captain_id) captain_name FROM applications WHERE status = ? ORDER BY created_at DESC LIMIT 100").bind(status).all();
   const counts = Object.fromEntries((await env.DB.prepare("SELECT status, COUNT(*) n FROM applications GROUP BY status").all()).results.map((x) => [x.status, x.n]));
   return json({ rows: r.results, counts });
 }
@@ -513,22 +522,55 @@ async function decideApplication(req, env, admin, id, verdict) {
   const b = await body(req).catch(() => ({})), note = clean(b?.note, 300), lang = pickLang(a.lang), first = a.name.split(" ")[0];
   if (verdict === "decline") {
     await env.DB.prepare("UPDATE applications SET status = 'declined', note = ?, decided_at = ? WHERE id = ?").bind(note, now(), id).run();
-    sendEmail(env, { to: a.email, ...M("application_declined", lang, { first, city: cityNameIn(a.city, lang), note }) }).catch(() => {});
+    sendEmail(env, { to: a.email, ...M("application_declined", lang, { first, city: a.city === "other" ? a.city_text || "" : cityNameIn(a.city, lang), note }) }).catch(() => {});
     return json({ ok: true });
   }
+  if (a.city === "other") return json({ error: `Zen isn't open in ${a.city_text || "that city"} yet, so this profile can't go live. Decline with a note, or open the city first.` }, 400);
   // approve: a sign-in (unless that email already has one), then the public profile linked to it, pinned and priced at the city price
   let adminId = null, password = null;
   const existing = await env.DB.prepare("SELECT id, role FROM admins WHERE email = ?").bind(a.email).first();
   if (existing && existing.role !== "platform") adminId = existing.id;
   else if (!existing) { password = appPassword(); const { hash, salt } = await hashPassword(password); adminId = randomId(); await env.DB.prepare("INSERT INTO admins (id, email, name, role, pass_hash, salt, level, notify) VALUES (?,?,?,?,?,?,?,1)").bind(adminId, a.email, a.name, a.city, hash, salt, "employee").run(); }
   const maxSort = (await env.DB.prepare("SELECT MAX(sort) m FROM therapists").first()).m, tid = randomId();
-  await env.DB.prepare("INSERT INTO therapists (id, city, name, bio, photo, languages, active, sort, admin_id, area, address, maps_url, title, story, certs, instagram, lat, lng, radius_km) VALUES (?,?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?)")
-    .bind(tid, a.city, a.name, a.bio || "", a.photo || null, a.languages || "", (maxSort ?? -1) + 1, adminId, a.area || "", a.address || "", a.maps_url || "", a.title || "", a.story || "", a.certs || "", a.instagram || "", a.lat, a.lng, a.radius_km || 0).run();
+  await env.DB.prepare("INSERT INTO therapists (id, city, name, bio, photo, languages, active, sort, admin_id, area, address, maps_url, title, story, certs, instagram, lat, lng, radius_km, captain_id) VALUES (?,?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+    .bind(tid, a.city, a.name, a.bio || "", a.photo || null, a.languages || "", (maxSort ?? -1) + 1, adminId, a.area || "", a.address || "", a.maps_url || "", a.title || "", a.story || "", a.certs || "", a.instagram || "", a.lat, a.lng, a.radius_km || 0, a.captain_id && (await env.DB.prepare("SELECT id FROM therapists WHERE id = ?").bind(a.captain_id).first()) ? a.captain_id : null).run();
   let i18n = null; try { i18n = await translateProfile(env, { title: a.title, bio: a.bio, story: a.story, certs: a.certs, languages: a.languages, area: a.area }); } catch (e) { console.error("translate", e.message); }
   if (i18n) await env.DB.prepare("UPDATE therapists SET i18n = ? WHERE id = ?").bind(JSON.stringify(i18n), tid).run();
   await env.DB.prepare("UPDATE applications SET status = 'approved', note = ?, decided_at = ?, therapist_id = ? WHERE id = ?").bind(note, now(), tid, id).run();
   const sent = await sendEmail(env, { to: a.email, ...M("application_approved", lang, { first, city: cityNameIn(a.city, lang), site: env.SITE_URL, signin: a.email, password: password || "(your existing password)" }) }).catch(() => false);
   return json({ ok: true, therapist_id: tid, admin_id: adminId, sent: Boolean(sent), password: sent ? undefined : password });
+}
+/* ---------- captains (2026-09-14, Ash): "if they train another therapist, they get ten percent of what they make; I make ten percent of that ten percent" ---------- */
+const inviteCode = (name) => ((name || "zen").toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 10) || "zen") + "-" + Math.random().toString(36).slice(2, 6);
+async function ensureInvite(env, th) {
+  if (th.invite_code) return th.invite_code;
+  for (let i = 0; i < 5; i++) { const c = inviteCode(th.name); try { const r = await env.DB.prepare("UPDATE therapists SET invite_code = ? WHERE id = ? AND invite_code IS NULL").bind(c, th.id).run(); if (r.meta.changes) return c; return (await env.DB.prepare("SELECT invite_code FROM therapists WHERE id = ?").bind(th.id).first())?.invite_code || null; } catch (_) {} }
+  return null;
+}
+async function captainLookup(env, code) {
+  const t = await env.DB.prepare("SELECT id, name, city, photo FROM therapists WHERE invite_code = ? AND active = 1").bind(clean(code, 40)).first();
+  return t ? json({ captain: t }) : json({ error: "That invite link isn't valid any more." }, 404);
+}
+async function myTeam(env, admin, url) {
+  let th = isEmployee(admin) ? await therapistOf(env, admin) : null;
+  if (!th && url.searchParams.get("therapist") && (isOwner(admin) || isPartner(admin))) th = await env.DB.prepare("SELECT * FROM therapists WHERE id = ?").bind(clean(url.searchParams.get("therapist"), 40)).first();
+  if (!th) return json({ error: "Your sign-in isn't linked to a therapist profile yet. Ask the owner to link it under Team." }, 404);
+  const code = await ensureInvite(env, th), st = await settings(env);
+  const trainees = (await env.DB.prepare("SELECT id, name, city, active, created_at FROM therapists WHERE captain_id = ? ORDER BY created_at").bind(th.id).all()).results;
+  const waiting = (await env.DB.prepare("SELECT name, city, city_text, created_at FROM applications WHERE captain_id = ? AND status = 'new' ORDER BY created_at DESC").bind(th.id).all()).results;
+  const captain = th.captain_id ? await env.DB.prepare("SELECT id, name FROM therapists WHERE id = ?").bind(th.captain_id).first() : null;
+  return json({ therapist: { id: th.id, name: th.name }, code, link: `${env.SITE_URL}/join?ref=${encodeURIComponent(code || "")}`, pct: st.captain_pct, platform_on_captain_pct: PLATFORM_ON_CAPTAIN_BPS / 100, trainees, waiting, captain });
+}
+async function setCaptain(req, env, admin, id) {
+  if (!isOwner(admin)) return json({ error: "Only the owner links who trained whom." }, 403);
+  const b = await body(req), t = await env.DB.prepare("SELECT id FROM therapists WHERE id = ?").bind(id).first();
+  if (!t) return json({ error: "Not found" }, 404);
+  const cid = b.captain_id ? clean(b.captain_id, 40) : null;
+  if (cid) { if (cid === id) return json({ error: "Someone can't be their own captain." }, 400);
+    const c = await env.DB.prepare("SELECT id, captain_id FROM therapists WHERE id = ?").bind(cid).first(); if (!c) return json({ error: "That captain doesn't exist." }, 404);
+    if (c.captain_id === id) return json({ error: "That would be a loop: this person trained them." }, 400); }
+  await env.DB.prepare("UPDATE therapists SET captain_id = ? WHERE id = ?").bind(cid, id).run();
+  return json({ ok: true, captain_id: cid });
 }
 /* ---------- a therapist's own prices (2026-09-13): owner or the city's partner set them; the therapist sees theirs ---------- */
 async function therapistPriceList(env, admin, id) {
@@ -748,11 +790,13 @@ export async function statements(env, admin, url) {
   const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(url.searchParams.get("month") || "") ? url.searchParams.get("month") : today().slice(0, 7);
   const city = scope(admin, url.searchParams.get("city"));   // scope(): owner and platform see every city
   const me = isEmployee(admin) ? await therapistOf(env, admin) : null;
+  const thAll = (await env.DB.prepare("SELECT id, name, city, captain_id FROM therapists").all()).results, thMap = Object.fromEntries(thAll.map((t) => [t.id, t]));
+  const trainees = me ? thAll.filter((t) => t.captain_id === me.id).map((t) => t.id) : [], capPct = (await settings(env)).captain_pct;
   if (isPlatform(admin) && url.searchParams.get("detail") === "1") url.searchParams.delete("detail");
   if (isEmployee(admin) && !me) return json({ month, city, rows: [], sessions: [], mine: true, note: "Your sign-in isn't linked to a therapist profile yet. Ask the owner to link it under Team." });
   const where = ["b.date >= ? AND b.date < ?", "b.status IN ('paid','confirmed','done','cancelled','no_show')", "(b.status IN ('paid','confirmed','done') OR b.cancel_fee > 0)"], args = [month + "-01", month + "-32"];
   if (city) { where.push("b.city = ?"); args.push(city); }
-  if (me) { where.push("b.therapist_id = ?"); args.push(me.id); }
+  if (me) { const ids = [me.id, ...trainees]; where.push(`b.therapist_id IN (${ids.map(() => "?").join(",")})`); args.push(...ids); }   // a captain's share needs the trainees' months too (only the share is shown)
   const rows = (await env.DB.prepare(`SELECT b.id, b.date, b.slot, b.name, b.email, b.service_name, b.city, b.currency, b.amount, b.platform_fee, b.source, b.provider, b.status, b.cancel_fee, b.refund_amount, b.package_id, b.gift_code, b.partner_code, b.discount_kind, b.therapist_id, t.name therapist FROM bookings b LEFT JOIN therapists t ON t.id = b.therapist_id WHERE ${where.join(" AND ")} ORDER BY b.date, b.slot`).bind(...args).all()).results;
   const sessions = rows.map((b) => { const kept = b.status === "cancelled" || b.status === "no_show"; const taken = kept ? b.cancel_fee || 0 : b.amount || 0; const ch = channelOf({ ...b, amount: taken }); const fee = ch === "cash" || ch === "free" ? 0 : kept ? feeOn(taken) : b.platform_fee || feeOn(taken); return { id: b.id, date: b.date, slot: b.slot, client: b.name, service: b.service_name, city: b.city, therapist_id: b.therapist_id, therapist: b.therapist || null, currency: b.currency, status: b.status, channel: ch, amount: taken, list_amount: b.amount, fee, net: taken - fee, refunded: b.refund_amount || 0, paid_with: b.package_id ? "pack" : b.gift_code ? "gift" : b.discount_kind || null, partner_code: b.partner_code || null }; });
   const key = (s) => (s.therapist_id || "-") + "|" + s.currency, groups = new Map();
@@ -766,9 +810,16 @@ export async function statements(env, admin, url) {
   const out = [...groups.values()].map((g) => ({ ...g, site_takings: g.card_amount + g.fawry_amount, to_therapist: g.card_amount + g.fawry_amount - g.fee, therapist_keeps: g.cash_amount, platform_due_on_fawry: g.fawry_amount ? feeSum(sessions, g, "fawry") : 0 })).sort((a, b) => (a.city || "").localeCompare(b.city || "") || (a.therapist || "").localeCompare(b.therapist || ""));
   // 2026-09-14 (Ash): nobody sees an individual's earnings but that person. Owner and partner get one row per city and currency
   // ("Cairo · team"); the platform account gets the same totals and no client names; only an employee sees their own line.
+  // captains (2026-09-14, Ash): a therapist trained by another owes them captain_pct of what they made (site takings after the fee, plus cash);
+  // the platform keeps PLATFORM_ON_CAPTAIN_BPS of that share. The captain's row shows the sum from their team, per trainee.
+  for (const g of out) { const t = thMap[g.therapist_id]; const c = t?.captain_id && thMap[t.captain_id];
+    if (c && capPct > 0) { g.captain_id = c.id; g.captain = c.name; g.captain_due = Math.round((g.to_therapist + g.cash_amount) * capPct / 100); g.platform_on_captain = Math.round(g.captain_due * PLATFORM_ON_CAPTAIN_BPS / 10000); g.captain_net = g.captain_due - g.platform_on_captain; } }
+  const shares = {}; for (const g of out) if (g.captain_due) { const k = g.captain_id + "|" + g.currency; const sh = shares[k] || (shares[k] = { captain_id: g.captain_id, currency: g.currency, total: 0, members: [] }); sh.total += g.captain_net; sh.members.push({ therapist_id: g.therapist_id, name: g.therapist, share: g.captain_net }); }
+  for (const g of out) { const sh = shares[g.therapist_id + "|" + g.currency]; if (sh) { g.team_share = sh.total; g.team_members = sh.members; delete shares[g.therapist_id + "|" + g.currency]; } }
+  for (const sh of Object.values(shares)) { const c = thMap[sh.captain_id]; out.push({ therapist_id: sh.captain_id, therapist: c?.name || "?", city: c?.city || "cairo", currency: sh.currency, sessions: 0, done: 0, upcoming: 0, kept: 0, card: 0, fawry: 0, cash: 0, free: 0, card_amount: 0, fawry_amount: 0, cash_amount: 0, kept_amount: 0, gross: 0, fee: 0, net: 0, refunded: 0, site_takings: 0, to_therapist: 0, therapist_keeps: 0, platform_due_on_fawry: 0, team_share: sh.total, team_members: sh.members }); }   // a captain with no sessions of their own this month
   const team = !me;
-  const rows_out = team ? Object.values(out.reduce((acc, g) => { const k = g.city + "|" + g.currency; const a = acc[k] || (acc[k] = { ...g, therapist_id: null, therapist: `${CITIES[g.city]?.name || g.city} · team`, sessions: 0, done: 0, upcoming: 0, kept: 0, card: 0, fawry: 0, cash: 0, free: 0, card_amount: 0, fawry_amount: 0, cash_amount: 0, kept_amount: 0, gross: 0, fee: 0, net: 0, refunded: 0, site_takings: 0, to_therapist: 0, therapist_keeps: 0, platform_due_on_fawry: 0 }); for (const f of ["sessions", "done", "upcoming", "kept", "card", "fawry", "cash", "free", "card_amount", "fawry_amount", "cash_amount", "kept_amount", "gross", "fee", "net", "refunded", "site_takings", "to_therapist", "therapist_keeps", "platform_due_on_fawry"]) a[f] += g[f] || 0; return acc; }, {})).sort((a, b) => a.city.localeCompare(b.city)) : out;
-  const sessions_out = team ? sessions.map(({ therapist, therapist_id, ...rest }) => rest) : sessions;   // no therapist column outside "Your earnings"
+  const rows_out = team ? Object.values(out.reduce((acc, g) => { const k = g.city + "|" + g.currency; const a = acc[k] || (acc[k] = { ...g, therapist_id: null, therapist: `${CITIES[g.city]?.name || g.city} · team`, sessions: 0, done: 0, upcoming: 0, kept: 0, card: 0, fawry: 0, cash: 0, free: 0, card_amount: 0, fawry_amount: 0, cash_amount: 0, kept_amount: 0, gross: 0, fee: 0, net: 0, refunded: 0, site_takings: 0, to_therapist: 0, therapist_keeps: 0, platform_due_on_fawry: 0, captain_shares: 0, platform_on_captains: 0, captain_id: undefined, captain: undefined, captain_due: undefined, captain_net: undefined, platform_on_captain: undefined, team_share: undefined, team_members: undefined }); for (const f of ["sessions", "done", "upcoming", "kept", "card", "fawry", "cash", "free", "card_amount", "fawry_amount", "cash_amount", "kept_amount", "gross", "fee", "net", "refunded", "site_takings", "to_therapist", "therapist_keeps", "platform_due_on_fawry"]) a[f] += g[f] || 0; a.captain_shares += g.captain_due || 0; a.platform_on_captains += g.platform_on_captain || 0; return acc; }, {})).sort((a, b) => a.city.localeCompare(b.city)) : out.filter((g) => g.therapist_id === me.id);   // a captain never sees a trainee's row, only the share
+  const sessions_out = team ? sessions.map(({ therapist, therapist_id, ...rest }) => rest) : sessions.filter((s) => s.therapist_id === me.id);   // no therapist column outside "Your earnings"; a captain's own sessions only
   if (url.searchParams.get("format") === "csv") {
     if (isPlatform(admin)) return json({ error: "The platform account sees totals, not sessions." }, 403);
     const esc = (v) => { const t = v === null || v === undefined ? "" : String(v); return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
@@ -776,7 +827,7 @@ export async function statements(env, admin, url) {
     const lines = [head.join(",")].concat(sessions_out.map((s) => [s.date, s.slot, s.city, ...(team ? [] : [s.therapist || ""]), s.client, s.service, s.status, s.channel, s.currency, (s.amount / 100).toFixed(2), (s.fee / 100).toFixed(2), (s.net / 100).toFixed(2), (s.refunded / 100).toFixed(2), s.paid_with || "", s.partner_code || ""].map(esc).join(",")));
     return new Response("\ufeff" + lines.join("\n") + "\n", { headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": `attachment; filename="zen-statement-${month}${city ? "-" + city : ""}${me ? "-" + me.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase() : ""}.csv"` } });
   }
-  return json({ month, city, mine: Boolean(me), team, therapist: me || null, fee_bps: PLATFORM_FEE_BPS, rows: rows_out, sessions: isPlatform(admin) ? undefined : me || url.searchParams.get("detail") === "1" ? sessions_out : undefined });
+  return json({ month, city, mine: Boolean(me), team, therapist: me || null, fee_bps: PLATFORM_FEE_BPS, captain_pct: capPct, platform_on_captain_pct: PLATFORM_ON_CAPTAIN_BPS / 100, rows: rows_out, sessions: isPlatform(admin) ? undefined : me || url.searchParams.get("detail") === "1" ? sessions_out : undefined });
 }
 const feeSum = (sessions, g, ch) => sessions.filter((s) => (s.therapist_id || null) === (g.therapist_id || null) && s.currency === g.currency && s.channel === ch).reduce((a, s) => a + s.fee, 0);
 async function listGifts(env, admin, url) {

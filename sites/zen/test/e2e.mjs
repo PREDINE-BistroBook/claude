@@ -235,6 +235,14 @@ await go("index.html"); ok("privacy: linked from the footer", (await page.$$("fo
 await go("account.html"); await page.waitForTimeout(900); await page.click('[role="tab"][data-tab="sessions"]'); await page.waitForTimeout(500);
 { const again = await page.$$eval("#tab-sessions a[data-again]", (as) => as.map((a) => a.getAttribute("href"))); ok("account: a past session carries 'Book again' with the city and service prefilled", again.length >= 1 && /booking\.html\?city=cairo&svc=/.test(again[0]), again); }
 
+// 8i. captains (2026-09-14): the invite link puts an applicant on a captain's team; "somewhere else" asks for the city
+{ const mt = await api("/api/admin/my-team?therapist=th2", { headers: { cookie } }); ok("captain: the owner can read a therapist's invite code", mt.status === 200 && mt.body.code && mt.body.link.includes("/join?ref="), mt.body);
+  await go("join.html?ref=" + encodeURIComponent(mt.body.code)); await page.waitForTimeout(600);
+  ok("join: the invite banner names the captain and presets the city", await page.isVisible("#j-captain") && /Hesham/.test(await page.textContent("#j-captain")) && (await page.inputValue("#j-city")) === "cairo", await page.textContent("#j-captain"));
+  await page.selectOption("#j-city", "other"); await page.waitForTimeout(200); ok("join: 'Somewhere else…' reveals the city field", await page.isVisible("#j-city-other"));
+  await page.selectOption("#j-city", "cairo"); await page.waitForTimeout(200); ok("join: …and hides it again", await page.isHidden("#j-city-other")); }
+await go("team.html"); ok("team: nobody shows 'trained by' until the owner links someone", (await page.$$(".tm-trained")).length === 0);
+
 // 9. success page + no JS errors anywhere
 await go("success.html?free=1"); ok("success page renders", (await page.textContent("body")).length > 200);
 ok("no JS errors across the flow", errs.length === 0, errs);

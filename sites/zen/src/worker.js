@@ -627,7 +627,7 @@ async function platformReport(env, admin) {
     fee_bps: PLATFORM_FEE_BPS, live: isLive(env), stripe_account: env.ZEN_STRIPE_ACCOUNT || null,
     months: months.results, by_city: byCity.results, totals: totals.results, packages: packs.results, gifts: gifts.results,
     admins: admins.results, users, messages_7d: lastMsg, pending_review: pendingReview.n,
-    rules: { loyalty_every: st.loyalty_every, referral_pct: st.referral_pct, birthday_pct: st.birthday_pct, package_pct: st.package_pct },
+    rules: { loyalty_every: st.loyalty_every, referral_pct: st.referral_pct, birthday_pct: st.birthday_pct, package_pct: st.package_pct, captain_pct: st.captain_pct },
   });
 }
 
@@ -781,6 +781,7 @@ async function adminSaveSettings(req, env, admin) {
   const num = (v, lo, hi, d) => String(Math.min(hi, Math.max(lo, Number(v) || d)));
   const stmts = [
     env.DB.prepare("INSERT OR REPLACE INTO settings VALUES ('loyalty_every', ?)").bind(num(b.loyalty_every ?? cur.loyalty_every, 2, 50, 10)),
+    env.DB.prepare("INSERT OR REPLACE INTO settings VALUES ('captain_pct', ?)").bind(num(b.captain_pct ?? cur.captain_pct, 0, 50, 10)),
     env.DB.prepare("INSERT OR REPLACE INTO settings VALUES ('referral_pct', ?)").bind(num(b.referral_pct ?? cur.referral_pct, 0, 100, 40)),
     env.DB.prepare("INSERT OR REPLACE INTO settings VALUES ('birthday_pct', ?)").bind(num(b.birthday_pct ?? cur.birthday_pct, 0, 100, 20)),
     env.DB.prepare("INSERT OR REPLACE INTO settings VALUES ('package_pct', ?)").bind(num(b.package_pct ?? cur.package_pct, 0, 100, 15)),
