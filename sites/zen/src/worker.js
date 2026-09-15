@@ -83,7 +83,7 @@ async function route(req, env, url, ctx) {
     const admin = await currentAdmin(req, env);
     if (!admin) return json({ error: "Sign in first." }, 401);
     // Platform account (Ash): numbers only. Everything operational belongs to Zen's owner and the city teams.
-    if (isPlatform(admin) && !["/api/admin/me", "/api/admin/stats", "/api/admin/platform", "/api/admin/profile", "/api/admin/password", "/api/admin/statements", "/api/admin/errors"].includes(p)) return json({ error: "Your account sees the numbers, not the operations. Ask Zen's owner for anything else." }, 403);
+    if (isPlatform(admin) && !["/api/admin/me", "/api/admin/stats", "/api/admin/platform", "/api/admin/profile", "/api/admin/password", "/api/admin/statements", "/api/admin/errors"].includes(p) && !/^\/api\/admin\/admins\/[a-z0-9]+\/switch$/.test(p)) return json({ error: "Your account sees the numbers, not the operations. Ask Zen's owner for anything else." }, 403);
     if (p === "/api/admin/platform" && m === "GET") return isPlatform(admin) ? platformReport(env, admin) : json({ error: "Only the Amico Mio account sees the platform report." }, 403);
     if (p === "/api/admin/me") return json({ admin: pub(admin), therapist: await env.DB.prepare("SELECT id, name, city, photo, active FROM therapists WHERE admin_id = ?").bind(admin.id).first(), cities: await cityMeta(env), settings: await settings(env), photos: authFlags(env).photos, live: isLive(env), pay: { live: isLive(env), stripe_key: Boolean(env.STRIPE_SECRET_KEY), stripe_account: Boolean(env.ZEN_STRIPE_ACCOUNT), stripe_webhook: Boolean(env.STRIPE_WEBHOOK_SECRET), fawry: fawryOn(env) } });
     if (p === "/api/admin/profile" && m === "PUT") return adminProfile(req, env, admin);
@@ -102,6 +102,7 @@ async function route(req, env, url, ctx) {
     if (p === "/api/admin/admins" && m === "GET") return adminList(env, admin);
     if (p === "/api/admin/admins" && m === "POST") return adminCreate(req, env, admin);
     const inv = p.match(/^\/api\/admin\/admins\/([a-z0-9]+)\/invite$/); if (inv && m === "POST") return adminInvite(req, env, admin, inv[1]);
+    const sw = p.match(/^\/api\/admin\/admins\/([a-z0-9]+)\/switch$/); if (sw && m === "PATCH") return adminSwitch(req, env, admin, sw[1]);   // 2026-09-15 (Ash): only the platform account switches sign-ins on or off
     mm = p.match(/^\/api\/admin\/admins\/([a-z0-9]+)$/);
     if (mm && m === "DELETE") return adminDelete(env, admin, mm[1]);
     if (mm && m === "PATCH") return adminEdit(req, env, admin, mm[1]);
@@ -620,7 +621,7 @@ async function platformReport(env, admin) {
     env.DB.prepare(`SELECT currency, COUNT(*) n, SUM(amount) rev, SUM(platform_fee) fee, SUM(source = 'manual') manual, SUM(amount = 0) free FROM bookings WHERE ${live} GROUP BY currency`).all(),
     env.DB.prepare("SELECT currency, COUNT(*) n, SUM(amount) rev, SUM(platform_fee) fee FROM client_packages WHERE status = 'paid' GROUP BY currency").all(),
     env.DB.prepare("SELECT currency, COUNT(*) n, SUM(amount) rev, SUM(platform_fee) fee FROM gifts WHERE status IN ('paid','redeemed') GROUP BY currency").all(),
-    env.DB.prepare("SELECT name, role, last_login, created_at FROM admins ORDER BY created_at").all(),
+    env.DB.prepare("SELECT id, name, role, last_login, created_at, disabled FROM admins ORDER BY created_at").all(),
     env.DB.prepare("SELECT COUNT(*) total, SUM(created_at >= date('now','start of month')) new_this_month, SUM(created_at >= date('now','-7 days')) new_7d FROM users").first(),
     env.DB.prepare("SELECT MAX(created_at) at, COUNT(*) n FROM messages WHERE created_at >= date('now','-7 days')").first(),
     env.DB.prepare("SELECT COUNT(*) n FROM bookings WHERE status = 'review'").first(),
@@ -856,8 +857,7 @@ async function adminEdit(req, env, admin, id) {
   if (b.password !== undefined) { if (String(b.password).length < 10) return json({ error: "Use at least 10 characters." }, 400); ({ hash, salt } = await hashPassword(String(b.password))); }
   let username = a.username || null; if (b.username !== undefined) { username = validUsername(b.username); if (username === false) return json({ error: "A username is 3 to 24 letters, digits, dots, dashes or underscores." }, 400); const t2 = await signinTaken(env, [username], id); if (t2) return json({ error: `"${t2}" is already another account's sign-in.` }, 409); }
   const level = levelFor(role, b.level, a.level);
-  const disabled = b.disabled === undefined ? a.disabled || 0 : b.disabled ? 1 : 0;
-  if (disabled && id === admin.id) return json({ error: "You can't switch off your own sign-in." }, 400);
+  const disabled = a.disabled || 0;   // on/off is the platform account's call (adminSwitch), never the owner's
   try { await env.DB.prepare("UPDATE admins SET name = ?, role = ?, pass_hash = ?, salt = ?, username = ?, level = ?, disabled = ? WHERE id = ?").bind(clean(b.name, 80) || a.name, role, hash, salt, username, level, disabled, id).run(); }
   catch { return json({ error: "That username is already used by another account." }, 409); }
   // an account narrowed to one city can't stay linked to a therapist profile in another
@@ -869,6 +869,16 @@ const WORDS = ["calm", "cup", "river", "sand", "palm", "wave", "stone", "reef", 
 function tempPassword() { const a = new Uint32Array(4); crypto.getRandomValues(a); return `${WORDS[a[0] % WORDS.length]}-${WORDS[a[1] % WORDS.length]}-${WORDS[a[2] % WORDS.length]}-${10 + (a[3] % 90)}`; }
 // Owner: give an account a fresh temporary password and deliver it. With a real email the password goes to the person by email and is
 // never shown; for a username-only account it comes back once so the owner can pass it on in person.
+// 2026-09-15 (Ash: "only I can put it back on or off"): the platform account switches any team sign-in off or on; the owner only sees the badge.
+async function adminSwitch(req, env, admin, id) {
+  if (!isPlatform(admin)) return json({ error: "Only the platform account (Amico Mio) switches sign-ins on or off." }, 403);
+  const a = await env.DB.prepare("SELECT id, role, name FROM admins WHERE id = ?").bind(id).first();
+  if (!a) return json({ error: "Not found" }, 404);
+  if (a.role === "platform") return json({ error: "The platform account can't be switched." }, 400);
+  const b = await body(req), disabled = b.disabled ? 1 : 0;
+  await env.DB.prepare("UPDATE admins SET disabled = ? WHERE id = ?").bind(disabled, id).run();
+  return json({ ok: true, id, name: a.name, disabled });
+}
 async function adminInvite(req, env, admin, id) {
   if (!isOwner(admin)) return json({ error: "Only the owner can send sign-ins." }, 403);
   const a = await env.DB.prepare("SELECT * FROM admins WHERE id = ?").bind(id).first();
