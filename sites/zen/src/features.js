@@ -45,9 +45,12 @@ export async function featureRoute(req, env, url, ctx) {
 }
 
 // ---------- live slots + team + packages ----------
+// 2026-09-15: a closed room answers the same everywhere a client could reach it
+async function closedCity(env, city) { const open = (await settings(env)).cities_open; return open.includes(city) ? null : json({ error: `Zen isn't open in ${CITIES[city]?.name || city} right now.` }, 400); }
 async function slots(env, url) {
   const city = cityOf(url.searchParams.get("city")), date = clean(url.searchParams.get("date"), 10);
   if (!city || !isDate(date)) return json({ error: "city and date" }, 400);
+  { const c = await closedCity(env, city); if (c) return c; }
   if (date < localNow(CITIES[city].tz).date) return json({ mode: "slots", slots: [] });
   const th = clean(url.searchParams.get("therapist"), 40) || null, svc = clean(url.searchParams.get("service"), 40) || null;
   const r = await slotsFor(env, city, date, th, svc);
@@ -70,6 +73,7 @@ export const coordsFromMaps = (url) => { const s = String(url || ""); const m = 
 async function providers(env, url) {
   const lat = coord(url.searchParams.get("lat"), 90), lng = coord(url.searchParams.get("lng"), 180), q = clean(url.searchParams.get("q") || "", 60).toLowerCase();
   const r = await env.DB.prepare("SELECT id, city, name, bio, photo, languages, area, maps_url, title, instagram, i18n, sort, lat, lng, radius_km FROM therapists WHERE active = 1 ORDER BY city, sort, name").all();
+  { const open = (await settings(env)).cities_open; r.results = r.results.filter((t) => open.includes(t.city)); }
   const pr = await env.DB.prepare("SELECT city, MIN(amount) amount, currency, COUNT(*) n FROM services WHERE active = 1 GROUP BY city").all().catch(() => ({ results: [] }));
   const price = Object.fromEntries(pr.results.map((x) => [x.city, { from: x.amount, currency: x.currency, services: x.n }]));
   const tp = await therapistPrices(env, null);
@@ -91,15 +95,17 @@ async function providers(env, url) {
 async function team(env, url) {
   const city = cityOf(url.searchParams.get("city"));
   const r = await env.DB.prepare("SELECT id, city, name, bio, photo, languages, area, maps_url, title, story, certs, instagram, i18n, sort, lat, lng, radius_km, captain_id, (SELECT c.name FROM therapists c WHERE c.id = therapists.captain_id) captain_name FROM therapists WHERE active = 1" + (city ? " AND city = ?" : "") + " ORDER BY city, sort, name").bind(...(city ? [city] : [])).all();
+  const open = (await settings(env)).cities_open;
   // the brief a client chooses by (2026-09-13): real numbers only — sessions done here and the average of the ratings clients left
   const stats = Object.fromEntries((await env.DB.prepare("SELECT therapist_id, COUNT(*) done, AVG(rating) avg, COUNT(rating) n FROM bookings WHERE status = 'done' AND therapist_id IS NOT NULL GROUP BY therapist_id").all().catch(() => ({ results: [] }))).results.map((x) => [x.therapist_id, x]));
   const off = {}; for (const x of (await env.DB.prepare("SELECT therapist_id, service_id FROM therapist_prices WHERE offered = 0").all().catch(() => ({ results: [] }))).results) (off[x.therapist_id] ||= []).push(x.service_id);
-  return json({ therapists: r.results.map((t) => ({ ...t, i18n: parseI18n(t.i18n), sessions_done: stats[t.id]?.done || 0, rating_avg: stats[t.id]?.n ? Math.round(stats[t.id].avg * 10) / 10 : null, rating_n: stats[t.id]?.n || 0, not_offered: off[t.id] || [] })) });
+  return json({ therapists: r.results.filter((t) => open.includes(t.city)).map((t) => ({ ...t, i18n: parseI18n(t.i18n), sessions_done: stats[t.id]?.done || 0, rating_avg: stats[t.id]?.n ? Math.round(stats[t.id].avg * 10) / 10 : null, rating_n: stats[t.id]?.n || 0, not_offered: off[t.id] || [] })) });
 }
 async function packages(env, url) {
-  const city = cityOf(url.searchParams.get("city"));
+  const city = cityOf(url.searchParams.get("city")), open = (await settings(env)).cities_open;
+  if (city && !open.includes(city)) return json({ packages: [] });
   const r = await env.DB.prepare("SELECT id, city, name, sessions, amount, currency, months_valid FROM packages WHERE active = 1" + (city ? " AND city = ?" : "") + " ORDER BY city, sort, sessions").bind(...(city ? [city] : [])).all();
-  return json({ packages: r.results.map((p) => ({ ...p, per_session: Math.round(p.amount / p.sessions) })) });
+  return json({ packages: r.results.filter((p) => open.includes(p.city)).map((p) => ({ ...p, per_session: Math.round(p.amount / p.sessions) })) });
 }
 async function packageCheckout(req, env) {
   const u = await currentUser(req, env); if (!u) return need(u);
@@ -136,6 +142,7 @@ async function giftCheckout(req, env) {
   const b = await body(req);
   const city = CITIES[b.city], svc = city ? await serviceOf(env, b.city, clean(b.service, 40)) : null;
   if (!city || !svc) return json({ error: "Pick a city and a session." }, 400);
+  { const c = await closedCity(env, b.city); if (c) return c; }
   const buyer_name = clean(b.buyer_name, 80), buyer_email = normEmail(b.buyer_email), recipient_name = clean(b.recipient_name, 80), recipient_email = normEmail(b.recipient_email), message = clean(b.message, 300);
   if (!buyer_name || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(buyer_email) || !recipient_name) return json({ error: "Your name and email, and who the gift is for." }, 400);
   const provider = payProvider(env, city.currency); if (!provider) return json({ preview: true, error: "Payments are not switched on yet." }, 503);
@@ -177,6 +184,7 @@ async function joinWaitlist(req, env) {
   const b = await body(req);
   const city = cityOf(b.city), date = clean(b.date, 10), pref = ["any", "morning", "afternoon", "evening"].includes(b.slot_pref) ? b.slot_pref : "any";
   if (!city || !isDate(date) || date < today()) return json({ error: "Pick a city and a day." }, 400);
+  { const c = await closedCity(env, city); if (c) return c; }
   await env.DB.prepare("DELETE FROM waitlist WHERE user_id = ? AND city = ? AND date = ?").bind(u.id, city, date).run();
   await env.DB.prepare("INSERT INTO waitlist (id, user_id, city, date, slot_pref) VALUES (?,?,?,?,?)").bind(randomId(), u.id, city, date, pref).run();
   return json({ ok: true });
@@ -491,6 +499,7 @@ async function applyToJoin(req, env) {
   const cityText = clean(b.city_text, 80), city = cityOf(b.city) || (b.city === "other" && cityText ? "other" : null);   // "other" (2026-09-14): a city Zen isn't in yet, kept as text so the owner sees where people want to open
   const name = clean(b.name, 80), email = normEmail(b.email), phone = clean(b.phone, 40);
   if (!name || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email || "") || !phone || !city) return json({ error: "Your name, a real email, a WhatsApp number and the city." }, 400);
+  if (city !== "other") { const c = await closedCity(env, city); if (c) return c; }
   const ref = clean(b.ref, 40), captain = ref ? await env.DB.prepare("SELECT id, name, admin_id FROM therapists WHERE invite_code = ? AND active = 1").bind(ref).first() : null;
   if (!b.agree) return json({ error: "Please accept the terms first." }, 400);
   const open = await env.DB.prepare("SELECT id FROM applications WHERE email = ? AND status = 'new'").bind(email).first();

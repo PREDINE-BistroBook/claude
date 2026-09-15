@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <title>Zen Recovery · Book a session</title>
-<meta name="description" content="Book a cupping or manual therapy session with Zen Recovery in Cairo, Dahab or Florence.">
+<meta name="description" content="Book a cupping or manual therapy session with Zen Recovery.">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -45,7 +45,7 @@
   <div class="places-head reveal">
     <p class="eyebrow">Three rooms, one team</p>
     <h2 id="places-title">Where would you like us?</h2>
-    <p>Zen works from Cairo, Dahab and Florence. Choose your city and we'll show you what's on offer there, in your currency.</p>
+    <p>Choose your city and we'll show you what's on offer there, in your currency.</p>
     <p id="chosen-line" hidden><span id="chosen-text"></span> <button type="button" class="change-city" id="change-city">Change city</button></p>
   </div>
   <div class="panels" id="panels" role="group" aria-label="Choose a city">
@@ -148,7 +148,7 @@
       <div id="book-empty" class="book-empty">
         <span class="arrow" aria-hidden="true">↑</span>
         <h2 id="book-title">Pick a city first.</h2>
-        <p>Prices, hours and the team change with the room. Choose Cairo, Dahab or Florence above and the booking form appears here.</p>
+        <p>Prices, hours and the team change with the room. Choose a city above and the booking form appears here.</p>
       </div>
       <div id="book-place" hidden>
         <div class="place-row"><p class="place-name" id="place-name">Florence</p><button type="button" class="change-city" id="change-city-2">Change city</button></div>
@@ -277,14 +277,15 @@
   <div class="foot-grid">
     <div>
       <img class="logo lg" src="img/logo-dark.png" alt="Zen Recovery" width="200" height="72">
-      <p>Manual techniques, cupping, muscle recovery. Cairo, Dahab and Florence. Recovery = growth.</p>
+      <p>Manual techniques, cupping, muscle recovery. Recovery = growth.</p>
+      <p data-cities-line>Cairo, Dahab and Florence</p>
     </div>
     <div>
       <p class="eyebrow">Find us</p>
       <ul>
         <li><a href="https://instagram.com/zen_recovery10" target="_blank" rel="noopener">Instagram · @zen_recovery10</a></li>
-        <li><a href="https://instagram.com/recoverywithshaarawy" target="_blank" rel="noopener">Instagram · @recoverywithshaarawy (Cairo & Dahab)</a></li>
-        <li><a href="https://wa.me/201145638166" target="_blank" rel="noopener">WhatsApp · Cairo & Dahab</a></li>
+        <li data-only="cairo,dahab"><a href="https://instagram.com/recoverywithshaarawy" target="_blank" rel="noopener">Instagram · @recoverywithshaarawy (Cairo & Dahab)</a></li>
+        <li data-only="cairo,dahab"><a href="https://wa.me/201145638166" target="_blank" rel="noopener">WhatsApp · Cairo & Dahab</a></li>
         <li><a href="find.html">Near you</a></li>
         <li><a href="join.html">Join as a therapist</a></li>
         <li><a href="booking.html">Cities</a></li>

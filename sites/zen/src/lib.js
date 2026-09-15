@@ -165,10 +165,13 @@ export const FLAGS = ["pregnant", "anticoagulant", "bleeding", "heart", "diabete
 export function parseIntake(t) { try { return t ? JSON.parse(t) : null; } catch { return null; } }
 export function healthFlags(intakeText) { const i = parseIntake(intakeText); return i?.health ? i.health.filter((h) => FLAGS.includes(h)) : []; }
 
+// 2026-09-15 (Ash): rooms open to clients. Closed rooms vanish from the site (cities, team, near you, gifts, join, emails); the admin keeps everything.
+const openList = (v) => { try { const a = JSON.parse(v || "null"); if (Array.isArray(a)) { const f = a.filter((k) => CITY_KEYS.includes(k)); if (f.length) return f; } } catch (_) {} return [...CITY_KEYS]; };
+export const cityLine = (open) => open.map((k) => CITIES[k]?.name || k).join(" · ");
 export async function settings(env) {
   const rows = (await env.DB.prepare("SELECT key, value FROM settings").all()).results;
   const s = Object.fromEntries(rows.map((r) => [r.key, r.value]));
-  return { loyalty_every: Number(s.loyalty_every || 10), referral_pct: Number(s.referral_pct || 40), birthday_pct: Number(s.birthday_pct || 50), package_pct: Number(s.package_pct || 15), captain_pct: Number(s.captain_pct ?? 10),
+  return { loyalty_every: Number(s.loyalty_every || 10), referral_pct: Number(s.referral_pct || 40), birthday_pct: Number(s.birthday_pct || 50), package_pct: Number(s.package_pct || 15), captain_pct: Number(s.captain_pct ?? 10), cities_open: openList(s.cities_open),
     rules: { cancel_hours: Number(s.cancel_hours ?? 24), late_pct: Number(s.late_pct ?? 100), noshow_pct: Number(s.noshow_pct ?? 100) },
     platform_fee_pct: PLATFORM_FEE_BPS / 100, gmaps: { cairo: s.gmaps_cairo || "", dahab: s.gmaps_dahab || "", florence: s.gmaps_florence || "" }, whatsapp: { cairo: s.wa_cairo || "", dahab: s.wa_dahab || "", florence: s.wa_florence || "" },
     review: { cairo: s.review_cairo || "", dahab: s.review_dahab || "", florence: s.review_florence || "" },
@@ -232,7 +235,7 @@ export function emailHtml(env, text) {
 <div style="max-width:560px;margin:0 auto;background:#F7F7F5;border:1px solid #d9dbd6;border-radius:18px;overflow:hidden">
 <div style="background:#000;padding:22px;text-align:center"><a href="${env.SITE_URL}"><img src="${env.SITE_URL}/img/logo-email.png" alt="Zen Recovery" width="120" height="120" style="display:inline-block;border:0"></a></div>
 <div style="padding:24px 26px;font-size:16px;line-height:1.55">${body}</div>
-<div style="padding:14px 26px 22px;font-size:12px;color:#8B928F;border-top:1px solid #e3e5e0">Zen Recovery · Cairo · Dahab · Florence · <a href="${env.SITE_URL}" style="color:#8B928F">zenrecovery.club</a></div>
+<div style="padding:14px 26px 22px;font-size:12px;color:#8B928F;border-top:1px solid #e3e5e0">Zen Recovery · {{CITIES}} · <a href="${env.SITE_URL}" style="color:#8B928F">zenrecovery.club</a></div>
 </div></body></html>`;
 }
 // A chat ping (2026-09-13, Ash: "an email pops with urgent and the customer message, with a Respond button that takes them to the chat"):
@@ -252,13 +255,14 @@ export function chatEmailHtml(env, { eyebrow, title, from, message, button, url,
   <a href="${url}" style="display:inline-block;background:#1B1E1D;color:#fff;text-decoration:none;font-weight:600;font-size:16px;padding:14px 26px;border-radius:999px">${esc(button)}</a>
   <p style="font-size:13px;color:#8B928F;line-height:1.5;margin:18px 0 12px">${esc(note)}</p>
 </div>
-<div style="padding:14px 26px 22px;font-size:12px;color:#8B928F;border-top:1px solid #e3e5e0">Zen Recovery · Cairo · Dahab · Florence · <a href="${env.SITE_URL}" style="color:#8B928F">zenrecovery.club</a></div>
+<div style="padding:14px 26px 22px;font-size:12px;color:#8B928F;border-top:1px solid #e3e5e0">Zen Recovery · {{CITIES}} · <a href="${env.SITE_URL}" style="color:#8B928F">zenrecovery.club</a></div>
 </div></body></html>`;
 }
 export async function sendEmail(env, { to, subject, text, html }) {
   const list = [...new Set((Array.isArray(to) ? to : [to]).filter(Boolean))];
   if (!env.RESEND_API_KEY || !list.length) return false;
-  const r = await fetch("https://api.resend.com/emails", { method: "POST", headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" }, body: JSON.stringify({ from: env.FROM_EMAIL, to: list, subject, text, html: html || emailHtml(env, text) }) });
+  const st = await settings(env).catch(() => null), htmlOut = (html || emailHtml(env, text)).split("{{CITIES}}").join(cityLine(st ? st.cities_open : CITY_KEYS));   // the footer names the rooms that are open
+  const r = await fetch("https://api.resend.com/emails", { method: "POST", headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" }, body: JSON.stringify({ from: env.FROM_EMAIL, to: list, subject, text, html: htmlOut }) });
   if (!r.ok) console.error("resend error", await r.text());
   return r.ok;
 }

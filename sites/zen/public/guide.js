@@ -8,14 +8,19 @@ window.ZenGuide = (function () {
   const EGYPT_SUGGEST = ["Cairo", "Giza", "New Cairo", "6th of October", "Maadi", "Heliopolis", "Nasr City", "Sheikh Zayed", "Alexandria", "Mansoura", "Tanta", "Zagazig", "Ismailia", "Suez", "Port Said", "Fayoum", "Minya", "Assiut", "Luxor", "Aswan", "Dahab", "Sharm El Sheikh", "Nuweiba", "Taba", "Saint Catherine", "Hurghada", "El Gouna", "Marsa Alam"];
   const ITALY_SUGGEST = ["Firenze / Florence", "Prato", "Pistoia", "Pisa", "Lucca", "Siena", "Arezzo", "Bologna", "Roma", "Milano", "Torino", "Genova", "Napoli", "Venezia", "Verona", "Padova", "Perugia", "Livorno"];
   function norm(s) { return String(s || "").toLowerCase().replace(/[^a-z\s]/g, " ").replace(/\s+/g, " ").trim(); }
-  function recommend(country, cityText) {
+  function recommend(country, cityText, open) {
+    const r = recommend0(country, cityText);
+    if (open && r.city && !open.includes(r.city)) return { city: null, reason: "Zen isn't open there right now. Pick the room you'll be nearest to when you travel." };
+    return r;
+  }
+  function recommend0(country, cityText) {
     const c = norm(cityText);
     if (country === "IT") return { city: "florence", reason: c.includes("firenze") || c.includes("florence") ? "You're in Florence: the studio is in town." : `Florence is our only room in Italy${c ? ", a train ride from " + cityText.trim() : ""}.` };
     if (country === "EG") {
       if (SINAI.some((k) => c.includes(k))) return { city: "dahab", reason: c.includes("dahab") ? "You're in Dahab: Shaarawy's room is by the sea." : `Dahab is the closest room to ${cityText.trim()}: same coast, no need to go through Cairo.` };
       return { city: "cairo", reason: c.includes("cairo") || c.includes("giza") ? "You're in Greater Cairo: Shaarawy's Cairo room is the one for you." : `Cairo is the closest room to ${cityText.trim() || "you"}.` };
     }
-    return { city: null, reason: "You're outside Egypt and Italy, so pick the room you'll be nearest to when you travel: Florence for Italy, Cairo or Dahab for Egypt." };
+    return { city: null, reason: "You're outside Egypt and Italy, so pick the room you'll be nearest to when you travel." };
   }
 
   /* ---------- questionnaire options ---------- */

@@ -214,7 +214,7 @@ const geoCtx = async (cc) => { const c = await b.newContext({ viewport: { width:
   ok("geo: a Florence deep link from Egypt is held back with the note, not opened", (await p.$eval('#panels .panel[data-city="florence"]', (e) => e.getAttribute("aria-pressed"))) !== "true" && await p.isVisible("#geo-all"), await p.textContent("#geo-note"));
   await p.click("#geo-all"); await p.waitForTimeout(700); ok("geo: unlocking then opens the linked city", (await p.$eval('#panels .panel[data-city="florence"]', (e) => e.getAttribute("aria-pressed"))) === "true"); await c.close(); }
 { const [c, p] = await geoCtx("IT"); await p.goto(H + "/booking.html", { waitUntil: "load" }); await p.waitForTimeout(900);
-  ok("geo: in Italy, Cairo and Dahab are dimmed and the note mentions Egypt", (await p.$$eval("#panels .panel.far", (els) => els.map((e) => e.dataset.city).sort().join())) === "cairo,dahab" && /Italy/.test(await p.textContent("#geo-note")) && /Egypt/.test(await p.textContent("#geo-note")), await p.textContent("#geo-note")); await c.close(); }
+  ok("geo: in Italy, Cairo and Dahab are dimmed and the note names them as the other rooms", (await p.$$eval("#panels .panel.far", (els) => els.map((e) => e.dataset.city).sort().join())) === "cairo,dahab" && /Italy/.test(await p.textContent("#geo-note")) && /rooms in Cairo, Dahab/.test(await p.textContent("#geo-note")), await p.textContent("#geo-note")); await c.close(); }
 { const [c, p] = await geoCtx("DE"); await p.goto(H + "/booking.html", { waitUntil: "load" }); await p.waitForTimeout(900);
   ok("geo: anywhere else, every city is open and no note", (await p.$$("#panels .panel.far")).length === 0 && !(await p.$("#geo-note:not([hidden])"))); await c.close(); }
 
@@ -242,6 +242,22 @@ await go("account.html"); await page.waitForTimeout(900); await page.click('[rol
   await page.selectOption("#j-city", "other"); await page.waitForTimeout(200); ok("join: 'Somewhere else…' reveals the city field", await page.isVisible("#j-city-other"));
   await page.selectOption("#j-city", "cairo"); await page.waitForTimeout(200); ok("join: …and hides it again", await page.isHidden("#j-city-other")); }
 await go("team.html"); ok("team: nobody shows 'trained by' until the owner links someone", (await page.$$(".tm-trained")).length === 0);
+
+// 8j. rooms open to clients (2026-09-15): Egypt closed → every Egyptian thing disappears from the pages, Florence stays
+{ const set = async (list) => api("/api/admin/settings", { method: "PUT", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ cities_open: list }) });
+  const s1 = await set(["florence"]); ok("rooms: the owner closes Cairo and Dahab", s1.status === 200 && s1.body.cities_open.join() === "florence", s1.body);
+  await go("index.html"); await page.waitForTimeout(600);
+  ok("rooms: home eyebrow and marquee show Florence only, the Cairo room photo is gone, the footer line reads Florence", await page.isHidden('.hero .eyebrow [data-only="cairo"]') && await page.isVisible('.hero .eyebrow [data-only="florence"]') && await page.isHidden('figure[data-only="cairo"]') && (await page.$$eval("footer [data-cities-line]", (els) => els.map((e) => e.textContent.trim()))).every((x) => x === "Florence"), await page.$$eval("footer [data-cities-line]", (els) => els.map((e) => e.textContent)));
+  ok("rooms: the Egyptian Instagram and WhatsApp links are hidden; the JSON-LD lists one room", await page.isHidden('footer li[data-only="cairo,dahab"]') && (await page.evaluate(() => JSON.parse(document.querySelector("#ld-org").textContent).department.length)) === 1);
+  await go("booking.html"); await page.waitForTimeout(600); ok("rooms: the booking page has one city card, Florence, and no Egypt text", (await page.$$("#panels .panel")).length === 1 && (await page.$eval("#panels .panel", (e) => e.dataset.city)) === "florence" && !/Cairo|Dahab/.test(await page.textContent("#places")), await page.textContent("#places").catch(() => ""));
+  await page.goto(H + "/booking.html?city=cairo", { waitUntil: "load" }); await page.waitForTimeout(1200); ok("rooms: a Cairo deep link opens nothing", await page.isHidden("#booking") && (await page.$$("#panels .panel")).length === 1);
+  await go("giftcard.html"); ok("rooms: the gift card city list is Florence only", (await page.$$eval("#g-city option", (os) => os.map((o) => o.value))).join() === "florence");
+  await go("join.html"); ok("rooms: the join form offers Florence and Somewhere else", (await page.$$eval("#j-city option", (os) => os.map((o) => o.value))).join() === "florence,other");
+  await go("team.html"); const tcities = await page.$$eval("#team-list .tm-card, #team-list article, #team-list > *", (els) => els.length); ok("rooms: the team page shows the Florence team only (Shika)", /Shika/.test(await page.textContent("#team-list")) && !/Hesham|Adham|Mazen/.test(await page.textContent("#team-list")), (await page.textContent("#team-list")).slice(0, 200));
+  await page.click("#lang-slot [data-lang=it], .lang [data-lang=it], button:has-text('Italiano')").catch(() => {}); await page.waitForTimeout(400); ok("rooms: the footer line follows the language", (await page.$eval("footer [data-cities-line]", (e) => e.textContent.trim())) === "Firenze", await page.$eval("footer [data-cities-line]", (e) => e.textContent));
+  await page.click("#lang-slot [data-lang=en], .lang [data-lang=en], button:has-text('English')").catch(() => {}); await page.waitForTimeout(300);
+  const s2 = await set(["cairo", "dahab", "florence"]); ok("rooms: reopened for the rest of the run", s2.status === 200 && s2.body.cities_open.length === 3);
+  await go("booking.html"); ok("rooms: three city cards again", (await page.$$("#panels .panel")).length === 3); }
 
 // 9. success page + no JS errors anywhere
 await go("success.html?free=1"); ok("success page renders", (await page.textContent("body")).length > 200);
