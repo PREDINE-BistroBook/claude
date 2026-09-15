@@ -46,12 +46,7 @@ await page.locator("#team-list .team-card", { hasText: "Anas" }).click(); await 
 await page.selectOption("#th-captain", "th2"); await page.click("#th-save"); await page.waitForTimeout(1200); ok("captain: saved: Anas's card now says trained by Hesham", /Anas[\s\S]*trained by Hesham/.test((await page.textContent("#team-list")).replace(/\s+/g, " ")), (await page.locator("#team-list .team-card", { hasText: "Anas" }).textContent()).replace(/\s+/g, " ").slice(0, 300));
 { const t = await (await fetch(H + "/api/team?city=cairo")).json(); ok("captain: the public team API carries it", t.therapists.find((x) => x.name.startsWith("Anas"))?.captain_name?.startsWith("Hesham"), t.therapists.map((x) => [x.name, x.captain_name])); }
 await tab("settings"); ok("settings: the captain share field reads 10", (await page.inputValue("#s-captain")) === "10");
-ok("rooms: the three room checkboxes are ticked", (await page.$$("#s-cities input:checked")).length === 3);
-await page.uncheck('#s-cities input[value="cairo"]'); await page.uncheck('#s-cities input[value="dahab"]'); await page.click('#rules-form button[type="submit"]'); await page.waitForTimeout(900);
-{ const st = await (await fetch(H + "/api/status")).json(); ok("rooms: saving closes them for clients", st.cities.join() === "florence", st.cities); }
-await page.goto(H + "/admin.html", { waitUntil: "load" }); await page.waitForTimeout(1000); ok("rooms: the overview says Cairo and Dahab are closed to clients", await page.isVisible("#closed-note") && /Cairo and Dahab/.test(await page.textContent("#closed-note")), await page.textContent("#closed-note").catch(() => ""));
-await tab("settings"); await page.check('#s-cities input[value="cairo"]'); await page.check('#s-cities input[value="dahab"]'); await page.click('#rules-form button[type="submit"]'); await page.waitForTimeout(900);
-{ const st = await (await fetch(H + "/api/status")).json(); ok("rooms: ticking them reopens", st.cities.length === 3, st.cities); }
+ok("rooms: the owner has no rooms switch (that's Ash's, from the platform account)", (await page.$$("#s-cities")).length === 0);
 await tab("team");
 await page.click("#add-therapist"); await page.waitForTimeout(400); ok("team: add dialog with pin controls + radius", await openDlg("#dlg-th") && await page.isVisible("#th-locate") && await page.isVisible("#th-lat") && await page.isVisible("#th-radius"));
 await page.click("#th-cancel"); await page.waitForTimeout(300);
@@ -181,5 +176,24 @@ await page.click("#add-service"); await page.waitForTimeout(400); await page.fil
   const cat = await (await fetch(H + "/api/catalog")).json(); const sv = cat.cities.cairo.services.find((x) => x.name.includes("neck reset")); ok("employee: it's on the public catalog with his id", sv && sv.therapist_id && sv.price === 85000, sv); }
 await tab("chat"); await page.waitForTimeout(500); ok("employee: Hesham sees only the room chat, not Adham's", (await page.$$("#achat-list .chat-item")).length === 1 && (await page.textContent("#achat-list")).includes("room"), await page.textContent("#achat-list"));
 await tab("money"); ok("employee: the tab reads Your earnings and shows their own card only", (await page.textContent("#tab-money-btn")).trim() === "Your earnings" && (await page.textContent("#money-title")).trim() === "Your earnings" && !(await page.isVisible("#st-city-pills .pill")), await page.textContent("#money-title"));
+// the platform account (Ash) closes rooms; the owner's admin loses them everywhere (2026-09-15)
+await page.evaluate(() => fetch("/api/admin/logout", { method: "POST" })); await page.goto(H + "/admin.html", { waitUntil: "load" }); await page.waitForTimeout(600);
+await page.fill("#a-email", "ash@x.com"); await page.fill("#a-pass", "Ash-pass-12345"); await page.click("#login-btn"); await page.waitForTimeout(1500);
+await page.evaluate(() => { const b = document.querySelector('.tabs button[data-tab="platform"]'); if (b) { b.hidden = false; b.click(); } }); await page.waitForTimeout(900);
+ok("platform: signs in and has the Rooms card with three ticked boxes", await page.isVisible("#pf-rooms") && (await page.$$("#pf-rooms input:checked")).length === 3);
+ok("platform: the Who signs in card has Switch off buttons", (await page.$$("#pf-admins [data-sw]")).length >= 2);
+await page.uncheck('#pf-rooms input[value="cairo"]'); await page.uncheck('#pf-rooms input[value="dahab"]'); await page.click("#pf-rooms-save"); await page.waitForTimeout(900);
+{ const st = await (await fetch(H + "/api/status")).json(); ok("platform: saving closes them for clients", await page.isVisible("#pf-rooms-ok") && st.cities.join() === "florence", st.cities); }
+await page.evaluate(() => fetch("/api/admin/logout", { method: "POST" })); await page.goto(H + "/admin.html", { waitUntil: "load" }); await page.waitForTimeout(600);
+await page.fill("#a-email", "owner@x.com"); await page.fill("#a-pass", "Owner-pass-12345"); await page.click("#login-btn"); await page.waitForTimeout(1500);
+ok("owner: the overview says Cairo and Dahab are closed, and the city pills show Florence only", /Cairo and Dahab/.test(await page.textContent("#closed-note")) && (await page.$$eval("#city-pills .pill", (ps) => ps.map((p) => p.dataset.city))).join() === ",florence", await page.$$eval("#city-pills .pill", (ps) => ps.map((p) => p.dataset.city)));
+await tab("calendar"); ok("owner: no city pills in the calendar (one room left)", (await page.$$("#cal-cities [data-calcity]")).length === 0);
+await tab("settings"); ok("owner: the per-city settings show Florence only", !/Cairo|Dahab/.test(await page.textContent("#links-form")) && /Florence/.test(await page.textContent("#links-form")), (await page.textContent("#links-form")).slice(0, 120));
+await tab("team"); await page.click("#add-therapist"); await page.waitForTimeout(400); ok("owner: a new therapist can only go to an open room", (await page.$$eval("#th-city option", (os) => os.map((o) => o.value))).join() === "florence"); await page.keyboard.press("Escape"); await page.waitForTimeout(300);
+await page.evaluate(() => fetch("/api/admin/logout", { method: "POST" })); await page.goto(H + "/admin.html", { waitUntil: "load" }); await page.waitForTimeout(600);
+await page.fill("#a-email", "ash@x.com"); await page.fill("#a-pass", "Ash-pass-12345"); await page.click("#login-btn"); await page.waitForTimeout(1500);
+await page.evaluate(() => { const b = document.querySelector('.tabs button[data-tab="platform"]'); if (b) { b.hidden = false; b.click(); } }); await page.waitForTimeout(900);
+await page.check('#pf-rooms input[value="cairo"]'); await page.check('#pf-rooms input[value="dahab"]'); await page.click("#pf-rooms-save"); await page.waitForTimeout(900);
+{ const st = await (await fetch(H + "/api/status")).json(); ok("platform: reopened", st.cities.length === 3, st.cities); }
 ok("no JS errors across the admin sweep", errs.length === 0, errs); ok("no native pop-ups", native.length === 0, native);
 await b.close();

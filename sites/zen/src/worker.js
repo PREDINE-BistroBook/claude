@@ -83,10 +83,11 @@ async function route(req, env, url, ctx) {
     const admin = await currentAdmin(req, env);
     if (!admin) return json({ error: "Sign in first." }, 401);
     // Platform account (Ash): numbers only. Everything operational belongs to Zen's owner and the city teams.
-    if (isPlatform(admin) && !["/api/admin/me", "/api/admin/stats", "/api/admin/platform", "/api/admin/profile", "/api/admin/password", "/api/admin/statements", "/api/admin/errors"].includes(p) && !/^\/api\/admin\/admins\/[a-z0-9]+\/switch$/.test(p)) return json({ error: "Your account sees the numbers, not the operations. Ask Zen's owner for anything else." }, 403);
+    if (isPlatform(admin) && !["/api/admin/me", "/api/admin/stats", "/api/admin/platform", "/api/admin/profile", "/api/admin/password", "/api/admin/statements", "/api/admin/errors", "/api/admin/rooms"].includes(p) && !/^\/api\/admin\/admins\/[a-z0-9]+\/switch$/.test(p)) return json({ error: "Your account sees the numbers, not the operations. Ask Zen's owner for anything else." }, 403);
     if (p === "/api/admin/platform" && m === "GET") return isPlatform(admin) ? platformReport(env, admin) : json({ error: "Only the Amico Mio account sees the platform report." }, 403);
     if (p === "/api/admin/me") return json({ admin: pub(admin), therapist: await env.DB.prepare("SELECT id, name, city, photo, active FROM therapists WHERE admin_id = ?").bind(admin.id).first(), cities: await cityMeta(env), settings: await settings(env), photos: authFlags(env).photos, live: isLive(env), pay: { live: isLive(env), stripe_key: Boolean(env.STRIPE_SECRET_KEY), stripe_account: Boolean(env.ZEN_STRIPE_ACCOUNT), stripe_webhook: Boolean(env.STRIPE_WEBHOOK_SECRET), fawry: fawryOn(env) } });
     if (p === "/api/admin/profile" && m === "PUT") return adminProfile(req, env, admin);
+    if (p === "/api/admin/rooms" && m === "PUT") return adminRooms(req, env, admin);   // 2026-09-15 (Ash): which rooms clients see is the platform account's call, not the owner's
     if (p === "/api/admin/errors" && m === "GET") return admin.role === "all" || isPlatform(admin) ? json({ rows: (await env.DB.prepare("SELECT id, at, page, msg, ua, n FROM client_errors ORDER BY at DESC LIMIT 40").all()).results }) : json({ error: "The owner and the platform account see site errors." }, 403);
     if (p === "/api/admin/stats" && m === "GET") return adminStats(env, admin, url);
     if (p === "/api/admin/bookings" && m === "GET") return adminBookings(env, admin, url);
@@ -801,7 +802,6 @@ async function adminSaveSettings(req, env, admin) {
     if (b.address?.[c] !== undefined) stmts.push(env.DB.prepare("INSERT OR REPLACE INTO settings VALUES (?, ?)").bind(`addr_${c}`, String(b.address[c] ?? "").replace(/[^\S\n]+/g, " ").split("\n").map((l) => clean(l, 80)).filter(Boolean).slice(0, 4).join("\n")));
     if (b.team?.[c] !== undefined) stmts.push(env.DB.prepare("INSERT OR REPLACE INTO settings VALUES (?, ?)").bind(`team_${c}`, clean(b.team[c], 120)));
   }
-  if (Array.isArray(b.cities_open)) { const f = b.cities_open.filter((k) => CITY_KEYS.includes(k)); if (!f.length) return json({ error: "Keep at least one room open." }, 400); stmts.push(env.DB.prepare("INSERT OR REPLACE INTO settings VALUES ('cities_open', ?)").bind(JSON.stringify(f))); }
   await env.DB.batch(stmts);
   return json(await settings(env));
 }
@@ -870,6 +870,13 @@ function tempPassword() { const a = new Uint32Array(4); crypto.getRandomValues(a
 // Owner: give an account a fresh temporary password and deliver it. With a real email the password goes to the person by email and is
 // never shown; for a username-only account it comes back once so the owner can pass it on in person.
 // 2026-09-15 (Ash: "only I can put it back on or off"): the platform account switches any team sign-in off or on; the owner only sees the badge.
+async function adminRooms(req, env, admin) {
+  if (!isPlatform(admin)) return json({ error: "Only the platform account (Amico Mio) opens or closes rooms." }, 403);
+  const b = await body(req), f = (Array.isArray(b.cities_open) ? b.cities_open : []).filter((k) => CITY_KEYS.includes(k));
+  if (!f.length) return json({ error: "Keep at least one room open." }, 400);
+  await env.DB.prepare("INSERT OR REPLACE INTO settings VALUES ('cities_open', ?)").bind(JSON.stringify(f)).run();
+  return json({ ok: true, cities_open: f });
+}
 async function adminSwitch(req, env, admin, id) {
   if (!isPlatform(admin)) return json({ error: "Only the platform account (Amico Mio) switches sign-ins on or off." }, 403);
   const a = await env.DB.prepare("SELECT id, role, name FROM admins WHERE id = ?").bind(id).first();
