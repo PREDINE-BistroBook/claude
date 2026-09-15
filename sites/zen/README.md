@@ -378,6 +378,14 @@ Nothing was deleted. A **switch** decides which rooms clients can see: setting `
 - Reopen: tick Cairo and Dahab in Settings. Everything reappears at once, no deploy.
 - Tests: smoke +19 (481), e2e +11 (135), admin-e2e +4 (103).
 
+## Shika owns the admin, the others are switched off; the site is Italian only (2026-09-15, Ash)
+
+- **Sign-ins that can be switched off** (migration 030, `admins.disabled`, applied to production): the owner's "Who can sign in" table has **Switch off / Switch on** per account and a "switched off" badge. A switched-off sign-in can't log in ("This sign-in is switched off. Ask the owner."), any open session ends at once (`currentAdmin` ignores it), and it gets no booking, chat or statement emails. Nothing is deleted: the account, its therapist link and its history stay, and Switch on brings it back. The owner can't switch off their own sign-in; the platform account is never touched.
+- **Production, 2026-09-15:** Shika (`shikaahmed221@gmail.com`, username `shika`) is now the **owner** (role `all`); Mazen (the previous `owner` sign-in), Hesham, Adham, Anas and Shaarawy are switched off. Ash's platform account is unchanged. Their therapist profiles are still there (hidden from clients by the rooms switch).
+- **Italian only:** `ONLY = ["it"]` in `public/i18n.js` (and `LANGS_OPEN` / `DEFAULT_LANG` in `src/lib.js` for the server side: booking language, emails). The language switch disappears when one language is open, `?lang=` and the browser language are ignored, `<html lang="it">`, and every public page's `<title>` and description are Italian. The English and Arabic dictionaries stay; reopening is those two constants. The admin stays in English (it was never translated; say the word and it gets the same treatment). The privacy page follows the same rule (a bug there also fixed: it read the wrong localStorage key).
+- The test suites set `window.ZEN_LANGS = ["en","it","ar"]` through Playwright's init script so the existing English checks still run; one section checks the real default (Italian, no switch, `?lang=en` ignored).
+- Tests: smoke +13 (494), e2e +3 (138), admin-e2e +3 (106).
+
 ## Ideas for later (not built — Ash decides)
 
 Built on 2026-09-12 (first batch): login bar, Google sign-in, three languages, session rating + therapist note, weekly check-ins with a progress chart, add-to-calendar, reschedule via WhatsApp, exercises per focus area, installable app. Built the same evening (second batch): items 15–30 below, plus 1–4, 7–9 and 13 which they overlap with — see the table above. Still genuinely open: 5 (deposit model), 6 (fee on hand-added bookings — a business decision), 10 (body map in the guest booking form; signed-in clients already have it in the questionnaire), 12 (link-in-bio page). Kept here for the record:

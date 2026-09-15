@@ -161,6 +161,11 @@ ok("owner: created Hesham's sign-in, credentials dialog shows the typed password
 await page.click("#ask-alt"); await page.waitForTimeout(900);   // no mail key here → "tell them in person", and the password must be unchanged
 ok("owner: emailing keeps the typed password (no reset)", (await page.textContent("#ask-text")).includes("Hesham-pass-12345"), await page.textContent("#ask-text"));
 await page.click("#ask-yes"); await page.waitForTimeout(300);
+// sign-ins can be switched off and on without deleting them (2026-09-15)
+await tab("settings"); { const row = () => page.locator("#admins-table tr", { hasText: "hesham@x.com" }); await row().locator("[data-off]").click(); await page.waitForTimeout(1000);
+  ok("sign-ins: Switch off marks the row and the button flips to Switch on", /switched off/.test(await row().textContent()) && (await row().locator("[data-off]").textContent()).trim() === "Switch on", (await row().textContent()).slice(0, 200));
+  const r = await fetch(H + "/api/admin/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: "hesham@x.com", password: "Hesham-pass-12345" }) }); ok("sign-ins: a switched-off sign-in can't log in", r.status === 403 && /switched off/.test((await r.json()).error), r.status);
+  await row().locator("[data-off]").click(); await page.waitForTimeout(1000); ok("sign-ins: Switch on brings it back", !/switched off/.test(await row().textContent()) && (await row().locator("[data-off]").textContent()).trim() === "Switch off"); }
 await page.evaluate(() => fetch("/api/admin/logout", { method: "POST" })); await page.goto(H + "/admin.html", { waitUntil: "load" }); await page.waitForTimeout(600);
 await page.fill("#a-email", "hesham@x.com"); await page.fill("#a-pass", "Hesham-pass-12345"); await page.click("#login-btn"); await page.waitForTimeout(1500);
 ok("employee: signs in with the password the owner typed", await page.isVisible(".tabs") && !(await page.isVisible("#login-form")), await page.textContent("#login-err").catch(() => ""));

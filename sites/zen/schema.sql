@@ -99,6 +99,7 @@ CREATE INDEX IF NOT EXISTS credits_user ON credits(user_id, status);
 CREATE TABLE IF NOT EXISTS admins (
   id         TEXT PRIMARY KEY,
   email      TEXT UNIQUE NOT NULL,
+  disabled   INTEGER DEFAULT 0,
   name       TEXT,
   role       TEXT NOT NULL,                -- all | cairo | dahab | florence
   pass_hash  TEXT NOT NULL,

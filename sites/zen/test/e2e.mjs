@@ -4,7 +4,7 @@ import fs from "node:fs";
 const G = process.env.GSAP_DIST || "node_modules/gsap/dist/", H = process.env.E2E_HOST || "http://localhost:8766";   // GSAP served locally so the run never depends on the CDN
 const b = await chromium.launch({ executablePath: process.env.CHROMIUM || undefined });
 const ok = (n, c, x) => { console.log((c ? "PASS " : "FAIL ") + n, c ? "" : (typeof x === "string" ? x : JSON.stringify(x))?.slice(0, 400) ?? ""); if (!c) process.exitCode = 1; };
-const ctx = await b.newContext({ viewport: { width: 1280, height: 900 } }); const errs = [];
+const ctx = await b.newContext({ viewport: { width: 1280, height: 900 } }); await ctx.addInitScript(() => { window.ZEN_LANGS = ["en", "it", "ar"]; }); const errs = [];
 await ctx.route("**/cdnjs.cloudflare.com/ajax/libs/gsap/**", (route) => { const f = route.request().url().includes("ScrollTrigger") ? "ScrollTrigger.min.js" : "gsap.min.js"; route.fulfill({ body: fs.readFileSync(G + f), contentType: "application/javascript" }); });
 await ctx.route(/googleapis|gstatic|google\.com|gravatar/, (r) => r.abort());
 const page = await ctx.newPage(); page.setDefaultTimeout(8000); process.on("unhandledRejection", (e) => { console.log("CRASH " + String(e && e.message || e).slice(0, 300)); process.exit(1); }); page.on("pageerror", (e) => errs.push(e.message)); page.on("console", (m) => { if (m.type() === "error" && !/cdnjs|favicon|ERR_FAILED|ERR_CONNECTION|503/.test(m.text())) errs.push(m.text()); });
@@ -180,7 +180,7 @@ await go("team.html"); ok("team: the brief (ratings / sessions) has a place on t
   await api("/api/admin/services/" + own.body.id, { method: "DELETE", headers: { cookie } }); }
 
 // 8e. the booking, step by step (slice 9): body map → treatment → therapist → when → details → (codes) → confirm
-const gctx = await b.newContext({ viewport: { width: 1280, height: 900 } }); await gctx.route("**/cdnjs.cloudflare.com/ajax/libs/gsap/**", (route) => { const f = route.request().url().includes("ScrollTrigger") ? "ScrollTrigger.min.js" : "gsap.min.js"; route.fulfill({ body: fs.readFileSync(G + f), contentType: "application/javascript" }); }); await gctx.route(/googleapis|gstatic|google\.com|gravatar/, (r) => r.abort());
+const gctx = await b.newContext({ viewport: { width: 1280, height: 900 } }); await gctx.addInitScript(() => { window.ZEN_LANGS = ["en", "it", "ar"]; }); await gctx.route("**/cdnjs.cloudflare.com/ajax/libs/gsap/**", (route) => { const f = route.request().url().includes("ScrollTrigger") ? "ScrollTrigger.min.js" : "gsap.min.js"; route.fulfill({ body: fs.readFileSync(G + f), contentType: "application/javascript" }); }); await gctx.route(/googleapis|gstatic|google\.com|gravatar/, (r) => r.abort());
 { const page = await gctx.newPage(); page.setDefaultTimeout(8000); page.on("pageerror", (e) => errs.push("guest: " + e.message));   // a fresh, signed-out browser: the guest flow
 await page.goto(H + "/booking.html?city=cairo", { waitUntil: "load" }); await page.waitForTimeout(900);
 { const vis = async () => page.$$eval("#booking .wstep", (els) => els.filter((e) => !e.hidden).map((e) => e.dataset.step));
@@ -201,7 +201,7 @@ await page.goto(H + "/booking.html?city=cairo", { waitUntil: "load" }); await pa
 await page.setViewportSize({ width: 390, height: 844 }); await page.goto(H + "/booking.html?city=cairo", { waitUntil: "load" }); await page.waitForTimeout(900); await page.screenshot({ path: S + "/shot-wiz-m1.png" }); await page.click("#wiz-next"); await page.waitForTimeout(400); await page.click("#wiz-next"); await page.waitForTimeout(600); await page.screenshot({ path: S + "/shot-wiz-m3.png" }); await gctx.close(); }
 
 // 8f. the right country's rooms (2026-09-14): Egypt sees Cairo + Dahab, Italy sees Florence; travellers unlock the rest
-const geoCtx = async (cc) => { const c = await b.newContext({ viewport: { width: 1280, height: 900 }, extraHTTPHeaders: { "x-e2e-country": cc } }); await c.route("**/cdnjs.cloudflare.com/ajax/libs/gsap/**", (route) => { const f = route.request().url().includes("ScrollTrigger") ? "ScrollTrigger.min.js" : "gsap.min.js"; route.fulfill({ body: fs.readFileSync(G + f), contentType: "application/javascript" }); }); await c.route(/googleapis|gstatic|google\.com|gravatar/, (r) => r.abort()); const p = await c.newPage(); p.setDefaultTimeout(8000); p.on("pageerror", (e) => errs.push("geo: " + e.message)); return [c, p]; };
+const geoCtx = async (cc) => { const c = await b.newContext({ viewport: { width: 1280, height: 900 }, extraHTTPHeaders: { "x-e2e-country": cc } }); await c.addInitScript(() => { window.ZEN_LANGS = ["en", "it", "ar"]; }); await c.addInitScript(() => { window.ZEN_LANGS = ["en", "it", "ar"]; }); await c.route("**/cdnjs.cloudflare.com/ajax/libs/gsap/**", (route) => { const f = route.request().url().includes("ScrollTrigger") ? "ScrollTrigger.min.js" : "gsap.min.js"; route.fulfill({ body: fs.readFileSync(G + f), contentType: "application/javascript" }); }); await c.route(/googleapis|gstatic|google\.com|gravatar/, (r) => r.abort()); const p = await c.newPage(); p.setDefaultTimeout(8000); p.on("pageerror", (e) => errs.push("geo: " + e.message)); return [c, p]; };
 { const [c, p] = await geoCtx("EG"); await p.goto(H + "/booking.html", { waitUntil: "load" }); await p.waitForTimeout(900);
   const far = async () => p.$$eval("#panels .panel", (els) => els.filter((e) => e.classList.contains("far")).map((e) => e.dataset.city));
   ok("geo: in Egypt, Florence is dimmed and the note says the studio exists", (await far()).join() === "florence" && await p.isVisible("#geo-note") && /Egypt/.test(await p.textContent("#geo-note")) && /Florence/.test(await p.textContent("#geo-note")), [await far(), await p.textContent("#geo-note")]);
@@ -258,6 +258,15 @@ await go("team.html"); ok("team: nobody shows 'trained by' until the owner links
   await page.click("#lang-slot [data-lang=en], .lang [data-lang=en], button:has-text('English')").catch(() => {}); await page.waitForTimeout(300);
   const s2 = await set(["cairo", "dahab", "florence"]); ok("rooms: reopened for the rest of the run", s2.status === 200 && s2.body.cities_open.length === 3);
   await go("booking.html"); ok("rooms: three city cards again", (await page.$$("#panels .panel")).length === 3); }
+
+// 8k. Italian only (2026-09-15): without the test override the site is Italian, has no language switch, and ignores ?lang=
+{ const c = await b.newContext({ viewport: { width: 1280, height: 900 } }); await c.route("**/cdnjs.cloudflare.com/ajax/libs/gsap/**", (route) => { const f = route.request().url().includes("ScrollTrigger") ? "ScrollTrigger.min.js" : "gsap.min.js"; route.fulfill({ body: fs.readFileSync(G + f), contentType: "application/javascript" }); }); await c.route(/googleapis|gstatic|google\.com|gravatar/, (r) => r.abort());
+  const p = await c.newPage(); p.setDefaultTimeout(8000); p.on("pageerror", (e) => errs.push("it: " + e.message));
+  await p.goto(H + "/index.html?lang=en", { waitUntil: "load" }); await p.waitForTimeout(700);
+  ok("italian: the home page is Italian, ?lang=en is ignored, html lang=it, no language switch", (await p.evaluate(() => document.documentElement.lang)) === "it" && (await p.textContent("#hero-title")).trim() === "La tensione ha una via d'uscita." && (await p.$$(".lang-switch")).length === 0 && (await p.title()) === "Zen Recovery", [await p.evaluate(() => document.documentElement.lang), await p.textContent("#hero-title")]);
+  await p.goto(H + "/booking.html", { waitUntil: "load" }); await p.waitForTimeout(500); ok("italian: the booking page title and city cards are Italian", (await p.title()) === "Zen Recovery · Prenota una seduta" && /Firenze/.test(await p.textContent("#panels")), await p.textContent("#panels").catch(() => ""));
+  await p.goto(H + "/privacy.html", { waitUntil: "load" }); await p.waitForTimeout(300); ok("italian: the privacy page opens in Italian with the language buttons hidden", await p.isVisible('[data-l="it"]') && await p.isHidden(".langs"));
+  await c.close(); }
 
 // 9. success page + no JS errors anywhere
 await go("success.html?free=1"); ok("success page renders", (await page.textContent("body")).length > 200);

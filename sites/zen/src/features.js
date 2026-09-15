@@ -514,7 +514,7 @@ async function applyToJoin(req, env) {
   sendEmail(env, { to: email, ...M("application_received", lang, { first: name.split(" ")[0], city: cityLabel }) }).catch(() => {});
   if (captain?.admin_id) { const ca = await env.DB.prepare("SELECT email, name FROM admins WHERE id = ? AND email LIKE '%@%'").bind(captain.admin_id).first();
     if (ca) sendEmail(env, { to: ca.email, subject: `${name} applied through your invite link`, text: [`Hi ${(ca.name || captain.name).split(" ")[0]},`, ``, `${name} (${cityEn}) just applied to join Zen Recovery through your link, as part of your team.`, `The owner reads every application and approves or declines it; you'll see them under Team → Your team once approved.`, ``, `${env.SITE_URL}/admin.html`].join("\n") }).catch(() => {}); }
-  const owners = (await env.DB.prepare("SELECT email FROM admins WHERE role = 'all' AND email LIKE '%@%'").all()).results.map((r) => r.email);
+  const owners = (await env.DB.prepare("SELECT email FROM admins WHERE role = 'all' AND COALESCE(disabled, 0) = 0 AND email LIKE '%@%'").all()).results.map((r) => r.email);
   if (owners.length) sendEmail(env, { to: owners, subject: `New therapist application · ${cityEn} · ${name}`, text: [`${name} applied to join Zen Recovery in ${cityEn}.${city === "other" ? " Zen isn't open there yet: this is someone asking to open it." : ""}`, captain ? `Trained by / invited by: ${captain.name} (captain share applies).` : ``, ``, `Title:     ${clean(b.title, 80)}`, `Area:      ${clean(b.area, 80)}`, `Phone:     ${phone}`, `Email:     ${email}`, `Instagram: ${clean(b.instagram, 40)}`, ``, `Bio: ${clean(b.bio, 400)}`, ``, `Approve or decline under Team → Applications: ${env.SITE_URL}/admin`].join("\n") }).catch(() => {});
   return json({ ok: true, id });
 }

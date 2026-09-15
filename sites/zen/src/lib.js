@@ -88,8 +88,8 @@ export async function serviceOf(env, city, id) { if (!CITY_KEYS.includes(city) |
 // Without: every admin of the city, so someone can accept the unassigned booking.
 export async function notifyList(env, city, therapistId) {
   const rows = therapistId
-    ? (await env.DB.prepare("SELECT a.email FROM admins a LEFT JOIN therapists t ON t.admin_id = a.id WHERE a.notify = 1 AND a.email LIKE '%@%' AND a.role != 'platform' AND (a.role = 'all' OR t.id = ?)").bind(therapistId).all()).results
-    : (await env.DB.prepare("SELECT email FROM admins WHERE notify = 1 AND email LIKE '%@%' AND role != 'platform' AND (role = 'all' OR role = ?)").bind(city || "").all()).results;
+    ? (await env.DB.prepare("SELECT a.email FROM admins a LEFT JOIN therapists t ON t.admin_id = a.id WHERE a.notify = 1 AND COALESCE(a.disabled, 0) = 0 AND a.email LIKE '%@%' AND a.role != 'platform' AND (a.role = 'all' OR t.id = ?)").bind(therapistId).all()).results
+    : (await env.DB.prepare("SELECT email FROM admins WHERE notify = 1 AND COALESCE(disabled, 0) = 0 AND email LIKE '%@%' AND role != 'platform' AND (role = 'all' OR role = ?)").bind(city || "").all()).results;
   return [...new Set([env.ZEN_NOTIFY_EMAIL, ...rows.map((r) => r.email)].filter(Boolean))];
 }
 // Profile texts in Italian and Arabic, by Workers AI (m2m100). Called after a therapist is saved and hourly for anything missing.
@@ -154,7 +154,7 @@ export async function fillFromWaitlist(env, city, date, slotLabelText, M) {
   const rows = (await env.DB.prepare("SELECT w.*, u.email, u.name, u.lang FROM waitlist w JOIN users u ON u.id = w.user_id WHERE w.city = ? AND w.date = ? AND w.notified_at IS NULL ORDER BY w.created_at LIMIT 3").bind(city, date).all()).results;
   let n = 0;
   for (const w of rows) {
-    const ok = await sendEmail(env, { to: w.email, ...M("waitlist", w.lang && ["en", "it", "ar"].includes(w.lang) ? w.lang : "en", { first: (w.name || "").split(" ")[0], city: CITIES[city].name, date, times: slotLabelText, link: `${env.SITE_URL}/booking?city=${city}&date=${date}` }) });
+    const ok = await sendEmail(env, { to: w.email, ...M("waitlist", pickLang(w.lang), { first: (w.name || "").split(" ")[0], city: CITIES[city].name, date, times: slotLabelText, link: `${env.SITE_URL}/booking?city=${city}&date=${date}` }) });
     await env.DB.prepare("UPDATE waitlist SET notified_at = ? WHERE id = ?").bind(now(), w.id).run();
     await logMessage(env, { user_id: w.user_id, kind: "waitlist", channel: "email", status: ok ? "sent" : "failed", detail: `${city} ${date} (freed by a cancellation)` }).catch(() => {});
     n++;
@@ -185,7 +185,7 @@ export async function currentUser(req, env) {
 export async function currentAdmin(req, env) {
   const t = await verifyPayload(env.SESSION_SECRET, getCookie(req, ADMIN_COOKIE));
   if (!t?.aid) return null;
-  return env.DB.prepare("SELECT * FROM admins WHERE id = ?").bind(t.aid).first();
+  return env.DB.prepare("SELECT * FROM admins WHERE id = ? AND COALESCE(disabled, 0) = 0").bind(t.aid).first();   // a switched-off sign-in is out at once (2026-09-15)
 }
 // New account: referral credit for the invitee, adopt guest bookings made with the same email.
 export async function createUser(env, { email, name, ref, city, lang, google_sub, apple_sub, photo }) {
@@ -193,7 +193,7 @@ export async function createUser(env, { email, name, ref, city, lang, google_sub
   if (ref) referrer = await env.DB.prepare("SELECT id, name FROM users WHERE referral_code = ?").bind(clean(ref, 12).toUpperCase()).first();
   const id = randomId();
   await env.DB.prepare("INSERT INTO users (id, email, name, city, referral_code, referred_by, lang, google_sub, apple_sub, photo) VALUES (?,?,?,?,?,?,?,?,?,?)")
-    .bind(id, email, name, CITY_KEYS.includes(city) ? city : null, referralCode(), referrer?.id || null, ["en", "it", "ar"].includes(lang) ? lang : null, google_sub || null, apple_sub || null, photo || null).run();
+    .bind(id, email, name, CITY_KEYS.includes(city) ? city : null, referralCode(), referrer?.id || null, pickLang(lang), google_sub || null, apple_sub || null, photo || null).run();
   await env.DB.prepare("UPDATE bookings SET user_id = ? WHERE user_id IS NULL AND email = ?").bind(id, email).run();
   if (referrer) {
     const s = await settings(env);
@@ -203,8 +203,10 @@ export async function createUser(env, { email, name, ref, city, lang, google_sub
 }
 // The language a client hears from us in: what they chose on the site for this booking/gift, else their profile, else English.
 export const LANGS = ["en", "it", "ar"];
-export const pickLang = (...cands) => cands.find((l) => LANGS.includes(l)) || "en";
-export async function userLang(env, userId) { if (!userId) return "en"; const u = await env.DB.prepare("SELECT lang FROM users WHERE id = ?").bind(userId).first(); return pickLang(u?.lang); }
+// 2026-09-15 (Ash): Italian only. LANGS_OPEN is what clients get (bookings, emails); the dictionaries for the rest stay. Mirror of ONLY in public/i18n.js.
+export const LANGS_OPEN = ["it"], DEFAULT_LANG = "it";
+export const pickLang = (...cands) => cands.find((l) => LANGS_OPEN.includes(l)) || DEFAULT_LANG;
+export async function userLang(env, userId) { if (!userId) return DEFAULT_LANG; const u = await env.DB.prepare("SELECT lang FROM users WHERE id = ?").bind(userId).first(); return pickLang(u?.lang); }
 // First sign-in through Google/Apple: no magic link was sent, so this is the client's first email from us.
 export async function welcomeEmail(env, user) {
   const first = (user.name || "").split(" ")[0] || "";

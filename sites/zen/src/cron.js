@@ -26,7 +26,7 @@ async function monthly(env) {
   return sendStatements(env, d.toISOString().slice(0, 7));
 }
 export async function sendStatements(env, month) {
-  const admins = (await env.DB.prepare("SELECT * FROM admins WHERE email LIKE '%@%' AND (notify IS NULL OR notify = 1)").all()).results;
+  const admins = (await env.DB.prepare("SELECT * FROM admins WHERE email LIKE '%@%' AND COALESCE(disabled, 0) = 0 AND (notify IS NULL OR notify = 1)").all()).results;
   let n = 0;
   for (const a of admins) {
     const key = month + ":" + a.id;

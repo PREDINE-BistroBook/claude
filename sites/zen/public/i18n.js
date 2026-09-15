@@ -3,7 +3,9 @@
    attributes) and swaps any English string it knows for the current language. JS-built strings use ZenI18n.t("…").
    Strings with variables use {placeholders}. Arabic switches the page to right-to-left and a font with Arabic glyphs. */
 window.ZenI18n = (function () {
-  const LANGS = { en: "English", it: "Italiano", ar: "العربية" };
+  // 2026-09-15 (Ash): Italian only. Put back ["en", "it", "ar"] here (and LANGS_OPEN in src/lib.js) to reopen the languages; the dictionaries stay.
+  const ONLY = (Array.isArray(window.ZEN_LANGS) && window.ZEN_LANGS.length ? window.ZEN_LANGS : ["it"]);
+  const LANGS = Object.fromEntries(Object.entries({ en: "English", it: "Italiano", ar: "العربية" }).filter(([k]) => ONLY.includes(k)));
   const IT = {
     // join (2026-09-13)
     "Join the team": "Unisciti al team", "Work with Zen Recovery.": "Lavora con Zen Recovery.", "Join as a therapist": "Candidati come terapista", "Therapists": "Terapisti",
@@ -782,10 +784,10 @@ window.ZenI18n = (function () {
   const D = { en: {}, it: IT, ar: AR };
 
   function detect() {
-    try { const q = new URLSearchParams(location.search).get("lang"); if (q && D[q]) { localStorage.setItem("zen_lang", q); return q; } } catch {}
-    try { const s = localStorage.getItem("zen_lang"); if (s && D[s]) return s; } catch {}
+    try { const q = new URLSearchParams(location.search).get("lang"); if (q && D[q] && ONLY.includes(q)) { localStorage.setItem("zen_lang", q); return q; } } catch {}
+    try { const s = localStorage.getItem("zen_lang"); if (s && D[s] && ONLY.includes(s)) return s; } catch {}
     const n = (navigator.language || "en").slice(0, 2).toLowerCase();
-    return D[n] ? n : "en";
+    return D[n] && ONLY.includes(n) ? n : ONLY[0];
   }
   let lang = detect();
   const ordinal = (n) => { n = Number(n); if (lang === "it") return n + "ª"; if (lang === "ar") return String(n); const r = n % 100; return n + (r >= 11 && r <= 13 ? "th" : { 1: "st", 2: "nd", 3: "rd" }[n % 10] || "th"); };
@@ -806,9 +808,9 @@ window.ZenI18n = (function () {
     root.querySelectorAll("[placeholder],[alt],[title],[aria-label]").forEach((el) => { for (const a of ATTRS) { if (!el.hasAttribute(a)) continue; const key = "__i18n_" + a; const orig = el[key] !== undefined ? el[key] : (el[key] = el.getAttribute(a)); el.setAttribute(a, (D[lang] && D[lang][orig]) || orig); } });
     const swEl = root.querySelectorAll ? document.querySelectorAll(".lang-switch [data-lang]") : []; swEl.forEach((b) => b.setAttribute("aria-pressed", b.dataset.lang === lang));
   }
-  function set(l) { if (!D[l]) return; lang = l; try { localStorage.setItem("zen_lang", l); } catch {} apply(); document.dispatchEvent(new CustomEvent("zen:lang", { detail: l })); }
+  function set(l) { if (!D[l] || !ONLY.includes(l)) return; lang = l; try { localStorage.setItem("zen_lang", l); } catch {} apply(); document.dispatchEvent(new CustomEvent("zen:lang", { detail: l })); }
   // language switcher markup, used by every page
-  function switcher() { return `<span class="lang-switch no-i18n" role="group" aria-label="Language">${Object.keys(LANGS).map((l) => `<button type="button" data-lang="${l}" aria-pressed="${l === lang}" lang="${l}">${l === "ar" ? "عربي" : l.toUpperCase()}</button>`).join("")}</span>`; }
+  function switcher() { if (Object.keys(LANGS).length < 2) return ""; return `<span class="lang-switch no-i18n" role="group" aria-label="Language">${Object.keys(LANGS).map((l) => `<button type="button" data-lang="${l}" aria-pressed="${l === lang}" lang="${l}">${l === "ar" ? "عربي" : l.toUpperCase()}</button>`).join("")}</span>`; }
   document.addEventListener("click", (e) => { const b = e.target.closest(".lang-switch [data-lang]"); if (b) set(b.dataset.lang); });
   document.addEventListener("DOMContentLoaded", () => apply());
   return { t, apply, set, switcher, ordinal, ordSuffix, get lang() { return lang; }, LANGS };
