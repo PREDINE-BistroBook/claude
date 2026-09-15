@@ -123,7 +123,7 @@ async function cityMeta(env) { const c = await catalog(env); return Object.fromE
 // What the website reads on load: services and prices per city (from the admin), address/team/WhatsApp/Maps per city (settings)
 async function publicCatalog(env) {
   const [c, st, off] = await Promise.all([catalog(env), settings(env), therapistOffering(env, null)]); const tp = off.prices;
-  return json({ cities: Object.fromEntries(CITY_KEYS.map((k) => [k, { name: c[k].name, currency: c[k].currency.toUpperCase(), address: st.address[k] ? st.address[k].split("\n").map((l) => l.trim()).filter(Boolean) : null, team: st.team[k] || null, whatsapp: st.whatsapp[k] || null, gmaps: st.gmaps[k] || null,
+  return json({ cities: Object.fromEntries(st.cities_open.map((k) => [k, { name: c[k].name, currency: c[k].currency.toUpperCase(), address: st.address[k] ? st.address[k].split("\n").map((l) => l.trim()).filter(Boolean) : null, team: st.team[k] || null, whatsapp: st.whatsapp[k] || null, gmaps: st.gmaps[k] || null,
     services: Object.values(c[k].services).map((s) => ({ id: s.id, name: s.short, dur: s.minutes, price: s.amount, desc: s.description, i18n: s.i18n || null, prices: tp[s.id] || null, not_offered: off.off[s.id] || null, therapist_id: s.therapist_id || null, photo: s.photo ? `/api/service-photo/${s.id}?v=${encodeURIComponent((s.updated_at || "").replace(/\D/g, ""))}` : null })) }])) }, 200, { "cache-control": "no-store" });
 }
 const INTAKE_LISTS = ["goals", "pain", "health"], INTAKE_STR = ["activity", "sport", "experience", "health_notes", "contact", "time_pref", "completed_at"];
@@ -171,7 +171,7 @@ async function clientLog(req, env) {
 async function status(env, req) {
   const st = await settings(env);
   const f = authFlags(env);
-  return json({ geo: { country: req?.cf?.country || null, city: req?.cf?.city || null },   // 2026-09-14: the booking page keeps a visitor in their own country's rooms
+  return json({ geo: { country: req?.cf?.country || null, city: req?.cf?.city || null }, cities: st.cities_open,   // 2026-09-15: the rooms open to clients   // 2026-09-14: the booking page keeps a visitor in their own country's rooms
     live: isLive(env) || fawryOn(env), preview: !isLive(env) && !fawryOn(env), fawry: fawryOn(env), pay: { egp: payProvider(env, "egp"), eur: payProvider(env, "eur") }, google: Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET), apple: f.apple, sms: f.sms,
     settings: { loyalty_every: st.loyalty_every, referral_pct: st.referral_pct, birthday_pct: st.birthday_pct, package_pct: st.package_pct }, rules: st.rules, gmaps: st.gmaps, whatsapp: st.whatsapp, review: st.review });
 }
@@ -336,6 +336,7 @@ async function checkout(req, env) {
   const cityKey = b.city, city = CITIES[cityKey];
   const svc = city ? await serviceOf(env, cityKey, clean(b.service, 40)) : null;
   if (!city || !svc) return json({ error: "Unknown city or session." }, 400);
+  if (!(await settings(env)).cities_open.includes(cityKey)) return json({ error: `Zen isn't open in ${city.name} right now.` }, 400);
   const name = clean(b.name, 80), email = normEmail(b.email), phone = clean(b.phone, 40), note = clean(b.note, 500), date = clean(b.date, 10);
   if (!name || !email || !phone || !isDate(date)) return json({ error: "Please fill in your name, WhatsApp number, email and a day." }, 400);
   if (date < localNow(city.tz).date) return json({ error: "That day has already passed." }, 400);
@@ -452,7 +453,8 @@ async function restore(env, bk) {
 
 // ---------- reviews the owner shows on the home page (2026-09-13): real ratings + words left by clients after a done session ----------
 async function publicReviews(env) {
-  const r = await env.DB.prepare("SELECT b.name, b.city, b.service_name, b.rating, b.feedback, b.lang, b.date FROM bookings b WHERE b.featured = 1 AND b.rating >= 4 AND COALESCE(b.feedback, '') != '' ORDER BY b.done_at DESC, b.date DESC LIMIT 12").all();
+  const open = (await settings(env)).cities_open;
+  const r = await env.DB.prepare(`SELECT b.name, b.city, b.service_name, b.rating, b.feedback, b.lang, b.date FROM bookings b WHERE b.featured = 1 AND b.rating >= 4 AND COALESCE(b.feedback, '') != '' AND b.city IN (${open.map(() => "?").join(",")}) ORDER BY b.done_at DESC, b.date DESC LIMIT 12`).bind(...open).all();
   return json({ reviews: r.results.map((x) => ({ first: (x.name || "").split(" ")[0], city: x.city, service: (x.service_name || "").split(" · ")[0], rating: x.rating, text: x.feedback, lang: x.lang || "en", when: x.date })) }, 200, { "cache-control": "public, max-age=300" });
 }
 
@@ -797,6 +799,7 @@ async function adminSaveSettings(req, env, admin) {
     if (b.address?.[c] !== undefined) stmts.push(env.DB.prepare("INSERT OR REPLACE INTO settings VALUES (?, ?)").bind(`addr_${c}`, String(b.address[c] ?? "").replace(/[^\S\n]+/g, " ").split("\n").map((l) => clean(l, 80)).filter(Boolean).slice(0, 4).join("\n")));
     if (b.team?.[c] !== undefined) stmts.push(env.DB.prepare("INSERT OR REPLACE INTO settings VALUES (?, ?)").bind(`team_${c}`, clean(b.team[c], 120)));
   }
+  if (Array.isArray(b.cities_open)) { const f = b.cities_open.filter((k) => CITY_KEYS.includes(k)); if (!f.length) return json({ error: "Keep at least one room open." }, 400); stmts.push(env.DB.prepare("INSERT OR REPLACE INTO settings VALUES ('cities_open', ?)").bind(JSON.stringify(f))); }
   await env.DB.batch(stmts);
   return json(await settings(env));
 }

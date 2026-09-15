@@ -45,7 +45,14 @@ const cards = await page.$$("#team-list .team-card"); ok("team: the seeded cards
 await page.locator("#team-list .team-card", { hasText: "Anas" }).click(); await page.waitForTimeout(500); ok("captain: the owner's dialog has 'Trained by' with the rest of the team, not Anas himself", await page.isVisible("#th-captain-wrap") && (await page.$$("#th-captain option")).length >= 6 && !/Anas/.test(await page.textContent("#th-captain")), await page.textContent("#th-captain"));
 await page.selectOption("#th-captain", "th2"); await page.click("#th-save"); await page.waitForTimeout(1200); ok("captain: saved: Anas's card now says trained by Hesham", /Anas[\s\S]*trained by Hesham/.test((await page.textContent("#team-list")).replace(/\s+/g, " ")), (await page.locator("#team-list .team-card", { hasText: "Anas" }).textContent()).replace(/\s+/g, " ").slice(0, 300));
 { const t = await (await fetch(H + "/api/team?city=cairo")).json(); ok("captain: the public team API carries it", t.therapists.find((x) => x.name.startsWith("Anas"))?.captain_name?.startsWith("Hesham"), t.therapists.map((x) => [x.name, x.captain_name])); }
-await tab("settings"); ok("settings: the captain share field reads 10", (await page.inputValue("#s-captain")) === "10"); await tab("team");
+await tab("settings"); ok("settings: the captain share field reads 10", (await page.inputValue("#s-captain")) === "10");
+ok("rooms: the three room checkboxes are ticked", (await page.$$("#s-cities input:checked")).length === 3);
+await page.uncheck('#s-cities input[value="cairo"]'); await page.uncheck('#s-cities input[value="dahab"]'); await page.click('#rules-form button[type="submit"]'); await page.waitForTimeout(900);
+{ const st = await (await fetch(H + "/api/status")).json(); ok("rooms: saving closes them for clients", st.cities.join() === "florence", st.cities); }
+await page.goto(H + "/admin.html", { waitUntil: "load" }); await page.waitForTimeout(1000); ok("rooms: the overview says Cairo and Dahab are closed to clients", await page.isVisible("#closed-note") && /Cairo and Dahab/.test(await page.textContent("#closed-note")), await page.textContent("#closed-note").catch(() => ""));
+await tab("settings"); await page.check('#s-cities input[value="cairo"]'); await page.check('#s-cities input[value="dahab"]'); await page.click('#rules-form button[type="submit"]'); await page.waitForTimeout(900);
+{ const st = await (await fetch(H + "/api/status")).json(); ok("rooms: ticking them reopens", st.cities.length === 3, st.cities); }
+await tab("team");
 await page.click("#add-therapist"); await page.waitForTimeout(400); ok("team: add dialog with pin controls + radius", await openDlg("#dlg-th") && await page.isVisible("#th-locate") && await page.isVisible("#th-lat") && await page.isVisible("#th-radius"));
 await page.click("#th-cancel"); await page.waitForTimeout(300);
 await page.locator("#team-list .team-card", { hasText: "Adham" }).click(); await page.waitForTimeout(400);

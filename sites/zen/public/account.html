@@ -433,6 +433,7 @@ const initials = (n) => (n || "?").split(" ").map((w) => w[0]).slice(0, 2).join(
 const fmtDate = (d) => new Date(d + "T12:00:00").toLocaleDateString(LOCALE(), { weekday: "short", day: "numeric", month: "short" });
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const ROOM_WA = { cairo: "201145638166", dahab: "201145638166", florence: "" };
+let OPEN_CITIES = ["cairo", "dahab", "florence"];   // from /api/status
 let me = null, bookingsCache = [], checkinsCache = [], STATUS = {}, TEAM = [];
 $("#lang-slot").innerHTML = I.switcher();
 
@@ -443,6 +444,7 @@ async function boot() {
   if (params.get("error") === "google") $("#google-err").hidden = false;
   $("#city-list").innerHTML = [...G.EGYPT_SUGGEST, ...G.ITALY_SUGGEST].map((c) => `<option value="${c}">`).join("");
   const [data, status] = await Promise.all([ZenAPI("GET", "/api/me").catch(() => ({ user: null })), ZenAPI("GET", "/api/status").catch(() => ({}))]);
+  if (Array.isArray(status.cities) && status.cities.length) { OPEN_CITIES = status.cities; ["cairo", "dahab", "florence"].filter((k) => !OPEN_CITIES.includes(k)).forEach((k) => { $$(`option[value="${k}"]`).forEach((el) => el.remove()); $$(`input[type="radio"][value="${k}"]`).forEach((el) => { (el.closest("label") || el).hidden = true; }); }); }   // closed rooms (2026-09-15)
   if (status.settings) { Object.assign(G.SETTINGS, status.settings); if (params.get("ref")) $("#ref-note").textContent = t("You've been invited: your first session is {pct}% off once you sign in.", { pct: G.SETTINGS.referral_pct }); }
   if (ZenAPI.isDemo()) { $("#demo-banner").hidden = false; $("#demo-login").hidden = false; }
   const refq = (params.get("ref") ? "&ref=" + encodeURIComponent(params.get("ref")) : "");
@@ -487,7 +489,7 @@ function collect() {
 }
 function updateRec() {
   collect();
-  const r = G.recommend(W.country, W.city_text);
+  const r = G.recommend(W.country, W.city_text, OPEN_CITIES);
   const box = $("#w-rec"), pick = $("#w-pick-city");
   if (!W.country) { box.hidden = true; pick.hidden = true; return; }
   if (r.city) { W.nearest = r.city; box.hidden = false; pick.hidden = true; box.innerHTML = `<div class="rec"><div><span class="eyebrow" style="color:var(--mark-soft)">Nearest room</span><b>${cityName(r.city)}</b><p>${esc(r.reason)}</p></div></div>`; }
@@ -556,7 +558,7 @@ function show(data) {
   $("#credits").innerHTML = cr.length ? cr.map((c) => `<div class="reward"><b>${c.pct === 100 ? t("Free session") : t("{pct}% off", { pct: c.pct })}</b><span class="muted" style="flex:1;font-size:.9rem">${esc(c.reason)}${c.expires_at ? ` · ${t("until {date}", { date: fmtDate(c.expires_at) })}` : ""}</span><a class="btn small" href="booking.html${room ? "?city=" + room : ""}">${t("Use it")}</a></div>`).join("") : `<p class="tiny">${t("No rewards waiting right now.")}</p>`;
   $("#invite-title").textContent = t("{pct}% off, for both of you", { pct: data.settings.referral_pct });
   $("#ref-code").textContent = u.referral_code; $("#share-url").textContent = data.share_url;
-  $("#share-wa").href = "https://wa.me/?text=" + encodeURIComponent(t("Try Zen Recovery with me — cupping and recovery in Cairo, Dahab and Florence. We both get {pct}% off with this link: {url}", { pct: data.settings.referral_pct, url: data.share_url }));
+  $("#share-wa").href = "https://wa.me/?text=" + encodeURIComponent(t("Try Zen Recovery with me — cupping and recovery. We both get {pct}% off with this link: {url}", { pct: data.settings.referral_pct, url: data.share_url }));
   if (data.referrer) { $("#referrer-line").textContent = t("You joined through {name}.", { name: data.referrer }); $("#referrer-line").hidden = false; }
   $("#friends").innerHTML = data.invited.map((f) => `<li><span>${esc(f.name)}</span><span class="tiny">${f.sessions ? (f.sessions === 1 ? t("1 session") : t("{n} sessions", { n: f.sessions })) : t("signed up, not booked yet")}</span></li>`).join("");
   $("#p-name").value = u.name || ""; $("#p-phone").value = u.phone || ""; $("#p-email").value = u.email; $("#p-birthday").value = u.birthday || "";
@@ -603,7 +605,7 @@ async function loadWaitlist() {
 }
 function renderAvatar(el, u) { el.innerHTML = u.photo ? `<img src="${u.photo}" alt="">` : initials(u.name); }
 $("#p-country").addEventListener("change", profileHint); $("#p-city-text").addEventListener("input", profileHint);
-function profileHint() { const r = G.recommend($("#p-country").value, $("#p-city-text").value); $("#p-rec-hint").textContent = r.city ? t("Nearest to you: {city}.", { city: cityName(r.city) }) : ""; if (r.city) $("#p-city").value = r.city; }
+function profileHint() { const r = G.recommend($("#p-country").value, $("#p-city-text").value, OPEN_CITIES); $("#p-rec-hint").textContent = r.city ? t("Nearest to you: {city}.", { city: cityName(r.city) }) : ""; if (r.city) $("#p-city").value = r.city; }
 
 /* sessions */
 const label = (s) => t({ paid: "Reserved · hour to confirm", confirmed: "Confirmed", done: "Done", cancelled: "Cancelled", no_show: "Missed", review: "Waiting for a therapist's OK" }[s] || s);
@@ -742,7 +744,7 @@ async function loadChatList() {
   if (OPEN) { const cur = CHATS.find((c) => c.id === OPEN.id); if (cur) { const wasRead = OPEN.their_read_at; OPEN = cur; if (cur.their_read_at !== wasRead) renderThread(); } }
 }
 function openPicker() {
-  const room = me?.user?.nearest_city || me?.user?.city || "cairo";
+  const room = me?.user?.nearest_city || me?.user?.city || OPEN_CITIES[0] || "florence";
   $("#chat-pick-list").innerHTML = CAN_MSG.map((p) => `<button type="button" class="chat-item" data-with="${esc(p.id)}"><span class="ch-av">${chatAv(p.photo, p.name)}</span><span class="who"><span class="l1"><b>${esc(p.name)}</b></span><span class="l2"><span>${cityName(p.city)}${p.title ? " · " + esc(p.title) : ""}${p.booked ? " · " + t("booked before") : ""}</span></span></span></button>`).join("") + `<button type="button" class="chat-item" data-with="room"><span class="ch-av">Z</span><span class="who"><span class="l1"><b>${t("Zen Recovery · {city}", { city: cityName(room) })}</b></span><span class="l2"><span>${t("The room")}</span></span></span></button>`;
   $$("#chat-pick-list [data-with]").forEach((b) => (b.onclick = () => { $("#chat-pick").close(); openChatWith(b.dataset.with); }));
   $("#chat-pick").showModal();
@@ -754,7 +756,7 @@ async function loadChats() {
   if (!chatPoll) chatPoll = setInterval(() => { if (document.hidden || $("#tab-messages").hidden || chatBusy) return; if (OPEN) refreshThread(true); else loadChatList(); }, OPEN ? 10000 : 20000);
 }
 async function openChatWith(who) {
-  try { const r = await ZenAPI("POST", "/api/me/chats", who === "room" ? { city: me?.user?.nearest_city || me?.user?.city || "cairo" } : { therapist_id: who }); await loadChatList(); await openChat(r.id); } catch (ex) { chatErr(ex.message); }
+  try { const r = await ZenAPI("POST", "/api/me/chats", who === "room" ? { city: me?.user?.nearest_city || me?.user?.city || OPEN_CITIES[0] || "florence" } : { therapist_id: who }); await loadChatList(); await openChat(r.id); } catch (ex) { chatErr(ex.message); }
 }
 function chatErr(msg) { const el = $("#chat-err"); el.textContent = msg; el.hidden = false; setTimeout(() => (el.hidden = true), 4000); }
 async function openChat(id) {

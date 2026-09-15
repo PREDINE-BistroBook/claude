@@ -34,6 +34,7 @@ panels.addEventListener("click", (e) => {
   choose(btn.dataset.city);
 });
 function choose(key, quiet) {
+  if (!cityOpen(key)) return;   // a closed room (2026-09-15)
   if (panels.classList.contains("has-choice") && city === key) return; // tapping the chosen card again does nothing
   city = key;
   const c = CITIES[key];
@@ -206,7 +207,7 @@ function renderPrep() {
 { const q = new URLSearchParams(location.search); const pre = q.get("city");
   if (q.get("date") && /^\d{4}-\d{2}-\d{2}$/.test(q.get("date"))) $("#date").value = q.get("date");
   if (q.get("gift")) $("#gift-code").value = q.get("gift");
-  if (pre && CITIES[pre]) setTimeout(() => geoReady().then(() => { if (!geoAllows(pre)) { PRE_BLOCKED = pre; return; } choose(pre, true); if (q.get("gift")) applyGift(); if (q.get("svc")) preselectService(q.get("svc")); }), 50); }
+  if (pre && CITIES[pre]) setTimeout(() => geoReady().then(() => { if (!cityOpen(pre)) return; if (!geoAllows(pre)) { PRE_BLOCKED = pre; return; } choose(pre, true); if (q.get("gift")) applyGift(); if (q.get("svc")) preselectService(q.get("svc")); }), 50); }
 let SVC_PRE = null;
 function preselectService(method) { SVC_PRE = method; const c = CITIES[city]; const hit = c?.services.find(s => methodOf(s.name) === method); if (hit) { const el = $("#svc-" + hit.id); if (el) { el.checked = true; updateSummary(); renderPrep(); } } }
 
@@ -308,7 +309,7 @@ $("#booking").addEventListener("submit", async (e) => {
 /* booking rules: numbers from the owner's settings; which provider takes the money per currency */
 let PAY = {};
 // the country comes with the status; anything that picks a city on its own (a ?city= link, the profile's nearest room) waits for it, at most 2.5 s
-var GEO_P = Promise.race([fetch("/api/status").then((r) => r.json()).then((s) => { PAY = s.pay || {}; GEO = s.geo || null; applyGeo(); if (s.rules) $$("[data-rule]").forEach((el) => { el.textContent = s.rules[el.dataset.rule]; }); if (city) updateSummary(); }).catch(() => {}), new Promise((res) => setTimeout(res, 2500))]);
+var GEO_P = Promise.race([fetch("/api/status").then((r) => r.json()).then((s) => { PAY = s.pay || {}; GEO = s.geo || null; if (Array.isArray(s.cities) && s.cities.length) window.Zen.OPEN = s.cities; applyGeo(); if (s.rules) $$("[data-rule]").forEach((el) => { el.textContent = s.rules[el.dataset.rule]; }); if (city) updateSummary(); }).catch(() => {}), new Promise((res) => setTimeout(res, 2500))]);
 function geoReady() { return GEO_P || Promise.resolve(); }
 
 /* where it hurts: the same body map as the client's intake, tap to toggle; the therapist sees it on the booking */
@@ -354,16 +355,19 @@ $("#booking").addEventListener("keydown", (e) => { if (e.key === "Enter" && e.ta
 var GEO = GEO || null, PRE_BLOCKED = PRE_BLOCKED || null;
 const GEO_ROOMS = { EG: ["cairo", "dahab"], IT: ["florence"] };
 function travelling() { try { return localStorage.getItem("zen:travel") === "1"; } catch (_) { return false; } }
-function geoAllowed() { const rooms = GEO && GEO.country && GEO_ROOMS[GEO.country]; return rooms && !travelling() ? rooms : null; }
-function geoAllows(k) { const a = geoAllowed(); return !a || a.includes(k); }
+function cityOpen(k) { return !(window.Zen && Zen.OPEN) || Zen.OPEN.includes(k); }
+function geoAllowed() { const rooms = ((GEO && GEO.country && GEO_ROOMS[GEO.country]) || []).filter(cityOpen); return rooms.length && !travelling() ? rooms : null; }
+function geoAllows(k) { if (!cityOpen(k)) return false; const a = geoAllowed(); return !a || a.includes(k); }
 function geoNote(shake) {
   let el = $("#geo-note"); const a = geoAllowed();
   if (!el) { el = document.createElement("p"); el.id = "geo-note"; el.className = "geo-note"; panels.insertAdjacentElement("afterend", el); }
-  if (!a) { el.hidden = !GEO?.country || !GEO_ROOMS[GEO.country]; el.innerHTML = GEO?.country && GEO_ROOMS[GEO.country] ? `${t("Showing all cities.")} <a href="#" id="geo-home">${t("Back to the rooms near me")}</a>` : ""; $("#geo-home")?.addEventListener("click", (e) => { e.preventDefault(); try { localStorage.removeItem("zen:travel"); } catch (_) {} applyGeo(); }); return; }
-  const here = GEO.country === "EG" ? t("You're in Egypt, so we show the rooms in Egypt: Cairo and Dahab.") : t("You're in Italy, so we show the studio in Florence.");
-  const also = GEO.country === "EG" ? t("Zen also has a studio in Florence, Italy.") : t("Zen also has rooms in Cairo and Dahab, Egypt.");
-  el.hidden = false; el.innerHTML = `${here} ${also} <a href="#" id="geo-all">${t("Travelling there? Show all cities")}</a>`;
-  $("#geo-all").addEventListener("click", (e) => { e.preventDefault(); try { localStorage.setItem("zen:travel", "1"); } catch (_) {} applyGeo(); if (PRE_BLOCKED) { const p = PRE_BLOCKED; PRE_BLOCKED = null; choose(p); } });
+  const near = ((GEO?.country && GEO_ROOMS[GEO.country]) || []).filter(cityOpen);
+  if (!a) { el.hidden = !near.length; el.innerHTML = near.length ? `${t("Showing all cities.")} <a href="#" id="geo-home">${t("Back to the rooms near me")}</a>` : ""; $("#geo-home")?.addEventListener("click", (e) => { e.preventDefault(); try { localStorage.removeItem("zen:travel"); } catch (_) {} applyGeo(); }); return; }
+  const others = Object.keys(CITIES).filter((k) => cityOpen(k) && !a.includes(k)), line = (ks) => ks.map((k) => t(CITIES[k].name)).join(", ");
+  const here = GEO.country === "EG" ? t("You're in Egypt, so we show the rooms in Egypt: {list}.", { list: line(a) }) : t("You're in Italy, so we show the rooms in Italy: {list}.", { list: line(a) });
+  const also = others.length ? t("Zen also has rooms in {list}.", { list: line(others) }) : "";
+  el.hidden = false; el.innerHTML = `${here} ${also} ${others.length ? `<a href="#" id="geo-all">${t("Travelling there? Show all cities")}</a>` : ""}`;
+  $("#geo-all")?.addEventListener("click", (e) => { e.preventDefault(); try { localStorage.setItem("zen:travel", "1"); } catch (_) {} applyGeo(); if (PRE_BLOCKED) { const p = PRE_BLOCKED; PRE_BLOCKED = null; if (cityOpen(p)) choose(p); } });
   if (shake) { el.classList.remove("pulse"); void el.offsetWidth; el.classList.add("pulse"); el.scrollIntoView({ block: "center", behavior: reduced ? "auto" : "smooth" }); }
 }
 function applyGeo() {

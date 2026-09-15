@@ -113,7 +113,7 @@
     </div>
   </section>
 </main>
-<footer><span>© <span id="year"></span> Zen Recovery · Cairo, Dahab, Florence</span><span>Cupping is a complementary therapy and not a substitute for medical care. <a href="index.html">Home</a> · <a href="account.html">My account</a></span></footer>
+<footer><span>© <span id="year"></span> Zen Recovery · <span data-cities-line data-sep=", ">Florence</span></span><span>Cupping is a complementary therapy and not a substitute for medical care. <a href="index.html">Home</a> · <a href="account.html">My account</a></span></footer>
 
 <script src="i18n.js"></script>
 <script src="guide.js"></script>
@@ -141,7 +141,7 @@ function render() {
   $("#a-before").innerHTML = [...G.ADVICE.before.general.slice(0, 3), ...(G.ADVICE.before[m.key] || []).slice(0, 3)].map((x) => `<li>${esc(t(x))}</li>`).join("");
   $("#a-after").innerHTML = [...G.ADVICE.after.general.slice(0, 3), ...(G.ADVICE.after[m.key] || []).slice(0, 3)].map((x) => `<li>${esc(t(x))}</li>`).join("");
   $("#a-skip").innerHTML = G.ADVICE.skip.slice(0, 4).map((x) => `<li>${esc(t(x))}</li>`).join("");
-  $("#b-title").textContent = t("{method} in Cairo, Dahab or Florence.", { method: t(m.title) });
+  $("#b-title").textContent = t("{method}, step by step.", { method: t(m.title) });
   $("#b-cities").innerHTML = Object.entries(CITY).map(([k, n]) => `<a href="booking.html?city=${k}&svc=${id}"><i style="background:var(--${k})"></i>${t("Book in {city}", { city: t(n) })}</a>`).join("");
   $("#others").innerHTML = M.ORDER.map((k) => `<a href="method.html?m=${k}" ${k === id ? 'aria-current="page"' : ""}><b>${esc(t(M.METHODS[k].title))}</b><span>${esc(t(M.METHODS[k].tagline))}</span></a>`).join("");
   const cur = $("#others a[aria-current]"); if (cur) $("#others").scrollLeft = Math.max(0, cur.offsetLeft - 16); // phones: the current chip starts in view
@@ -167,6 +167,7 @@ fetch("/api/me", { credentials: "same-origin" }).then((r) => (r.headers.get("con
   m.animate(gsap, tl);
 })();
 </script>
+<script>fetch("/api/status").then((r) => r.json()).then((s) => { const N = { cairo: "Cairo", dahab: "Dahab", florence: "Florence" }; document.querySelectorAll("[data-cities-line]").forEach((el) => { el.textContent = (s.cities || Object.keys(N)).map((k) => N[k]).join(el.dataset.sep || ", "); }); }).catch(() => {});</script>
 <script src="motion.js"></script>
 </body>
 </html>

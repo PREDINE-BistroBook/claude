@@ -75,8 +75,25 @@ fetch("/api/catalog").then(r => (r.headers.get("content-type") || "").includes("
   for (const [k, c] of Object.entries(d.cities)) { if (!CITIES[k]) continue; if (c.services?.length) CITIES[k].services = c.services; if (c.address?.length) CITIES[k].address = c.address; if (c.team) CITIES[k].team = c.team; if (c.whatsapp) CITIES[k].whatsapp = c.whatsapp; }
   Zen.emit("catalog", d);
 }).catch(() => {});
-fetch("/api/status").then(r => (r.headers.get("content-type") || "").includes("json") ? r.json() : {}).then(s => { ST = { ...ST, ...s }; applySettings(s.settings); Zen.emit("status", ST); }).catch(() => applySettings());
-document.addEventListener("zen:lang", () => { applySettings(); Zen.emit("lang", I.lang); });
+fetch("/api/status").then(r => (r.headers.get("content-type") || "").includes("json") ? r.json() : {}).then(s => { ST = { ...ST, ...s }; applySettings(s.settings); applyCities(s.cities); Zen.emit("status", ST); }).catch(() => applySettings());
+document.addEventListener("zen:lang", () => { applySettings(); applyCities(); Zen.emit("lang", I.lang); });
+
+/* ---------- rooms open to clients (2026-09-15, Ash: "take out the Egyptian side… keep it hidden in case they ever come back") ----------
+   /api/status says which rooms are open. Anything marked data-only="cairo,dahab" hides unless one of those is open; [data-cities-line]
+   gets the open rooms as text; city cards, <option>s and radios for a closed room are removed; the home page's JSON-LD lists open rooms. */
+const T_ = (k, v) => (window.ZenI18n ? window.ZenI18n.t(k, v) : k);
+function citiesLine(keys, sep) { const names = keys.map((k) => T_(CITIES[k]?.name || k)); if (sep) return names.join(sep); if (names.length <= 1) return names.join(""); return T_("{list} and {last}", { list: names.slice(0, -1).join(", "), last: names[names.length - 1] }); }
+function applyCities(open) {
+  if (Array.isArray(open) && open.length) Zen.OPEN = open;
+  const O = Zen.OPEN || Object.keys(CITIES), closed = Object.keys(CITIES).filter((k) => !O.includes(k));
+  $$("[data-only]").forEach((el) => { el.hidden = !el.dataset.only.split(",").some((k) => O.includes(k.trim())); });
+  $$("[data-cities-line]").forEach((el) => { el.textContent = citiesLine(O, el.dataset.sep || null); });
+  closed.forEach((k) => { $$(`.panel[data-city="${k}"], option[value="${k}"]`).forEach((el) => el.remove()); $$(`input[type="radio"][value="${k}"]`).forEach((el) => { (el.closest("label") || el).hidden = true; }); });
+  const panels = $("#panels"); if (panels) panels.dataset.n = String(panels.querySelectorAll(".panel").length);
+  if (/^\/(index\.html)?$/.test(location.pathname)) { let ld = $("#ld-org"); if (!ld) { ld = document.createElement("script"); ld.type = "application/ld+json"; ld.id = "ld-org"; document.head.appendChild(ld); }
+    ld.textContent = JSON.stringify({ "@context": "https://schema.org", "@type": "Organization", name: "Zen Recovery", url: "https://zenrecovery.club/", logo: "https://zenrecovery.club/img/logo-social.png", sameAs: O.some((k) => CITIES[k]?.currency === "EGP") ? ["https://instagram.com/zen_recovery10", "https://instagram.com/recoverywithshaarawy"] : ["https://instagram.com/zen_recovery10"], department: O.map((k) => ({ "@type": "HealthAndBeautyBusiness", name: "Zen Recovery · " + CITIES[k].name, url: "https://zenrecovery.club/booking?city=" + k, address: { "@type": "PostalAddress", addressLocality: CITIES[k].name, addressCountry: CITIES[k].currency === "EGP" ? "EG" : "IT" } })) }); }
+  Zen.emit("cities", O);
+}
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 document.documentElement.classList.add("js");
 $("#year").textContent = new Date().getFullYear();
