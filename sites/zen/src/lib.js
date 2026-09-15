@@ -185,7 +185,11 @@ export async function currentUser(req, env) {
 export async function currentAdmin(req, env) {
   const t = await verifyPayload(env.SESSION_SECRET, getCookie(req, ADMIN_COOKIE));
   if (!t?.aid) return null;
-  return env.DB.prepare("SELECT * FROM admins WHERE id = ? AND COALESCE(disabled, 0) = 0").bind(t.aid).first();   // a switched-off sign-in is out at once (2026-09-15)
+  const a = await env.DB.prepare("SELECT * FROM admins WHERE id = ? AND COALESCE(disabled, 0) = 0").bind(t.aid).first();   // a switched-off sign-in is out at once (2026-09-15)
+  // 2026-09-15 (Ash: "anything related to Cairo or Dahab should be taken"): a closed room is invisible to the team's admin as well, in every list
+  // and every total; the platform account still sees everything. `open` is the list of rooms this admin may see, or undefined when all are open.
+  if (a && a.role !== "platform") { const open = (await settings(env)).cities_open; if (open.length < CITY_KEYS.length) a.open = open; }
+  return a;
 }
 // New account: referral credit for the invitee, adopt guest bookings made with the same email.
 export async function createUser(env, { email, name, ref, city, lang, google_sub, apple_sub, photo }) {
@@ -204,7 +208,7 @@ export async function createUser(env, { email, name, ref, city, lang, google_sub
 // The language a client hears from us in: what they chose on the site for this booking/gift, else their profile, else English.
 export const LANGS = ["en", "it", "ar"];
 // 2026-09-15 (Ash): Italian only. LANGS_OPEN is what clients get (bookings, emails); the dictionaries for the rest stay. Mirror of ONLY in public/i18n.js.
-export const LANGS_OPEN = ["it"], DEFAULT_LANG = "it";
+export const LANGS_OPEN = globalThis.ZEN_LANGS_OPEN || ["it"], DEFAULT_LANG = LANGS_OPEN[0];   // a test host may widen it (globalThis.ZEN_LANGS_OPEN) before importing the Worker
 export const pickLang = (...cands) => cands.find((l) => LANGS_OPEN.includes(l)) || DEFAULT_LANG;
 export async function userLang(env, userId) { if (!userId) return DEFAULT_LANG; const u = await env.DB.prepare("SELECT lang FROM users WHERE id = ?").bind(userId).first(); return pickLang(u?.lang); }
 // First sign-in through Google/Apple: no magic link was sent, so this is the client's first email from us.

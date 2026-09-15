@@ -244,8 +244,10 @@ await go("account.html"); await page.waitForTimeout(900); await page.click('[rol
 await go("team.html"); ok("team: nobody shows 'trained by' until the owner links someone", (await page.$$(".tm-trained")).length === 0);
 
 // 8j. rooms open to clients (2026-09-15): Egypt closed → every Egyptian thing disappears from the pages, Florence stays
-{ const set = async (list) => api("/api/admin/settings", { method: "PUT", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ cities_open: list }) });
-  const s1 = await set(["florence"]); ok("rooms: the owner closes Cairo and Dahab", s1.status === 200 && s1.body.cities_open.join() === "florence", s1.body);
+{ const lg = await api("/api/admin/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: "ash@x.com", password: "Ash-pass-12345" }) }); const ashCookie = (lg.h.getSetCookie?.() || []).map((c) => c.split(";")[0]).join("; ");
+  const own = await api("/api/admin/rooms", { method: "PUT", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ cities_open: ["florence"] }) }); ok("rooms: the owner is refused on the rooms switch", own.status === 403, own.status);
+  const set = async (list) => api("/api/admin/rooms", { method: "PUT", headers: { "content-type": "application/json", cookie: ashCookie }, body: JSON.stringify({ cities_open: list }) });
+  const s1 = await set(["florence"]); ok("rooms: the platform account closes Cairo and Dahab", s1.status === 200 && s1.body.cities_open.join() === "florence", s1.body);
   await go("index.html"); await page.waitForTimeout(600);
   ok("rooms: home eyebrow and marquee show Florence only, the Cairo room photo is gone, the footer line reads Florence", await page.isHidden('.hero .eyebrow [data-only="cairo"]') && await page.isVisible('.hero .eyebrow [data-only="florence"]') && await page.isHidden('figure[data-only="cairo"]') && (await page.$$eval("footer [data-cities-line]", (els) => els.map((e) => e.textContent.trim()))).every((x) => x === "Florence"), await page.$$eval("footer [data-cities-line]", (els) => els.map((e) => e.textContent)));
   ok("rooms: the Egyptian Instagram and WhatsApp links are hidden; the JSON-LD lists one room", await page.isHidden('footer li[data-only="cairo,dahab"]') && (await page.evaluate(() => JSON.parse(document.querySelector("#ld-org").textContent).department.length)) === 1);
