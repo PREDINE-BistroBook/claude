@@ -29,7 +29,7 @@
 // DEV_MAGIC_LINK ("1" returns the sign-in link in the response — local testing only).
 
 import { CITIES, SLOTS, PLATFORM_FEE_BPS } from "./catalog.js";
-import { tooMany, noteAttempt, ipOf } from "./lib.js";
+import { tooMany, noteAttempt, ipOf, LANGS_OPEN, DEFAULT_LANG } from "./lib.js";
 import { randomId, signPayload, verifyPayload, getCookie, setCookie, clearCookie, hashPassword, verifyPassword } from "./auth.js";
 import { cityNameIn, therapistOffering, offersService, nameIn, hoursUntil, cancelTerms, stripeRefund, fillFromWaitlist, payProvider, fawryOn, fawryCheckout, fawryStatus, fawryNotificationValid, CITY_KEYS, USER_COOKIE, ADMIN_COOKIE, json, clean, normEmail, isDate, isTime, fmt, now, today, feeOn, body, isLive, parseIntake, healthFlags, settings, currentUser, currentAdmin, scope, sendEmail, sendSms, stripeCheckout, slotsFor, createUser, sessionCookieFor, welcomeEmail, catalog, serviceOf, notifyList, validPhoto, localNow, maybeRewardReferrer, maybeRewardLoyalty, isPlatform, isOwner, seesAll, therapistOf, visibleWhere, canSeeBooking, isPartner, isEmployee, managesCity, pickLang, userLang } from "./lib.js";
 import { M, paidLineFor } from "./mail.js";
@@ -171,7 +171,7 @@ async function clientLog(req, env) {
 async function status(env, req) {
   const st = await settings(env);
   const f = authFlags(env);
-  return json({ geo: { country: req?.cf?.country || null, city: req?.cf?.city || null }, cities: st.cities_open,   // 2026-09-15: the rooms open to clients   // 2026-09-14: the booking page keeps a visitor in their own country's rooms
+  return json({ geo: { country: req?.cf?.country || null, city: req?.cf?.city || null }, cities: st.cities_open, langs: LANGS_OPEN, lang: DEFAULT_LANG,   // 2026-09-15: the rooms open to clients   // 2026-09-14: the booking page keeps a visitor in their own country's rooms
     live: isLive(env) || fawryOn(env), preview: !isLive(env) && !fawryOn(env), fawry: fawryOn(env), pay: { egp: payProvider(env, "egp"), eur: payProvider(env, "eur") }, google: Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET), apple: f.apple, sms: f.sms,
     settings: { loyalty_every: st.loyalty_every, referral_pct: st.referral_pct, birthday_pct: st.birthday_pct, package_pct: st.package_pct }, rules: st.rules, gmaps: st.gmaps, whatsapp: st.whatsapp, review: st.review });
 }
@@ -189,7 +189,7 @@ async function requestLink(req, env) {
   if (!user) {
     const name = clean(b.name, 80);
     if (!name) return json({ error: "Tell us your name so we know who's coming.", needName: true }, 400);
-    user = await createUser(env, { email, name, ref: b.ref, city: b.city, lang: b.lang });
+    user = await createUser(env, { email, name, ref: b.ref, city: b.city, lang: pickLang(b.lang) });
     created = true;
   }
   let link; try { link = await loginLink(env, user.id); } catch (e) { if (e.status) return json({ error: e.message }, e.status); throw e; }
@@ -313,7 +313,7 @@ async function updateMe(req, env) {
   const nearest = CITY_KEYS.includes(b.nearest_city) ? b.nearest_city : b.nearest_city === null ? null : u.nearest_city;
   const intake = b.intake === undefined ? u.intake : cleanIntake(b.intake);
   if (b.intake !== undefined) { const np = parseIntake(intake)?.pain; if (Array.isArray(np)) await logPain(env, u.id, np, parseIntake(u.intake)?.pain === undefined ? "intake" : "client", null); }
-  const lang = ["en", "it", "ar"].includes(b.lang) ? b.lang : u.lang;
+  const lang = LANGS_OPEN.includes(b.lang) ? b.lang : pickLang(u.lang);
   const therapist = b.preferred_therapist === undefined ? u.preferred_therapist : clean(b.preferred_therapist, 40) || null;
   await env.DB.prepare("UPDATE users SET name = ?, phone = ?, city = ?, notes = ?, birthday = ?, photo = ?, country = ?, city_text = ?, nearest_city = ?, intake = ?, lang = ?, preferred_therapist = ? WHERE id = ?")
     .bind(clean(b.name, 80) || u.name, b.phone === undefined ? u.phone : clean(b.phone, 40), CITY_KEYS.includes(b.city) ? b.city : (nearest || u.city), b.notes === undefined ? u.notes : clean(b.notes, 1000), b.birthday === undefined ? u.birthday : (isDate(b.birthday || "") ? b.birthday : null), photo, country, b.city_text === undefined ? u.city_text : clean(b.city_text, 80), nearest, intake, lang, therapist, u.id).run();
@@ -574,6 +574,7 @@ async function adminLogin(req, env) {
       a = await env.DB.prepare("SELECT * FROM admins WHERE email = ?").bind(email).first();
     }
   }
+  if (a && a.disabled) return json({ error: "This sign-in is switched off. Ask the owner." }, 403);
   const ip = ipOf(req);
   if (await tooMany(env, "login:" + email, 8, 15) || await tooMany(env, "login:" + ip, 40, 15)) return json({ error: "Too many tries. Wait 15 minutes, then try again." }, 429);
   if (!a || !(await verifyPassword(password, a.pass_hash, a.salt))) { await noteAttempt(env, "login:" + email); await noteAttempt(env, "login:" + ip); return json({ error: "Wrong email/username or password." }, 401); }
@@ -805,7 +806,7 @@ async function adminSaveSettings(req, env, admin) {
 }
 async function adminList(env, admin) {
   if (!isOwner(admin)) return json({ error: "Only the owner can see this." }, 403);
-  const r = await env.DB.prepare("SELECT a.id, a.email, a.username, a.name, a.role, a.level, a.photo, a.phone, a.notify, a.created_at, a.last_login, t.id therapist_id, t.name therapist_name, t.city therapist_city FROM admins a LEFT JOIN therapists t ON t.admin_id = a.id ORDER BY a.created_at").all();
+  const r = await env.DB.prepare("SELECT a.id, a.email, a.username, a.name, a.role, a.level, a.photo, a.phone, a.notify, a.disabled, a.created_at, a.last_login, t.id therapist_id, t.name therapist_name, t.city therapist_city FROM admins a LEFT JOIN therapists t ON t.admin_id = a.id ORDER BY a.created_at").all();
   return json({ admins: r.results });
 }
 async function adminCreate(req, env, admin) {
@@ -855,7 +856,9 @@ async function adminEdit(req, env, admin, id) {
   if (b.password !== undefined) { if (String(b.password).length < 10) return json({ error: "Use at least 10 characters." }, 400); ({ hash, salt } = await hashPassword(String(b.password))); }
   let username = a.username || null; if (b.username !== undefined) { username = validUsername(b.username); if (username === false) return json({ error: "A username is 3 to 24 letters, digits, dots, dashes or underscores." }, 400); const t2 = await signinTaken(env, [username], id); if (t2) return json({ error: `"${t2}" is already another account's sign-in.` }, 409); }
   const level = levelFor(role, b.level, a.level);
-  try { await env.DB.prepare("UPDATE admins SET name = ?, role = ?, pass_hash = ?, salt = ?, username = ?, level = ? WHERE id = ?").bind(clean(b.name, 80) || a.name, role, hash, salt, username, level, id).run(); }
+  const disabled = b.disabled === undefined ? a.disabled || 0 : b.disabled ? 1 : 0;
+  if (disabled && id === admin.id) return json({ error: "You can't switch off your own sign-in." }, 400);
+  try { await env.DB.prepare("UPDATE admins SET name = ?, role = ?, pass_hash = ?, salt = ?, username = ?, level = ?, disabled = ? WHERE id = ?").bind(clean(b.name, 80) || a.name, role, hash, salt, username, level, disabled, id).run(); }
   catch { return json({ error: "That username is already used by another account." }, 409); }
   // an account narrowed to one city can't stay linked to a therapist profile in another
   if (role !== "all") await env.DB.prepare("UPDATE therapists SET admin_id = NULL WHERE admin_id = ? AND city != ?").bind(id, role).run();

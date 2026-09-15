@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="en">
+<html lang="it">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Zen Recovery · Privacy</title>
-<meta name="description" content="What Zen Recovery keeps about you, why, who handles it, and how to have it removed.">
+<meta name="description" content="Cosa conserva Zen Recovery su di te, perché, chi tratta i dati e come farli cancellare.">
 <meta name="theme-color" content="#1B1E1D">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="img/favicon.png"><link rel="apple-touch-icon" href="img/apple-touch-icon.png">
@@ -110,8 +110,10 @@
 <script>
   document.getElementById("year").textContent = new Date().getFullYear();
   const pick = (l) => { document.querySelectorAll("[data-l]").forEach((s) => s.classList.toggle("on", s.dataset.l === l)); document.querySelectorAll("[data-pick]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.pick === l))); document.documentElement.lang = l; document.documentElement.dir = l === "ar" ? "rtl" : "ltr"; };
-  let lang = "en"; try { lang = localStorage.getItem("zen:lang") || (navigator.language || "en").slice(0, 2); } catch (_) {}
-  pick(["en", "it", "ar"].includes(lang) ? lang : "en");
+  const ONLY = (Array.isArray(window.ZEN_LANGS) && window.ZEN_LANGS.length ? window.ZEN_LANGS : ["it"]);   // 2026-09-15: Italian only, like i18n.js
+  document.querySelector(".langs").hidden = ONLY.length < 2;
+  let lang = ONLY[0]; try { lang = localStorage.getItem("zen_lang") || (navigator.language || ONLY[0]).slice(0, 2); } catch (_) {}
+  pick(ONLY.includes(lang) ? lang : ONLY[0]);
   document.querySelectorAll("[data-pick]").forEach((b) => b.addEventListener("click", () => pick(b.dataset.pick)));
 </script>
 </body>
