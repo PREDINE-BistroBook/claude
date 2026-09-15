@@ -42,7 +42,7 @@ export default {
     if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(req);
     try {
       const res = await route(req, env, url, ctx);
-      return res || json({ error: "Not found" }, 404);
+      return hideClosedRooms(req, env, url, res || json({ error: "Not found" }, 404));
     } catch (e) {
       if (e && e.status) return json({ error: e.message }, e.status);
       console.error(e);
@@ -52,6 +52,18 @@ export default {
   async scheduled(event, env, ctx) { ctx.waitUntil(runCron(env)); },
 };
 
+// 2026-09-15: whatever an admin endpoint answers, rows of a closed room never reach the team's admin (the platform account is exempt).
+// Lists lose the objects whose `city` is closed, maps lose the closed keys, a closed room's own record answers 404.
+async function hideClosedRooms(req, env, url, res) {
+  if (!url.pathname.startsWith("/api/admin/") || req.method !== "GET" || !(res.headers.get("content-type") || "").includes("json")) return res;
+  const admin = await currentAdmin(req, env); if (!admin || !admin.open) return res;
+  const closed = new Set(CITY_KEYS.filter((k) => !admin.open.includes(k)));
+  const strip = (v) => Array.isArray(v) ? v.filter((x) => !(x && typeof x === "object" && !Array.isArray(x) && closed.has(x.city))).map(strip)
+    : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).filter(([k, x]) => !(closed.has(k) && x && typeof x === "object")).map(([k, x]) => [k, strip(x)])) : v;
+  const data = await res.json().catch(() => null); if (data === null) return json({ error: "Not found" }, 404);
+  if (data && typeof data === "object" && !Array.isArray(data) && closed.has(data.city)) return json({ error: "Not found" }, 404);
+  return json(strip(data), res.status, Object.fromEntries([...res.headers].filter(([k]) => !["content-length", "content-type"].includes(k))));
+}
 async function route(req, env, url, ctx) {
   const p = url.pathname, m = req.method;
   if (p === "/api/status") return status(env, req);
@@ -562,7 +574,7 @@ async function afterReview(env, bk) {
 }
 
 // ---------- admin ----------
-const cityWhere = (city, col = "city") => (city ? { sql: ` AND ${col} = ?`, args: [city] } : { sql: "", args: [] });
+const cityWhere = (city, col = "city", open) => (city ? { sql: ` AND ${col} = ?`, args: [city] } : open ? { sql: ` AND ${col} IN (${open.map(() => "?").join(",")})`, args: [...open] } : { sql: "", args: [] });   // `open`: only the rooms open to clients (closed rooms are hidden from the team's admin)
 
 async function adminLogin(req, env) {
   const b = await body(req);
@@ -588,7 +600,7 @@ async function adminLogin(req, env) {
 
 async function adminStats(env, admin, url) {
   const city = scope(admin, url.searchParams.get("city"));
-  const w = cityWhere(city);
+  const w = cityWhere(city, "city", admin.open);
   const live = "status IN ('paid','confirmed','done')";
   const q = (sql, ...args) => env.DB.prepare(sql).bind(...args, ...w.args);
   const v = visibleWhere(admin, isOwner(admin) ? null : await therapistOf(env, admin)), wb = { sql: w.sql + v.sql, args: [...w.args, ...v.args] };   // bookings only: what this account may see
@@ -602,7 +614,7 @@ async function adminStats(env, admin, url) {
     qb(`SELECT status, COUNT(*) n FROM bookings WHERE status != 'pending'${wb.sql} GROUP BY status`).all(),
     qb(`SELECT COUNT(DISTINCT COALESCE(user_id, email)) total, COUNT(DISTINCT CASE WHEN created_at >= date('now','start of month') THEN COALESCE(user_id, email) END) new_this_month FROM bookings WHERE ${live}${wb.sql}`).first(),
     qb(`SELECT COUNT(*) n FROM bookings WHERE status IN ('paid','confirmed') AND date >= date('now')${wb.sql}`).first(),
-    qb(`SELECT b.id, b.name, b.service_name, b.slot, b.status, b.city, t.name therapist FROM bookings b LEFT JOIN therapists t ON t.id = b.therapist_id WHERE b.status IN ('paid','confirmed') AND b.date = date('now')${wb.sql.replace(" city = ?", " b.city = ?").replace(/\(therapist_id/g, "(b.therapist_id").replace(/OR therapist_id/g, "OR b.therapist_id").replace(/AND therapist_id/g, "AND b.therapist_id")} ORDER BY b.slot`).all(),
+    qb(`SELECT b.id, b.name, b.service_name, b.slot, b.status, b.city, t.name therapist FROM bookings b LEFT JOIN therapists t ON t.id = b.therapist_id WHERE b.status IN ('paid','confirmed') AND b.date = date('now')${wb.sql.replace(" city = ?", " b.city = ?").replace(" city IN (", " b.city IN (").replace(/\(therapist_id/g, "(b.therapist_id").replace(/OR therapist_id/g, "OR b.therapist_id").replace(/AND therapist_id/g, "AND b.therapist_id")} ORDER BY b.slot`).all(),
     seesAll(admin) && !city ? env.DB.prepare(`SELECT city, currency, COUNT(*) n, SUM(amount) rev, SUM(platform_fee) fee FROM bookings WHERE ${live} AND date >= date('now','start of month') GROUP BY city, currency`).all() : { results: [] },
     qb(`SELECT kind, status, COUNT(*) n FROM credits WHERE user_id IN (SELECT DISTINCT user_id FROM bookings WHERE user_id IS NOT NULL${wb.sql}) GROUP BY kind, status`).all(),
     qb(`SELECT COUNT(*) n FROM bookings WHERE status = 'review'${wb.sql}`).first(),
@@ -638,10 +650,10 @@ async function platformReport(env, admin) {
 
 async function adminBookings(env, admin, url) {
   const city = scope(admin, url.searchParams.get("city"));
-  const w = cityWhere(city);
+  const w = cityWhere(city, "city", admin.open);
   const status = clean(url.searchParams.get("status"), 20), from = clean(url.searchParams.get("from"), 10), to = clean(url.searchParams.get("to"), 10), qs = clean(url.searchParams.get("q"), 60);
   let sql = `SELECT b.id, b.user_id, b.name, b.email, b.phone, b.city, b.service_name, b.date, b.slot, b.amount, b.list_amount, b.currency, b.discount_kind, b.platform_fee, b.status, b.source, b.note, b.created_at, b.cancel_fee, b.cancelled_at, b.cancelled_by, b.refund_amount, b.refund_status, b.areas, b.featured, b.rating, b.feedback, b.rating, b.feedback, b.therapist_note, b.therapist_id, b.gift_code, b.partner_code, b.package_id, t.name therapist, u.intake AS user_intake, u.notes AS user_notes, u.nearest_city AS user_nearest, u.lang AS user_lang, u.approved AS user_approved
-    FROM bookings b LEFT JOIN users u ON u.id = b.user_id LEFT JOIN therapists t ON t.id = b.therapist_id WHERE b.status != 'pending'${w.sql.replace(" city = ?", " b.city = ?")}`;
+    FROM bookings b LEFT JOIN users u ON u.id = b.user_id LEFT JOIN therapists t ON t.id = b.therapist_id WHERE b.status != 'pending'${w.sql.replace(" city = ?", " b.city = ?").replace(" city IN (", " b.city IN (")}`;
   const args = [...w.args];
   const v = visibleWhere(admin, await therapistOf(env, admin), "b.therapist_id"); sql += v.sql; args.push(...v.args);
   if (status) { sql += " AND b.status = ?"; args.push(status); }
@@ -742,7 +754,7 @@ async function acceptBooking(env, admin, id) {
 async function adminClients(env, admin, url) {
   const city = scope(admin, url.searchParams.get("city"));
   const qs = clean(url.searchParams.get("q"), 60);
-  const w = cityWhere(city, "b.city");
+  const w = cityWhere(city, "b.city", admin.open);
   let sql = `SELECT u.id, u.name, u.email, u.phone, u.city, u.photo, u.created_at, u.referred_by, u.nearest_city, u.city_text, u.intake, u.approved, u.birthday,
       (SELECT name FROM users r WHERE r.id = u.referred_by) referrer_name,
       COUNT(b.id) sessions, SUM(b.status='done') done, MAX(b.date) last_visit,
@@ -764,7 +776,7 @@ async function adminClient(env, admin, id) {
   const u = await env.DB.prepare("SELECT id, name, email, phone, city, photo, notes, birthday, referral_code, referred_by, created_at, last_login, country, city_text, nearest_city, intake, lang, google_sub, apple_sub, approved, preferred_therapist FROM users WHERE id = ?").bind(id).first();
   if (!u) return json({ error: "Not found" }, 404);
   const city = isOwner(admin) ? null : admin.role;
-  const w = cityWhere(city);
+  const w = cityWhere(city, "city", admin.open);
   const [bookings, credits, referrer, checkins, packages, photos, messages] = await Promise.all([
     env.DB.prepare(`SELECT b.id, b.city, b.service_name, b.date, b.slot, b.amount, b.currency, b.discount_kind, b.status, b.source, b.rating, b.feedback, b.therapist_note, t.name therapist FROM bookings b LEFT JOIN therapists t ON t.id = b.therapist_id WHERE b.user_id = ? AND b.status != 'pending'${w.sql.replace(" city = ?", " b.city = ?")} ORDER BY b.date DESC`).bind(id, ...w.args).all(),
     env.DB.prepare("SELECT kind, pct, status, reason, created_at FROM credits WHERE user_id = ? ORDER BY created_at DESC").bind(id).all(),
