@@ -36,7 +36,7 @@ export const classesRoutes: RouteObject[] = [
     path: 'classes/:id/edit',
     element: (
       <Guard permission="courses.write">
-        <CourseFormPage key="edit" />
+        <CourseFormPage />
       </Guard>
     ),
   },

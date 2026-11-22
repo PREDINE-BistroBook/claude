@@ -43,6 +43,14 @@ export const talentPhotoInput = z.object({
   caption: optText(200),
 });
 
+/** PATCH /api/talent/:id/photos/:photoId — caption and/or position in the gallery. */
+export const talentPhotoUpdateInput = z
+  .object({
+    caption: optText(200),
+    sortOrder: z.number().int().min(0).max(100000),
+  })
+  .partial();
+
 /**
  * GET /api/talent query. `age` matches talent whose playing-age range contains it.
  * `skill` / `language` match one tag, case-insensitively.

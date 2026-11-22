@@ -16,7 +16,8 @@ export function orderedWeekdays(weekStart: number): number[] {
  * Weekly schedule as short lines, one per time range:
  *   ["Tue, Thu · 18:00 – 20:00", "Sat · 10:00 – 13:00"]
  */
-export function scheduleLines(slots: readonly ScheduleSlot[], f: Format, weekStart: number, separator = ', '): string[] {
+export function scheduleLines(slots: readonly ScheduleSlot[], f: Format, weekStart: number): string[] {
+  const separator = f.locale.startsWith('ar') ? '، ' : ', ';
   const groups = new Map<string, { start: string; end: string; days: number[] }>();
   for (const s of slots) {
     const key = `${s.startTime}-${s.endTime}`;

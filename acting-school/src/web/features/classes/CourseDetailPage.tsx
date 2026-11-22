@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import clsx from 'clsx';
-import { Check, CircleAlert, Ellipsis, Pencil, Plus, Trash2, UserPlus, Users } from 'lucide-react';
+import { Check, ChevronRight, CircleAlert, Ellipsis, Pencil, Plus, Trash2, UserPlus, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
@@ -14,12 +14,10 @@ import {
   ButtonLink,
   Card,
   ConfirmDialog,
-  DescriptionList,
   EmptyState,
   ErrorState,
   IconButton,
   List,
-  ListRow,
   Modal,
   PageHeader,
   PageLoader,
@@ -34,6 +32,7 @@ import { fullName, useFormat } from '@web/lib/format';
 import { classesErrorKey, useCourse, useInvalidateClasses, useWeekStart } from './api';
 import { AddStudentModal } from './components/AddStudentModal';
 import { CourseTile } from './components/CourseColor';
+import { InfoGrid } from './components/InfoGrid';
 import { SessionFormModal } from './components/SessionFormModal';
 import { isPast, needsAttendance, rateTone, scheduleLines } from './utils';
 
@@ -131,8 +130,7 @@ function InfoCard({ course: c, enrolled }: { course: CourseDetail; enrolled: num
   const lines = scheduleLines(c.schedule, f, weekStart);
   return (
     <Card>
-      <DescriptionList
-        columns={3}
+      <InfoGrid
         items={[
           { label: t('fields.teacher'), value: c.teacherName },
           { label: t('fields.room'), value: c.room },
@@ -140,11 +138,6 @@ function InfoCard({ course: c, enrolled }: { course: CourseDetail; enrolled: num
             label: t('fields.enrolled'),
             value: c.capacity !== null ? t('detail.enrolledOf', { enrolled, capacity: c.capacity }) : t('detail.enrolledNoLimit', { enrolled }),
           },
-          {
-            label: t('fields.schedule'),
-            value: lines.length ? lines.map((l) => <div key={l}>{l}</div>) : <span className="text-muted">{t('list.noSchedule')}</span>,
-          },
-          { label: t('fields.dates'), value: t('detail.dateRange', { start: f.date(c.startDate), end: f.date(c.endDate) }) },
           {
             label: t('fields.nextSession'),
             value: c.nextSession ? (
@@ -155,7 +148,13 @@ function InfoCard({ course: c, enrolled }: { course: CourseDetail; enrolled: num
               <span className="text-muted">{t('list.noUpcoming')}</span>
             ),
           },
-          ...(c.description ? [{ label: t('fields.description'), value: <p className="whitespace-pre-line">{c.description}</p>, wide: true }] : []),
+          {
+            label: t('fields.schedule'),
+            span: 'row',
+            value: lines.length ? lines.map((l) => <div key={l}>{l}</div>) : <span className="text-muted">{t('list.noSchedule')}</span>,
+          },
+          { label: t('fields.dates'), span: 'row', value: t('detail.dateRange', { start: f.date(c.startDate), end: f.date(c.endDate) }) },
+          ...(c.description ? [{ label: t('fields.description'), value: <p className="whitespace-pre-line">{c.description}</p>, span: 'full' as const }] : []),
         ]}
       />
     </Card>
@@ -413,44 +412,52 @@ function SessionsTab({ course, canWrite }: { course: CourseDetail; canWrite: boo
 function SessionRow({ session: s, course }: { session: ClassSession; course: CourseDetail }) {
   const { t } = useTranslation('classes');
   const f = useFormat();
-  const day = Number(s.date.slice(8, 10));
+  const cancelled = s.status === 'cancelled';
   const sub = s.teacherId !== course.teacherId && s.teacherName;
   const details = [s.topic, s.room !== course.room ? s.room : null, sub ? t('sessions.withTeacher', { name: s.teacherName }) : null].filter(Boolean);
+  const badges = [
+    cancelled && <StatusBadge key="c" group="sessionStatus" value="cancelled" />,
+    s.extra && (
+      <Badge key="e" tone="info">
+        {t('sessions.extra')}
+      </Badge>
+    ),
+    s.attendanceTaken ? (
+      <Badge key="a" tone="success">
+        <Check className="size-3" aria-hidden />
+        {t('sessions.attendanceTaken')}
+      </Badge>
+    ) : needsAttendance(s) ? (
+      <Badge key="a" tone="warning">
+        {t('sessions.needsAttendance')}
+      </Badge>
+    ) : null,
+  ].filter(Boolean);
+
   return (
-    <ListRow
-      to={`/sessions/${s.id}`}
-      leading={
+    <li>
+      <Link to={`/sessions/${s.id}`} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-2 sm:px-5">
         <span
           className={clsx(
-            'flex size-11 flex-col items-center justify-center rounded-xl leading-none',
-            s.status === 'cancelled' ? 'bg-surface-2 text-muted line-through' : 'bg-accent-soft text-accent',
+            'flex size-11 shrink-0 flex-col items-center justify-center rounded-xl leading-none',
+            cancelled ? 'bg-surface-2 text-muted' : 'bg-accent-soft text-accent',
           )}
           aria-hidden
         >
           <span className="text-[10px] font-medium uppercase">{f.date(s.date, 'weekdayShort')}</span>
-          <span className="mt-0.5 text-base font-semibold tabular-nums">{f.number(day)}</span>
+          <span className={clsx('mt-0.5 text-base font-semibold tabular-nums', cancelled && 'line-through')}>{f.number(Number(s.date.slice(8, 10)))}</span>
         </span>
-      }
-      title={
-        <span className={clsx(s.status === 'cancelled' && 'text-muted')}>
-          {f.date(s.date, 'weekday')} · {f.timeRange(s.startTime, s.endTime)}
-        </span>
-      }
-      subtitle={details.length ? details.join(' · ') : undefined}
-      trailing={
-        <span className="flex flex-col items-end gap-1 sm:flex-row sm:items-center">
-          {s.status === 'cancelled' && <StatusBadge group="sessionStatus" value="cancelled" />}
-          {s.extra && <Badge tone="info">{t('sessions.extra')}</Badge>}
-          {s.attendanceTaken ? (
-            <Badge tone="success">
-              <Check className="size-3" aria-hidden />
-              <span className="max-sm:sr-only">{t('sessions.attendanceTaken')}</span>
-            </Badge>
-          ) : needsAttendance(s) ? (
-            <Badge tone="warning">{t('sessions.needsAttendance')}</Badge>
-          ) : null}
-        </span>
-      }
-    />
+        <div className="min-w-0 flex-1">
+          <div className={clsx('flex flex-wrap items-baseline gap-x-1.5 font-medium', cancelled ? 'text-muted' : 'text-ink')}>
+            <span>{f.date(s.date, 'weekday')}</span>
+            <span className="text-sm font-normal text-muted">{f.timeRange(s.startTime, s.endTime)}</span>
+          </div>
+          {details.length > 0 && <div className="mt-0.5 truncate text-sm text-muted">{details.join(' · ')}</div>}
+          {badges.length > 0 && <div className="mt-1.5 flex flex-wrap gap-1 sm:hidden">{badges}</div>}
+        </div>
+        {badges.length > 0 && <div className="hidden shrink-0 items-center gap-1.5 sm:flex">{badges}</div>}
+        <ChevronRight className="size-4 shrink-0 text-muted rtl:-scale-x-100" aria-hidden />
+      </Link>
+    </li>
   );
 }

@@ -41,7 +41,11 @@ export function TeacherSelect({
     >
       <Select {...select} disabled={select.disabled || directory.isPending}>
         <option value="">{directory.isPending ? t('common:states.loading') : emptyLabel}</option>
-        {currentMissing && <option value={current.id}>{t('form.inactiveStaff', { name: current.name ?? `#${current.id}` })}</option>}
+        {currentMissing && (
+          <option value={current.id}>
+            {directory.isSuccess ? t('form.inactiveStaff', { name: current.name ?? `#${current.id}` }) : (current.name ?? `#${current.id}`)}
+          </option>
+        )}
         {teachers.length > 0 && (
           <optgroup label={t('form.teachers')}>
             {teachers.map((s) => (

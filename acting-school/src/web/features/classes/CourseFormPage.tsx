@@ -40,7 +40,7 @@ export default function CourseFormPage() {
   if (courseId === null) return <CourseForm weekStart={weekStart} />;
   if (course.isPending) return <PageLoader />;
   if (course.isError) return <ErrorState error={course.error} onRetry={() => void course.refetch()} />;
-  return <CourseForm course={course.data} weekStart={weekStart} />;
+  return <CourseForm key={course.data.id} course={course.data} weekStart={weekStart} />;
 }
 
 function CourseForm({ course, weekStart }: { course?: CourseDetail; weekStart: number }) {

@@ -66,7 +66,9 @@ export function ScheduleEditor({
                     ))}
                   </Select>
                 </div>
-                <IconButton icon={Trash2} label={t('schedule.removeSlot', { n })} variant="danger-ghost" className="sm:hidden" onClick={() => onChange(slots.filter((_, j) => j !== i))} />
+                <div className="sm:hidden">
+                  <IconButton icon={Trash2} label={t('schedule.removeSlot', { n })} variant="danger-ghost" onClick={() => onChange(slots.filter((_, j) => j !== i))} />
+                </div>
               </div>
               <div>
                 <label htmlFor={ids.start} className="mb-1 block text-xs font-medium text-muted">
@@ -94,13 +96,9 @@ export function ScheduleEditor({
                   aria-invalid={error(`schedule.${i}.endTime`) ? true : undefined}
                 />
               </div>
-              <IconButton
-                icon={Trash2}
-                label={t('schedule.removeSlot', { n })}
-                variant="danger-ghost"
-                className="hidden sm:inline-flex"
-                onClick={() => onChange(slots.filter((_, j) => j !== i))}
-              />
+              <div className="hidden sm:block">
+                <IconButton icon={Trash2} label={t('schedule.removeSlot', { n })} variant="danger-ghost" onClick={() => onChange(slots.filter((_, j) => j !== i))} />
+              </div>
             </div>
             {errs.length > 0 && (
               <p className="mt-2 text-sm text-danger" role="alert">

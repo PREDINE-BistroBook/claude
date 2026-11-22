@@ -53,4 +53,4 @@ Rules that hold for every position: owner accounts are visible and editable only
 
 ## Ideas backlog
 
-100 more enhancement ideas were brainstormed and published as an interactive board where the school marks Want / Maybe / Skip. Picks from that board get added here.
+100 more enhancement ideas are in `docs/IDEAS.md`, and on the interactive Idea Board (https://claude.ai/artifact/SV4PHBRaWH7aG4wBYD4Q1Y) where the school marks Want / Maybe / Skip. Picks from that board get added here.

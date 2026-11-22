@@ -13,7 +13,6 @@ import {
   ButtonLink,
   Card,
   ConfirmDialog,
-  DescriptionList,
   EmptyState,
   ErrorState,
   FormActions,
@@ -31,6 +30,7 @@ import { fullName, useFormat } from '@web/lib/format';
 import { classesErrorKey, keys, useCourse, useInvalidateClasses, useSession } from './api';
 import { AttendanceControl } from './components/AttendanceControl';
 import { CourseTile } from './components/CourseColor';
+import { InfoGrid } from './components/InfoGrid';
 import { SessionFormModal } from './components/SessionFormModal';
 
 export default function SessionPage() {
@@ -80,18 +80,19 @@ export default function SessionPage() {
           </Link>
         }
         subtitle={
-          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="grid gap-1">
             <span className="font-medium text-ink">{f.date(s.date, 'full')}</span>
-            <span aria-hidden>·</span>
-            <span>{f.timeRange(s.startTime, s.endTime)}</span>
-            {cancelled && <StatusBadge group="sessionStatus" value="cancelled" />}
-            {s.extra && <Badge tone="info">{t('sessions.extra')}</Badge>}
+            <span className="flex flex-wrap items-center gap-1.5">
+              <span className="me-1">{f.timeRange(s.startTime, s.endTime)}</span>
+              <StatusBadge group="sessionStatus" value={s.status} />
+              {s.extra && <Badge tone="info">{t('sessions.extra')}</Badge>}
+            </span>
           </span>
         }
         actions={
           canWrite && (
             <>
-              <Button icon={Pencil} onClick={() => setEditing(true)}>
+              <Button icon={Pencil} onClick={() => setEditing(true)} disabled={!c}>
                 {t('common:actions.edit')}
               </Button>
               {cancelled ? (
@@ -112,8 +113,7 @@ export default function SessionPage() {
         {c && <SessionNav course={c} sessionId={s.id} />}
 
         <Card>
-          <DescriptionList
-            columns={3}
+          <InfoGrid
             items={[
               {
                 label: t('fields.teacher'),
@@ -125,9 +125,8 @@ export default function SessionPage() {
                 ) : null,
               },
               { label: t('fields.room'), value: s.room },
-              { label: t('fields.status'), value: <StatusBadge group="sessionStatus" value={s.status} /> },
-              { label: t('fields.topic'), value: s.topic, wide: !!s.topic && s.topic.length > 60 },
-              ...(s.notes ? [{ label: t('fields.notes'), value: <p className="whitespace-pre-line">{s.notes}</p>, wide: true }] : []),
+              { label: t('fields.topic'), value: s.topic, span: 'row' },
+              ...(s.notes ? [{ label: t('fields.notes'), value: <p className="whitespace-pre-line">{s.notes}</p>, span: 'full' as const }] : []),
             ]}
           />
         </Card>
