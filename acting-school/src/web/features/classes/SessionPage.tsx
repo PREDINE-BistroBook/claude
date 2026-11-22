@@ -126,7 +126,7 @@ export default function SessionPage() {
               },
               { label: t('fields.room'), value: s.room },
               { label: t('fields.topic'), value: s.topic, span: 'row' },
-              ...(s.notes ? [{ label: t('fields.notes'), value: <p className="whitespace-pre-line">{s.notes}</p>, span: 'full' as const }] : []),
+              ...(s.notes ? [{ label: t('fields.notes'), value: <p dir="auto" className="text-start whitespace-pre-line break-words">{s.notes}</p>, span: 'full' as const }] : []),
             ]}
           />
         </Card>

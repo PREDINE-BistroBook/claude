@@ -35,9 +35,14 @@ export function AppShell() {
   const toggleLanguage = useLanguageToggle();
   const [moreOpen, setMoreOpen] = useState(false);
 
-  useEffect(() => setMoreOpen(false), [pathname]);
-  // Each navigation starts at the top, like a new page.
-  useEffect(() => window.scrollTo(0, 0), [pathname]);
+  useEffect(() => {
+    setMoreOpen(false);
+  }, [pathname]);
+  // Each navigation starts at the top, like a new page. Braces matter: in current
+  // Chromium window.scrollTo() returns a Promise, and an effect must not return one.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
 
   const items = NAV_ITEMS.filter((i) => !i.permission || can(i.permission));
   const tabs = (user ? MOBILE_TABS[user.role] : []).map((to) => items.find((i) => i.to === to)).filter(Boolean) as NavItem[];

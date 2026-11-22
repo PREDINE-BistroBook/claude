@@ -35,7 +35,8 @@ export function Avatar({
   className?: string;
 }) {
   const [broken, setBroken] = useState(false);
-  const shapeCls = shape === 'circle' ? 'rounded-full' : 'rounded-xl';
+  // A rounded-* in className replaces the shape's default radius.
+  const shapeCls = shape === 'circle' ? 'rounded-full' : /(^|\s)rounded(-|\s|$)/.test(className ?? '') ? '' : 'rounded-xl';
   const dims = shape === 'portrait' ? '' : SIZES[size];
   const portraitCls = shape === 'portrait' ? 'aspect-[3/4] w-full text-3xl' : '';
   if (fileId && !broken) {

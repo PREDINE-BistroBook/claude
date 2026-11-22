@@ -2,6 +2,7 @@ import clsx from 'clsx';
 import { ChevronRight } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
+import { BidiText } from './BidiText';
 
 /** Card-style list container; rows are divided by hairlines. Works at phone width without tables. */
 export function List({ children, className }: { children: ReactNode; className?: string }) {
@@ -11,6 +12,8 @@ export function List({ children, className }: { children: ReactNode; className?:
 /**
  * One row: leading (avatar/icon), title + subtitle, trailing (badge/meta).
  * Pass `to` to make the whole row a link (adds a chevron), or `onClick`.
+ * A plain-string title (user data, usually) is wrapped in BidiText so a Latin
+ * name in the Arabic UI is cut at its own end.
  */
 export function ListRow({
   to,
@@ -33,7 +36,7 @@ export function ListRow({
     <>
       {leading && <div className="shrink-0">{leading}</div>}
       <div className="min-w-0 flex-1">
-        <div className="truncate font-medium text-ink">{title}</div>
+        <div className="truncate font-medium text-ink">{typeof title === 'string' ? <BidiText>{title}</BidiText> : title}</div>
         {subtitle && <div className="mt-0.5 truncate text-sm text-muted">{subtitle}</div>}
       </div>
       {trailing && <div className="flex shrink-0 items-center gap-2">{trailing}</div>}

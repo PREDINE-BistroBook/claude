@@ -83,7 +83,7 @@ router.post('/setup', async (c) => {
     if (n > 0) return null;
     return tx
       .insert(users)
-      .values({ email: input.email, name: input.name, role: 'owner', passwordHash, locale: input.locale ?? 'en' })
+      .values({ email: input.email, name: input.name, role: 'owner', passwordHash, locale: input.locale ?? 'en', lastLoginAt: Date.now() })
       .returning()
       .get();
   });

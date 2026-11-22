@@ -45,7 +45,8 @@ export function useFormat() {
     /** "YYYY-MM-DDTHH:MM" → date + time. */
     dateTime(dt: string | null | undefined, style: DateStyle = 'weekday'): string {
       if (!dt) return '';
-      return `${this.date(dt.slice(0, 10), style)}, ${this.time(dt.slice(11, 16))}`;
+      const sep = i18n.language === 'ar' ? '، ' : ', ';
+      return `${this.date(dt.slice(0, 10), style)}${sep}${this.time(dt.slice(11, 16))}`;
     },
     /** Epoch ms → date. */
     timestamp(ms: number | null | undefined, style: DateStyle = 'medium'): string {

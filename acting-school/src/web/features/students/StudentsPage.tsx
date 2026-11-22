@@ -23,7 +23,7 @@ import { useAuth } from '@web/lib/auth';
 import { ageOn, fullName } from '@web/lib/format';
 import { useDebounced } from '@web/lib/hooks';
 import { useStudents } from './api';
-import { BidiText } from './components/BidiText';
+import { BidiText } from '@web/components/ui';
 
 type StatusFilter = StudentStatus | 'all';
 
@@ -153,18 +153,19 @@ function StudentRow({ student: s }: { student: StudentListItem }) {
   const { t } = useTranslation(['students', 'common']);
   const name = fullName(s);
   const age = ageOn(s.dateOfBirth);
+  // Age keeps its place; a long phone/email (last) is cut at its own end ("+20 101 23…"), not its start.
   const details: ReactNode[] = [];
-  if (age !== null) details.push(<span key="age">{t('common:units.years', { count: age })}</span>);
-  if (s.phone)
+  if (age !== null)
     details.push(
-      <span key="phone" dir="ltr">
-        {s.phone}
+      <span key="age" className="shrink-0">
+        {t('common:units.years', { count: age })}
       </span>,
     );
-  else if (s.email && age === null)
+  const contact = s.phone ?? (age === null ? s.email : null);
+  if (contact)
     details.push(
-      <span key="email" dir="ltr">
-        {s.email}
+      <span key="contact" dir="ltr" className="min-w-0 truncate">
+        {contact}
       </span>,
     );
   const classes = t('list.classes', { count: s.activeEnrollments });
@@ -176,14 +177,18 @@ function StudentRow({ student: s }: { student: StudentListItem }) {
       title={<BidiText>{name}</BidiText>}
       subtitle={
         details.length ? (
-          <>
-            {details.map((d, i) => (
-              <span key={i}>
-                {i > 0 && <span aria-hidden> · </span>}
-                {d}
-              </span>
-            ))}
-          </>
+          <span className="flex min-w-0 items-center">
+            {details.flatMap((d, i) =>
+              i === 0
+                ? [d]
+                : [
+                    <span key={`sep${i}`} aria-hidden className="shrink-0 whitespace-pre">
+                      {' · '}
+                    </span>,
+                    d,
+                  ],
+            )}
+          </span>
         ) : undefined
       }
       trailing={

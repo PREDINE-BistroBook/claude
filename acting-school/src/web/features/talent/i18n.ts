@@ -6,7 +6,7 @@ const en = {
   newTalent: 'New talent',
   editTalent: 'Edit talent',
   list: {
-    searchPlaceholder: 'Search by name or stage name',
+    searchPlaceholder: 'Search by name',
     statusFilter: 'Status',
     all: 'All',
     filters: 'Filters',
@@ -72,7 +72,7 @@ const en = {
     instagramPlaceholder: 'handle',
     instagramHint: 'Just the handle, without the @.',
     contact: 'Contact',
-    contactHint: 'For the agency only — never shared with casting directors from here.',
+    contactHint: 'For the agency’s internal use only.',
     notes: 'Notes',
     notesPlaceholder: 'Availability, strengths, anything the team should know…',
     fromStudent: 'Creating from student {{name}}',
@@ -90,7 +90,7 @@ const en = {
   detail: {
     eyes: 'Eyes: {{value}}',
     hair: 'Hair: {{value}}',
-    realName: 'Real name: {{name}}',
+    realName: 'Real name',
     quickFacts: 'Quick facts',
     photos: 'Photos',
     addPhotos: 'Add photos',
@@ -150,7 +150,7 @@ const ar: TranslationOf<typeof en> = {
   newTalent: 'موهبة جديدة',
   editTalent: 'تعديل الملف',
   list: {
-    searchPlaceholder: 'ابحث بالاسم أو الاسم الفني',
+    searchPlaceholder: 'ابحث بالاسم',
     statusFilter: 'الحالة',
     all: 'الكل',
     filters: 'التصفية',
@@ -182,7 +182,7 @@ const ar: TranslationOf<typeof en> = {
     emptyHint: 'أضف الممثلين الذين تمثّلهم الوكالة مع صورهم ومهاراتهم ولغاتهم.',
     emptyHintReadOnly: 'ستظهر ملفات المواهب هنا عند إضافتها.',
     showAllStatuses: 'عرض كل الحالات',
-    plays: 'عمر الأداء {{min}}–{{max}}',
+    plays: 'عمر الأداء من {{min}} إلى {{max}}',
     playsFrom: 'عمر الأداء {{min}} فما فوق',
     playsUpTo: 'عمر الأداء حتى {{max}}',
   },
@@ -238,7 +238,7 @@ const ar: TranslationOf<typeof en> = {
   detail: {
     eyes: 'العينان: {{value}}',
     hair: 'الشعر: {{value}}',
-    realName: 'الاسم الحقيقي: {{name}}',
+    realName: 'الاسم الحقيقي',
     quickFacts: 'معلومات سريعة',
     photos: 'الصور',
     addPhotos: 'إضافة صور',

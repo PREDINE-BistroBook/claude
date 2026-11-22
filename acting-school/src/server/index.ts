@@ -39,6 +39,9 @@ if (fs.existsSync(webRoot)) {
     }
   });
   app.use('*', serveStatic({ root: path.relative(process.cwd(), webRoot) || '.' }));
+  // A missing hashed asset (an old tab after a deploy) is a 404, not the HTML shell
+  // served as JavaScript.
+  app.get('/assets/*', (c) => c.text('Not found', 404));
   // Client-side routes (/students/12 …) all load the app shell.
   const shell = fs.readFileSync(path.join(webRoot, 'index.html'), 'utf8');
   app.get('*', (c) => c.html(shell));

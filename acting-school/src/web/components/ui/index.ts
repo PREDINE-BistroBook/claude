@@ -4,6 +4,7 @@
  */
 export { Avatar } from './Avatar';
 export { Badge, type Tone } from './Badge';
+export { BidiText, DataLine } from './BidiText';
 export { Button, ButtonLink, IconButton, buttonClasses } from './Button';
 export { Card } from './Card';
 export { DescriptionList } from './DescriptionList';
@@ -16,7 +17,7 @@ export { PageHeader } from './PageHeader';
 export { PhotoInput } from './PhotoInput';
 export { SearchInput } from './SearchInput';
 export { StatCard } from './StatCard';
-export { StatusBadge, type StatusGroup } from './StatusBadge';
+export { STATUS_TONES, StatusBadge, type StatusGroup } from './StatusBadge';
 export { ComingSoon, EmptyState, ErrorState, FormError, NoAccess, PageLoader, Spinner, SplashScreen } from './States';
 export { Segmented, Tabs } from './Tabs';
 export { TagInput } from './TagInput';

@@ -14,6 +14,7 @@ import {
   ButtonLink,
   Card,
   ConfirmDialog,
+  DataLine,
   EmptyState,
   ErrorState,
   IconButton,
@@ -154,7 +155,7 @@ function InfoCard({ course: c, enrolled }: { course: CourseDetail; enrolled: num
             value: lines.length ? lines.map((l) => <div key={l}>{l}</div>) : <span className="text-muted">{t('list.noSchedule')}</span>,
           },
           { label: t('fields.dates'), span: 'row', value: t('detail.dateRange', { start: f.date(c.startDate), end: f.date(c.endDate) }) },
-          ...(c.description ? [{ label: t('fields.description'), value: <p className="whitespace-pre-line">{c.description}</p>, span: 'full' as const }] : []),
+          ...(c.description ? [{ label: t('fields.description'), value: <p dir="auto" className="text-start whitespace-pre-line break-words">{c.description}</p>, span: 'full' as const }] : []),
         ]}
       />
     </Card>
@@ -414,7 +415,7 @@ function SessionRow({ session: s, course }: { session: ClassSession; course: Cou
   const f = useFormat();
   const cancelled = s.status === 'cancelled';
   const sub = s.teacherId !== course.teacherId && s.teacherName;
-  const details = [s.topic, s.room !== course.room ? s.room : null, sub ? t('sessions.withTeacher', { name: s.teacherName }) : null].filter(Boolean);
+  const details = [s.topic, s.room !== course.room ? s.room : null, sub ? t('sessions.withTeacher', { name: `\u2068${s.teacherName}\u2069` }) : null];
   const badges = [
     cancelled && <StatusBadge key="c" group="sessionStatus" value="cancelled" />,
     s.extra && (
@@ -452,7 +453,7 @@ function SessionRow({ session: s, course }: { session: ClassSession; course: Cou
             <span>{f.date(s.date, 'weekday')}</span>
             <span className="text-sm font-normal text-muted">{f.timeRange(s.startTime, s.endTime)}</span>
           </div>
-          {details.length > 0 && <div className="mt-0.5 truncate text-sm text-muted">{details.join(' · ')}</div>}
+          <DataLine parts={details} className="mt-0.5 text-sm text-muted" />
           {badges.length > 0 && <div className="mt-1.5 flex flex-wrap gap-1 sm:hidden">{badges}</div>}
         </div>
         {badges.length > 0 && <div className="hidden shrink-0 items-center gap-1.5 sm:flex">{badges}</div>}

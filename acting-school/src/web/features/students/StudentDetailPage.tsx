@@ -27,7 +27,7 @@ import { courseColor } from '@web/lib/colors';
 import { ageOn, fullName, useFormat } from '@web/lib/format';
 import { errorMessageKey } from '@web/lib/forms';
 import { useDeleteStudent, useStudent } from './api';
-import { BidiText } from './components/BidiText';
+import { BidiText } from '@web/components/ui';
 
 const isCourseColor = (c: string | null): c is CourseColor => !!c && (COURSE_COLORS as readonly string[]).includes(c);
 

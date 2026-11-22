@@ -6,7 +6,7 @@ import { Badge, type Tone } from './Badge';
  * so "active" is the same green everywhere.
  *   <StatusBadge group="studentStatus" value={s.status} />
  */
-const TONES = {
+export const STATUS_TONES = {
   role: { owner: 'accent', admin: 'info', teacher: 'success', agent: 'warning' },
   studentStatus: { prospect: 'info', active: 'success', paused: 'warning', alumni: 'neutral' },
   courseStatus: { active: 'success', archived: 'neutral' },
@@ -26,11 +26,11 @@ const TONES = {
   },
 } as const satisfies Record<string, Record<string, Tone>>;
 
-export type StatusGroup = keyof typeof TONES;
+export type StatusGroup = keyof typeof STATUS_TONES;
 
-export function StatusBadge<G extends StatusGroup>({ group, value, className }: { group: G; value: keyof (typeof TONES)[G] & string; className?: string }) {
+export function StatusBadge<G extends StatusGroup>({ group, value, className }: { group: G; value: keyof (typeof STATUS_TONES)[G] & string; className?: string }) {
   const { t } = useTranslation();
-  const tone = (TONES[group] as Record<string, Tone>)[value] ?? 'neutral';
+  const tone = (STATUS_TONES[group] as Record<string, Tone>)[value] ?? 'neutral';
   const key: string = `common:enums.${group}.${value}`;
   return (
     <Badge tone={tone} className={className}>

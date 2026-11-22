@@ -38,7 +38,7 @@ export default function ProfilePage() {
   if (!user) return null;
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="mx-auto max-w-3xl">
       <PageHeader
         title={t('profile.title')}
         leading={<Avatar name={user.name} size="lg" />}

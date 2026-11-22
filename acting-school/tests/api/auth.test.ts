@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { users } from '../../src/server/db/schema';
 import { makeTestContext, uploadPng, PNG_1PX } from '../helpers';
 
 describe('setup', () => {
@@ -16,6 +17,9 @@ describe('setup', () => {
     expect(res.status).toBe(201);
     expect(res.body.user).toMatchObject({ email: 'owner@example.com', role: 'owner' });
     expect(res.headers.get('set-cookie')).toContain('HttpOnly');
+    // Setting up signs the owner in, so the staff list mustn't say "Never signed in".
+    const owner = t.db.select().from(users).get()!;
+    expect(typeof owner.lastLoginAt).toBe('number');
 
     me = await t.anon.get('/api/auth/me');
     expect(me.body).toMatchObject({ user: null, needsSetup: false, schoolName: 'Stage Left Academy' });
