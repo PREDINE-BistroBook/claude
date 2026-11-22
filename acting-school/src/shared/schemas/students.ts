@@ -26,6 +26,14 @@ export const studentInput = z.object({
 export type StudentInput = z.infer<typeof studentInput>;
 export const studentUpdateInput = studentInput.partial();
 
+/**
+ * Contact details, visible only with students.contact. Without it the API
+ * answers null for these (and contactHidden: true), doesn't search them, and
+ * ignores them on create/update so an edit form can't wipe them.
+ */
+export const STUDENT_CONTACT_FIELDS = ['email', 'phone', 'guardianName', 'guardianPhone', 'guardianEmail', 'emergencyName', 'emergencyPhone'] as const;
+export type StudentContactField = (typeof STUDENT_CONTACT_FIELDS)[number];
+
 /** Query string for GET /api/students. */
 export const studentListQuery = z.object({
   q: z.string().trim().max(100).optional(),
@@ -52,6 +60,8 @@ export interface Student {
   notes: string | null;
   createdAt: number;
   updatedAt: number;
+  /** True when the caller can't see contact details (no students.contact): those fields are null. */
+  contactHidden: boolean;
 }
 
 /** GET /api/students → { items: StudentListItem[] } (sorted by last name, first name). */
@@ -64,11 +74,13 @@ export interface StudentListItem {
   dateOfBirth: string | null;
   status: StudentStatus;
   photoFileId: string | null;
-  /** Number of enrollments with status 'enrolled'. */
+  /** Number of enrollments with status 'enrolled' (in classes the caller can see). */
   activeEnrollments: number;
+  /** True when the caller can't see contact details (no students.contact): email and phone are null. */
+  contactHidden: boolean;
 }
 
-/** GET /api/students/:id */
+/** GET /api/students/:id — enrollments and attendance cover only the classes the caller can see. */
 export interface StudentDetail extends Student {
   enrollments: {
     id: number;

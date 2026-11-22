@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { addDays, todayISO, weekdayOf } from '../../src/shared/dates';
+import { BUILT_IN_POSITIONS } from '../../src/shared/permissions';
 import { classSessions, enrollments, students, users } from '../../src/server/db/schema';
 import { daysBetween, generateDates, mayMarkAttendance, planRegeneration, sameSchedule } from '../../src/server/lib/classSessions';
 import { makeTestContext, type Client } from '../helpers';
@@ -168,13 +169,19 @@ describe('planRegeneration (unit)', () => {
 });
 
 describe('mayMarkAttendance (unit)', () => {
-  it('owner/admin any session, teacher only their own, agent never', () => {
-    expect(mayMarkAttendance({ id: 1, role: 'owner' }, null)).toBe(true);
-    expect(mayMarkAttendance({ id: 1, role: 'admin' }, 99)).toBe(true);
-    expect(mayMarkAttendance({ id: 5, role: 'teacher' }, 5)).toBe(true);
-    expect(mayMarkAttendance({ id: 5, role: 'teacher' }, 6)).toBe(false);
-    expect(mayMarkAttendance({ id: 5, role: 'teacher' }, null)).toBe(false);
-    expect(mayMarkAttendance({ id: 5, role: 'agent' }, 5)).toBe(false);
+  it('attendance.write + classes.all: any session; attendance.write alone: only their own; no attendance.write: never', () => {
+    const everyone = BUILT_IN_POSITIONS.find((p) => p.key === 'ceo')!.permissions;
+    const director = BUILT_IN_POSITIONS.find((p) => p.key === 'executive_director')!.permissions;
+    const coach = BUILT_IN_POSITIONS.find((p) => p.key === 'acting_coach')!.permissions;
+    const casting = BUILT_IN_POSITIONS.find((p) => p.key === 'head_of_casting')!.permissions;
+    expect(mayMarkAttendance({ id: 1, permissions: [...everyone] }, null)).toBe(true);
+    expect(mayMarkAttendance({ id: 1, permissions: [...director] }, 99)).toBe(true);
+    expect(mayMarkAttendance({ id: 5, permissions: [...coach] }, 5)).toBe(true);
+    expect(mayMarkAttendance({ id: 5, permissions: [...coach] }, 6)).toBe(false);
+    expect(mayMarkAttendance({ id: 5, permissions: [...coach] }, null)).toBe(false);
+    expect(mayMarkAttendance({ id: 5, permissions: [...casting] }, 5)).toBe(false);
+    // Coach + finance: finance brings classes.all, so the coach may mark any session.
+    expect(mayMarkAttendance({ id: 5, permissions: [...coach, 'classes.all'] }, 6)).toBe(true);
   });
 });
 
@@ -277,20 +284,32 @@ describe('courses: create & read', () => {
     }
   });
 
-  it('enforces permissions: read for every role, write for owner/admin only', async () => {
+  it('enforces permissions: read with courses.read (own classes only without classes.all), write with courses.write', async () => {
     const admin = await t.as('admin');
+    const teacher = await t.as('teacher');
     const c = await mkCourse(admin);
+    const own = await mkCourse(admin, { name: 'Own', teacherId: teacher.user.id });
     expect((await t.anon.get('/api/courses')).status).toBe(401);
     expect((await t.anon.get(`/api/courses/${c.id}`)).status).toBe(401);
-    for (const role of ['teacher', 'agent'] as const) {
-      const u = await t.as(role);
-      expect((await u.get('/api/courses')).status).toBe(200);
-      expect((await u.get(`/api/courses/${c.id}`)).status).toBe(200);
+    // Head of casting has classes.all: sees every class, can't change any.
+    const agent = await t.as('agent');
+    expect((await agent.get('/api/courses')).body.items.map((x: any) => x.id).sort()).toEqual([c.id, own.id].sort());
+    // A coach sees only the classes they teach; anyone else's is a 404.
+    expect((await teacher.get('/api/courses')).body.items.map((x: any) => x.id)).toEqual([own.id]);
+    expect((await teacher.get(`/api/courses/${own.id}`)).status).toBe(200);
+    expect((await teacher.get(`/api/courses/${c.id}`)).status).toBe(404);
+    for (const [u, course] of [
+      [agent, c],
+      [teacher, own],
+    ] as const) {
+      expect((await u.get(`/api/courses/${course.id}`)).status).toBe(200);
       expect((await u.post('/api/courses', courseBody())).status).toBe(403);
-      expect((await u.patch(`/api/courses/${c.id}`, { name: 'X' })).status).toBe(403);
-      expect((await u.delete(`/api/courses/${c.id}`)).status).toBe(403);
-      expect((await u.post(`/api/courses/${c.id}/sessions`, { date: '2031-03-05', startTime: '10:00', endTime: '11:00' })).status).toBe(403);
+      expect((await u.patch(`/api/courses/${course.id}`, { name: 'X' })).status).toBe(403);
+      expect((await u.delete(`/api/courses/${course.id}`)).status).toBe(403);
+      expect((await u.post(`/api/courses/${course.id}/sessions`, { date: '2031-03-05', startTime: '10:00', endTime: '11:00' })).status).toBe(403);
     }
+    // No courses.read at all (casting team): 403.
+    expect((await (await t.as('casting_team')).get('/api/courses')).status).toBe(403);
   });
 
   it('answers 404 for unknown classes', async () => {
@@ -724,15 +743,19 @@ describe('sessions: detail, edit, delete', () => {
     expect(later.body.roster.map((r: any) => r.studentId)).toContain(late.id);
   });
 
-  it('reports canMarkAttendance per role, teacher and status', async () => {
+  it('reports canMarkAttendance per position, teacher and status', async () => {
     const tina = await t.as('teacher');
     const other = await t.as('teacher');
     const agent = await t.as('agent');
+    const moaty = await t.as(['acting_coach', 'finance']);
     const c = await mkCourse(admin, { teacherId: tina.user.id });
     const s = sessionOn(c, '2031-03-04');
     expect((await tina.get(`/api/sessions/${s.id}`)).body.canMarkAttendance).toBe(true);
-    expect((await other.get(`/api/sessions/${s.id}`)).body.canMarkAttendance).toBe(false);
+    // Another coach can't even see a class they don't teach.
+    expect((await other.get(`/api/sessions/${s.id}`)).status).toBe(404);
     expect((await agent.get(`/api/sessions/${s.id}`)).body.canMarkAttendance).toBe(false);
+    // Coach + finance: classes.all from finance, attendance.write from coaching → any session.
+    expect((await moaty.get(`/api/sessions/${s.id}`)).body.canMarkAttendance).toBe(true);
     await admin.patch(`/api/sessions/${s.id}`, { status: 'cancelled' });
     expect((await admin.get(`/api/sessions/${s.id}`)).body.canMarkAttendance).toBe(false);
     expect((await tina.get(`/api/sessions/${s.id}`)).body.canMarkAttendance).toBe(false);
@@ -769,11 +792,12 @@ describe('sessions: detail, edit, delete', () => {
     expect((await admin.patch(`/api/sessions/${s.id}`, { topic: 'x' })).status).toBe(404);
   });
 
-  it('lets only owner/admin edit or delete sessions', async () => {
-    const c = await mkCourse(admin);
+  it('lets only courses.write edit or delete sessions', async () => {
+    const teacher = await t.as('teacher');
+    const agent = await t.as('agent');
+    const c = await mkCourse(admin, { teacherId: teacher.user.id });
     const s = sessionOn(c, '2031-03-04');
-    for (const role of ['teacher', 'agent'] as const) {
-      const u = await t.as(role);
+    for (const u of [teacher, agent]) {
       expect((await u.get(`/api/sessions/${s.id}`)).status).toBe(200);
       expect((await u.patch(`/api/sessions/${s.id}`, { topic: 'x' })).status).toBe(403);
       expect((await u.delete(`/api/sessions/${s.id}`)).status).toBe(403);
@@ -827,19 +851,25 @@ describe('attendance', () => {
     expect(rows.every((r) => r.markedBy === admin.user.id)).toBe(true);
   });
 
-  it('applies the teacher rule (own and substitute sessions only)', async () => {
+  it('applies the teacher rule without classes.all (own and substitute sessions only)', async () => {
     const tina = await t.as('teacher');
     const sub = await t.as('teacher');
     const { a, c, s } = await setup(tina.user.id);
     const body = { records: [{ studentId: a.id, status: 'present' }] };
     expect((await tina.put(`/api/sessions/${s.id}/attendance`, body)).status).toBe(200);
-    expect((await sub.put(`/api/sessions/${s.id}/attendance`, body)).status).toBe(403);
+    // Not their class at all: they can't see it.
+    expect((await sub.put(`/api/sessions/${s.id}/attendance`, body)).status).toBe(404);
 
     // With a substitute set on a session, the substitute marks it — not the course teacher.
     const other = sessionOn(c, '2031-03-06');
     await admin.patch(`/api/sessions/${other.id}`, { teacherId: sub.user.id });
     expect((await sub.put(`/api/sessions/${other.id}/attendance`, body)).status).toBe(200);
     expect((await tina.put(`/api/sessions/${other.id}/attendance`, body)).status).toBe(403);
+    // The substitute now sees the class, but still only marks the session they cover.
+    const denied = await sub.put(`/api/sessions/${s.id}/attendance`, body);
+    expect(denied.status).toBe(403);
+    // Coach + finance (classes.all) may mark any session.
+    expect((await (await t.as(['acting_coach', 'finance'])).put(`/api/sessions/${s.id}/attendance`, body)).status).toBe(200);
 
     const agent = await t.as('agent');
     expect((await agent.put(`/api/sessions/${s.id}/attendance`, body)).status).toBe(403);
@@ -876,5 +906,69 @@ describe('attendance', () => {
     expect(r.body.error.code).toBe('session_cancelled');
 
     expect((await admin.put('/api/sessions/99999/attendance', { records: [] })).status).toBe(404);
+  });
+});
+
+// ── Class scope (without classes.all) ───────────────────────────────────────
+
+describe('class scope', () => {
+  it('a coach sees only the classes they teach; a substitute also sees the class they cover', async () => {
+    const t = await makeTestContext();
+    const admin = await t.as('admin');
+    const tina = await t.as('teacher', { name: 'Tina' });
+    const sub = await t.as('teacher', { name: 'Sub' });
+    const outsider = await t.as('teacher', { name: 'Outsider' });
+    const a = await mkCourse(admin, { name: 'A', teacherId: tina.user.id });
+    const b = await mkCourse(admin, { name: 'B' });
+    const covered = sessionOn(a, '2031-03-11');
+    const bSession = sessionOn(b, '2031-03-11');
+
+    const ids = async (c: Client) => (await c.get('/api/courses')).body.items.map((x: any) => x.name);
+    expect(await ids(tina)).toEqual(['A']);
+    expect(await ids(sub)).toEqual([]);
+    expect((await sub.get(`/api/sessions/${covered.id}`)).status).toBe(404);
+
+    await admin.patch(`/api/sessions/${covered.id}`, { teacherId: sub.user.id });
+    expect(await ids(sub)).toEqual(['A']);
+    expect((await sub.get(`/api/courses/${a.id}`)).status).toBe(200);
+    const detail = await sub.get(`/api/sessions/${covered.id}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body.canMarkAttendance).toBe(true);
+    // The course teacher still sees the class (and the covered session) but doesn't mark it.
+    expect((await tina.get(`/api/sessions/${covered.id}`)).body.canMarkAttendance).toBe(false);
+
+    for (const c of [tina, sub, outsider]) {
+      expect((await c.get(`/api/courses/${b.id}`)).status).toBe(404);
+      expect((await c.get(`/api/sessions/${bSession.id}`)).status).toBe(404);
+    }
+    expect(await ids(outsider)).toEqual([]);
+
+    // The sessions list is scoped the same way.
+    const range = '/api/sessions?from=2031-03-01&to=2031-03-31';
+    const courseNames = async (c: Client) => [...new Set((await c.get(range)).body.items.map((s: any) => s.courseName))];
+    expect(await courseNames(tina)).toEqual(['A']);
+    expect(await courseNames(sub)).toEqual(['A']);
+    expect(await courseNames(outsider)).toEqual([]);
+    expect(await courseNames(admin)).toEqual(['A', 'B']);
+    // Coach + finance has classes.all.
+    expect(await ids(await t.as(['acting_coach', 'finance']))).toEqual(['A', 'B']);
+  });
+
+  it('courses.write without classes.all only changes the classes it teaches and enrolls only students it can see', async () => {
+    const t = await makeTestContext();
+    const admin = await t.as('admin');
+    const lead = await t.as({ permissions: ['courses.read', 'courses.write', 'students.read'] });
+    const mine = await mkCourse(admin, { name: 'Mine', teacherId: lead.user.id });
+    const other = await mkCourse(admin, { name: 'Other' });
+    const known = mkStudent(t, 'Known', 'One');
+    const stranger = mkStudent(t, 'Not', 'Mine');
+    await admin.post(`/api/courses/${mine.id}/enrollments`, { studentId: known.id });
+    expect((await lead.patch(`/api/courses/${mine.id}`, { room: 'Hall' })).status).toBe(200);
+    expect((await lead.patch(`/api/courses/${other.id}`, { room: 'Hall' })).status).toBe(404);
+    expect((await lead.delete(`/api/courses/${other.id}`)).status).toBe(404);
+    expect((await lead.patch(`/api/sessions/${sessionOn(other, '2031-03-04').id}`, { topic: 'x' })).status).toBe(404);
+    const refused = await lead.post(`/api/courses/${mine.id}/enrollments`, { studentId: stranger.id });
+    expect(refused.status).toBe(400);
+    expect(refused.body.error.issues[0]).toMatchObject({ path: ['studentId'], message: 'classes:errors.studentNotFound' });
   });
 });

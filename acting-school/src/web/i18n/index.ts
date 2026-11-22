@@ -4,6 +4,7 @@ import type { Locale } from '@shared/enums';
 import castings from '../features/castings/i18n';
 import classes from '../features/classes/i18n';
 import dashboard from '../features/dashboard/i18n';
+import positions from '../features/positions/i18n';
 import schedule from '../features/schedule/i18n';
 import settings from '../features/settings/i18n';
 import staff from '../features/staff/i18n';
@@ -13,7 +14,7 @@ import common from './common';
 import type { Namespace } from './types';
 
 /** Every namespace. A feature's strings live in features/<name>/i18n.ts; register new namespaces here. */
-export const namespaces = { common, students, classes, talent, castings, schedule, dashboard, staff, settings } satisfies Record<
+export const namespaces = { common, students, classes, talent, castings, schedule, dashboard, staff, positions, settings } satisfies Record<
   string,
   Namespace<any>
 >;

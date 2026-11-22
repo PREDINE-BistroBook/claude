@@ -1,60 +1,13 @@
 import clsx from 'clsx';
-import { ChevronDown, Crown, Dices, GraduationCap, ShieldCheck, Star } from 'lucide-react';
-import { useId, useState, type InputHTMLAttributes, type ReactNode } from 'react';
+import { BadgeCheck, ChevronRight, Crown, Dices, Lock } from 'lucide-react';
+import type { InputHTMLAttributes } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ROLES, type Role } from '@shared/roles';
-import { Card, IconButton, Input, StatusBadge } from '@web/components/ui';
+import { Link } from 'react-router';
+import type { PositionSummary } from '@shared/schemas/auth';
+import type { Position } from '@shared/schemas/positions';
+import { Badge, IconButton, Input, Spinner } from '@web/components/ui';
+import { usePositionName } from '@web/lib/positions';
 import { generatePassword } from '../api';
-
-/** On/off switch with a label and help text. The whole control is at least 40px tall. */
-export function Switch({
-  checked,
-  onChange,
-  label,
-  description,
-  disabled,
-}: {
-  checked: boolean;
-  onChange: (value: boolean) => void;
-  label: ReactNode;
-  description?: ReactNode;
-  disabled?: boolean;
-}) {
-  const id = useId();
-  return (
-    <div className="flex items-center justify-between gap-4">
-      <div className="min-w-0">
-        <label htmlFor={id} className={clsx('text-sm font-medium text-ink', !disabled && 'cursor-pointer')}>
-          {label}
-        </label>
-        {description && (
-          <p id={`${id}-desc`} className="mt-0.5 text-xs text-muted">
-            {description}
-          </p>
-        )}
-      </div>
-      <button
-        id={id}
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        aria-describedby={description ? `${id}-desc` : undefined}
-        disabled={disabled}
-        onClick={() => onChange(!checked)}
-        className="group flex h-10 shrink-0 items-center rounded-full px-0.5 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        <span
-          className={clsx(
-            'flex h-7 w-12 items-center rounded-full p-1 transition-colors group-focus-visible:ring-2 group-focus-visible:ring-accent/40',
-            checked ? 'bg-accent' : 'bg-line-strong',
-          )}
-        >
-          <span className={clsx('size-5 rounded-full bg-white shadow-sm transition-[margin] duration-150', checked ? 'ms-5' : 'ms-0')} />
-        </span>
-      </button>
-    </div>
-  );
-}
 
 /** Visible text input for a temporary password, with a "generate" button. */
 export function TempPasswordInput({ onGenerate, ...input }: { onGenerate: (value: string) => void } & InputHTMLAttributes<HTMLInputElement>) {
@@ -67,47 +20,109 @@ export function TempPasswordInput({ onGenerate, ...input }: { onGenerate: (value
   );
 }
 
-const ROLE_ICONS: Record<Role, typeof Crown> = { owner: Crown, admin: ShieldCheck, teacher: GraduationCap, agent: Star };
-
-/** Collapsible plain-words guide to the four roles. */
-export function RoleGuide({ className }: { className?: string }) {
+/** Small chips with someone's positions; owner positions stand out. */
+export function PositionChips({ positions, className }: { positions: readonly PositionSummary[]; className?: string }) {
   const { t } = useTranslation('staff');
-  const [open, setOpen] = useState(false);
-  const panelId = useId();
+  const name = usePositionName();
+  if (!positions.length) return <Badge className={className}>{t('positions.none')}</Badge>;
   return (
-    <Card padded={false} className={className}>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        aria-controls={panelId}
-        className={clsx(
-          'flex min-h-12 w-full items-center justify-between gap-3 px-4 py-3 text-start hover:bg-surface-2 sm:px-5',
-          open ? 'rounded-t-2xl' : 'rounded-2xl',
-        )}
-      >
-        <span className="font-medium text-ink">{t('roles.title')}</span>
-        <span className="sr-only">{open ? t('roles.hide') : t('roles.show')}</span>
-        <ChevronDown className={clsx('size-5 shrink-0 text-muted transition-transform', open && 'rotate-180')} aria-hidden />
-      </button>
-      {open && (
-        <ul id={panelId} className="grid gap-3 border-t border-line px-4 py-4 sm:grid-cols-2 sm:px-5">
-          {ROLES.map((role) => {
-            const Icon = ROLE_ICONS[role];
-            return (
-              <li key={role} className="flex gap-3">
-                <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-muted">
-                  <Icon className="size-4" aria-hidden />
+    <span className={clsx('flex flex-wrap gap-1', className)}>
+      {positions.map((p) => (
+        <Badge key={p.id} tone={p.isOwner ? 'accent' : 'info'}>
+          {p.isOwner && <Crown className="size-3" aria-hidden />}
+          {name(p)}
+        </Badge>
+      ))}
+    </span>
+  );
+}
+
+/** A link to the positions screen, for people who can open it. */
+export function PositionsGuideLink({ className }: { className?: string }) {
+  const { t } = useTranslation('staff');
+  return (
+    <Link
+      to="/positions"
+      className={clsx('flex min-h-14 items-center gap-3 rounded-2xl border border-line bg-surface px-4 py-3 transition-colors hover:bg-surface-2 sm:px-5', className)}
+    >
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-surface-2 text-muted">
+        <BadgeCheck className="size-5" aria-hidden />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block font-medium text-ink">{t('positions.guide')}</span>
+        <span className="block text-sm text-muted">{t('positions.guideHint')}</span>
+      </span>
+      <ChevronRight className="size-4 shrink-0 text-muted rtl:-scale-x-100" aria-hidden />
+    </Link>
+  );
+}
+
+/**
+ * Checkboxes for the positions someone holds. Only positions the signed-in
+ * person may assign can be ticked or unticked; one they hold but can't assign
+ * stays ticked and locked, with the reason.
+ */
+export function PositionPicker({
+  positions,
+  loading,
+  failed,
+  value,
+  onChange,
+  disabled,
+}: {
+  positions: readonly Position[];
+  loading?: boolean;
+  failed?: boolean;
+  value: readonly number[];
+  onChange: (ids: number[]) => void;
+  disabled?: boolean;
+}) {
+  const { t } = useTranslation(['staff', 'positions']);
+  const name = usePositionName();
+  if (loading) return <Spinner className="my-2" />;
+  if (failed) return <p className="text-sm text-danger">{t('positions.loadError')}</p>;
+  const selected = new Set(value);
+  const toggle = (id: number, on: boolean) => {
+    const next = new Set(selected);
+    if (on) next.add(id);
+    else next.delete(id);
+    // Keep the positions list order.
+    onChange([...positions.map((p) => p.id).filter((x) => next.has(x)), ...value.filter((x) => !positions.some((p) => p.id === x))]);
+  };
+  return (
+    <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line">
+      {positions.map((p) => {
+        const off = disabled || !p.assignable;
+        const id = `pos-${p.id}`;
+        const allows = p.isOwner ? t('positions:allowsEverything') : p.permissions.length ? t('positions:allows', { count: p.permissions.length }) : t('positions:allowsNothing');
+        return (
+          <li key={p.id}>
+            <label htmlFor={id} className={clsx('flex min-h-12 items-start gap-3 px-3.5 py-2.5', off ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-surface-2')}>
+              <input
+                id={id}
+                type="checkbox"
+                className="mt-0.5 size-5 shrink-0 rounded accent-[var(--accent)] disabled:opacity-60"
+                checked={selected.has(p.id)}
+                disabled={off}
+                onChange={(e) => toggle(p.id, e.target.checked)}
+              />
+              <span className="min-w-0 flex-1">
+                <span className={clsx('flex flex-wrap items-center gap-1.5 text-sm font-medium', off && !selected.has(p.id) ? 'text-muted' : 'text-ink')}>
+                  {name(p)}
+                  {p.isOwner && <Badge tone="accent">{t('positions:owner')}</Badge>}
                 </span>
-                <div className="min-w-0">
-                  <StatusBadge group="role" value={role} />
-                  <p className="mt-1 text-sm text-muted">{t(`roles.${role}`)}</p>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </Card>
+                <span className="block text-xs text-muted">{allows}</span>
+                {!p.assignable && !disabled && (
+                  <span className="mt-0.5 flex items-center gap-1 text-xs font-medium text-warning">
+                    <Lock className="size-3.5 shrink-0" aria-hidden />
+                    {t('positions.locked')}
+                  </span>
+                )}
+              </span>
+            </label>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

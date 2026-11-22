@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router';
-import { can as canRole, type Permission } from '@shared/roles';
+import type { Permission } from '@shared/permissions';
 import type { MeResponse, SessionUser } from '@shared/schemas/auth';
 import { currentLanguage, setLanguage } from '../i18n';
 import { NoAccess, SplashScreen } from '../components/ui/States';
@@ -12,6 +12,7 @@ interface AuthState {
   needsSetup: boolean;
   schoolName: string;
   loading: boolean;
+  /** Whether the signed-in person's positions allow this (owners: everything). */
   can: (permission: Permission) => boolean;
   /** Call after sign-in / setup / profile change to refresh. */
   refresh: () => Promise<void>;
@@ -57,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       needsSetup: me.data?.needsSetup ?? false,
       schoolName: me.data?.schoolName ?? '',
       loading: me.isPending,
-      can: (p) => canRole(user?.role, p),
+      can: (p) => !!user?.permissions.includes(p),
       refresh,
       signOut,
     }),
@@ -85,7 +86,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-/** Renders children only for roles with the permission; a "no access" message otherwise. */
+/** Renders children only for people whose positions allow the permission; a "no access" message otherwise. */
 export function Guard({ permission, children }: { permission: Permission; children: ReactNode }) {
   const { can } = useAuth();
   return can(permission) ? <>{children}</> : <NoAccess />;

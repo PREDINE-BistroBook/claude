@@ -1,4 +1,4 @@
-import { ArrowLeft, AtSign, Cake, Clapperboard, ExternalLink, Eye, GraduationCap, Mail, MapPin, Pencil, Phone, Ruler, Scissors, Trash2, type LucideIcon } from 'lucide-react';
+import { ArrowLeft, AtSign, Cake, Clapperboard, ExternalLink, Eye, GraduationCap, Lock, Mail, MapPin, Pencil, Phone, Ruler, Scissors, Trash2, type LucideIcon } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router';
@@ -180,7 +180,12 @@ function TalentView({ talent: p, del }: { talent: TalentDetail; del: ReturnType<
           </Card>
 
           <Card title={t('detail.contact')}>
-            {p.phone || p.email ? (
+            {p.contactHidden ? (
+              <p className="flex items-center gap-2 text-sm text-muted">
+                <Lock className="size-4 shrink-0" aria-hidden />
+                {t('common:states.contactHidden')}
+              </p>
+            ) : p.phone || p.email ? (
               <ul className="-my-1 grid gap-1">
                 {p.phone && <LinkRow href={telHref(p.phone)} icon={Phone} label={t('common:fields.phone')} value={p.phone} />}
                 {p.email && <LinkRow href={`mailto:${p.email}`} icon={Mail} label={t('common:fields.email')} value={p.email} />}

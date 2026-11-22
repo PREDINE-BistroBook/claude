@@ -4,9 +4,37 @@ import path from 'node:path';
 import { createApp } from '../src/server/app';
 import type { AppConfig } from '../src/server/config';
 import { createDb, type DB } from '../src/server/db/client';
-import { users } from '../src/server/db/schema';
+import { eq, inArray } from 'drizzle-orm';
+import { positions, userPositions, users } from '../src/server/db/schema';
 import { hashPassword } from '../src/server/lib/password';
-import type { Role } from '../src/shared/roles';
+import type { BuiltInPositionKey, Permission } from '../src/shared/permissions';
+
+/** Old role names from phase 1, kept so tests read naturally: each maps to the closest built-in position. */
+export const LEGACY_ROLES = {
+  owner: 'ceo',
+  admin: 'executive_director',
+  teacher: 'acting_coach',
+  agent: 'head_of_casting',
+} as const satisfies Record<string, BuiltInPositionKey>;
+export type LegacyRole = keyof typeof LEGACY_ROLES;
+
+/**
+ * Who a test user is:
+ * - a built-in position key ('executive_director') or a legacy role ('admin');
+ * - several of them (['acting_coach', 'finance']) — their permissions add up;
+ * - { permissions: [...] } — a custom position made just for this user (isOwner optional).
+ */
+export type PositionSpec =
+  | BuiltInPositionKey
+  | LegacyRole
+  | readonly (BuiltInPositionKey | LegacyRole)[]
+  | { permissions: readonly Permission[]; isOwner?: boolean; name?: string };
+
+function specLabel(spec: PositionSpec): string {
+  if (typeof spec === 'string') return spec;
+  if (Array.isArray(spec)) return spec.join('+');
+  return 'custom';
+}
 
 export interface TestResponse<T = any> {
   status: number;
@@ -55,7 +83,9 @@ let hashed: Promise<string> | null = null;
 /**
  * A fresh app on an in-memory database. Typical use:
  *   const t = await makeTestContext();
- *   const admin = await t.as('admin');
+ *   const admin = await t.as('admin');            // legacy alias of 'executive_director'
+ *   const moaty = await t.as(['acting_coach', 'finance']);
+ *   const custom = await t.as({ permissions: ['students.read'] });
  *   const res = await admin.post('/api/students', { firstName: 'A', lastName: 'B' });
  */
 export async function makeTestContext() {
@@ -66,14 +96,52 @@ export async function makeTestContext() {
   hashed ??= hashPassword(PASSWORD);
   let n = 0;
 
-  /** Create a staff account directly in the database. */
-  async function createUser(role: Role, overrides: Partial<typeof users.$inferInsert> = {}) {
+  /** The position ids a spec stands for (a custom spec creates its position). */
+  function positionIdsFor(spec: PositionSpec): number[] {
+    if (typeof spec === 'object' && !Array.isArray(spec)) {
+      const custom = spec as Exclude<PositionSpec, string | readonly unknown[]>;
+      const row = db
+        .insert(positions)
+        .values({ name: custom.name ?? `Custom ${++n}`, isOwner: custom.isOwner ?? false, permissions: [...custom.permissions], sortOrder: 1000 })
+        .returning({ id: positions.id })
+        .get();
+      return [row.id];
+    }
+    const keys = (Array.isArray(spec) ? spec : [spec]).map((k) => (k in LEGACY_ROLES ? LEGACY_ROLES[k as LegacyRole] : k) as string);
+    const rows = db.select({ id: positions.id, key: positions.key }).from(positions).where(inArray(positions.key, keys)).all();
+    if (rows.length !== new Set(keys).size) throw new Error(`unknown position key in ${JSON.stringify(spec)}`);
+    return rows.map((r) => r.id);
+  }
+
+  /** The id of a built-in position (or legacy role name). */
+  function positionId(key: BuiltInPositionKey | LegacyRole): number {
+    const k = key in LEGACY_ROLES ? LEGACY_ROLES[key as LegacyRole] : key;
+    return db.select({ id: positions.id }).from(positions).where(eq(positions.key, k)).get()!.id;
+  }
+
+  /** Create a staff account directly in the database, holding the given position(s). */
+  async function createUser(spec: PositionSpec, overrides: Partial<typeof users.$inferInsert> = {}) {
     n++;
-    return db
+    const label = specLabel(spec);
+    const user = db
       .insert(users)
-      .values({ email: `${role}${n}@test.local`, name: `${role} ${n}`, role, passwordHash: await hashed!, ...overrides })
+      .values({ email: `${label.replace(/[^a-z0-9_]/gi, '_')}${n}@test.local`, name: `${label} ${n}`, passwordHash: await hashed!, ...overrides })
       .returning()
       .get()!;
+    const ids = positionIdsFor(spec);
+    db.insert(userPositions)
+      .values(ids.map((positionId) => ({ userId: user.id, positionId })))
+      .run();
+    return user;
+  }
+
+  /** Replace a user's positions directly in the database. */
+  function setPositions(userId: number, spec: PositionSpec) {
+    const ids = positionIdsFor(spec);
+    db.delete(userPositions).where(eq(userPositions.userId, userId)).run();
+    db.insert(userPositions)
+      .values(ids.map((positionId) => ({ userId, positionId })))
+      .run();
   }
 
   /** Sign in as an existing user and return a client carrying their cookie. */
@@ -84,9 +152,9 @@ export async function makeTestContext() {
     return makeClient(app, setCookie.split(';')[0]);
   }
 
-  /** Create a user with this role and return a signed-in client (with .user). */
-  async function as(role: Role, overrides: Partial<typeof users.$inferInsert> = {}) {
-    const user = await createUser(role, overrides);
+  /** Create a user holding these position(s) and return a signed-in client (with .user). */
+  async function as(spec: PositionSpec, overrides: Partial<typeof users.$inferInsert> = {}) {
+    const user = await createUser(spec, overrides);
     const client = await login(user.email);
     return Object.assign(client, { user });
   }
@@ -97,6 +165,8 @@ export async function makeTestContext() {
     config,
     anon: makeClient(app),
     createUser,
+    setPositions,
+    positionId,
     login,
     as,
     password: PASSWORD,

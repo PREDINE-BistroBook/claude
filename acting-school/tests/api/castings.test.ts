@@ -747,3 +747,49 @@ describe('access', () => {
     expect(got).toEqual(expected);
   });
 });
+
+// ── Sending to clients (castings.send) ──────────────────────────────────────
+
+describe('castings.send', () => {
+  async function fixture() {
+    const t = await makeTestContext();
+    const head = await t.as('head_of_casting');
+    const team = await t.as('casting_team');
+    const casting = await createCasting(head);
+    const role = await createRole(head, casting.id);
+    return { t, head, team, role, a: insertTalent(t), b: insertTalent(t, { firstName: 'Omar' }), c: insertTalent(t, { firstName: 'Dina' }) };
+  }
+
+  it('the casting team builds shortlists but can’t put anyone forward to the client (403 cannot_send)', async () => {
+    const { t, team, role, a, b } = await fixture();
+    const shortlisted = await submit(team, role.id, a.id);
+    expect(shortlisted.status).toBe('shortlisted');
+    for (const status of ['submitted', 'audition', 'callback', 'booked'] as const) {
+      const created = await team.post('/api/submissions', { roleId: role.id, talentId: b.id, status });
+      expect(created.status).toBe(403);
+      expect(created.body.error.code).toBe('cannot_send');
+      const moved = await team.patch(`/api/submissions/${shortlisted.id}`, { status });
+      expect(moved.status).toBe(403);
+      expect(moved.body.error.code).toBe('cannot_send');
+    }
+    expect(t.db.select().from(submissions).where(eq(submissions.id, shortlisted.id)).get()!.status).toBe('shortlisted');
+    expect(t.db.select().from(submissions).where(eq(submissions.talentId, b.id)).all()).toEqual([]);
+    // Statuses that don't send anyone are fine.
+    for (const status of ['rejected', 'withdrawn', 'shortlisted'] as const) {
+      expect((await team.patch(`/api/submissions/${shortlisted.id}`, { status })).status).toBe(200);
+    }
+    expect((await submit(team, role.id, b.id, { status: 'rejected' })).status).toBe('rejected');
+  });
+
+  it('heads of casting (and the director) send; the team can then still edit notes on a sent submission', async () => {
+    const { t, head, team, role, a, b } = await fixture();
+    const sent = await submit(head, role.id, a.id, { status: 'submitted' });
+    expect((await head.patch(`/api/submissions/${sent.id}`, { status: 'audition', auditionAt: '2031-05-01T10:00' })).body.status).toBe('audition');
+    // Saving the same status back with other fields isn't sending anyone new.
+    const notes = await team.patch(`/api/submissions/${sent.id}`, { status: 'audition', notes: 'Bring headshots' });
+    expect(notes.status).toBe(200);
+    expect(notes.body).toMatchObject({ status: 'audition', notes: 'Bring headshots' });
+    const director = await t.as('executive_director');
+    expect((await submit(director, role.id, b.id, { status: 'booked' })).status).toBe('booked');
+  });
+});

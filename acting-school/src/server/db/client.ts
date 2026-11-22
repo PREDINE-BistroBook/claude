@@ -3,6 +3,7 @@ import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import fs from 'node:fs';
 import path from 'node:path';
+import { ensureBuiltInPositions } from '../lib/access';
 import * as schema from './schema';
 
 export type DB = BetterSQLite3Database<typeof schema> & { $client: Database.Database };
@@ -13,7 +14,8 @@ export function migrationsDir(): string {
 }
 
 /**
- * Open (or create) the database and bring it up to date.
+ * Open (or create) the database and bring it up to date: migrations, then the
+ * built-in positions (CEO, Acting coach, …) if any are missing.
  * Pass ':memory:' for a throwaway database (tests).
  */
 export function createDb(filename: string): DB {
@@ -24,5 +26,6 @@ export function createDb(filename: string): DB {
   sqlite.pragma('busy_timeout = 5000');
   const db = drizzle(sqlite, { schema }) as DB;
   migrate(db, { migrationsFolder: migrationsDir() });
+  ensureBuiltInPositions(db);
   return db;
 }

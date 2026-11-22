@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, isNotNull, lte, notInArray, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, isNotNull, lte, notInArray, sql, type SQL } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { splitDateTime } from '../../shared/dates';
 import type { SubmissionStatus } from '../../shared/enums';
@@ -7,13 +7,14 @@ import { scheduleRangeQuery, type AuditionEvent, type ClassEvent, type ScheduleE
 import type { DB } from '../db/client';
 import { castingRoles, castings, classSessions, courses, enrollments, submissions, talent, users } from '../db/schema';
 import type { AppEnv } from '../env';
+import { courseScope } from '../lib/access';
 import { query } from '../lib/validate';
-import { requireAuth, userCan } from '../middleware/auth';
+import { currentUser, requireAuth, userCan } from '../middleware/auth';
 
 /**
- * The combined calendar: class sessions (courses.read) and auditions
- * (castings.read — so never for teachers) in one date range. Reads the school
- * and agency tables directly; nothing here writes.
+ * The combined calendar: class sessions (courses.read; without classes.all only
+ * sessions of the classes you teach) and auditions (castings.read) in one date
+ * range. Reads the school and agency tables directly; nothing here writes.
  */
 const router = new Hono<AppEnv>();
 router.use(requireAuth);
@@ -25,8 +26,8 @@ const effectiveRoom = sql<string | null>`coalesce(${classSessions.room}, ${cours
 /** Stage name when set, else "First Last". */
 export const talentDisplayName = sql<string>`coalesce(nullif(trim(${talent.stageName}), ''), ${talent.firstName} || ' ' || ${talent.lastName})`;
 
-/** Every class session dated from…to (cancelled ones too), with its course's enrolled count. */
-export function loadClassEvents(db: DB, from: string, to: string): ClassEvent[] {
+/** Every class session dated from…to (cancelled ones too), with its course's enrolled count; `scope` filters courses. */
+export function loadClassEvents(db: DB, from: string, to: string, scope?: SQL): ClassEvent[] {
   // One grouped count per course, joined once — not a count per session row.
   const enrolled = db
     .select({ courseId: enrollments.courseId, n: sql<number>`count(*)`.as('n') })
@@ -53,7 +54,7 @@ export function loadClassEvents(db: DB, from: string, to: string): ClassEvent[] 
     .innerJoin(courses, eq(courses.id, classSessions.courseId))
     .leftJoin(users, eq(users.id, effectiveTeacherId))
     .leftJoin(enrolled, eq(enrolled.courseId, classSessions.courseId))
-    .where(and(gte(classSessions.date, from), lte(classSessions.date, to)))
+    .where(and(gte(classSessions.date, from), lte(classSessions.date, to), scope))
     .orderBy(asc(classSessions.date), asc(classSessions.startTime), asc(classSessions.id))
     .all();
   return rows.map((r) => ({ kind: 'class' as const, ...r }));
@@ -127,7 +128,7 @@ router.get('/', (c) => {
   const { from, to } = query(c, scheduleRangeQuery);
   const db = c.get('db');
   const items: ScheduleEvent[] = [];
-  if (userCan(c, 'courses.read')) items.push(...loadClassEvents(db, from, to));
+  if (userCan(c, 'courses.read')) items.push(...loadClassEvents(db, from, to, courseScope(currentUser(c))));
   if (userCan(c, 'castings.read')) items.push(...loadAuditionEvents(db, { from, to, excludeStatuses: ['withdrawn'] }));
   items.sort(compareEvents);
   return c.json<ListResponse<ScheduleEvent>>({ items });

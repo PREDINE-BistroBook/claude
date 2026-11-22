@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import { todayISO } from '../../shared/dates';
 import type { ListResponse } from '../../shared/schemas/common';
 import {
+  STUDENT_CONTACT_FIELDS,
   studentInput,
   studentListQuery,
   studentUpdateInput,
@@ -10,17 +11,22 @@ import {
   type StudentDetail,
   type StudentListItem,
 } from '../../shared/schemas/students';
+import type { SessionUser } from '../../shared/schemas/auth';
 import type { DB } from '../db/client';
-import { attendance, courses, enrollments, files, students, talent } from '../db/schema';
+import { attendance, classSessions, courses, enrollments, files, students, talent } from '../db/schema';
 import type { AppEnv } from '../env';
+import { courseScope, hasPermission, ownCourseIds, redactContact, seesAllClasses, studentScope, withoutContact } from '../lib/access';
 import { ApiError, notFound } from '../lib/errors';
 import { body, paramId, query } from '../lib/validate';
-import { requireAuth, requirePermission } from '../middleware/auth';
+import { currentUser, requireAuth, requirePermission } from '../middleware/auth';
 
 /**
- * Students: the school's people. Everyone on staff can read them; owners and
- * admins can change them. Deleting a student removes their enrollments and
- * attendance (FK cascade); a linked talent profile is kept, unlinked.
+ * Students: the school's people. students.read shows them — only those in
+ * classes you teach unless you also have classes.all (anyone else is a 404);
+ * students.write changes them. Phone, email, guardian and emergency contacts
+ * need students.contact: without it they come back null (contactHidden: true),
+ * aren't searched and are ignored on writes. Deleting a student removes their
+ * enrollments and attendance (FK cascade); a linked talent profile is kept, unlinked.
  */
 const router = new Hono<AppEnv>();
 router.use(requireAuth);
@@ -30,8 +36,11 @@ const canWrite = requirePermission('students.write');
 
 type StudentRow = typeof students.$inferSelect;
 
-function toStudent(r: StudentRow): Student {
-  return {
+const seesContact = (user: SessionUser) => hasPermission(user, 'students.contact');
+
+function toStudent(r: StudentRow, user: SessionUser): Student {
+  return redactContact(
+    {
     id: r.id,
     firstName: r.firstName,
     lastName: r.lastName,
@@ -51,7 +60,10 @@ function toStudent(r: StudentRow): Student {
     notes: r.notes,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
-  };
+    },
+    STUDENT_CONTACT_FIELDS,
+    seesContact(user),
+  );
 }
 
 /** A photo id must name an uploaded file; otherwise a field-level 400 on photoFileId. */
@@ -65,8 +77,13 @@ function assertPhotoExists(db: DB, fileId: string | null | undefined) {
   }
 }
 
-function findStudent(db: DB, id: number): StudentRow {
-  const row = db.select().from(students).where(eq(students.id, id)).get();
+/** The student, if this person may see them; a 404 otherwise (not in a class they teach, or no such student). */
+function findStudent(db: DB, id: number, user: SessionUser): StudentRow {
+  const row = db
+    .select()
+    .from(students)
+    .where(and(eq(students.id, id), studentScope(user)))
+    .get();
   if (!row) throw notFound('Student not found');
   return row;
 }
@@ -78,7 +95,8 @@ const likeEscaped = (expr: SQL, pattern: string) => sql`${expr} like ${pattern} 
 /** Phone digits with common separators removed, for matching "050 123 4567" against "0501234567". */
 const phoneDigitsSql = sql`replace(replace(replace(replace(replace(coalesce(${students.phone}, ''), ' ', ''), '-', ''), '(', ''), ')', ''), '+', '')`;
 
-function searchCondition(q: string): SQL {
+/** Name search; email and phone too only for someone who may see them (otherwise a search would reveal them). */
+function searchCondition(q: string, withContact: boolean): SQL {
   const term = q.replace(/\s+/g, ' ');
   const pattern = `%${escapeLike(term)}%`;
   const parts: SQL[] = [
@@ -86,11 +104,12 @@ function searchCondition(q: string): SQL {
     likeEscaped(sql`${students.lastName}`, pattern),
     likeEscaped(sql`(${students.firstName} || ' ' || ${students.lastName})`, pattern),
     likeEscaped(sql`(${students.lastName} || ' ' || ${students.firstName})`, pattern),
-    likeEscaped(sql`${students.email}`, pattern),
-    likeEscaped(sql`${students.phone}`, pattern),
   ];
-  const digits = term.replace(/[\s\-().+]/g, '');
-  if (/^\d{3,}$/.test(digits)) parts.push(sql`${phoneDigitsSql} like ${`%${digits}%`}`);
+  if (withContact) {
+    parts.push(likeEscaped(sql`${students.email}`, pattern), likeEscaped(sql`${students.phone}`, pattern));
+    const digits = term.replace(/[\s\-().+]/g, '');
+    if (/^\d{3,}$/.test(digits)) parts.push(sql`${phoneDigitsSql} like ${`%${digits}%`}`);
+  }
   return or(...parts)!;
 }
 
@@ -99,20 +118,24 @@ function searchCondition(q: string): SQL {
 router.get('/', canRead, (c) => {
   const { q, status } = query(c, studentListQuery);
   const db = c.get('db');
+  const me = currentUser(c);
+  const all = seesAllClasses(me);
 
   // One grouped subquery for every student's active-enrollment count (no per-row queries).
   const active = db
     .select({ studentId: enrollments.studentId, n: sql<number>`count(*)`.as('n') })
     .from(enrollments)
-    .where(eq(enrollments.status, 'enrolled'))
+    .where(and(eq(enrollments.status, 'enrolled'), all ? undefined : sql`${enrollments.courseId} in (${ownCourseIds(me.id)})`))
     .groupBy(enrollments.studentId)
     .as('active_enrollments');
 
   const conditions: SQL[] = [];
+  const scope = studentScope(me);
+  if (scope) conditions.push(scope);
   if (status) conditions.push(eq(students.status, status));
-  if (q) conditions.push(searchCondition(q));
+  if (q) conditions.push(searchCondition(q, seesContact(me)));
 
-  const items: StudentListItem[] = db
+  const rows = db
     .select({
       id: students.id,
       firstName: students.firstName,
@@ -129,6 +152,7 @@ router.get('/', canRead, (c) => {
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(sql`${students.lastName} collate nocase`, sql`${students.firstName} collate nocase`, asc(students.id))
     .all();
+  const items: StudentListItem[] = rows.map((r) => redactContact(r, STUDENT_CONTACT_FIELDS, seesContact(me)));
 
   const res: ListResponse<StudentListItem> = { items };
   return c.json(res);
@@ -137,7 +161,8 @@ router.get('/', canRead, (c) => {
 // ── Create ──────────────────────────────────────────────────────────────────
 
 router.post('/', canWrite, async (c) => {
-  const input = await body(c, studentInput);
+  const me = currentUser(c);
+  const input = withoutContact(await body(c, studentInput), STUDENT_CONTACT_FIELDS, seesContact(me));
   const db = c.get('db');
   assertPhotoExists(db, input.photoFileId);
   const created = db
@@ -150,7 +175,7 @@ router.post('/', canWrite, async (c) => {
     })
     .returning()
     .get();
-  return c.json(toStudent(created), 201);
+  return c.json(toStudent(created, me), 201);
 });
 
 // ── Detail ──────────────────────────────────────────────────────────────────
@@ -158,7 +183,10 @@ router.post('/', canWrite, async (c) => {
 router.get('/:id', canRead, (c) => {
   const id = paramId(c);
   const db = c.get('db');
-  const row = findStudent(db, id);
+  const me = currentUser(c);
+  const row = findStudent(db, id, me);
+  // Without classes.all, only their enrollments (and attendance) in classes you teach.
+  const visibleCourses = courseScope(me);
 
   const enrollmentRows = db
     .select({
@@ -171,14 +199,16 @@ router.get('/:id', canRead, (c) => {
     })
     .from(enrollments)
     .innerJoin(courses, eq(courses.id, enrollments.courseId))
-    .where(eq(enrollments.studentId, id))
+    .where(and(eq(enrollments.studentId, id), visibleCourses))
     .orderBy(desc(enrollments.enrolledOn), desc(enrollments.id))
     .all();
 
   const counts = db
     .select({ status: attendance.status, n: sql<number>`count(*)`.mapWith(Number) })
     .from(attendance)
-    .where(eq(attendance.studentId, id))
+    .innerJoin(classSessions, eq(classSessions.id, attendance.sessionId))
+    .innerJoin(courses, eq(courses.id, classSessions.courseId))
+    .where(and(eq(attendance.studentId, id), visibleCourses))
     .groupBy(attendance.status)
     .all();
   const totals: StudentDetail['attendance'] = { present: 0, late: 0, absent: 0, excused: 0, total: 0 };
@@ -190,7 +220,7 @@ router.get('/:id', canRead, (c) => {
   const talentRow = db.select({ id: talent.id }).from(talent).where(eq(talent.studentId, id)).get();
 
   const res: StudentDetail = {
-    ...toStudent(row),
+    ...toStudent(row, me),
     enrollments: enrollmentRows,
     attendance: totals,
     talentId: talentRow?.id ?? null,
@@ -203,23 +233,26 @@ router.get('/:id', canRead, (c) => {
 router.patch('/:id', canWrite, async (c) => {
   const id = paramId(c);
   const db = c.get('db');
-  const existing = findStudent(db, id);
-  const input = await body(c, studentUpdateInput);
+  const me = currentUser(c);
+  const existing = findStudent(db, id, me);
+  const input = withoutContact(await body(c, studentUpdateInput), STUDENT_CONTACT_FIELDS, seesContact(me));
   assertPhotoExists(db, input.photoFileId);
 
   const patch = Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined)) as Partial<typeof students.$inferInsert>;
-  if (!Object.keys(patch).length) return c.json(toStudent(existing));
+  if (!Object.keys(patch).length) return c.json(toStudent(existing, me));
   const updated = db.update(students).set(patch).where(eq(students.id, id)).returning().get();
   if (!updated) throw notFound('Student not found');
-  return c.json(toStudent(updated));
+  return c.json(toStudent(updated, me));
 });
 
 // ── Delete ──────────────────────────────────────────────────────────────────
 
 router.delete('/:id', canWrite, (c) => {
   const id = paramId(c);
+  const db = c.get('db');
+  findStudent(db, id, currentUser(c));
   // Enrollments and attendance cascade; talent.student_id is set to NULL (see db/schema.ts).
-  const result = c.get('db').delete(students).where(eq(students.id, id)).run();
+  const result = db.delete(students).where(eq(students.id, id)).run();
   if (result.changes === 0) throw notFound('Student not found');
   return c.body(null, 204);
 });

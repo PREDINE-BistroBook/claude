@@ -2,8 +2,9 @@ import type { ClassSession } from './courses';
 import type { ScheduleEvent } from './schedule';
 
 /**
- * GET /api/dashboard — shaped by role: sections the caller can't access are
- * omitted (undefined), not empty. Teachers get their own sessions only.
+ * GET /api/dashboard — shaped by permissions: sections the caller can't access
+ * are omitted (undefined), not empty. Without classes.all, counts cover the
+ * classes the caller teaches and the session lists their own sessions only.
  */
 export interface DashboardData {
   today: string;
@@ -13,9 +14,9 @@ export interface DashboardData {
     activeTalent?: number;
     openCastings?: number;
   };
-  /** Today's class sessions (teacher: only theirs). */
+  /** Today's class sessions (without classes.all: only the ones the caller teaches). */
   todaySessions?: ClassSession[];
-  /** Past sessions in the last 14 days with no attendance yet (teacher: only theirs). */
+  /** Past sessions in the last 14 days with no attendance yet (without classes.all: only the caller's). */
   attendanceToDo?: ClassSession[];
   /** (Added) Total sessions needing attendance before the ATTENDANCE_TODO_MAX cap; present exactly when attendanceToDo is. */
   attendanceToDoCount?: number;

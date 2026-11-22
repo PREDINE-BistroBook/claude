@@ -1,6 +1,7 @@
 export * from './common';
 export * from './auth';
 export * from './staff';
+export * from './positions';
 export * from './settings';
 export * from './files';
 export * from './students';

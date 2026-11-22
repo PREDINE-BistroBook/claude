@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { LOCALES, type Locale } from '../enums';
-import type { Role } from '../roles';
+import type { Permission } from '../permissions';
 import { email, optText, password, reqText } from './common';
 
 export const loginInput = z.object({
@@ -33,14 +33,34 @@ export const profileInput = z
   })
   .partial();
 
-/** The signed-in staff member, as returned by GET /api/auth/me and POST /api/auth/login. */
+/** A position as shown next to a person (staff list, profile, directory). */
+export interface PositionSummary {
+  id: number;
+  /** Built-in positions only ('ceo', 'acting_coach', …). */
+  key: string | null;
+  name: string;
+  /** Arabic name; show `name` when null. */
+  nameAr: string | null;
+  isOwner: boolean;
+}
+
+/**
+ * The signed-in staff member, as returned by GET /api/auth/me and POST /api/auth/login.
+ * Positions and permissions are worked out on every request, so a change applies
+ * on the person's next request.
+ */
 export interface SessionUser {
   id: number;
   email: string;
   name: string;
-  role: Role;
   phone: string | null;
   locale: Locale;
+  /** Sorted like the positions list (sortOrder, then name). */
+  positions: PositionSummary[];
+  /** Holds at least one owner position (CEO, CFO): every permission, sees owner accounts. */
+  isOwner: boolean;
+  /** Effective permissions: everything the positions add up to (owners: all). */
+  permissions: Permission[];
 }
 
 export interface MeResponse {

@@ -46,6 +46,7 @@
     "build:server": "esbuild src/server/index.ts --bundle --platform=node --format=esm --packages=external --tsconfig=tsconfig.json --outfile=dist/server/index.js",
     "start": "NODE_ENV=production node dist/server/index.js",
     "seed": "tsx src/server/db/seed.ts",
+    "owner": "tsx src/server/db/grantOwner.ts",
     "db:generate": "drizzle-kit generate",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",

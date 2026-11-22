@@ -27,9 +27,10 @@ const STUDENT_KEYS = [
   'notes',
   'createdAt',
   'updatedAt',
+  'contactHidden',
 ].sort();
 
-const LIST_KEYS = ['id', 'firstName', 'lastName', 'email', 'phone', 'dateOfBirth', 'status', 'photoFileId', 'activeEnrollments'].sort();
+const LIST_KEYS = ['id', 'firstName', 'lastName', 'email', 'phone', 'dateOfBirth', 'status', 'photoFileId', 'activeEnrollments', 'contactHidden'].sort();
 
 function insertCourse(t: Ctx, name: string, color: (typeof courses.$inferInsert)['color'] = 'emerald') {
   return t.db.insert(courses).values({ name, startDate: '2026-01-05', endDate: '2026-06-30', color }).returning().get()!;
@@ -70,6 +71,7 @@ describe('POST /api/students', () => {
       phone: null,
       photoFileId: null,
       notes: null,
+      contactHidden: false,
     });
     expect(typeof res.body.id).toBe('number');
     expect(typeof res.body.createdAt).toBe('number');
@@ -424,14 +426,38 @@ describe('access control', () => {
     expect((await t.anon.delete(`/api/students/${layla.id}`)).status).toBe(401);
   });
 
-  it.each(['owner', 'admin', 'teacher', 'agent'] as const)('%s can read the list and a student', async (role) => {
+  it.each(['owner', 'admin', 'agent', 'video_editor', 'finance', 'casting_team'] as const)(
+    '%s (students.read + classes.all) can read the list and a student',
+    async (role) => {
+      const t = await makeTestContext();
+      const { layla } = await seedPeople(t);
+      const me = await t.as(role);
+      const list = await me.get('/api/students');
+      expect(list.status).toBe(200);
+      expect(list.body.items).toHaveLength(4);
+      expect((await me.get(`/api/students/${layla.id}`)).status).toBe(200);
+    },
+  );
+
+  it('a coach (no classes.all) reads only students in classes they teach; the rest are a 404', async () => {
+    const t = await makeTestContext();
+    const { layla, omar } = await seedPeople(t);
+    const me = await t.as('teacher');
+    expect((await me.get('/api/students')).body.items).toEqual([]);
+    expect((await me.get(`/api/students/${layla.id}`)).status).toBe(404);
+    const course = t.db.insert(courses).values({ name: 'Mine', startDate: '2026-01-05', endDate: '2026-06-30', teacherId: me.user.id }).returning().get()!;
+    t.db.insert(enrollments).values({ courseId: course.id, studentId: layla.id, enrolledOn: '2026-01-05' }).run();
+    expect((await me.get('/api/students')).body.items.map((s: any) => s.id)).toEqual([layla.id]);
+    expect((await me.get(`/api/students/${layla.id}`)).status).toBe(200);
+    expect((await me.get(`/api/students/${omar.id}`)).status).toBe(404);
+  });
+
+  it('403 without students.read', async () => {
     const t = await makeTestContext();
     const { layla } = await seedPeople(t);
-    const me = await t.as(role);
-    const list = await me.get('/api/students');
-    expect(list.status).toBe(200);
-    expect(list.body.items).toHaveLength(4);
-    expect((await me.get(`/api/students/${layla.id}`)).status).toBe(200);
+    const me = await t.as({ permissions: ['talent.read', 'classes.all'] });
+    expect((await me.get('/api/students')).status).toBe(403);
+    expect((await me.get(`/api/students/${layla.id}`)).status).toBe(403);
   });
 
   it.each(['teacher', 'agent'] as const)('%s cannot create, update or delete', async (role) => {
@@ -466,5 +492,126 @@ describe('access control', () => {
       body: JSON.stringify({ firstName: 'A', lastName: 'B' }),
     });
     expect(res.status).toBe(403);
+  });
+});
+
+describe('contact details (students.contact)', () => {
+  async function fixture() {
+    const t = await makeTestContext();
+    const admin = await t.as('admin');
+    const res = await admin.post<Student>('/api/students', {
+      firstName: 'Layla',
+      lastName: 'Haddad',
+      email: 'layla@example.com',
+      phone: '+20 101 234 5501',
+      guardianName: 'Mona Haddad',
+      guardianPhone: '+20 100 000 0001',
+      guardianEmail: 'mona@example.com',
+      emergencyName: 'Sami',
+      emergencyPhone: '+20 100 000 0002',
+      notes: 'Keen',
+    });
+    return { t, admin, layla: res.body };
+  }
+  const CONTACT = { email: null, phone: null, guardianName: null, guardianPhone: null, guardianEmail: null, emergencyName: null, emergencyPhone: null };
+
+  it.each(['video_editor', 'head_of_casting', 'casting_team'] as const)('%s gets them as null with contactHidden, on the list and the detail', async (key) => {
+    const { t, layla } = await fixture();
+    const me = await t.as(key);
+    const detail = await me.get<StudentDetail>(`/api/students/${layla.id}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body).toMatchObject({ ...CONTACT, firstName: 'Layla', notes: 'Keen', contactHidden: true });
+    const list = await me.get<{ items: StudentListItem[] }>('/api/students');
+    expect(list.body.items[0]).toMatchObject({ email: null, phone: null, contactHidden: true });
+  });
+
+  it('a coach sees their own students without contact details', async () => {
+    const { t, layla } = await fixture();
+    const coach = await t.as('teacher');
+    const course = insertCourse(t, 'Mine');
+    t.db.update(courses).set({ teacherId: coach.user.id }).where(eq(courses.id, course.id)).run();
+    t.db.insert(enrollments).values({ courseId: course.id, studentId: layla.id, enrolledOn: '2026-01-05' }).run();
+    expect((await coach.get(`/api/students/${layla.id}`)).body).toMatchObject({ ...CONTACT, contactHidden: true });
+  });
+
+  it.each(['finance', 'admin', 'owner'] as const)('%s sees them', async (key) => {
+    const { t, layla } = await fixture();
+    const me = await t.as(key);
+    expect((await me.get(`/api/students/${layla.id}`)).body).toMatchObject({
+      email: 'layla@example.com',
+      phone: '+20 101 234 5501',
+      guardianName: 'Mona Haddad',
+      emergencyPhone: '+20 100 000 0002',
+      contactHidden: false,
+    });
+    expect((await me.get<{ items: StudentListItem[] }>('/api/students')).body.items[0]).toMatchObject({ phone: '+20 101 234 5501', contactHidden: false });
+  });
+
+  it('search matches phone and email only for someone who may see them (no oracle)', async () => {
+    const { t, layla } = await fixture();
+    const editor = await t.as('video_editor');
+    const finance = await t.as(['acting_coach', 'finance']);
+    const found = async (c: typeof editor, q: string) => (await c.get<{ items: StudentListItem[] }>(`/api/students?q=${encodeURIComponent(q)}`)).body.items.map((s) => s.id);
+    for (const q of ['2345501', '101 234', 'layla@example', 'example.com']) {
+      expect(await found(editor, q)).toEqual([]);
+      expect(await found(finance, q)).toEqual([layla.id]);
+    }
+    expect(await found(editor, 'Layla Haddad')).toEqual([layla.id]);
+  });
+
+  it('without students.contact, create and update ignore contact fields entirely', async () => {
+    const { t, layla } = await fixture();
+    const clerk = await t.as({ permissions: ['students.read', 'students.write', 'classes.all'] });
+    const res = await clerk.patch<Student>(`/api/students/${layla.id}`, { email: '', phone: null, guardianName: 'Someone else', emergencyPhone: '', notes: 'Updated' });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ ...CONTACT, notes: 'Updated', contactHidden: true });
+    expect(t.db.select().from(students).where(eq(students.id, layla.id)).get()).toMatchObject({
+      email: 'layla@example.com',
+      phone: '+20 101 234 5501',
+      guardianName: 'Mona Haddad',
+      emergencyPhone: '+20 100 000 0002',
+      notes: 'Updated',
+    });
+    const created = await clerk.post<Student>('/api/students', { firstName: 'New', lastName: 'Kid', phone: '0100', guardianEmail: 'x@example.com' });
+    expect(created.status).toBe(201);
+    expect(created.body.contactHidden).toBe(true);
+    expect(t.db.select().from(students).where(eq(students.id, created.body.id)).get()).toMatchObject({ phone: null, guardianEmail: null });
+  });
+});
+
+describe('class scope (without classes.all)', () => {
+  it('a coach’s student detail shows only enrollments and attendance from classes they teach', async () => {
+    const t = await makeTestContext();
+    const { layla } = await seedPeople(t);
+    const coach = await t.as('teacher');
+    const mine = insertCourse(t, 'Mine');
+    const theirs = insertCourse(t, 'Theirs');
+    t.db.update(courses).set({ teacherId: coach.user.id }).where(eq(courses.id, mine.id)).run();
+    t.db
+      .insert(enrollments)
+      .values([
+        { courseId: mine.id, studentId: layla.id, enrolledOn: '2026-01-05' },
+        { courseId: theirs.id, studentId: layla.id, enrolledOn: '2026-01-05' },
+      ])
+      .run();
+    t.db.insert(attendance).values({ sessionId: insertSession(t, mine.id, '2026-01-12').id, studentId: layla.id, status: 'present' }).run();
+    t.db.insert(attendance).values({ sessionId: insertSession(t, theirs.id, '2026-01-13').id, studentId: layla.id, status: 'absent' }).run();
+
+    const res = await coach.get<StudentDetail>(`/api/students/${layla.id}`);
+    expect(res.body.enrollments.map((e) => e.courseName)).toEqual(['Mine']);
+    expect(res.body.attendance).toEqual({ present: 1, late: 0, absent: 0, excused: 0, total: 1 });
+    expect((await coach.get<{ items: StudentListItem[] }>('/api/students')).body.items[0]!.activeEnrollments).toBe(1);
+    // The director sees both.
+    const admin = await t.as('admin');
+    expect((await admin.get<StudentDetail>(`/api/students/${layla.id}`)).body.attendance.total).toBe(2);
+  });
+
+  it('students.write without classes.all can’t change or delete students outside their classes (404)', async () => {
+    const t = await makeTestContext();
+    const { layla } = await seedPeople(t);
+    const writer = await t.as({ permissions: ['students.read', 'students.write', 'students.contact'] });
+    expect((await writer.patch(`/api/students/${layla.id}`, { notes: 'x' })).status).toBe(404);
+    expect((await writer.delete(`/api/students/${layla.id}`)).status).toBe(404);
+    expect(t.db.select().from(students).where(eq(students.id, layla.id)).get()).toBeTruthy();
   });
 });

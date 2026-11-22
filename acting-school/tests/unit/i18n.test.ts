@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import castings from '../../src/web/features/castings/i18n';
 import classes from '../../src/web/features/classes/i18n';
 import dashboard from '../../src/web/features/dashboard/i18n';
+import positions from '../../src/web/features/positions/i18n';
 import schedule from '../../src/web/features/schedule/i18n';
 import settings from '../../src/web/features/settings/i18n';
 import staff from '../../src/web/features/staff/i18n';
@@ -9,7 +10,7 @@ import students from '../../src/web/features/students/i18n';
 import talent from '../../src/web/features/talent/i18n';
 import common from '../../src/web/i18n/common';
 
-const namespaces = { common, students, classes, talent, castings, schedule, dashboard, staff, settings };
+const namespaces = { common, students, classes, talent, castings, schedule, dashboard, staff, positions, settings };
 const PLURAL = /_(zero|one|two|few|many|other)$/;
 const AR_FORMS = ['zero', 'one', 'two', 'few', 'many', 'other'];
 
@@ -59,5 +60,23 @@ describe.each(Object.entries(namespaces))('i18n namespace "%s"', (_name, ns) => 
       .filter((k) => !PLURAL.test(k) && k in ar)
       .filter((k) => JSON.stringify(interpolations(en[k]!)) !== JSON.stringify(interpolations(ar[k]!)));
     expect(mismatched).toEqual([]);
+  });
+});
+
+describe('permission labels', () => {
+  it('every permission has an English and Arabic label and description', async () => {
+    const { PERMISSIONS, PERMISSION_GROUPS } = await import('../../src/shared/permissions');
+    const en = flatten(positions.en as Record<string, unknown>);
+    const ar = flatten(positions.ar as Record<string, unknown>);
+    const missing = PERMISSIONS.flatMap((p) =>
+      ['label', 'description'].flatMap((f) => [`perm.${p}.${f}`].filter((k) => !en[k] || !ar[k])),
+    );
+    expect(missing).toEqual([]);
+    // No stale labels for permissions that no longer exist.
+    const labelled = Object.keys(en).filter((k) => k.startsWith('perm.') && k.endsWith('.label')).map((k) => k.slice(5, -6));
+    expect(labelled.sort()).toEqual([...PERMISSIONS].sort());
+    // Every permission is in exactly one group, and every group has a label.
+    expect(PERMISSION_GROUPS.flatMap((g) => g.permissions).sort()).toEqual([...PERMISSIONS].sort());
+    for (const g of PERMISSION_GROUPS) expect([en[`groups.${g.id}`], ar[`groups.${g.id}`]].every(Boolean)).toBe(true);
   });
 });

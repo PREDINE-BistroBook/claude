@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { ClipboardCheck, GraduationCap, Mail, Pencil, Phone, ShieldCheck, ShieldX, Star, Trash2, TriangleAlert, UserPlus, type LucideIcon } from 'lucide-react';
+import { ClipboardCheck, GraduationCap, Lock, Mail, Pencil, Phone, ShieldCheck, ShieldX, Star, Trash2, TriangleAlert, UserPlus, type LucideIcon } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router';
@@ -134,42 +134,50 @@ function StudentView({ student: s, del }: { student: StudentDetail; del: ReturnT
 
       {/* grid-cols-1 (minmax(0, 1fr)) so long emails truncate instead of widening the page. */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Card title={t('detail.contact')}>
-          {s.phone || s.email ? (
-            <ul className="-my-1 grid gap-1">
-              {s.phone && <ContactLink href={telHref(s.phone)} icon={Phone} label={t('common:fields.phone')} value={s.phone} />}
-              {s.email && <ContactLink href={`mailto:${s.email}`} icon={Mail} label={t('common:fields.email')} value={s.email} />}
-            </ul>
-          ) : (
-            <p className="text-sm text-muted">{t('detail.noContact')}</p>
-          )}
-        </Card>
+        {s.contactHidden ? (
+          <Card title={t('detail.contact')} className="md:col-span-2">
+            <ContactHidden />
+          </Card>
+        ) : (
+          <>
+            <Card title={t('detail.contact')}>
+              {s.phone || s.email ? (
+                <ul className="-my-1 grid gap-1">
+                  {s.phone && <ContactLink href={telHref(s.phone)} icon={Phone} label={t('common:fields.phone')} value={s.phone} />}
+                  {s.email && <ContactLink href={`mailto:${s.email}`} icon={Mail} label={t('common:fields.email')} value={s.email} />}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted">{t('detail.noContact')}</p>
+              )}
+            </Card>
 
-        <Card title={t('detail.guardianEmergency')}>
-          {isMinor && !hasGuardian && (
-            <p className="mb-3 flex items-start gap-2 rounded-xl bg-warning-soft px-3.5 py-3 text-sm text-warning" role="note">
-              <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
-              {t('detail.minorNoGuardian')}
-            </p>
-          )}
-          {hasGuardian || hasEmergency ? (
-            <div className="grid gap-4">
-              {hasGuardian && (
-                <PersonBlock heading={t('detail.guardian')} name={s.guardianName}>
-                  {s.guardianPhone && <ContactLink href={telHref(s.guardianPhone)} icon={Phone} label={t('common:fields.phone')} value={s.guardianPhone} />}
-                  {s.guardianEmail && <ContactLink href={`mailto:${s.guardianEmail}`} icon={Mail} label={t('common:fields.email')} value={s.guardianEmail} />}
-                </PersonBlock>
+            <Card title={t('detail.guardianEmergency')}>
+              {isMinor && !hasGuardian && (
+                <p className="mb-3 flex items-start gap-2 rounded-xl bg-warning-soft px-3.5 py-3 text-sm text-warning" role="note">
+                  <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
+                  {t('detail.minorNoGuardian')}
+                </p>
               )}
-              {hasEmergency && (
-                <PersonBlock heading={t('detail.emergency')} name={s.emergencyName}>
-                  {s.emergencyPhone && <ContactLink href={telHref(s.emergencyPhone)} icon={Phone} label={t('common:fields.phone')} value={s.emergencyPhone} />}
-                </PersonBlock>
+              {hasGuardian || hasEmergency ? (
+                <div className="grid gap-4">
+                  {hasGuardian && (
+                    <PersonBlock heading={t('detail.guardian')} name={s.guardianName}>
+                      {s.guardianPhone && <ContactLink href={telHref(s.guardianPhone)} icon={Phone} label={t('common:fields.phone')} value={s.guardianPhone} />}
+                      {s.guardianEmail && <ContactLink href={`mailto:${s.guardianEmail}`} icon={Mail} label={t('common:fields.email')} value={s.guardianEmail} />}
+                    </PersonBlock>
+                  )}
+                  {hasEmergency && (
+                    <PersonBlock heading={t('detail.emergency')} name={s.emergencyName}>
+                      {s.emergencyPhone && <ContactLink href={telHref(s.emergencyPhone)} icon={Phone} label={t('common:fields.phone')} value={s.emergencyPhone} />}
+                    </PersonBlock>
+                  )}
+                </div>
+              ) : (
+                !isMinor && <p className="text-sm text-muted">{t('detail.noGuardian')}</p>
               )}
-            </div>
-          ) : (
-            !isMinor && <p className="text-sm text-muted">{t('detail.noGuardian')}</p>
-          )}
-        </Card>
+            </Card>
+          </>
+        )}
 
         <Card title={t('detail.classes')} padded={false}>
           {s.enrollments.length ? (
@@ -250,6 +258,17 @@ function StudentView({ student: s, del }: { student: StudentDetail; del: ReturnT
         onCancel={() => setConfirmOpen(false)}
       />
     </div>
+  );
+}
+
+/** Shown instead of phone, email, guardian and emergency contacts to someone whose position can't see them. */
+function ContactHidden() {
+  const { t } = useTranslation('common');
+  return (
+    <p className="flex items-center gap-2 text-sm text-muted">
+      <Lock className="size-4 shrink-0" aria-hidden />
+      {t('states.contactHidden')}
+    </p>
   );
 }
 

@@ -17,10 +17,11 @@ export default function ClassesPage() {
   const { t } = useTranslation('classes');
   const { user, can } = useAuth();
   const [params, setParams] = useSearchParams();
-  const isTeacher = user?.role === 'teacher';
+  // Without classes.all the API only answers the classes you teach, so there's nothing to toggle.
+  const seesAll = can('classes.all');
   const status: CourseStatus = params.get('status') === 'archived' ? 'archived' : 'active';
-  // Teachers start on their own classes; ?mine=0 shows everyone's.
-  const mine = isTeacher && params.get('mine') !== '0';
+  // People who see every class can narrow it to their own with ?mine=1.
+  const mine = seesAll && params.get('mine') === '1';
   const [q, setQ] = useState('');
 
   const courses = useCourses({ status, teacherId: mine ? user?.id : undefined });
@@ -69,11 +70,11 @@ export default function ClassesPage() {
               { value: 'archived', label: t('common:enums.courseStatus.archived') },
             ]}
           />
-          {isTeacher && (
+          {seesAll && (
             <button
               type="button"
               aria-pressed={mine}
-              onClick={() => setParam('mine', mine ? '0' : null)}
+              onClick={() => setParam('mine', mine ? null : '1')}
               className={clsx(
                 'inline-flex h-10 items-center gap-1.5 rounded-xl border px-3 text-sm font-medium transition-colors',
                 mine ? 'border-accent bg-accent-soft text-accent' : 'border-line-strong bg-surface text-muted hover:text-ink',
@@ -101,6 +102,8 @@ export default function ClassesPage() {
             <EmptyState icon={GraduationCap} title={t('list.emptyMine')} description={t('list.emptyMineHint')} />
           ) : status === 'archived' ? (
             <EmptyState icon={GraduationCap} title={t('list.emptyArchived')} />
+          ) : !seesAll ? (
+            <EmptyState icon={GraduationCap} title={t('list.emptyOwn')} description={t('list.emptyOwnHint')} />
           ) : (
             <EmptyState
               icon={GraduationCap}

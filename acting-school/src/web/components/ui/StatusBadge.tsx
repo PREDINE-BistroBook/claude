@@ -7,7 +7,6 @@ import { Badge, type Tone } from './Badge';
  *   <StatusBadge group="studentStatus" value={s.status} />
  */
 export const STATUS_TONES = {
-  role: { owner: 'accent', admin: 'info', teacher: 'success', agent: 'warning' },
   studentStatus: { prospect: 'info', active: 'success', paused: 'warning', alumni: 'neutral' },
   courseStatus: { active: 'success', archived: 'neutral' },
   enrollmentStatus: { enrolled: 'success', withdrawn: 'neutral', completed: 'info' },

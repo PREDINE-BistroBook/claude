@@ -208,15 +208,15 @@ describe('GET /api/schedule', () => {
     });
   });
 
-  it('never shows auditions to teachers; agents and admins see both kinds', async () => {
+  it('never shows auditions to coaches (no castings.read); casting and the director see both kinds', async () => {
     const t = await makeTestContext();
     const s = seed(t);
     const today = todayISO();
-    s.session(s.course().id, { date: today });
+    const teacher = await t.as('teacher');
+    s.session(s.course({ teacherId: teacher.user.id }).id, { date: today });
     const role = s.role(s.casting().id);
     s.submission(role.id, s.talent().id, { status: 'audition', auditionAt: `${today}T15:00` });
 
-    const teacher = await t.as('teacher');
     const tRes = await teacher.get<{ items: ScheduleEvent[] }>(range(today, today));
     expect(tRes.status).toBe(200);
     expect(classes(tRes.body.items)).toHaveLength(1);
@@ -282,8 +282,12 @@ describe('GET /api/dashboard', () => {
     expect(res.body.today).toBe(todayISO());
     expect(res.body.counts).toEqual({ activeStudents: 2, activeCourses: 1, activeTalent: 1, openCastings: 2 });
 
+    // A coach without classes.all counts only their own classes and students: none yet.
     const teacher = await t.as('teacher');
-    expect((await teacher.get<DashboardData>('/api/dashboard')).body.counts).toEqual({ activeStudents: 2, activeCourses: 1 });
+    expect((await teacher.get<DashboardData>('/api/dashboard')).body.counts).toEqual({ activeStudents: 0, activeCourses: 0 });
+    // Coach + finance has classes.all (and no talent/castings).
+    const moaty = await t.as(['acting_coach', 'finance']);
+    expect((await moaty.get<DashboardData>('/api/dashboard')).body.counts).toEqual({ activeStudents: 2, activeCourses: 1 });
   });
 
   it('shapes the answer by role: sections a role cannot see are absent', async () => {
@@ -504,5 +508,45 @@ describe('GET /api/dashboard', () => {
       { id: soon.id, title: 'Soon', submissionDeadline: addDays(today, 3) },
       { id: week.id, title: 'Week', submissionDeadline: addDays(today, 7) },
     ]);
+  });
+});
+
+// ── Class scope ─────────────────────────────────────────────────────────────
+
+describe('class scope on the schedule and dashboard', () => {
+  it('without classes.all the schedule shows only the classes you teach (all their sessions); with it, every class', async () => {
+    const t = await makeTestContext();
+    const s = seed(t);
+    const today = todayISO();
+    const coach = await t.as('teacher');
+    const sub = await t.as('teacher');
+    const own = s.course({ name: 'Own', teacherId: coach.user.id });
+    const other = s.course({ name: 'Other' });
+    const ownSession = s.session(own.id, { date: today });
+    s.session(own.id, { date: today, startTime: '12:00', endTime: '13:00', teacherId: sub.user.id });
+    s.session(other.id, { date: today });
+
+    const titles = async (c: Awaited<ReturnType<typeof t.as>>) => classes((await c.get<{ items: ScheduleEvent[] }>(range(today, today))).body.items).map((e) => `${e.title} ${e.startTime}`);
+    expect(await titles(coach)).toEqual(['Own 10:00', 'Own 12:00']);
+    // The substitute covers one session, so the class is theirs to see too.
+    expect(await titles(sub)).toEqual(['Own 10:00', 'Own 12:00']);
+    expect(await titles(await t.as('video_editor'))).toEqual(['Other 10:00', 'Own 10:00', 'Own 12:00']);
+    expect(ownSession).toBeTruthy();
+  });
+
+  it('a coach’s dashboard counts only their own active classes and students', async () => {
+    const t = await makeTestContext();
+    const s = seed(t);
+    const coach = await t.as('teacher');
+    const own = s.course({ teacherId: coach.user.id });
+    const other = s.course();
+    const archived = s.course({ teacherId: coach.user.id, status: 'archived' });
+    const mine = s.student();
+    s.enroll(own.id, mine.id);
+    s.enroll(archived.id, s.student({ status: 'alumni' }).id);
+    s.enroll(other.id, s.student().id);
+    s.student();
+    expect((await coach.get<DashboardData>('/api/dashboard')).body.counts).toEqual({ activeStudents: 1, activeCourses: 1 });
+    expect((await (await t.as('admin')).get<DashboardData>('/api/dashboard')).body.counts).toMatchObject({ activeStudents: 3, activeCourses: 2 });
   });
 });

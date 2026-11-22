@@ -9,19 +9,25 @@
  *
  * Dates are relative to today, so the demo always looks current.
  *
- * Logins (password demo1234 for all):
- *   owner@demo.school     Owner
- *   admin@demo.school     Admin
- *   teacher@demo.school   Teacher (Layla Haddad)
- *   teacher2@demo.school  Teacher (Daniel Price)
- *   agent@demo.school     Agent   (Omar Farouk)
+ * Logins (password demo1234 for all) — fictional people in the school's real positions:
+ *   owner@demo.school     CEO                      (Karim Mansour)
+ *   cfo@demo.school       CFO                      (Hisham Mansour)
+ *   director@demo.school  Executive Director       (Dalia Fathy)
+ *   head@demo.school      Head of Casting          (Sherif Adel)
+ *   casting@demo.school   Casting team             (Tarek Samir)
+ *   editor@demo.school    Video editor             (Hany Nabil)
+ *   coach@demo.school     Acting coach             (Layla Haddad — teaches classes)
+ *   coach2@demo.school    Acting coach + Finance   (Daniel Price — teaches classes)
+ *   tom.wilkins@demo.school  former Acting coach, deactivated
  */
 import { count, eq } from 'drizzle-orm';
 import fs from 'node:fs';
 import path from 'node:path';
 import { addDays, todayISO, weekdayOf } from '../../shared/dates';
 import type { AttendanceStatus, Gender, SubmissionStatus } from '../../shared/enums';
+import type { BuiltInPositionKey } from '../../shared/permissions';
 import type { CourseDetail, CourseEnrollment } from '../../shared/schemas/courses';
+import type { Position } from '../../shared/schemas/positions';
 import { createApp } from '../app';
 import { loadConfig } from '../config';
 import { createDb } from './client';
@@ -126,7 +132,7 @@ async function uploadPortrait(client: ReturnType<typeof as>, who: string, gender
 
 const setup = await call(null, 'POST', '/auth/setup', {
   schoolName: 'Stage Left Academy',
-  name: 'Rania Mansour',
+  name: 'Karim Mansour',
   email: 'owner@demo.school',
   password: PASSWORD,
   locale: 'en',
@@ -134,18 +140,25 @@ const setup = await call(null, 'POST', '/auth/setup', {
 const owner = as(setup.cookie!);
 await owner.patch('/settings', { weekStartsOn: 1, defaultLocale: 'en' });
 
-const staffSpec = [
-  { key: 'admin', name: 'Sara Nasser', email: 'admin@demo.school', role: 'admin', phone: '+20 100 555 0101' },
-  { key: 'layla', name: 'Layla Haddad', email: 'teacher@demo.school', role: 'teacher', phone: '+20 100 555 0102' },
-  { key: 'daniel', name: 'Daniel Price', email: 'teacher2@demo.school', role: 'teacher', phone: '+20 100 555 0103' },
-  { key: 'omar', name: 'Omar Farouk', email: 'agent@demo.school', role: 'agent', phone: '+20 100 555 0104', locale: 'ar' },
+// The built-in positions exist from the start; staff are given them by key.
+const positionIds = Object.fromEntries((await owner.get<{ items: Position[] }>('/positions')).items.map((p) => [p.key, p.id])) as Record<BuiltInPositionKey, number>;
+
+const staffSpec: { key: string; name: string; email: string; positions: BuiltInPositionKey[]; phone: string | null; locale?: 'ar' | 'en' }[] = [
+  { key: 'cfo', name: 'Hisham Mansour', email: 'cfo@demo.school', positions: ['cfo'], phone: '+20 100 555 0100' },
+  { key: 'director', name: 'Dalia Fathy', email: 'director@demo.school', positions: ['executive_director'], phone: '+20 100 555 0101' },
+  { key: 'head', name: 'Sherif Adel', email: 'head@demo.school', positions: ['head_of_casting'], phone: '+20 100 555 0104', locale: 'ar' },
+  { key: 'casting', name: 'Tarek Samir', email: 'casting@demo.school', positions: ['casting_team'], phone: '+20 100 555 0105' },
+  { key: 'editor', name: 'Hany Nabil', email: 'editor@demo.school', positions: ['video_editor'], phone: '+20 100 555 0106' },
+  { key: 'layla', name: 'Layla Haddad', email: 'coach@demo.school', positions: ['acting_coach'], phone: '+20 100 555 0102' },
+  // Coaches and also keeps the books (one person, two positions: their permissions add up).
+  { key: 'daniel', name: 'Daniel Price', email: 'coach2@demo.school', positions: ['acting_coach', 'finance'], phone: '+20 100 555 0103' },
   // Taught the (now archived) Shakespeare course; deactivated at the end.
-  { key: 'tom', name: 'Tom Wilkins', email: 'tom.wilkins@demo.school', role: 'teacher', phone: null },
-] as const;
-const staff: Record<(typeof staffSpec)[number]['key'], number> = {} as never;
+  { key: 'tom', name: 'Tom Wilkins', email: 'tom.wilkins@demo.school', positions: ['acting_coach'], phone: null },
+];
+const staff: Record<string, number> = {};
 for (const s of staffSpec) {
-  const { key, ...input } = s;
-  const created = await owner.post<{ id: number }>('/staff', { ...input, password: PASSWORD });
+  const { key, positions, ...input } = s;
+  const created = await owner.post<{ id: number }>('/staff', { ...input, positionIds: positions.map((k) => positionIds[k]), password: PASSWORD });
   staff[key] = created.id;
 }
 
@@ -229,8 +242,8 @@ for (const s of studentSpec) {
 
 // ── 3. Classes, enrolments, attendance ──────────────────────────────────────
 
-const layla = await login('teacher@demo.school');
-const daniel = await login('teacher2@demo.school');
+const layla = await login('coach@demo.school');
+const daniel = await login('coach2@demo.school');
 const teacherClient: Record<number, ReturnType<typeof as>> = { [staff.layla]: layla, [staff.daniel]: daniel };
 
 interface CourseSpec {
@@ -442,7 +455,8 @@ for (const spec of courseSpec) {
 
 // ── 4. Talent roster ────────────────────────────────────────────────────────
 
-const agent = await login('agent@demo.school');
+// Heads of casting build the roster and send talent to clients.
+const agent = await login('head@demo.school');
 
 interface TalentSpec {
   key: string;
@@ -755,9 +769,12 @@ Stage Left Academy demo data is ready (${secs}s) in ${config.dataDir}
   ${studentSpec.length} students · ${courseSpec.length} classes · ${talentSpec.length} talent · ${castingSpec.length} castings
 
 Sign in with any of these (password: ${PASSWORD}):
-  owner@demo.school     Owner   — Rania Mansour
-  admin@demo.school     Admin   — Sara Nasser
-  teacher@demo.school   Teacher — Layla Haddad
-  teacher2@demo.school  Teacher — Daniel Price
-  agent@demo.school     Agent   — Omar Farouk
+  owner@demo.school     CEO                     — Karim Mansour
+  cfo@demo.school       CFO                     — Hisham Mansour
+  director@demo.school  Executive Director      — Dalia Fathy
+  head@demo.school      Head of Casting         — Sherif Adel
+  casting@demo.school   Casting team            — Tarek Samir
+  editor@demo.school    Video editor            — Hany Nabil
+  coach@demo.school     Acting coach            — Layla Haddad
+  coach2@demo.school    Acting coach + Finance  — Daniel Price
 `);

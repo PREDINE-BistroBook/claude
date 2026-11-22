@@ -1,12 +1,13 @@
 import clsx from 'clsx';
-import { ExternalLink, UserMinus } from 'lucide-react';
+import { ExternalLink, Lock, UserMinus } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import { SUBMISSION_STATUSES, type SubmissionStatus } from '@shared/enums';
-import { submissionUpdateInput, type Submission } from '@shared/schemas/castings';
+import { isSendingStatus, submissionUpdateInput, type Submission } from '@shared/schemas/castings';
 import { Avatar, Button, ConfirmDialog, Field, FormError, Input, Modal, TextAreaField, TextField, useToast } from '@web/components/ui';
 import { ApiError } from '@web/lib/api';
+import { useAuth } from '@web/lib/auth';
 import { displayName, fullName } from '@web/lib/format';
 import { useForm } from '@web/lib/forms';
 import { castingsErrorKey, useDeleteSubmission, useUpdateSubmission } from '../api';
@@ -35,6 +36,10 @@ const DOT: Record<string, string> = {
 function SubmissionDialog({ submission: s, roleName, onClose }: Props & { submission: Submission }) {
   const { t } = useTranslation(['castings', 'common']);
   const toast = useToast();
+  const { can } = useAuth();
+  // Moving someone to a status that sends them to the client needs castings.send; their current status stays selectable.
+  const mayPick = (status: SubmissionStatus) => status === s.status || !isSendingStatus(status) || can('castings.send');
+  const sendLocked = !can('castings.send');
   const update = useUpdateSubmission(s.id);
   const remove = useDeleteSubmission(s.id);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -142,9 +147,16 @@ function SubmissionDialog({ submission: s, roleName, onClose }: Props & { submis
 
           <fieldset>
             <legend className="mb-2 text-sm font-medium text-ink">{t('submission.status')}</legend>
+            {sendLocked && (
+              <p className="mb-2 flex items-start gap-2 rounded-xl bg-surface-2 px-3 py-2.5 text-xs text-muted" role="note">
+                <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                {t('submission.cannotSend')}
+              </p>
+            )}
             <div className="grid gap-1.5">
               {SUBMISSION_STATUSES.map((status) => {
                 const checked = v.status === status;
+                const allowed = mayPick(status);
                 return (
                   <div key={status}>
                     {status === FINAL_STATUSES[0] && (
@@ -152,8 +164,8 @@ function SubmissionDialog({ submission: s, roleName, onClose }: Props & { submis
                     )}
                     <label
                       className={clsx(
-                        'flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border px-3 py-2 transition-colors',
-                        checked ? 'border-accent bg-accent-soft/50' : 'border-line hover:bg-surface-2',
+                        'flex min-h-12 items-center gap-3 rounded-xl border px-3 py-2 transition-colors',
+                        !allowed ? 'cursor-not-allowed border-line opacity-60' : checked ? 'cursor-pointer border-accent bg-accent-soft/50' : 'cursor-pointer border-line hover:bg-surface-2',
                       )}
                     >
                       <input
@@ -161,11 +173,15 @@ function SubmissionDialog({ submission: s, roleName, onClose }: Props & { submis
                         name="status"
                         value={status}
                         checked={checked}
+                        disabled={!allowed}
                         onChange={() => form.set('status', status)}
                         className="size-4 shrink-0 accent-[var(--accent)]"
                       />
                       <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-medium text-ink">{t(`common:enums.submissionStatus.${status}`)}</span>
+                        <span className="flex items-center gap-1.5 text-sm font-medium text-ink">
+                          {t(`common:enums.submissionStatus.${status}`)}
+                          {!allowed && <Lock className="size-3.5 text-muted" aria-hidden />}
+                        </span>
                         <span className="block text-xs text-muted">{t(`submission.statusHints.${status}`)}</span>
                       </span>
                       <span aria-hidden className={clsx('size-2.5 shrink-0 rounded-full', DOT[SUBMISSION_TONES[status]])} />

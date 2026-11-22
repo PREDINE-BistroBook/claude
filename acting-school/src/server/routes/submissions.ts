@@ -1,18 +1,20 @@
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { SUBMISSION_STATUSES } from '../../shared/enums';
-import { submissionInput, submissionUpdateInput, type Submission } from '../../shared/schemas/castings';
+import { isSendingStatus, submissionInput, submissionUpdateInput, type Submission } from '../../shared/schemas/castings';
 import type { DB } from '../db/client';
 import { castingRoles, submissions, talent } from '../db/schema';
 import type { AppEnv } from '../env';
 import { ApiError, notFound } from '../lib/errors';
 import { body, paramId } from '../lib/validate';
-import { currentUser, requireAuth, requirePermission } from '../middleware/auth';
+import { currentUser, requireAuth, requirePermission, userCan } from '../middleware/auth';
 
 /**
  * Submissions: a talent put forward for one casting role, and how far they got
  * (shortlisted → submitted → audition → callback → booked, or rejected /
- * withdrawn). A talent is on a role at most once. Same access as castings.
+ * withdrawn). A talent is on a role at most once. castings.write builds the
+ * shortlist; moving someone to a status that sends them to the client
+ * (submitted, audition, callback, booked) also needs castings.send.
  */
 const router = new Hono<AppEnv>();
 router.use(requireAuth);
@@ -99,11 +101,13 @@ function fieldIssue(field: string, message: string): ApiError {
 }
 
 const alreadySubmitted = () => new ApiError(409, 'already_submitted', 'This talent is already on this role');
+const cannotSend = () => new ApiError(403, 'cannot_send', 'Sending talent to the client needs the castings.send permission');
 
 // ── Create ──────────────────────────────────────────────────────────────────
 
 router.post('/', canWrite, async (c) => {
   const input = await body(c, submissionInput);
+  if (input.status && isSendingStatus(input.status) && !userCan(c, 'castings.send')) throw cannotSend();
   const db = c.get('db');
 
   const role = db.select({ id: castingRoles.id }).from(castingRoles).where(eq(castingRoles.id, input.roleId)).get();
@@ -140,8 +144,10 @@ router.patch('/:id', canWrite, async (c) => {
   const raw = await body(c, submissionUpdateInput);
   const input = Object.fromEntries(Object.entries(raw).filter(([, v]) => v !== undefined)) as typeof raw;
   const db = c.get('db');
-  const found = db.select({ id: submissions.id }).from(submissions).where(eq(submissions.id, id)).get();
+  const found = db.select({ id: submissions.id, status: submissions.status }).from(submissions).where(eq(submissions.id, id)).get();
   if (!found) throw notFound('Submission not found');
+  // Sending is a change of status; saving other fields of an already-sent submission is fine.
+  if (input.status && input.status !== found.status && isSendingStatus(input.status) && !userCan(c, 'castings.send')) throw cannotSend();
   if (Object.keys(input).length) db.update(submissions).set(input).where(eq(submissions.id, id)).run();
   return c.json(loadSubmission(db, id));
 });

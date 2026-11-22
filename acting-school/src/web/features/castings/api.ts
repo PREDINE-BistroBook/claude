@@ -127,6 +127,7 @@ export function useActiveTalent(q: string, enabled = true) {
 /** Message key for a failed casting/submission request, with this module's own error codes. */
 export function castingsErrorKey(err: unknown): string {
   if (err instanceof ApiError && err.code === 'already_submitted') return 'castings:errors.alreadySubmitted';
+  if (err instanceof ApiError && err.code === 'cannot_send') return 'castings:errors.cannotSend';
   if (err instanceof ApiError && err.code === 'validation' && err.issues?.length) {
     const own = err.issues.find((i) => /^castings:errors\./.test(i.message));
     if (own) return own.message;

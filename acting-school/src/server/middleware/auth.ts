@@ -1,17 +1,22 @@
 import { and, eq, gt } from 'drizzle-orm';
 import type { Context, MiddlewareHandler } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
-import { can, type Permission } from '../../shared/roles';
+import type { Permission } from '../../shared/permissions';
 import type { SessionUser } from '../../shared/schemas/auth';
-import { authSessions, users } from '../db/schema';
+import { authSessions, positions, userPositions, users } from '../db/schema';
 import type { AppEnv } from '../env';
+import { accessFrom, hasPermission, positionOrder } from '../lib/access';
 import { ApiError } from '../lib/errors';
 import { newToken, sha256 } from '../lib/password';
 
 export const SESSION_COOKIE = 'as_session';
 const DAY = 24 * 60 * 60 * 1000;
 
-/** Loads the signed-in user (if any) from the session cookie. Never rejects. */
+/**
+ * Loads the signed-in user (if any) from the session cookie. Never rejects.
+ * Positions and permissions are read fresh on every request (one joined query),
+ * so a change to someone's positions applies on their next request.
+ */
 export const loadSession: MiddlewareHandler<AppEnv> = async (c, next) => {
   c.set('user', null);
   c.set('sessionId', null);
@@ -20,28 +25,43 @@ export const loadSession: MiddlewareHandler<AppEnv> = async (c, next) => {
     const db = c.get('db');
     const id = sha256(token);
     const now = Date.now();
-    const row = db
+    // One row per position held (or a single row with null position columns).
+    const rows = db
       .select({
         expiresAt: authSessions.expiresAt,
         id: users.id,
         email: users.email,
         name: users.name,
-        role: users.role,
         phone: users.phone,
         locale: users.locale,
         active: users.active,
+        positionId: positions.id,
+        positionKey: positions.key,
+        positionName: positions.name,
+        positionNameAr: positions.nameAr,
+        positionIsOwner: positions.isOwner,
+        positionPermissions: positions.permissions,
       })
       .from(authSessions)
       .innerJoin(users, eq(users.id, authSessions.userId))
+      .leftJoin(userPositions, eq(userPositions.userId, users.id))
+      .leftJoin(positions, eq(positions.id, userPositions.positionId))
       .where(and(eq(authSessions.id, id), gt(authSessions.expiresAt, now)))
-      .get();
+      .orderBy(...positionOrder)
+      .all();
+    const row = rows[0];
     if (row && row.active) {
-      const { expiresAt, active: _active, ...user } = row;
+      const held = rows.flatMap((r) =>
+        r.positionId === null
+          ? []
+          : [{ id: r.positionId, key: r.positionKey, name: r.positionName!, nameAr: r.positionNameAr, isOwner: !!r.positionIsOwner, permissions: r.positionPermissions ?? [] }],
+      );
+      const user: SessionUser = { id: row.id, email: row.email, name: row.name, phone: row.phone, locale: row.locale, ...accessFrom(held) };
       c.set('user', user);
       c.set('sessionId', id);
       // Sliding expiry: renew when less than half the lifetime is left.
       const lifetime = c.get('config').sessionDays * DAY;
-      if (expiresAt - now < lifetime / 2) {
+      if (row.expiresAt - now < lifetime / 2) {
         const newExpiry = now + lifetime;
         db.update(authSessions).set({ expiresAt: newExpiry }).where(eq(authSessions.id, id)).run();
         writeCookie(c, token, newExpiry);
@@ -69,12 +89,17 @@ export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
   await next();
 };
 
-/** 401 if signed out, 403 if the role lacks the permission. */
+/** 401 if signed out, 403 unless the person's positions allow the permission. */
 export function requirePermission(permission: Permission): MiddlewareHandler<AppEnv> {
+  return requireAnyPermission(permission);
+}
+
+/** 401 if signed out, 403 unless the person's positions allow at least one of these permissions. */
+export function requireAnyPermission(...permissions: Permission[]): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
     const user = c.get('user');
     if (!user) throw new ApiError(401, 'unauthorized', 'Please sign in');
-    if (!can(user.role, permission)) throw new ApiError(403, 'forbidden', 'You do not have access to this');
+    if (!permissions.some((p) => hasPermission(user, p))) throw new ApiError(403, 'forbidden', 'You do not have access to this');
     await next();
   };
 }
@@ -88,7 +113,7 @@ export function currentUser(c: Context<AppEnv>): SessionUser {
 
 /** Inline permission check inside a handler (e.g. to include optional data). */
 export function userCan(c: Context<AppEnv>, permission: Permission): boolean {
-  return can(c.get('user')?.role, permission);
+  return hasPermission(c.get('user'), permission);
 }
 
 function writeCookie(c: Context<AppEnv>, token: string, expiresAt: number) {

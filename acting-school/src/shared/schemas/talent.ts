@@ -37,6 +37,12 @@ export const talentInput = talentFields.refine(
 export type TalentInput = z.infer<typeof talentInput>;
 export const talentUpdateInput = talentFields.partial();
 
+/**
+ * Contact details, visible only with talent.contact. Without it the API answers
+ * null for these (and contactHidden: true) and ignores them on create/update.
+ */
+export const TALENT_CONTACT_FIELDS = ['email', 'phone'] as const;
+
 /** POST /api/talent/:id/photos — attach an uploaded file to the gallery. */
 export const talentPhotoInput = z.object({
   fileId: z.uuid(),
@@ -91,6 +97,8 @@ export interface Talent {
   notes: string | null;
   createdAt: number;
   updatedAt: number;
+  /** True when the caller can't see contact details (no talent.contact): email and phone are null. */
+  contactHidden: boolean;
 }
 
 /** GET /api/talent → { items: TalentListItem[] } — also used by the casting "add talent" picker. */

@@ -39,7 +39,13 @@ describe('npm run seed', () => {
         db.close();
       }
     };
-    expect(count('select count(*) as n from users')).toBe(6);
+    expect(count('select count(*) as n from users')).toBe(9);
+    expect(count('select count(*) as n from positions')).toBe(8);
+    // Everyone holds a position; coach2 holds two (acting coach + finance).
+    expect(count('select count(*) as n from users where id not in (select user_id from user_positions)')).toBe(0);
+    expect(count(`select count(*) as n from user_positions up join users u on u.id = up.user_id where u.email = 'coach2@demo.school'`)).toBe(2);
+    expect(count(`select count(*) as n from user_positions up join users u on u.id = up.user_id join positions p on p.id = up.position_id where p.is_owner = 1`)).toBe(2);
+    expect(count('select count(*) as n from users where active = 0')).toBe(1);
     expect(count('select count(*) as n from students')).toBeGreaterThanOrEqual(20);
     expect(count('select count(*) as n from courses')).toBeGreaterThanOrEqual(4);
     expect(count('select count(*) as n from attendance')).toBeGreaterThan(100);
@@ -51,10 +57,10 @@ describe('npm run seed', () => {
     const again = seed();
     expect(again.status).toBe(1);
     expect(again.stderr).toContain('--reset');
-    expect(count('select count(*) as n from users')).toBe(6);
+    expect(count('select count(*) as n from users')).toBe(9);
 
     const reset = seed('--reset');
     expect(reset.status).toBe(0);
-    expect(count('select count(*) as n from users')).toBe(6);
+    expect(count('select count(*) as n from users')).toBe(9);
   }, 90_000);
 });

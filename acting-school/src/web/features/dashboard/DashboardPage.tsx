@@ -3,7 +3,7 @@ import { Clapperboard, GraduationCap, Plus, Star, UserPlus, Users, type LucideIc
 import { useTranslation } from 'react-i18next';
 import type { ReactNode } from 'react';
 import { todayISO } from '@shared/dates';
-import type { Permission } from '@shared/roles';
+import type { Permission } from '@shared/permissions';
 import type { DashboardData } from '@shared/schemas/dashboard';
 import { ButtonLink, ErrorState, PageHeader, PageLoader, StatCard } from '@web/components/ui';
 import { useAuth } from '@web/lib/auth';
@@ -72,7 +72,7 @@ export default function DashboardPage() {
 
         <SectionColumns
           school={[
-            data.todaySessions && <TodayClassesCard key="today" sessions={data.todaySessions} today={today} mine={user?.role === 'teacher'} />,
+            data.todaySessions && <TodayClassesCard key="today" sessions={data.todaySessions} today={today} mine={!can('classes.all')} />,
             data.attendanceToDo && data.attendanceToDo.length > 0 && (
               <AttendanceCard key="attendance" sessions={data.attendanceToDo} total={data.attendanceToDoCount ?? data.attendanceToDo.length} today={today} />
             ),

@@ -10,6 +10,7 @@ import castingRoutes from './routes/castings';
 import courseRoutes from './routes/courses';
 import dashboardRoutes from './routes/dashboard';
 import fileRoutes from './routes/files';
+import positionRoutes from './routes/positions';
 import scheduleRoutes from './routes/schedule';
 import sessionRoutes from './routes/sessions';
 import settingsRoutes from './routes/settings';
@@ -45,6 +46,7 @@ export function createApp(deps: { db: DB; config: AppConfig }) {
   app.route('/api/auth', authRoutes);
   app.route('/api/files', fileRoutes);
   app.route('/api/staff', staffRoutes);
+  app.route('/api/positions', positionRoutes);
   app.route('/api/settings', settingsRoutes);
   app.route('/api/students', studentRoutes);
   app.route('/api/courses', courseRoutes);

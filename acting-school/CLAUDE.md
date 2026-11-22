@@ -23,6 +23,7 @@ A standalone project. It shares nothing with the rest of this repository: not th
 ```
 npm run dev          # API on :3000 (tsx watch) + Vite on :5173 (proxies /api)
 npm run seed         # demo data into $DATA_DIR (default ./data) — see src/server/db/seed.ts for logins
+npm run owner -- a@b # give an existing account the CEO position (lockout / phase-1 upgrade)
 npm run typecheck    # tsc, whole project
 npm test             # vitest
 npm run build        # web → dist/web, server → dist/server
@@ -34,27 +35,29 @@ npm run e2e          # Playwright
 ## Layout
 
 ```
-src/shared/          roles.ts (roles → permissions), enums.ts, dates.ts, schemas/<module>.ts (zod + API types)
+src/shared/          permissions.ts (permission catalogue, built-in positions), enums.ts, dates.ts, schemas/<module>.ts (zod + API types)
 src/server/
   app.ts             mounts every router under /api/<module>
   db/schema.ts       all tables; db/migrations/ generated SQL (applied at startup)
-  middleware/auth.ts requireAuth, requirePermission, currentUser, userCan
-  lib/               errors.ts (ApiError), validate.ts (body/query/paramId), password.ts, settings.ts
+  middleware/auth.ts requireAuth, requirePermission/requireAnyPermission, currentUser, userCan
+  lib/               access.ts (positions → permissions, class scope, contact redaction), errors.ts (ApiError), validate.ts (body/query/paramId), password.ts, settings.ts
+  db/grantOwner.ts   `npm run owner -- email`: give an account the CEO position (lockout / phase-1 upgrade)
   routes/<module>.ts one Hono router per module
 src/web/
   router.tsx         spreads each feature's routes
   features/<module>/ routes.tsx, pages, components, i18n.ts (en + ar)
   components/ui/     the UI kit (import from '@web/components/ui')
-  lib/               api.ts, auth.tsx (useAuth, Guard), forms.ts (useForm), format.ts (useFormat), query.ts, image.ts
+  lib/               api.ts, auth.tsx (useAuth, Guard), forms.ts (useForm), format.ts (useFormat), positions.ts (usePositionName), query.ts, image.ts
   i18n/              index.ts (registers namespaces), common.ts (shared strings + enum labels)
   layout/            AppShell (sidebar on desktop, bottom tabs on phones), nav.ts
-tests/helpers.ts     makeTestContext(): in-memory app, t.as('admin') → signed-in client
+tests/helpers.ts     makeTestContext(): in-memory app, t.as('executive_director' | ['acting_coach','finance'] | { permissions }) → signed-in client
 ```
 
 ## Rules
 
 ### Server
-- Every router: `router.use(requireAuth)` or per-route `requirePermission('x.y')`. Permissions come from `src/shared/roles.ts` only. The API is the guard; the UI hiding things is a courtesy.
+- Every router: `router.use(requireAuth)` or per-route `requirePermission('x.y')`. Permissions are defined in `src/shared/permissions.ts` only; a person's effective permissions come from the positions they hold (`SessionUser.permissions`, worked out on every request; owner positions = all). The API is the guard; the UI hiding things is a courtesy.
+- Access rules beyond a single permission live in `src/server/lib/access.ts`: without `classes.all` a person only sees the classes they teach (course teacher or a session's substitute) and those classes' students — anything else is a 404; without `students.contact` / `talent.contact` contact fields come back null with `contactHidden: true`, aren't searched, and are ignored on writes. Non-owners never see owner accounts or owner positions and can't give, take or edit access beyond their own.
 - Validate everything: `await body(c, schema)`, `query(c, schema)`, `paramId(c)`. Throw `ApiError` / `notFound()` / `forbidden()` / `conflict()` — never return ad-hoc error JSON.
 - Response shapes must match the interfaces in `src/shared/schemas/<module>.ts`. Lists answer `{ items: [...] }`. Create answers 201 with the created resource. Delete answers 204 (`c.body(null, 204)`).
 - Multi-step writes go in `db.transaction((tx) => { … })`. **better-sqlite3 transactions are synchronous: no `await` inside** (do async work — hashing, file IO — before).
@@ -70,8 +73,8 @@ tests/helpers.ts     makeTestContext(): in-memory app, t.as('admin') → signed-
 - Data: TanStack Query with keys starting with the resource (`['students']`, `['students', id]`); invalidate the resource after a mutation. API calls via `api.get/post/patch/put/delete` from `@web/lib/api` (paths without `/api`).
 - Forms: `useForm` + the shared zod schema (`form.validate(studentInput)`), `onError: form.setServerError`. Field errors render via `Field`/`TextField` `error={form.error('x')}`.
 - Dates/times on screen: `useFormat()` (`f.date(iso)`, `f.time(hhmm)`, `f.weekday(n)`), never raw strings.
-- Gate UI with `useAuth().can('x.y')`; gate routes with `<Guard permission="x.y">`.
+- Gate UI with `useAuth().can('x.y')`; gate routes with `<Guard permission="x.y">`. Never branch on a position's name or key — always on a permission. Show position names with `usePositionName()` (Arabic name in Arabic when set).
 - Page titles via `PageHeader` (it also sets the browser tab title).
 
 ### Tests
-- API tests per module in `tests/api/<module>.test.ts` using `makeTestContext()`. Cover: happy path, validation (400), auth (401 signed out, 403 for roles without the permission), not found (404), and the module's own business rules.
+- API tests per module in `tests/api/<module>.test.ts` using `makeTestContext()`. Cover: happy path, validation (400), auth (401 signed out, 403 for positions without the permission), not found (404), and the module's own business rules. `t.as()` also accepts the phase-1 names owner/admin/teacher/agent as aliases of ceo/executive_director/acting_coach/head_of_casting.

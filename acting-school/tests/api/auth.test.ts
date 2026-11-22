@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { users } from '../../src/server/db/schema';
+import { PERMISSIONS } from '../../src/shared/permissions';
 import { makeTestContext, uploadPng, PNG_1PX } from '../helpers';
 
 describe('setup', () => {
-  it('creates the owner on first run, then refuses', async () => {
+  it('creates the first account with the CEO position on first run, then refuses', async () => {
     const t = await makeTestContext();
     let me = await t.anon.get('/api/auth/me');
     expect(me.body).toMatchObject({ user: null, needsSetup: true });
@@ -15,7 +16,9 @@ describe('setup', () => {
       password: 'longenough',
     });
     expect(res.status).toBe(201);
-    expect(res.body.user).toMatchObject({ email: 'owner@example.com', role: 'owner' });
+    expect(res.body.user).toMatchObject({ email: 'owner@example.com', isOwner: true, permissions: [...PERMISSIONS] });
+    expect(res.body.user.positions).toEqual([{ id: expect.any(Number), key: 'ceo', name: 'CEO', nameAr: 'الرئيس التنفيذي', isOwner: true }]);
+    expect((await t.login('owner@example.com', 'longenough').then((c) => c.get('/api/auth/me'))).body.user.positions[0].key).toBe('ceo');
     expect(res.headers.get('set-cookie')).toContain('HttpOnly');
     // Setting up signs the owner in, so the staff list mustn't say "Never signed in".
     const owner = t.db.select().from(users).get()!;
@@ -44,7 +47,13 @@ describe('login / logout / me', () => {
     const u = await t.createUser('teacher', { email: 'teach@example.com' });
     const client = await t.login('teach@example.com');
     const me = await client.get('/api/auth/me');
-    expect(me.body.user).toMatchObject({ id: u.id, role: 'teacher' });
+    expect(me.body.user).toMatchObject({
+      id: u.id,
+      isOwner: false,
+      permissions: ['students.read', 'courses.read', 'attendance.write'],
+      positions: [expect.objectContaining({ key: 'acting_coach', name: 'Acting coach', nameAr: 'مدرب تمثيل', isOwner: false })],
+    });
+    expect(Object.keys(me.body.user).sort()).toEqual(['email', 'id', 'isOwner', 'locale', 'name', 'permissions', 'phone', 'positions']);
     expect(me.body.user.passwordHash).toBeUndefined();
 
     await client.post('/api/auth/logout');
@@ -110,11 +119,27 @@ describe('profile & password', () => {
     await t.login(me.user.email, 'newpassword1');
   });
 
-  it('cannot change own role through the profile', async () => {
+  it('cannot change own positions or permissions through the profile', async () => {
     const t = await makeTestContext();
     const me = await t.as('teacher');
-    await me.patch('/api/auth/profile', { role: 'owner' });
-    expect((await me.get('/api/auth/me')).body.user.role).toBe('teacher');
+    await me.patch('/api/auth/profile', { positionIds: [t.positionId('ceo')], permissions: ['staff.manage'], isOwner: true });
+    const after = (await me.get('/api/auth/me')).body.user;
+    expect(after.positions.map((p: any) => p.key)).toEqual(['acting_coach']);
+    expect(after.isOwner).toBe(false);
+    expect(after.permissions).not.toContain('staff.manage');
+  });
+
+  it('a change to someone’s positions applies on their next request', async () => {
+    const t = await makeTestContext();
+    const me = await t.as('teacher');
+    expect((await me.get('/api/staff')).status).toBe(403);
+    t.setPositions(me.user.id, ['acting_coach', 'executive_director']);
+    expect((await me.get('/api/staff')).status).toBe(200);
+    const user = (await me.get('/api/auth/me')).body.user;
+    // Sorted like the positions list; permissions add up.
+    expect(user.positions.map((p: any) => p.key)).toEqual(['executive_director', 'acting_coach']);
+    expect(user.permissions).toContain('staff.manage');
+    expect(user.permissions).not.toContain('payments.manage');
   });
 });
 

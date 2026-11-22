@@ -27,14 +27,18 @@ import {
   planRegeneration,
   sameSchedule,
 } from '../lib/classSessions';
+import type { SessionUser } from '../../shared/schemas/auth';
+import { canSeeStudent, courseScope } from '../lib/access';
 import { ApiError, notFound } from '../lib/errors';
 import { body, paramId, query } from '../lib/validate';
-import { requireAuth, requirePermission } from '../middleware/auth';
+import { currentUser, requireAuth, requirePermission } from '../middleware/auth';
 
 /**
  * Classes ("courses"): CRUD, weekly schedule → generated sessions, enrollments
  * and one-off extra sessions. Reading needs courses.read; everything that
- * changes a class needs courses.write.
+ * changes a class needs courses.write. Without classes.all a person only sees
+ * (and can only change) the classes they teach — as the course's teacher or as
+ * the substitute on any of its sessions; any other class is a 404.
  */
 const router = new Hono<AppEnv>();
 router.use(requireAuth);
@@ -58,8 +62,13 @@ function assertSpan(startDate: string, endDate: string) {
   if (daysBetween(startDate, endDate) > MAX_COURSE_SPAN_DAYS) throw fieldError(['endDate'], 'errors.dateRangeTooLong');
 }
 
-function requireCourse(db: DB, id: number) {
-  const course = db.select().from(courses).where(eq(courses.id, id)).get();
+/** The course, if this person may see it; a 404 otherwise. */
+function requireCourse(db: DB, id: number, user: SessionUser) {
+  const course = db
+    .select()
+    .from(courses)
+    .where(and(eq(courses.id, id), courseScope(user)))
+    .get();
   if (!course) throw notFound('Class not found');
   return course;
 }
@@ -82,7 +91,11 @@ function classFull(): ApiError {
 
 router.get('/', read, (c) => {
   const q = query(c, courseListQuery);
-  const filters = [q.status ? eq(courses.status, q.status) : undefined, q.teacherId ? eq(courses.teacherId, q.teacherId) : undefined];
+  const filters = [
+    courseScope(currentUser(c)),
+    q.status ? eq(courses.status, q.status) : undefined,
+    q.teacherId ? eq(courses.teacherId, q.teacherId) : undefined,
+  ];
   const items: CourseListItem[] = loadCourseListItems(c.get('db'), and(...filters), todayISO()).map(
     ({ description: _d, createdAt: _c, updatedAt: _u, ...item }) => item,
   );
@@ -121,7 +134,7 @@ router.post('/', write, async (c) => {
 });
 
 router.get('/:id', read, (c) => {
-  const detail = loadCourseDetail(c.get('db'), paramId(c), todayISO());
+  const detail = loadCourseDetail(c.get('db'), paramId(c), todayISO(), courseScope(currentUser(c)));
   if (!detail) throw notFound('Class not found');
   return c.json(detail);
 });
@@ -129,7 +142,7 @@ router.get('/:id', read, (c) => {
 router.patch('/:id', write, async (c) => {
   const id = paramId(c);
   const db = c.get('db');
-  const course = requireCourse(db, id);
+  const course = requireCourse(db, id, currentUser(c));
   const input = await body(c, courseUpdateInput);
 
   const startDate = input.startDate ?? course.startDate;
@@ -186,7 +199,7 @@ router.patch('/:id', write, async (c) => {
 router.delete('/:id', write, (c) => {
   const id = paramId(c);
   const db = c.get('db');
-  requireCourse(db, id);
+  requireCourse(db, id, currentUser(c));
   db.delete(courses).where(eq(courses.id, id)).run();
   return c.body(null, 204);
 });
@@ -196,10 +209,10 @@ router.delete('/:id', write, (c) => {
 router.post('/:id/enrollments', write, async (c) => {
   const id = paramId(c);
   const db = c.get('db');
-  const course = requireCourse(db, id);
+  const course = requireCourse(db, id, currentUser(c));
   const input = await body(c, enrollmentInput);
   const student = db.select({ id: students.id }).from(students).where(eq(students.id, input.studentId)).get();
-  if (!student) throw fieldError(['studentId'], 'classes:errors.studentNotFound');
+  if (!student || !canSeeStudent(db, currentUser(c), input.studentId)) throw fieldError(['studentId'], 'classes:errors.studentNotFound');
   const today = todayISO();
 
   const enrollmentId = db.transaction((tx) => {
@@ -224,7 +237,7 @@ router.patch('/:id/enrollments/:enrollmentId', write, async (c) => {
   const id = paramId(c);
   const enrollmentId = paramId(c, 'enrollmentId');
   const db = c.get('db');
-  const course = requireCourse(db, id);
+  const course = requireCourse(db, id, currentUser(c));
   const input = await body(c, enrollmentUpdateInput);
 
   db.transaction((tx) => {
@@ -245,7 +258,7 @@ router.delete('/:id/enrollments/:enrollmentId', write, (c) => {
   const id = paramId(c);
   const enrollmentId = paramId(c, 'enrollmentId');
   const db = c.get('db');
-  requireCourse(db, id);
+  requireCourse(db, id, currentUser(c));
   const res = db
     .delete(enrollments)
     .where(and(eq(enrollments.id, enrollmentId), eq(enrollments.courseId, id)))
@@ -259,7 +272,7 @@ router.delete('/:id/enrollments/:enrollmentId', write, (c) => {
 router.post('/:id/sessions', write, async (c) => {
   const id = paramId(c);
   const db = c.get('db');
-  requireCourse(db, id);
+  requireCourse(db, id, currentUser(c));
   const input = await body(c, sessionCreateInput);
   if (input.teacherId) assertActiveStaff(db, input.teacherId);
 

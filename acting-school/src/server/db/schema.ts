@@ -9,7 +9,7 @@
  *
  * After changing this file run `npm run db:generate` to add a migration.
  */
-import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import {
   ATTENDANCE_STATUSES,
   CASTING_STATUSES,
@@ -25,7 +25,7 @@ import {
   SUBMISSION_STATUSES,
   TALENT_STATUSES,
 } from '../../shared/enums';
-import { ROLES } from '../../shared/roles';
+import type { Permission } from '../../shared/permissions';
 
 const now = () => Date.now();
 const timestamps = () => ({
@@ -40,7 +40,6 @@ export const users = sqliteTable('users', {
   /** Always stored lower-case. */
   email: text('email').notNull().unique(),
   name: text('name').notNull(),
-  role: text('role', { enum: ROLES }).notNull(),
   passwordHash: text('password_hash').notNull(),
   phone: text('phone'),
   locale: text('locale', { enum: LOCALES }).notNull().default('en'),
@@ -48,6 +47,37 @@ export const users = sqliteTable('users', {
   lastLoginAt: integer('last_login_at'),
   ...timestamps(),
 });
+
+/**
+ * Positions (CEO, Acting coach, …): what a staff member may do. A person holds
+ * one or more (user_positions) and their permissions add up. Built-in positions
+ * have a `key` and are created at startup when missing (ensureBuiltInPositions).
+ * `isOwner` positions allow every permission; their stored list is ignored.
+ */
+export const positions = sqliteTable('positions', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  /** Set for built-in positions ('ceo', 'acting_coach', …); NULL for ones the school adds. */
+  key: text('key').unique(),
+  name: text('name').notNull(),
+  nameAr: text('name_ar'),
+  isOwner: integer('is_owner', { mode: 'boolean' }).notNull().default(false),
+  permissions: text('permissions', { mode: 'json' }).$type<Permission[]>().notNull().$defaultFn(() => []),
+  sortOrder: integer('sort_order').notNull().default(0),
+  ...timestamps(),
+});
+
+export const userPositions = sqliteTable(
+  'user_positions',
+  {
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    positionId: integer('position_id')
+      .notNull()
+      .references(() => positions.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.positionId] }), index('user_positions_position_idx').on(t.positionId)],
+);
 
 /** Sign-in sessions. `id` is the SHA-256 of the cookie token, never the token itself. */
 export const authSessions = sqliteTable(

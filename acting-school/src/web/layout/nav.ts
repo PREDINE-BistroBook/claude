@@ -1,6 +1,5 @@
-import { CalendarDays, Clapperboard, GraduationCap, LayoutDashboard, Settings, Star, UserCog, Users, type LucideIcon } from 'lucide-react';
-import type { Permission } from '@shared/roles';
-import type { Role } from '@shared/roles';
+import { BadgeCheck, CalendarDays, Clapperboard, GraduationCap, LayoutDashboard, Settings, Star, UserCog, Users, type LucideIcon } from 'lucide-react';
+import type { Permission } from '@shared/permissions';
 
 export interface NavItem {
   to: string;
@@ -19,13 +18,22 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/talent', label: 'talent', icon: Star, permission: 'talent.read', group: 'agency' },
   { to: '/castings', label: 'castings', icon: Clapperboard, permission: 'castings.read', group: 'agency' },
   { to: '/staff', label: 'staff', icon: UserCog, permission: 'staff.manage', group: 'admin' },
+  { to: '/positions', label: 'positions', icon: BadgeCheck, permission: 'positions.manage', group: 'admin' },
   { to: '/settings', label: 'settings', icon: Settings, permission: 'settings.manage', group: 'admin' },
 ];
 
-/** Phone bottom bar: the four destinations each role uses most, then "More". */
-export const MOBILE_TABS: Record<Role, string[]> = {
-  owner: ['/', '/schedule', '/students', '/talent'],
-  admin: ['/', '/schedule', '/students', '/talent'],
-  teacher: ['/', '/schedule', '/classes', '/students'],
-  agent: ['/', '/schedule', '/talent', '/castings'],
-};
+/**
+ * Phone bottom bar: Home, then the first three destinations the person can open
+ * from a priority list that fits their work, then "More".
+ * - coaches (attendance for their own classes only): classes first;
+ * - agency people (castings, but no say over students): talent and castings first;
+ * - everyone else (directors, owners, finance, editors): students first.
+ */
+export function mobileTabs(can: (p: Permission) => boolean): string[] {
+  let priority: string[];
+  if (can('attendance.write') && !can('classes.all')) priority = ['/schedule', '/classes', '/students', '/talent', '/castings'];
+  else if (can('castings.write') && !can('students.write')) priority = ['/schedule', '/talent', '/castings', '/students', '/classes'];
+  else priority = ['/schedule', '/students', '/talent', '/classes', '/castings'];
+  const open = new Set(NAV_ITEMS.filter((i) => !i.permission || can(i.permission)).map((i) => i.to));
+  return ['/', ...priority.filter((to) => open.has(to)).slice(0, 3)];
+}

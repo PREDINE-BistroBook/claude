@@ -6,6 +6,7 @@ const en = {
   editStudent: 'Edit student',
   list: {
     searchPlaceholder: 'Search name, email or phone',
+    searchNamePlaceholder: 'Search by name',
     statusFilter: 'Filter by status',
     all: 'All',
     count_one: '{{count}} student',
@@ -14,7 +15,7 @@ const en = {
     classes_other: '{{count}} classes',
     emptyTitle: 'No students yet',
     emptyHint: 'Add your first student to start enrolling them in classes.',
-    emptyHintReadOnly: 'Students added by an owner or admin will appear here.',
+    emptyHintReadOnly: 'Students in the classes you can see will appear here.',
     clearFilters: 'Clear filters',
   },
   form: {
@@ -91,6 +92,7 @@ const ar: TranslationOf<typeof en> = {
   editStudent: 'تعديل بيانات الطالب',
   list: {
     searchPlaceholder: 'ابحث بالاسم أو البريد أو الهاتف',
+    searchNamePlaceholder: 'ابحث بالاسم',
     statusFilter: 'تصفية حسب الحالة',
     all: 'الكل',
     count_zero: 'لا يوجد طلاب',
@@ -107,7 +109,7 @@ const ar: TranslationOf<typeof en> = {
     classes_other: '{{count}} صف',
     emptyTitle: 'لا يوجد طلاب بعد',
     emptyHint: 'أضف أول طالب لتبدأ بتسجيله في الصفوف.',
-    emptyHintReadOnly: 'سيظهر هنا الطلاب الذين يضيفهم المالك أو المسؤول.',
+    emptyHintReadOnly: 'سيظهر هنا الطلاب المسجّلون في الصفوف التي يمكنك رؤيتها.',
     clearFilters: 'مسح عوامل التصفية',
   },
   form: {

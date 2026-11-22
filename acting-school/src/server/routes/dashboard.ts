@@ -13,14 +13,16 @@ import {
 import type { DB } from '../db/client';
 import { attendance, castings, classSessions, courses, enrollments, students, talent, users } from '../db/schema';
 import type { AppEnv } from '../env';
+import { courseScope, seesAllClasses, studentScope } from '../lib/access';
 import { currentUser, requireAuth, userCan } from '../middleware/auth';
 import { loadAuditionEvents } from './schedule';
 
 /**
- * Home screen data, shaped by role: a section the caller's role can't see is
- * left out of the JSON entirely (not sent empty). Teachers only get the
- * sessions they teach (their substitute sessions included, ones handed to a
- * substitute excluded).
+ * Home screen data, shaped by permissions: a section the caller can't see is
+ * left out of the JSON entirely (not sent empty). Without classes.all the
+ * counts cover only the classes you teach (and their students), and the
+ * session lists only the sessions you teach yourself (your substitute sessions
+ * included, ones handed to a substitute excluded).
  */
 const router = new Hono<AppEnv>();
 router.use(requireAuth);
@@ -65,13 +67,13 @@ router.get('/', (c) => {
   const me = currentUser(c);
   const today = todayISO();
   const now = nowTime();
-  // Teachers see their own teaching only: the substitute if set, else the course's teacher.
-  const mine = me.role === 'teacher' ? sql`${effectiveTeacherId} = ${me.id}` : undefined;
+  // Without classes.all: only your own teaching — the substitute if set, else the course's teacher.
+  const mine = seesAllClasses(me) ? undefined : sql`${effectiveTeacherId} = ${me.id}`;
 
   const data: DashboardData = { today, counts: {} };
 
-  if (userCan(c, 'students.read')) data.counts.activeStudents = countWhere(db, students, eq(students.status, 'active'));
-  if (userCan(c, 'courses.read')) data.counts.activeCourses = countWhere(db, courses, eq(courses.status, 'active'));
+  if (userCan(c, 'students.read')) data.counts.activeStudents = countWhere(db, students, and(eq(students.status, 'active'), studentScope(me))!);
+  if (userCan(c, 'courses.read')) data.counts.activeCourses = countWhere(db, courses, and(eq(courses.status, 'active'), courseScope(me))!);
   if (userCan(c, 'talent.read')) data.counts.activeTalent = countWhere(db, talent, eq(talent.status, 'active'));
   if (userCan(c, 'castings.read')) data.counts.openCastings = countWhere(db, castings, eq(castings.status, 'open'));
 

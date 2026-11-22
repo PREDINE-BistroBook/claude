@@ -1,10 +1,11 @@
 import type { SelectHTMLAttributes } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Field, Select } from '@web/components/ui';
+import { usePositionNames } from '@web/lib/positions';
 import { useStaffDirectory } from '../api';
 
 /**
- * Staff picker from GET /api/staff/directory (active staff, teachers first).
+ * Staff picker from GET /api/staff/directory (active staff, coaches first).
  * Keeps showing `current` even if that person is no longer active, and still
  * works (with just "none" + current) when the directory can't be loaded.
  */
@@ -25,10 +26,11 @@ export function TeacherSelect({
   optional?: boolean;
 } & SelectHTMLAttributes<HTMLSelectElement> & { id: string }) {
   const { t } = useTranslation('classes');
+  const positionNames = usePositionNames();
   const directory = useStaffDirectory();
   const active = (directory.data?.items ?? []).filter((s) => s.active);
-  const teachers = active.filter((s) => s.role === 'teacher');
-  const others = active.filter((s) => s.role !== 'teacher');
+  const teachers = active.filter((s) => s.coach);
+  const others = active.filter((s) => !s.coach);
   const currentMissing = current && current.id && !active.some((s) => s.id === current.id);
 
   return (
@@ -59,7 +61,7 @@ export function TeacherSelect({
           <optgroup label={t('form.otherStaff')}>
             {others.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.name} · {t(`common:enums.role.${s.role}`)}
+                {s.positions.length ? `${s.name} · ${positionNames(s.positions)}` : s.name}
               </option>
             ))}
           </optgroup>

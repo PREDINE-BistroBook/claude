@@ -3,15 +3,16 @@ import { Plus, UserCog } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { StaffMember } from '@shared/schemas/staff';
-import { Avatar, Badge, Button, EmptyState, ErrorState, List, ListRow, PageHeader, PageLoader, StatusBadge } from '@web/components/ui';
+import { Avatar, Badge, Button, EmptyState, ErrorState, List, ListRow, PageHeader, PageLoader } from '@web/components/ui';
 import { useAuth } from '@web/lib/auth';
 import { useFormat } from '@web/lib/format';
 import { useStaffList } from './api';
-import { RoleGuide } from './components/bits';
+import { PositionChips, PositionsGuideLink } from './components/bits';
 import { AddStaffModal, EditStaffModal } from './components/StaffModals';
 
 export default function StaffPage() {
   const { t } = useTranslation(['staff', 'common']);
+  const { can } = useAuth();
   const staff = useStaffList();
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -74,7 +75,7 @@ export default function StaffPage() {
         subtitle={staff.isSuccess && items.length > 0 ? t('summary', { count: active.length }) : undefined}
         actions={addButton}
       />
-      <RoleGuide className="mb-5" />
+      {can('positions.manage') && <PositionsGuideLink className="mb-5" />}
       {body}
       <AddStaffModal open={adding} onClose={() => setAdding(false)} />
       <EditStaffModal member={editing} onClose={() => setEditingId(null)} />
@@ -107,14 +108,10 @@ function StaffRow({ member, onOpen }: { member: StaffMember; onOpen: () => void 
             {member.email}
           </span>
           <span className="block truncate text-xs">{lastSeen}</span>
+          <PositionChips positions={member.positions} className="mt-1.5 whitespace-normal" />
         </>
       }
-      trailing={
-        <span className="flex flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-2">
-          {!member.active && <Badge tone="danger">{t('inactive')}</Badge>}
-          <StatusBadge group="role" value={member.role} />
-        </span>
-      }
+      trailing={!member.active && <Badge tone="danger">{t('inactive')}</Badge>}
     />
   );
 }

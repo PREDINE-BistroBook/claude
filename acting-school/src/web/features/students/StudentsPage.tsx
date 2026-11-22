@@ -132,7 +132,7 @@ export default function StudentsPage() {
     <div>
       <PageHeader title={t('title')} actions={newButton} />
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <SearchInput value={text} onChange={setText} placeholder={t('list.searchPlaceholder')} className="w-full md:max-w-sm" />
+        <SearchInput value={text} onChange={setText} placeholder={t(can('students.contact') ? 'list.searchPlaceholder' : 'list.searchNamePlaceholder')} className="w-full md:max-w-sm" />
         <Segmented<StatusFilter>
           label={t('list.statusFilter')}
           value={status ?? 'all'}

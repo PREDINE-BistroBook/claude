@@ -3,6 +3,7 @@ import { createBrowserRouter } from 'react-router';
 import { castingsRoutes } from './features/castings/routes';
 import { classesRoutes } from './features/classes/routes';
 import { dashboardRoutes } from './features/dashboard/routes';
+import { positionsRoutes } from './features/positions/routes';
 import { scheduleRoutes } from './features/schedule/routes';
 import { settingsRoutes } from './features/settings/routes';
 import { staffRoutes } from './features/staff/routes';
@@ -38,6 +39,7 @@ export const router = createBrowserRouter([
       ...talentRoutes,
       ...castingsRoutes,
       ...staffRoutes,
+      ...positionsRoutes,
       ...settingsRoutes,
       { path: 'profile', element: <ProfilePage /> },
       { path: '*', element: <NotFoundPage /> },

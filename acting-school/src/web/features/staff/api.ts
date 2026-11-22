@@ -18,7 +18,7 @@ export function useStaffList() {
   });
 }
 
-/** School settings (any signed-in role may read them). Same key and shape as the other screens use. */
+/** School settings (everyone signed in may read them). Same key and shape as the other screens use. */
 export function useSchoolSettings() {
   return useQuery({
     queryKey: ['settings'],
@@ -31,11 +31,11 @@ export function useCreateStaff() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: StaffCreateInput) => api.post<StaffMember>('/staff', data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: staffKeys.all }),
+    onSuccess: () => Promise.all([qc.invalidateQueries({ queryKey: staffKeys.all }), qc.invalidateQueries({ queryKey: ['positions'] })]),
   });
 }
 
-/** PATCH a staff account. Editing yourself also refreshes /auth/me (name, language in the shell). */
+/** PATCH a staff account. Editing yourself also refreshes /auth/me (name, language in the shell); positions show holder counts. */
 export function useUpdateStaff(id: number, isSelf: boolean) {
   const qc = useQueryClient();
   return useMutation({
@@ -43,6 +43,7 @@ export function useUpdateStaff(id: number, isSelf: boolean) {
     onSuccess: async () => {
       await Promise.all([
         qc.invalidateQueries({ queryKey: staffKeys.all }),
+        qc.invalidateQueries({ queryKey: ['positions'] }),
         isSelf ? qc.invalidateQueries({ queryKey: ME_KEY }) : Promise.resolve(),
       ]);
     },
@@ -54,7 +55,8 @@ export function staffErrorKey(err: unknown): string | null {
   if (!(err instanceof ApiError)) return null;
   if (err.code === 'cannot_change_self') return 'staff:errors.cannotChangeSelf';
   if (err.code === 'last_owner') return 'staff:errors.lastOwner';
-  if (err.code === 'forbidden') return 'staff:errors.ownerOnly';
+  if (err.code === 'owner_only') return 'staff:errors.ownerOnly';
+  if (err.code === 'exceeds_your_access') return 'staff:errors.exceedsYourAccess';
   return null;
 }
 

@@ -51,13 +51,14 @@ describe('talent CRUD', () => {
       headshotFileId: null,
       createdAt: expect.any(Number),
       updatedAt: expect.any(Number),
+      contactHidden: false,
     });
     // Exactly the Talent interface — no extra keys.
     expect(Object.keys(res.body).sort()).toEqual(
       [
         'id', 'studentId', 'firstName', 'lastName', 'stageName', 'email', 'phone', 'dateOfBirth', 'gender', 'playingAgeMin',
         'playingAgeMax', 'heightCm', 'eyeColor', 'hairColor', 'city', 'languages', 'skills', 'showreelUrl', 'instagram',
-        'headshotFileId', 'status', 'representedSince', 'notes', 'createdAt', 'updatedAt',
+        'headshotFileId', 'status', 'representedSince', 'notes', 'createdAt', 'updatedAt', 'contactHidden',
       ].sort(),
     );
   });
@@ -689,5 +690,47 @@ describe('talent permissions', () => {
       body: '{nope',
     });
     expect(res.status).toBe(400);
+  });
+});
+
+describe('talent contact details (talent.contact)', () => {
+  it('without talent.contact (video editor) phone and email are hidden on every answer', async () => {
+    const t = await makeTestContext();
+    const agent = await t.as('agent');
+    const actor = await createTalent(agent, { email: 'lina@example.com', phone: '+20 100 555 1234', city: 'Cairo' });
+    const editor = await t.as('video_editor');
+    const detail = await editor.get(`/api/talent/${actor.id}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body).toMatchObject({ email: null, phone: null, city: 'Cairo', contactHidden: true });
+    // The list carries no contact details at all; the editor still sees names and photos.
+    const list = await editor.get('/api/talent');
+    expect(list.body.items[0]).toMatchObject({ firstName: 'Lina', headshotFileId: null });
+    expect('phone' in list.body.items[0]).toBe(false);
+    // Search never looks at phone or email (no oracle).
+    expect(ids(await editor.get('/api/talent?q=555'))).toEqual([]);
+    expect(ids(await editor.get('/api/talent?q=lina%40'))).toEqual([]);
+    expect(ids(await editor.get('/api/talent?q=lina'))).toEqual([actor.id]);
+  });
+
+  it('the casting team (talent.contact) sees them', async () => {
+    const t = await makeTestContext();
+    const team = await t.as('casting_team');
+    const actor = await createTalent(team, { email: 'lina@example.com', phone: '0100' });
+    expect(actor).toMatchObject({ email: 'lina@example.com', phone: '0100', contactHidden: false });
+    expect((await team.get(`/api/talent/${actor.id}`)).body).toMatchObject({ email: 'lina@example.com', contactHidden: false });
+  });
+
+  it('without talent.contact, create and update ignore phone and email (an edit form can’t wipe them)', async () => {
+    const t = await makeTestContext();
+    const agent = await t.as('agent');
+    const writer = await t.as({ permissions: ['talent.read', 'talent.write'] });
+    const actor = await createTalent(agent, { email: 'lina@example.com', phone: '0100' });
+    const res = await writer.patch(`/api/talent/${actor.id}`, { email: '', phone: null, city: 'Giza' });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ city: 'Giza', email: null, phone: null, contactHidden: true });
+    expect(t.db.select().from(talent).where(eq(talent.id, actor.id)).get()).toMatchObject({ email: 'lina@example.com', phone: '0100', city: 'Giza' });
+    const created = await writer.post('/api/talent', { firstName: 'New', lastName: 'Face', email: 'x@example.com', phone: '123' });
+    expect(created.status).toBe(201);
+    expect(t.db.select().from(talent).where(eq(talent.id, created.body.id)).get()).toMatchObject({ email: null, phone: null });
   });
 });

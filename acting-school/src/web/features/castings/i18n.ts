@@ -121,6 +121,7 @@ const en = {
     title: 'Submission',
     status: 'Status',
     final: 'Final outcome',
+    cannotSend: 'Sending actors to the client (submitted, audition, callback, booked) needs a position that allows it. Ask a head of casting.',
     audition: 'Audition',
     auditionHint: 'Leave both empty if there’s no audition yet.',
     auditionDate: 'Date',
@@ -176,6 +177,7 @@ const en = {
     roleNotFound: 'That role no longer exists.',
     talentNotFound: 'That talent is no longer on the roster.',
     alreadySubmitted: 'This talent is already on the role.',
+    cannotSend: 'Your position can’t send actors to clients.',
     auditionIncomplete: 'Enter both a date and a time, or leave both empty.',
   },
 };
@@ -325,6 +327,7 @@ const ar: TranslationOf<typeof en> = {
     title: 'الترشيح',
     status: 'الحالة',
     final: 'النتيجة النهائية',
+    cannotSend: 'إرسال الممثلين إلى العميل (تم الترشيح، تجربة أداء، استدعاء ثانٍ، تم الاختيار) يحتاج إلى منصب يسمح بذلك. اطلب ذلك من رئيس الكاستينج.',
     audition: 'موعد الاختبار',
     auditionHint: 'اترك الحقلين فارغين إن لم يُحدَّد موعد بعد.',
     auditionDate: 'التاريخ',
@@ -400,6 +403,7 @@ const ar: TranslationOf<typeof en> = {
     roleNotFound: 'هذا الدور لم يعد موجودًا.',
     talentNotFound: 'هذه الموهبة لم تعد في القائمة.',
     alreadySubmitted: 'هذه الموهبة مرشّحة لهذا الدور بالفعل.',
+    cannotSend: 'منصبك لا يسمح بإرسال الممثلين إلى العملاء.',
     auditionIncomplete: 'أدخل التاريخ والوقت معًا، أو اترك الحقلين فارغين.',
   },
 };

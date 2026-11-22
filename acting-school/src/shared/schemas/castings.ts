@@ -65,6 +65,14 @@ export const submissionInput = z.object({
   auditionLocation: optText(200),
   notes: optText(5000),
 });
+/**
+ * Statuses that mean the talent was sent to the client. Moving a submission to
+ * one of these needs castings.send (403 'cannot_send' otherwise); shortlisted,
+ * rejected and withdrawn need only castings.write.
+ */
+export const SENDING_SUBMISSION_STATUSES = ['submitted', 'audition', 'callback', 'booked'] as const satisfies readonly SubmissionStatus[];
+export const isSendingStatus = (s: SubmissionStatus): boolean => (SENDING_SUBMISSION_STATUSES as readonly string[]).includes(s);
+
 export const submissionUpdateInput = z
   .object({
     status: z.enum(SUBMISSION_STATUSES),

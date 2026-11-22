@@ -2,7 +2,10 @@ import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { LOCALES, type Locale } from '@shared/enums';
 import { changePasswordInput, profileInput } from '@shared/schemas/auth';
-import { Avatar, Button, Card, Field, FormError, FormGrid, PageHeader, Select, StatusBadge, TextField, useToast } from '../components/ui';
+import { Crown } from 'lucide-react';
+import { Avatar, Button, Card, Field, FormError, FormGrid, PageHeader, Select, TextField, useToast } from '../components/ui';
+import { PermissionSummary } from '../features/positions/components/PermissionList';
+import { PositionChips } from '../features/staff/components/bits';
 import { setLanguage } from '../i18n';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -10,7 +13,7 @@ import { useForm } from '../lib/forms';
 import { PasswordInput } from './PasswordInput';
 
 export default function ProfilePage() {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['common', 'positions', 'staff']);
   const { user, refresh } = useAuth();
   const toast = useToast();
   const details = useForm({ name: user?.name ?? '', phone: user?.phone ?? '', locale: (user?.locale ?? 'en') as Locale });
@@ -42,9 +45,25 @@ export default function ProfilePage() {
       <PageHeader
         title={t('profile.title')}
         leading={<Avatar name={user.name} size="lg" />}
-        subtitle={<StatusBadge group="role" value={user.role} />}
       />
       <div className="grid gap-5">
+        <Card title={t('profile.whatYouCanDo')} description={user.isOwner ? undefined : t('profile.whatYouCanDoHint')}>
+          <div className="mb-4">
+            <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">{t('profile.yourPositions')}</h3>
+            <PositionChips positions={user.positions} />
+          </div>
+          {user.isOwner ? (
+            <p className="flex items-start gap-2.5 rounded-xl bg-accent-soft px-3.5 py-3 text-sm text-ink">
+              <Crown className="mt-0.5 size-4 shrink-0 text-accent" aria-hidden />
+              {t('profile.ownerEverything')}
+            </p>
+          ) : user.permissions.length ? (
+            <PermissionSummary permissions={user.permissions} />
+          ) : (
+            <p className="text-sm text-muted">{t('profile.nothingYet')}</p>
+          )}
+        </Card>
+
         <Card title={t('profile.details')}>
           <form
             noValidate

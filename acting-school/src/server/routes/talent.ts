@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import { todayISO } from '../../shared/dates';
 import type { ApiIssue, ListResponse } from '../../shared/schemas/common';
 import {
+  TALENT_CONTACT_FIELDS,
   talentInput,
   talentListQuery,
   talentPhotoInput,
@@ -17,15 +18,19 @@ import {
 import type { DB } from '../db/client';
 import { castingRoles, castings, files, students, submissions, talent, talentPhotos } from '../db/schema';
 import type { AppEnv } from '../env';
+import type { SessionUser } from '../../shared/schemas/auth';
+import { hasPermission, redactContact, withoutContact } from '../lib/access';
 import { ApiError, conflict, notFound } from '../lib/errors';
 import { body, paramId, query } from '../lib/validate';
-import { requireAuth, requirePermission } from '../middleware/auth';
+import { currentUser, requireAuth, requirePermission } from '../middleware/auth';
 
 /**
- * Talent: the agency's roster. Owners, admins and agents can read and change
- * it; teachers can't see it at all. A talent may be linked to one student
- * (talent.student_id is unique). Photos are attached after the profile exists;
- * the primary headshot is always one of the talent's own photos.
+ * Talent: the agency's roster. talent.read shows it, talent.write changes it.
+ * Phone and email need talent.contact: without it they come back null
+ * (contactHidden: true) and are ignored on writes (search never looks at them).
+ * A talent may be linked to one student (talent.student_id is unique). Photos
+ * are attached after the profile exists; the primary headshot is always one of
+ * the talent's own photos.
  */
 const router = new Hono<AppEnv>();
 router.use(requireAuth);
@@ -38,8 +43,11 @@ type TalentRow = typeof talent.$inferSelect;
 type Conn = DB | Parameters<Parameters<DB['transaction']>[0]>[0];
 type PhotoRow = typeof talentPhotos.$inferSelect;
 
-function toTalent(r: TalentRow): Talent {
-  return {
+const seesContact = (user: SessionUser) => hasPermission(user, 'talent.contact');
+
+function toTalent(r: TalentRow, user: SessionUser): Talent {
+  return redactContact(
+    {
     id: r.id,
     studentId: r.studentId,
     firstName: r.firstName,
@@ -65,7 +73,10 @@ function toTalent(r: TalentRow): Talent {
     notes: r.notes,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
-  };
+    },
+    TALENT_CONTACT_FIELDS,
+    seesContact(user),
+  );
 }
 
 function toPhoto(r: PhotoRow): TalentPhoto {
@@ -259,7 +270,8 @@ router.get('/tags', canRead, (c) => {
 // ── Create ──────────────────────────────────────────────────────────────────
 
 router.post('/', canWrite, async (c) => {
-  const input = await body(c, talentInput);
+  const me = currentUser(c);
+  const input = withoutContact(await body(c, talentInput), TALENT_CONTACT_FIELDS, seesContact(me));
   if (input.headshotFileId) throw fieldError('headshotFileId', 'talent:errors.headshotOnCreate');
   const db = c.get('db');
 
@@ -278,7 +290,7 @@ router.post('/', canWrite, async (c) => {
       .returning()
       .get();
   });
-  return c.json(toTalent(created), 201);
+  return c.json(toTalent(created, me), 201);
 });
 
 // ── Detail ──────────────────────────────────────────────────────────────────
@@ -322,7 +334,7 @@ router.get('/:id', canRead, (c) => {
         .get() ?? null)
     : null;
 
-  const res: TalentDetail = { ...toTalent(row), photos, submissions: subs, student };
+  const res: TalentDetail = { ...toTalent(row, currentUser(c)), photos, submissions: subs, student };
   return c.json(res);
 });
 
@@ -332,7 +344,8 @@ router.patch('/:id', canWrite, async (c) => {
   const id = paramId(c);
   const db = c.get('db');
   const existing = findTalent(db, id);
-  const input = await body(c, talentUpdateInput);
+  const me = currentUser(c);
+  const input = withoutContact(await body(c, talentUpdateInput), TALENT_CONTACT_FIELDS, seesContact(me));
 
   // The range rule applies to the profile as it will be saved, not just to this request.
   const min = input.playingAgeMin !== undefined ? input.playingAgeMin : existing.playingAgeMin;
@@ -352,14 +365,14 @@ router.patch('/:id', canWrite, async (c) => {
   if (input.instagram !== undefined) patch.instagram = normalizeInstagram(input.instagram);
   if (input.languages !== undefined) patch.languages = uniqueTags(input.languages);
   if (input.skills !== undefined) patch.skills = uniqueTags(input.skills);
-  if (!Object.keys(patch).length) return c.json(toTalent(existing));
+  if (!Object.keys(patch).length) return c.json(toTalent(existing, me));
 
   const updated = db.transaction((tx) => {
     if (input.studentId && input.studentId !== existing.studentId) assertStudentLinkable(tx, input.studentId, id);
     return tx.update(talent).set(patch).where(eq(talent.id, id)).returning().get();
   });
   if (!updated) throw notFound('Talent not found');
-  return c.json(toTalent(updated));
+  return c.json(toTalent(updated, me));
 });
 
 // ── Delete ──────────────────────────────────────────────────────────────────

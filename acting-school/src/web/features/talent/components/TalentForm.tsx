@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router';
 import { todayISO } from '@shared/dates';
 import { GENDERS, TALENT_STATUSES, type TalentStatus } from '@shared/enums';
 import type { StudentDetail } from '@shared/schemas/students';
-import { talentInput, type Talent } from '@shared/schemas/talent';
+import { TALENT_CONTACT_FIELDS, talentInput, type Talent } from '@shared/schemas/talent';
 import {
   Button,
   ButtonLink,
@@ -22,6 +22,7 @@ import {
   useToast,
 } from '@web/components/ui';
 import { ApiError } from '@web/lib/api';
+import { useAuth } from '@web/lib/auth';
 import { ageOn } from '@web/lib/format';
 import { useForm } from '@web/lib/forms';
 import { addTalentPhoto, talentKeys, useSaveTalent, useTalentTags } from '../api';
@@ -100,6 +101,8 @@ export function TalentForm({ talent, student }: { talent?: Talent; student?: Stu
   const tags = useTalentTags();
   const v = form.values;
   const age = ageOn(v.dateOfBirth || null);
+  // Without talent.contact, phone and email aren't shown or sent (the API would ignore them anyway).
+  const withContact = useAuth().can('talent.contact');
 
   const submit = () => {
     const data = form.validate(talentInput, {
@@ -109,6 +112,7 @@ export function TalentForm({ talent, student }: { talent?: Talent; student?: Stu
       ...(talent ? {} : { studentId: student?.id ?? null }),
     });
     if (!data) return focusFirstError();
+    if (!withContact) for (const f of TALENT_CONTACT_FIELDS) delete data[f];
     save.mutate(data, {
       onSuccess: async (saved) => {
         if (!talent && student?.photoFileId) {
@@ -290,21 +294,23 @@ export function TalentForm({ talent, student }: { talent?: Talent; student?: Stu
         </FormGrid>
       </FormSection>
 
-      <FormSection title={t('form.contact')} description={t('form.contactHint')}>
-        <FormGrid>
-          <TextField
-            label={t('common:fields.email')}
-            type="email"
-            inputMode="email"
-            autoComplete="off"
-            dir="ltr"
-            optional
-            {...form.bind('email')}
-            error={form.error('email')}
-          />
-          <TextField label={t('common:fields.phone')} type="tel" inputMode="tel" autoComplete="off" dir="ltr" optional {...form.bind('phone')} error={form.error('phone')} />
-        </FormGrid>
-      </FormSection>
+      {withContact && (
+        <FormSection title={t('form.contact')} description={t('form.contactHint')}>
+          <FormGrid>
+            <TextField
+              label={t('common:fields.email')}
+              type="email"
+              inputMode="email"
+              autoComplete="off"
+              dir="ltr"
+              optional
+              {...form.bind('email')}
+              error={form.error('email')}
+            />
+            <TextField label={t('common:fields.phone')} type="tel" inputMode="tel" autoComplete="off" dir="ltr" optional {...form.bind('phone')} error={form.error('phone')} />
+          </FormGrid>
+        </FormSection>
+      )}
 
       <FormSection title={t('form.notes')}>
         <Field htmlFor="f-notes" error={form.error('notes')}>

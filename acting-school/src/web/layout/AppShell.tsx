@@ -9,7 +9,8 @@ import { currentLanguage, setLanguage } from '../i18n';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useOnline } from '../lib/hooks';
-import { MOBILE_TABS, NAV_ITEMS, type NavItem } from './nav';
+import { usePositionNames } from '../lib/positions';
+import { NAV_ITEMS, mobileTabs, type NavItem } from './nav';
 
 function useLanguageToggle() {
   const { user, refresh } = useAuth();
@@ -33,6 +34,7 @@ export function AppShell() {
   const { pathname } = useLocation();
   const online = useOnline();
   const toggleLanguage = useLanguageToggle();
+  const positionNames = usePositionNames();
   const [moreOpen, setMoreOpen] = useState(false);
 
   useEffect(() => {
@@ -45,7 +47,8 @@ export function AppShell() {
   }, [pathname]);
 
   const items = NAV_ITEMS.filter((i) => !i.permission || can(i.permission));
-  const tabs = (user ? MOBILE_TABS[user.role] : []).map((to) => items.find((i) => i.to === to)).filter(Boolean) as NavItem[];
+  const tabs = (user ? mobileTabs(can) : []).map((to) => items.find((i) => i.to === to)).filter(Boolean) as NavItem[];
+  const myPositions = user ? positionNames(user.positions) : '';
   const moreItems = items.filter((i) => !tabs.includes(i));
   const groups: { id: NavItem['group']; label?: string }[] = [
     { id: 'main' },
@@ -111,7 +114,7 @@ export function AppShell() {
             <Avatar name={user?.name ?? ''} size="sm" />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium">{user?.name}</span>
-              <span className="block truncate text-xs text-muted">{user && t(`enums.role.${user.role}`)}</span>
+              <span className="block truncate text-xs text-muted">{myPositions}</span>
             </span>
           </NavLink>
           <button
@@ -206,7 +209,7 @@ export function AppShell() {
                 <Avatar name={user?.name ?? ''} size="md" />
                 <div className="min-w-0">
                   <div className="truncate font-medium">{user?.name}</div>
-                  <div className="truncate text-sm text-muted">{user && t(`enums.role.${user.role}`)}</div>
+                  <div className="truncate text-sm text-muted">{myPositions}</div>
                 </div>
               </div>
               <button type="button" onClick={() => setMoreOpen(false)} className="rounded-lg p-2 text-muted hover:bg-surface-2" aria-label={t('actions.close')}>

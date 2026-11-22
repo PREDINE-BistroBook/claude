@@ -11,11 +11,13 @@
  */
 import { and, asc, eq, inArray, sql, type AnyColumn, type SQL } from 'drizzle-orm';
 import { addDays, parseDate, weekdayOf } from '../../shared/dates';
-import type { Role } from '../../shared/roles';
-import { can } from '../../shared/roles';
+import type { SessionUser } from '../../shared/schemas/auth';
 import type { ClassSession, CourseDetail, CourseEnrollment, CourseListItem, ScheduleSlot, SessionDetail } from '../../shared/schemas/courses';
 import type { DB } from '../db/client';
 import { attendance, classSessions, courseSlots, courses, enrollments, students, users } from '../db/schema';
+import { mayMarkAttendance } from './access';
+
+export { mayMarkAttendance };
 
 // ── Pure generation logic ───────────────────────────────────────────────────
 
@@ -144,16 +146,6 @@ export function sameSchedule(a: readonly ScheduleSlot[], b: readonly ScheduleSlo
   return norm(a) === norm(b);
 }
 
-/**
- * Attendance rule: owner/admin may mark any session; a teacher only sessions
- * they teach (the session's substitute, else the course's teacher).
- */
-export function mayMarkAttendance(user: { id: number; role: Role }, effectiveTeacherId: number | null): boolean {
-  if (!can(user.role, 'attendance.write')) return false;
-  if (user.role === 'teacher') return effectiveTeacherId === user.id;
-  return true;
-}
-
 // ── Read models ─────────────────────────────────────────────────────────────
 
 const nocase = (col: AnyColumn) => sql`${col} collate nocase`;
@@ -199,9 +191,13 @@ export function loadSession(db: DB, id: number): ClassSession | null {
   return loadSessions(db, eq(classSessions.id, id))[0] ?? null;
 }
 
-/** The session, its roster (enrolled by that date + anyone already marked) and whether `user` may mark it. */
-export function loadSessionDetail(db: DB, id: number, user: { id: number; role: Role }): SessionDetail | null {
-  const session = loadSession(db, id);
+/**
+ * The session, its roster (enrolled by that date + anyone already marked) and
+ * whether `user` may mark it. `scope` limits which sessions count as found
+ * (e.g. courseScope for someone who only sees their own classes).
+ */
+export function loadSessionDetail(db: DB, id: number, user: Pick<SessionUser, 'id' | 'permissions'>, scope?: SQL): SessionDetail | null {
+  const session = loadSessions(db, and(eq(classSessions.id, id), scope))[0];
   if (!session) return null;
   const roster = db
     .select({
@@ -340,8 +336,9 @@ export function loadEnrollments(db: DB, courseId: number, today: string, enrollm
   return rows.map(({ held, attended, ...r }) => ({ ...r, attendanceRate: held > 0 ? attended / held : null }));
 }
 
-export function loadCourseDetail(db: DB, id: number, today: string): CourseDetail | null {
-  const course = loadCourseListItems(db, eq(courses.id, id), today)[0];
+/** The course with enrollments and sessions; null when missing or outside `scope`. */
+export function loadCourseDetail(db: DB, id: number, today: string, scope?: SQL): CourseDetail | null {
+  const course = loadCourseListItems(db, and(eq(courses.id, id), scope), today)[0];
   if (!course) return null;
   return {
     ...course,

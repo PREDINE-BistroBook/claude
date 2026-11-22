@@ -1,14 +1,15 @@
-import { count, eq } from 'drizzle-orm';
+import { and, count, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { changePasswordInput, loginInput, profileInput, setupInput, type MeResponse, type SessionUser } from '../../shared/schemas/auth';
-import { authSessions, users } from '../db/schema';
+import { FIRST_OWNER_POSITION } from '../../shared/permissions';
+import { changePasswordInput, loginInput, profileInput, setupInput, type MeResponse } from '../../shared/schemas/auth';
+import { authSessions, positions, userPositions, users } from '../db/schema';
 import type { AppEnv } from '../env';
+import { ensureBuiltInPositions, toSessionUser } from '../lib/access';
 import { ApiError } from '../lib/errors';
 import { getDummyHash, hashPassword, verifyPassword } from '../lib/password';
 import { getSettings, saveSettings } from '../lib/settings';
 import { body } from '../lib/validate';
 import { currentUser, endSession, requireAuth, startSession } from '../middleware/auth';
-import { and, ne } from 'drizzle-orm';
 
 const router = new Hono<AppEnv>();
 
@@ -29,10 +30,6 @@ function recordFailure(email: string) {
   const f = failures.get(email);
   if (!f || Date.now() - f.first > WINDOW) failures.set(email, { count: 1, first: Date.now() });
   else f.count++;
-}
-
-function toSessionUser(u: typeof users.$inferSelect): SessionUser {
-  return { id: u.id, email: u.email, name: u.name, role: u.role, phone: u.phone, locale: u.locale };
 }
 
 function staffCount(c: { get: (k: 'db') => AppEnv['Variables']['db'] }): number {
@@ -63,7 +60,7 @@ router.post('/login', async (c) => {
   failures.delete(input.email);
   db.update(users).set({ lastLoginAt: Date.now() }).where(eq(users.id, user.id)).run();
   startSession(c, user.id);
-  return c.json({ user: toSessionUser(user) });
+  return c.json({ user: toSessionUser(db, user) });
 });
 
 router.post('/logout', (c) => {
@@ -71,7 +68,7 @@ router.post('/logout', (c) => {
   return c.json({ ok: true });
 });
 
-/** First run: create the owner account. Refused once any staff account exists. */
+/** First run: create the first account, holding the CEO position. Refused once any staff account exists. */
 router.post('/setup', async (c) => {
   const input = await body(c, setupInput);
   if (staffCount(c) > 0) throw new ApiError(409, 'already_set_up', 'This school is already set up');
@@ -81,23 +78,28 @@ router.post('/setup', async (c) => {
     // Re-check inside the transaction: two setup requests must not both win.
     const n = tx.select({ n: count() }).from(users).get()?.n ?? 0;
     if (n > 0) return null;
-    return tx
+    const user = tx
       .insert(users)
-      .values({ email: input.email, name: input.name, role: 'owner', passwordHash, locale: input.locale ?? 'en', lastLoginAt: Date.now() })
+      .values({ email: input.email, name: input.name, passwordHash, locale: input.locale ?? 'en', lastLoginAt: Date.now() })
       .returning()
       .get();
+    ensureBuiltInPositions(tx);
+    const ceo = tx.select({ id: positions.id }).from(positions).where(eq(positions.key, FIRST_OWNER_POSITION)).get()!;
+    tx.insert(userPositions).values({ userId: user.id, positionId: ceo.id }).run();
+    return user;
   });
   if (!created) throw new ApiError(409, 'already_set_up', 'This school is already set up');
   saveSettings(db, { schoolName: input.schoolName, ...(input.locale ? { defaultLocale: input.locale } : {}) });
   startSession(c, created.id);
-  return c.json({ user: toSessionUser(created) }, 201);
+  return c.json({ user: toSessionUser(db, created) }, 201);
 });
 
 router.patch('/profile', requireAuth, async (c) => {
   const input = await body(c, profileInput);
   const me = currentUser(c);
-  const updated = c.get('db').update(users).set(input).where(eq(users.id, me.id)).returning().get();
-  return c.json({ user: toSessionUser(updated!) });
+  const db = c.get('db');
+  const updated = db.update(users).set(input).where(eq(users.id, me.id)).returning().get();
+  return c.json({ user: toSessionUser(db, updated!) });
 });
 
 router.post('/password', requireAuth, async (c) => {

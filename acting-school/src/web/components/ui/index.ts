@@ -18,6 +18,7 @@ export { PhotoInput } from './PhotoInput';
 export { SearchInput } from './SearchInput';
 export { StatCard } from './StatCard';
 export { STATUS_TONES, StatusBadge, type StatusGroup } from './StatusBadge';
+export { Switch } from './Switch';
 export { ComingSoon, EmptyState, ErrorState, FormError, NoAccess, PageLoader, Spinner, SplashScreen } from './States';
 export { Segmented, Tabs } from './Tabs';
 export { TagInput } from './TagInput';
