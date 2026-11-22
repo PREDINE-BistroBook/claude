@@ -1,0 +1,138 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter/wght.css";
+/* Arabic + Latin subsets only (the UI has no other scripts). */
+@import "@fontsource/ibm-plex-sans-arabic/arabic-400.css";
+@import "@fontsource/ibm-plex-sans-arabic/arabic-500.css";
+@import "@fontsource/ibm-plex-sans-arabic/arabic-600.css";
+@import "@fontsource/ibm-plex-sans-arabic/arabic-700.css";
+@import "@fontsource/ibm-plex-sans-arabic/latin-400.css";
+@import "@fontsource/ibm-plex-sans-arabic/latin-500.css";
+@import "@fontsource/ibm-plex-sans-arabic/latin-600.css";
+@import "@fontsource/ibm-plex-sans-arabic/latin-700.css";
+
+/*
+ * Design tokens. Use the semantic utilities (bg-surface, text-muted, border-line,
+ * bg-accent, text-danger, bg-success-soft …) rather than raw palette colours, so
+ * light and dark mode both work. Direction: always logical utilities
+ * (ps-/pe-/ms-/me-/start-/end-/text-start/border-s) — never left/right — so
+ * Arabic (RTL) mirrors correctly. Directional icons get `rtl:-scale-x-100`.
+ */
+@theme inline {
+  --font-sans: var(--font-ui);
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+}
+
+:root {
+  --font-ui: "Inter Variable", "IBM Plex Sans Arabic", ui-sans-serif, system-ui, sans-serif;
+  --canvas: #f6f3ef;
+  --surface: #ffffff;
+  --surface-2: #f1ece6;
+  --ink: #1f1a17;
+  --muted: #6b625b;
+  --line: #e6dfd7;
+  --line-strong: #d3c9be;
+  --accent: #8c1d32;
+  --accent-hover: #741628;
+  --accent-soft: #f7e6e9;
+  --accent-ink: #ffffff;
+  --success: #15803d;
+  --success-soft: #e5f4ea;
+  --warning: #a35107;
+  --warning-soft: #fcf0de;
+  --danger: #b91c1c;
+  --danger-soft: #fde8e8;
+  --info: #1d4ed8;
+  --info-soft: #e6edfc;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --canvas: #13100f;
+    --surface: #1c1816;
+    --surface-2: #26201d;
+    --ink: #f3eee9;
+    --muted: #a99f96;
+    --line: #342d28;
+    --line-strong: #4a413b;
+    --accent: #e8657c;
+    --accent-hover: #f08496;
+    --accent-soft: #3b1c24;
+    --accent-ink: #1a0a0e;
+    --success: #4ade80;
+    --success-soft: #14301e;
+    --warning: #f5b544;
+    --warning-soft: #33260e;
+    --danger: #f87171;
+    --danger-soft: #3b1717;
+    --info: #93b4fd;
+    --info-soft: #18233d;
+    color-scheme: dark;
+  }
+}
+
+/* Arabic: Plex Sans Arabic first (its Latin glyphs match well). */
+html[lang="ar"] {
+  --font-ui: "IBM Plex Sans Arabic", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-canvas text-ink antialiased;
+    font-family: var(--font-ui);
+  }
+
+  /* Arabic script needs more line height to stay legible. */
+  html[lang="ar"] body {
+    line-height: 1.65;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  dialog::backdrop {
+    background: rgb(0 0 0 / 0.45);
+  }
+}
+
+/* iOS: keep content clear of the home indicator / notch. */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

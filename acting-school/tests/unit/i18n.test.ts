@@ -1,0 +1,63 @@
+import { describe, expect, it } from 'vitest';
+import castings from '../../src/web/features/castings/i18n';
+import classes from '../../src/web/features/classes/i18n';
+import dashboard from '../../src/web/features/dashboard/i18n';
+import schedule from '../../src/web/features/schedule/i18n';
+import settings from '../../src/web/features/settings/i18n';
+import staff from '../../src/web/features/staff/i18n';
+import students from '../../src/web/features/students/i18n';
+import talent from '../../src/web/features/talent/i18n';
+import common from '../../src/web/i18n/common';
+
+const namespaces = { common, students, classes, talent, castings, schedule, dashboard, staff, settings };
+const PLURAL = /_(zero|one|two|few|many|other)$/;
+const AR_FORMS = ['zero', 'one', 'two', 'few', 'many', 'other'];
+
+function flatten(obj: Record<string, unknown>, prefix = ''): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    const key = prefix ? `${prefix}.${k}` : k;
+    if (typeof v === 'string') out[key] = v;
+    else if (v && typeof v === 'object') Object.assign(out, flatten(v as Record<string, unknown>, key));
+  }
+  return out;
+}
+const base = (k: string) => k.replace(PLURAL, '');
+const interpolations = (s: string) => [...s.matchAll(/\{\{\s*(\w+)\s*\}\}/g)].map((m) => m[1]).sort();
+
+describe.each(Object.entries(namespaces))('i18n namespace "%s"', (_name, ns) => {
+  const en = flatten(ns.en as Record<string, unknown>);
+  const ar = flatten(ns.ar as Record<string, unknown>);
+
+  it('Arabic has every English key', () => {
+    const arBases = new Set(Object.keys(ar).map(base));
+    const missing = Object.keys(en).filter((k) => !(k in ar) && !arBases.has(base(k)));
+    expect(missing).toEqual([]);
+  });
+
+  it('Arabic has no keys English lacks', () => {
+    const enBases = new Set(Object.keys(en).map(base));
+    const extra = Object.keys(ar).filter((k) => !enBases.has(base(k)));
+    expect(extra).toEqual([]);
+  });
+
+  it('Arabic plurals have all six forms', () => {
+    const pluralBases = new Set(Object.keys(en).filter((k) => PLURAL.test(k)).map(base));
+    const incomplete = [...pluralBases].filter((b) => AR_FORMS.some((f) => !(`${b}_${f}` in ar)));
+    expect(incomplete).toEqual([]);
+  });
+
+  it('no empty strings or untranslated placeholders', () => {
+    const bad = Object.entries({ ...en, ...Object.fromEntries(Object.entries(ar).map(([k, v]) => [`ar:${k}`, v])) }).filter(
+      ([, v]) => !v.trim() || /TODO|TITLE_AR|^TITLE$/.test(v),
+    );
+    expect(bad).toEqual([]);
+  });
+
+  it('interpolation variables match between languages', () => {
+    const mismatched = Object.keys(en)
+      .filter((k) => !PLURAL.test(k) && k in ar)
+      .filter((k) => JSON.stringify(interpolations(en[k]!)) !== JSON.stringify(interpolations(ar[k]!)));
+    expect(mismatched).toEqual([]);
+  });
+});

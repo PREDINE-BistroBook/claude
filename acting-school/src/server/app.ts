@@ -1,0 +1,73 @@
+import { Hono } from 'hono';
+import { secureHeaders } from 'hono/secure-headers';
+import type { AppConfig } from './config';
+import type { DB } from './db/client';
+import type { AppEnv } from './env';
+import { ApiError } from './lib/errors';
+import { loadSession, requireAjaxHeader } from './middleware/auth';
+import authRoutes from './routes/auth';
+import castingRoutes from './routes/castings';
+import courseRoutes from './routes/courses';
+import dashboardRoutes from './routes/dashboard';
+import fileRoutes from './routes/files';
+import scheduleRoutes from './routes/schedule';
+import sessionRoutes from './routes/sessions';
+import settingsRoutes from './routes/settings';
+import staffRoutes from './routes/staff';
+import studentRoutes from './routes/students';
+import submissionRoutes from './routes/submissions';
+import talentRoutes from './routes/talent';
+
+/**
+ * The API as a plain Hono app — no Node specifics, so tests can call
+ * app.request() against an in-memory database. src/server/index.ts adds the
+ * HTTP server and static files.
+ */
+export function createApp(deps: { db: DB; config: AppConfig }) {
+  const app = new Hono<AppEnv>();
+
+  app.use('*', async (c, next) => {
+    c.set('db', deps.db);
+    c.set('config', deps.config);
+    await next();
+  });
+
+  app.use('/api/*', secureHeaders({ crossOriginResourcePolicy: 'same-origin' }));
+  app.use('/api/*', async (c, next) => {
+    await next();
+    // Staff data: never cache API JSON anywhere (files set their own header).
+    if (!c.res.headers.has('Cache-Control')) c.header('Cache-Control', 'no-store');
+  });
+  app.use('/api/*', requireAjaxHeader);
+  app.use('/api/*', loadSession);
+
+  app.get('/api/health', (c) => c.json({ ok: true }));
+  app.route('/api/auth', authRoutes);
+  app.route('/api/files', fileRoutes);
+  app.route('/api/staff', staffRoutes);
+  app.route('/api/settings', settingsRoutes);
+  app.route('/api/students', studentRoutes);
+  app.route('/api/courses', courseRoutes);
+  app.route('/api/sessions', sessionRoutes);
+  app.route('/api/talent', talentRoutes);
+  app.route('/api/castings', castingRoutes);
+  app.route('/api/submissions', submissionRoutes);
+  app.route('/api/schedule', scheduleRoutes);
+  app.route('/api/dashboard', dashboardRoutes);
+
+  app.all('/api/*', (c) => c.json({ error: { code: 'not_found', message: 'No such API route' } }, 404));
+
+  app.onError((err, c) => {
+    if (err instanceof ApiError) {
+      return c.json({ error: { code: err.code, message: err.message, ...(err.issues ? { issues: err.issues } : {}) } }, err.status);
+    }
+    // SQLite constraint errors that slipped past validation.
+    const code = (err as { code?: string }).code;
+    if (code === 'SQLITE_CONSTRAINT_UNIQUE') return c.json({ error: { code: 'conflict', message: 'That already exists' } }, 409);
+    if (code === 'SQLITE_CONSTRAINT_FOREIGNKEY') return c.json({ error: { code: 'bad_request', message: 'A linked record does not exist' } }, 400);
+    console.error(err);
+    return c.json({ error: { code: 'server_error', message: 'Something went wrong' } }, 500);
+  });
+
+  return app;
+}
