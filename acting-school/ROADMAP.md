@@ -1,6 +1,10 @@
 # Roadmap
 
-What the school asked for, in the order we plan to build it. Phase 1 (the basics) is being built now; everything below is phase 2 onward. Update this file as decisions are made.
+What the school asked for, in the order we plan to build it. Update this file as decisions are made.
+
+**Phase 1 (the basics) — done (2026-11-22):** staff sign-in, students, classes with weekly schedules, attendance, actor roster with photos, castings with roles and submissions, combined schedule, home dashboard, staff and settings. English + Arabic, phone and desktop, demo data (`npm run seed`). Everything below is phase 2 onward.
+
+**Now building:** phase 2, step 1 — positions & permissions.
 
 ## Decisions so far
 
