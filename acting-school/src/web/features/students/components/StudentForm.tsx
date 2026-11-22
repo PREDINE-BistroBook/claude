@@ -87,8 +87,10 @@ export function StudentForm({ student }: { student?: Student }) {
   const consentHintId = useId();
   const v = form.values;
   // Without students.contact the contact sections aren't shown or sent (the API would ignore them anyway).
+  // Nor when the record was loaded without them (contactHidden): its contact fields are empty placeholders,
+  // and sending them after a permission was granted meanwhile would wipe the real contacts.
   const { can } = useAuth();
-  const withContact = can('students.contact');
+  const withContact = can('students.contact') && !student?.contactHidden;
 
   const age = ageOn(v.dateOfBirth || null);
   const isMinor = age !== null && age < 18;

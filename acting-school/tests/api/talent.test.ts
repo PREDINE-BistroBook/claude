@@ -424,6 +424,53 @@ describe('student link', () => {
   });
 });
 
+describe('student link follows student access', () => {
+  it('talent.read+talent.write without students.read can’t learn student names (or ids) by linking', async () => {
+    const t = await makeTestContext();
+    const secret = addStudent(t, { firstName: 'Secret', lastName: 'Student' });
+    const linkedElsewhere = addStudent(t, { firstName: 'Linked', lastName: 'Already' });
+    const admin = await t.as('admin');
+    const other = await createTalent(admin, { studentId: linkedElsewhere.id });
+    const assistant = await t.as({ permissions: ['talent.read', 'talent.write'] });
+    expect((await assistant.get(`/api/students/${secret.id}`)).status).toBe(403);
+    const created = await assistant.post('/api/talent', { firstName: 'X', lastName: 'Y' });
+    expect(created.status).toBe(201);
+    const missing = await assistant.post('/api/talent', { firstName: 'X', lastName: 'Y', studentId: 99999 });
+    expect(missing.status).toBe(400);
+    // Existing, missing and already-linked students all answer the same.
+    for (const studentId of [secret.id, linkedElsewhere.id]) {
+      const onCreate = await assistant.post('/api/talent', { firstName: 'X', lastName: 'Y', studentId });
+      expect([onCreate.status, onCreate.body]).toEqual([missing.status, missing.body]);
+      const onPatch = await assistant.patch(`/api/talent/${created.body.id}`, { studentId });
+      expect([onPatch.status, onPatch.body]).toEqual([missing.status, missing.body]);
+    }
+    expect(t.db.select().from(talent).where(eq(talent.studentId, secret.id)).all()).toHaveLength(0);
+    // A profile someone else linked shows no student, and the studentId filter finds nothing.
+    const detail = await assistant.get(`/api/talent/${other.id}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body).toMatchObject({ studentId: null, student: null });
+    expect(ids(await assistant.get(`/api/talent?studentId=${linkedElsewhere.id}`))).toEqual([]);
+    expect(ids(await admin.get(`/api/talent?studentId=${linkedElsewhere.id}`))).toEqual([other.id]);
+    // Editing that profile neither shows nor drops the link.
+    const edited = await assistant.patch(`/api/talent/${other.id}`, { city: 'Cairo' });
+    expect(edited.body).toMatchObject({ city: 'Cairo', studentId: null });
+    expect(t.db.select().from(talent).where(eq(talent.id, other.id)).get()!.studentId).toBe(linkedElsewhere.id);
+  });
+
+  it('a coach with talent.read doesn’t see the linked student outside their classes', async () => {
+    const t = await makeTestContext();
+    const admin = await t.as('admin');
+    const outside = addStudent(t, { firstName: 'Outside', lastName: 'Pupil' });
+    const tal = await createTalent(admin, { firstName: 'Stage', lastName: 'Name', studentId: outside.id });
+    const coach = await t.as({ permissions: ['students.read', 'courses.read', 'attendance.write', 'talent.read'] });
+    expect((await coach.get(`/api/students/${outside.id}`)).status).toBe(404);
+    expect((await coach.get(`/api/talent/${tal.id}`)).body).toMatchObject({ studentId: null, student: null });
+    expect(ids(await coach.get(`/api/talent?studentId=${outside.id}`))).toEqual([]);
+    // The director sees the link.
+    expect((await admin.get(`/api/talent/${tal.id}`)).body).toMatchObject({ studentId: outside.id, student: { id: outside.id, firstName: 'Outside', lastName: 'Pupil' } });
+  });
+});
+
 describe('photos and headshot', () => {
   let t: Ctx;
   let agent: Client;

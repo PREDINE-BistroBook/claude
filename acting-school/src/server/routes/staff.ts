@@ -1,7 +1,5 @@
 import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
-import type { Permission } from '../../shared/permissions';
-import { holdsAll } from '../../shared/permissions';
 import type { ListResponse } from '../../shared/schemas/common';
 import { STAFF_ERROR_CODES, staffCreateInput, staffUpdateInput, type StaffDirectoryEntry, type StaffMember } from '../../shared/schemas/staff';
 import type { DB } from '../db/client';
@@ -13,6 +11,7 @@ import {
   loadAccess,
   loadPositionRows,
   notAnOwner,
+  positionAllows,
   withinAccess,
   type Actor,
   type UserAccess,
@@ -28,7 +27,8 @@ import { currentUser, requireAuth, requirePermission } from '../middleware/auth'
  * and edit accounts, with these limits for anyone who isn't an owner:
  * - accounts holding an owner position (CEO, CFO) are invisible to them (404);
  * - they can only give or take positions whose every permission they hold
- *   themselves, never an owner position;
+ *   themselves, never an owner position (to them an owner position id is as
+ *   unknown as a missing one);
  * - they can only edit, deactivate or reset the password of someone who can't
  *   do anything they can't (otherwise a password reset would be a takeover).
  * Nobody changes their own positions or deactivates themselves, and at least
@@ -86,10 +86,18 @@ function emailInUse(db: Tx, email: string, exceptId?: number): boolean {
 
 type PositionRow = typeof positions.$inferSelect;
 
-/** The positions named by `ids` (deduplicated); a field error on positionIds if any doesn't exist. */
-function findPositions(db: Tx, ids: number[]): PositionRow[] {
+/**
+ * The positions named by `ids` (deduplicated); a field error on positionIds if
+ * any doesn't exist. Owner positions don't exist for non-owners, so naming one
+ * gets the same answer as a missing id.
+ */
+function findPositions(db: Tx, ids: number[], actor: Actor): PositionRow[] {
   const unique = [...new Set(ids)];
-  const rows = db.select().from(positions).where(inArray(positions.id, unique)).all();
+  const rows = db
+    .select()
+    .from(positions)
+    .where(and(inArray(positions.id, unique), actor.isOwner ? undefined : eq(positions.isOwner, false)))
+    .all();
   if (rows.length !== unique.length) {
     throw new ApiError(400, 'validation', 'Some fields are missing or invalid', [
       { path: ['positionIds'], code: 'custom', message: 'staff:errors.positionNotFound' },
@@ -100,12 +108,13 @@ function findPositions(db: Tx, ids: number[]): PositionRow[] {
 
 /**
  * Giving or taking these positions: owner positions need an owner; anything
- * else needs the actor to hold every permission the position allows.
+ * else needs the actor to hold every permission the position allows (what it
+ * actually allows — the same list GET /positions shows).
  */
-function assertMayAssign(actor: Actor, changed: readonly { isOwner: boolean; permissions: readonly string[] }[]) {
+function assertMayAssign(actor: Actor, changed: readonly Pick<PositionRow, 'isOwner' | 'permissions'>[]) {
   if (actor.isOwner) return;
   if (changed.some((p) => p.isOwner)) throw ownerOnlyError();
-  if (!changed.every((p) => holdsAll(actor.permissions, p.permissions as Permission[]))) throw exceedsError();
+  if (!changed.every((p) => withinAccess(actor, positionAllows(p)))) throw exceedsError();
 }
 
 /** Everyone signed in: names and positions for teacher pickers. Registered before /:id. */
@@ -166,7 +175,7 @@ router.post('/', canManage, async (c) => {
   const input = await body(c, staffCreateInput);
   const me = currentUser(c);
   const db = c.get('db');
-  const chosen = findPositions(db, input.positionIds);
+  const chosen = findPositions(db, input.positionIds, me);
   assertMayAssign(me, chosen);
   // Cheap check first so a duplicate doesn't pay for a slow hash; re-checked in the transaction.
   if (emailInUse(db, input.email)) throw emailTakenError();
@@ -207,7 +216,7 @@ router.patch('/:id', canManage, async (c) => {
   const isSelf = target.id === me.id;
   let nextPositions: PositionRow[] | null = null;
   if (input.positionIds !== undefined) {
-    const chosen = findPositions(db, input.positionIds);
+    const chosen = findPositions(db, input.positionIds, me);
     const currentIds = new Set(current.map((p) => p.id));
     const chosenIds = new Set(chosen.map((p) => p.id));
     const added = chosen.filter((p) => !currentIds.has(p.id));

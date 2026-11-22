@@ -7,12 +7,15 @@ export interface NavItem {
   label: string;
   icon: LucideIcon;
   permission?: Permission;
+  /** Shown when the person holds at least one of these (in addition to `permission`, if set). */
+  anyPermission?: readonly Permission[];
   group: 'main' | 'school' | 'agency' | 'admin';
 }
 
 export const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'home', icon: LayoutDashboard, group: 'main' },
-  { to: '/schedule', label: 'schedule', icon: CalendarDays, group: 'main' },
+  // Classes and auditions: nothing to show to someone who can see neither.
+  { to: '/schedule', label: 'schedule', icon: CalendarDays, anyPermission: ['courses.read', 'castings.read'], group: 'main' },
   { to: '/students', label: 'students', icon: Users, permission: 'students.read', group: 'school' },
   { to: '/classes', label: 'classes', icon: GraduationCap, permission: 'courses.read', group: 'school' },
   { to: '/talent', label: 'talent', icon: Star, permission: 'talent.read', group: 'agency' },
@@ -21,6 +24,11 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/positions', label: 'positions', icon: BadgeCheck, permission: 'positions.manage', group: 'admin' },
   { to: '/settings', label: 'settings', icon: Settings, permission: 'settings.manage', group: 'admin' },
 ];
+
+/** Whether the person's permissions open this destination. */
+export function navItemOpen(item: NavItem, can: (p: Permission) => boolean): boolean {
+  return (!item.permission || can(item.permission)) && (!item.anyPermission || item.anyPermission.some(can));
+}
 
 /**
  * Phone bottom bar: Home, then the first three destinations the person can open
@@ -34,6 +42,6 @@ export function mobileTabs(can: (p: Permission) => boolean): string[] {
   if (can('attendance.write') && !can('classes.all')) priority = ['/schedule', '/classes', '/students', '/talent', '/castings'];
   else if (can('castings.write') && !can('students.write')) priority = ['/schedule', '/talent', '/castings', '/students', '/classes'];
   else priority = ['/schedule', '/students', '/talent', '/classes', '/castings'];
-  const open = new Set(NAV_ITEMS.filter((i) => !i.permission || can(i.permission)).map((i) => i.to));
+  const open = new Set(NAV_ITEMS.filter((i) => navItemOpen(i, can)).map((i) => i.to));
   return ['/', ...priority.filter((to) => open.has(to)).slice(0, 3)];
 }

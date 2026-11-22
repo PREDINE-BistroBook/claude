@@ -2,8 +2,10 @@ import { BadgeCheck, Crown, Lock, Plus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { Position } from '@shared/schemas/positions';
 import { Badge, ButtonLink, EmptyState, ErrorState, List, ListRow, PageHeader, PageLoader } from '@web/components/ui';
+import { useAuth } from '@web/lib/auth';
 import { usePositionName } from '@web/lib/positions';
 import { usePositions } from './api';
+import { heldByOthersBeyondReach } from './utils';
 
 export default function PositionsPage() {
   const { t } = useTranslation(['positions', 'common']);
@@ -40,6 +42,8 @@ export default function PositionsPage() {
 function PositionRow({ position: p }: { position: Position }) {
   const { t } = useTranslation(['positions', 'common']);
   const name = usePositionName();
+  const { user } = useAuth();
+  const lockedLabel = t(heldByOthersBeyondReach(p, user?.permissions ?? []) ? 'lockedHolders' : 'locked');
   const Icon = p.isOwner ? Crown : BadgeCheck;
   const allows = p.isOwner ? t('allowsEverything') : p.permissions.length ? t('allows', { count: p.permissions.length }) : t('allowsNothing');
   return (
@@ -66,9 +70,9 @@ function PositionRow({ position: p }: { position: Position }) {
       }
       trailing={
         !p.editable && (
-          <span className="flex items-center text-muted" title={t('locked')}>
+          <span className="flex items-center text-muted" title={lockedLabel}>
             <Lock className="size-4" aria-hidden />
-            <span className="sr-only">{t('locked')}</span>
+            <span className="sr-only">{lockedLabel}</span>
           </span>
         )
       }

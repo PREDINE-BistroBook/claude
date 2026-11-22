@@ -34,9 +34,17 @@ export interface Position {
   /** What it allows. Owner positions always list every permission. */
   permissions: Permission[];
   sortOrder: number;
-  /** People holding it (that the caller can see). */
+  /**
+   * People holding it — everyone, owners included, whoever asks (a bare number:
+   * the owner accounts themselves stay hidden). A position with holders can't be
+   * deleted, so `holderCount === 0` is exactly when deleting isn't refused for that.
+   */
   holderCount: number;
-  /** The caller may edit (and, unless built-in or in use, delete) it. */
+  /**
+   * The caller may edit (and, unless built-in or in use, delete) it. False for a
+   * non-owner when someone who can do more than them (not an owner) holds it:
+   * editing it would change that person's access.
+   */
   editable: boolean;
   /** The caller may give it to / take it from staff. */
   assignable: boolean;
@@ -50,9 +58,9 @@ export const POSITION_ERROR_CODES = {
   inUse: 'position_in_use',
   /** 409 — built-in positions can be renamed and changed but not deleted. */
   builtIn: 'position_built_in',
-  /** 409 — another position already has this name. */
+  /** 409 — another position (that the caller can see) already has this name. */
   nameTaken: 'position_name_taken',
-  /** 403 — a non-owner tried to allow something they can't do themselves. */
+  /** 403 — a non-owner tried to allow something they can't do themselves, or to change a position held by someone who can do more than them. */
   exceedsYourAccess: 'exceeds_your_access',
   /** 403 — only owners may create, change or delete owner positions. */
   ownerOnly: 'owner_only',

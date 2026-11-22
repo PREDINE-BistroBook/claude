@@ -1,11 +1,11 @@
 import clsx from 'clsx';
-import { Clapperboard, GraduationCap, Plus, Star, UserPlus, Users, type LucideIcon } from 'lucide-react';
+import { Clapperboard, GraduationCap, LayoutDashboard, Lock, Plus, Star, UserPlus, Users, type LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ReactNode } from 'react';
 import { todayISO } from '@shared/dates';
 import type { Permission } from '@shared/permissions';
 import type { DashboardData } from '@shared/schemas/dashboard';
-import { ButtonLink, ErrorState, PageHeader, PageLoader, StatCard } from '@web/components/ui';
+import { ButtonLink, EmptyState, ErrorState, PageHeader, PageLoader, StatCard } from '@web/components/ui';
 import { useAuth } from '@web/lib/auth';
 import { useFormat } from '@web/lib/format';
 import { useDashboard } from './api';
@@ -41,9 +41,31 @@ export default function DashboardPage() {
   const stats = data ? STATS.filter((s) => data.counts[s.key] !== undefined) : [];
   const actions = QUICK_ACTIONS.filter((a) => can(a.permission));
 
+  const school = data
+    ? [
+        data.todaySessions && <TodayClassesCard key="today" sessions={data.todaySessions} today={today} mine={!can('classes.all')} />,
+        data.attendanceToDo && data.attendanceToDo.length > 0 && (
+          <AttendanceCard key="attendance" sessions={data.attendanceToDo} total={data.attendanceToDoCount ?? data.attendanceToDo.length} today={today} />
+        ),
+      ].filter(Boolean)
+    : [];
+  const agency = data
+    ? [
+        data.upcomingAuditions && <AuditionsCard key="auditions" auditions={data.upcomingAuditions} />,
+        data.closingCastings && <ClosingCastingsCard key="closing" castings={data.closingCastings} today={today} />,
+      ].filter(Boolean)
+    : [];
+
   let body;
   if (dashboard.isPending) body = <PageLoader />;
   else if (dashboard.isError || !data) body = <ErrorState error={dashboard.error} onRetry={() => void dashboard.refetch()} />;
+  else if (!user?.permissions.length)
+    // An account whose positions allow nothing (yet): say so here rather than showing a blank page.
+    body = (
+      <EmptyState icon={Lock} title={t('noAccess')} description={t('common:profile.nothingYet')} className="rounded-2xl border border-dashed border-line-strong" />
+    );
+  else if (!stats.length && !actions.length && !school.length && !agency.length)
+    body = <EmptyState icon={LayoutDashboard} title={t('empty.title')} description={t('empty.hint')} className="rounded-2xl border border-dashed border-line-strong" />;
   else
     body = (
       <div className="space-y-6">
@@ -70,18 +92,7 @@ export default function DashboardPage() {
           </section>
         )}
 
-        <SectionColumns
-          school={[
-            data.todaySessions && <TodayClassesCard key="today" sessions={data.todaySessions} today={today} mine={!can('classes.all')} />,
-            data.attendanceToDo && data.attendanceToDo.length > 0 && (
-              <AttendanceCard key="attendance" sessions={data.attendanceToDo} total={data.attendanceToDoCount ?? data.attendanceToDo.length} today={today} />
-            ),
-          ]}
-          agency={[
-            data.upcomingAuditions && <AuditionsCard key="auditions" auditions={data.upcomingAuditions} />,
-            data.closingCastings && <ClosingCastingsCard key="closing" castings={data.closingCastings} today={today} />,
-          ]}
-        />
+        <SectionColumns school={school} agency={agency} />
       </div>
     );
 

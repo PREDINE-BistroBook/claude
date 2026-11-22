@@ -22,7 +22,8 @@ import { currentUser, requireAuth, requirePermission } from '../middleware/auth'
 
 /**
  * Students: the school's people. students.read shows them — only those in
- * classes you teach unless you also have classes.all (anyone else is a 404);
+ * your own classes, or that you added, unless you also have classes.all
+ * (anyone else is a 404);
  * students.write changes them. Phone, email, guardian and emergency contacts
  * need students.contact: without it they come back null (contactHidden: true),
  * aren't searched and are ignored on writes. Deleting a student removes their
@@ -172,6 +173,7 @@ router.post('/', canWrite, async (c) => {
       status: input.status ?? 'active',
       joinedOn: input.joinedOn ?? todayISO(),
       mediaConsent: input.mediaConsent ?? false,
+      createdBy: me.id,
     })
     .returning()
     .get();

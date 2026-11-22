@@ -180,7 +180,7 @@ function TalentView({ talent: p, del }: { talent: TalentDetail; del: ReturnType<
           </Card>
 
           <Card title={t('detail.contact')}>
-            {p.contactHidden ? (
+            {p.contactHidden || !can('talent.contact') ? (
               <p className="flex items-center gap-2 text-sm text-muted">
                 <Lock className="size-4 shrink-0" aria-hidden />
                 {t('common:states.contactHidden')}

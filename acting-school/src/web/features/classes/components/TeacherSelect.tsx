@@ -6,7 +6,8 @@ import { useStaffDirectory } from '../api';
 
 /**
  * Staff picker from GET /api/staff/directory (active staff, coaches first).
- * Keeps showing `current` even if that person is no longer active, and still
+ * Keeps showing `current` even if that person isn't offered (no longer active,
+ * or an owner account, which the directory leaves out for non-owners), and still
  * works (with just "none" + current) when the directory can't be loaded.
  */
 export function TeacherSelect({
@@ -32,6 +33,9 @@ export function TeacherSelect({
   const teachers = active.filter((s) => s.coach);
   const others = active.filter((s) => !s.coach);
   const currentMissing = current && current.id && !active.some((s) => s.id === current.id);
+  // "(inactive)" only when the directory says so: an owner teaching the class isn't in a non-owner's
+  // directory at all, and is shown by plain name rather than wrongly labelled inactive.
+  const currentInactive = !!current && !!directory.data?.items.some((s) => s.id === current.id && !s.active);
 
   return (
     <Field
@@ -45,7 +49,7 @@ export function TeacherSelect({
         <option value="">{directory.isPending ? t('common:states.loading') : emptyLabel}</option>
         {currentMissing && (
           <option value={current.id}>
-            {directory.isSuccess ? t('form.inactiveStaff', { name: current.name ?? `#${current.id}` }) : (current.name ?? `#${current.id}`)}
+            {currentInactive ? t('form.inactiveStaff', { name: current.name ?? `#${current.id}` }) : (current.name ?? `#${current.id}`)}
           </option>
         )}
         {teachers.length > 0 && (

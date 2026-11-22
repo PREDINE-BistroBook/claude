@@ -102,7 +102,9 @@ export function TalentForm({ talent, student }: { talent?: Talent; student?: Stu
   const v = form.values;
   const age = ageOn(v.dateOfBirth || null);
   // Without talent.contact, phone and email aren't shown or sent (the API would ignore them anyway).
-  const withContact = useAuth().can('talent.contact');
+  // Nor when the profile was loaded without them (contactHidden): sending those empty placeholders after
+  // a permission was granted meanwhile would wipe the real contacts.
+  const withContact = useAuth().can('talent.contact') && !talent?.contactHidden;
 
   const submit = () => {
     const data = form.validate(talentInput, {

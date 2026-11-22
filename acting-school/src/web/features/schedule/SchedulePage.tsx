@@ -1,10 +1,10 @@
-import { ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react';
+import { CalendarOff, ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 import { addDays, todayISO } from '@shared/dates';
 import type { ScheduleFilter } from '@shared/schemas/schedule';
-import { Button, ErrorState, PageHeader, PageLoader, Segmented, Spinner } from '@web/components/ui';
+import { Button, EmptyState, ErrorState, PageHeader, PageLoader, Segmented, Spinner } from '@web/components/ui';
 import { useAuth } from '@web/lib/auth';
 import { usePrefetchAdjacentWeeks, useSchedule, useWeekStart } from './api';
 import { DayAgenda } from './components/DayAgenda';
@@ -33,16 +33,21 @@ export default function SchedulePage() {
   const { can } = useAuth();
   const f = useCalendarFormat();
   const [params, setParams] = useSearchParams();
+  // The API adds class sessions only with courses.read and auditions only with castings.read.
+  const canSeeClasses = can('courses.read');
   const canSeeAuditions = can('castings.read');
+  const canSeeAnything = canSeeClasses || canSeeAuditions;
+  // The All / Classes / Auditions switch only makes sense to someone who sees both.
+  const canFilter = canSeeClasses && canSeeAuditions;
 
   const today = todayISO();
   const selected = parseDateParam(params.get('date')) ?? today;
-  const filter = parseFilterParam(params.get('show'), canSeeAuditions);
+  const filter = parseFilterParam(params.get('show'), { classes: canSeeClasses, auditions: canSeeAuditions });
 
   const { weekStartsOn, ready } = useWeekStart();
   const week = useMemo(() => weekOf(selected, weekStartsOn), [selected, weekStartsOn]);
-  const schedule = useSchedule(week.from, week.to, ready);
-  usePrefetchAdjacentWeeks(week.from, ready && schedule.isSuccess);
+  const schedule = useSchedule(week.from, week.to, ready && canSeeAnything);
+  usePrefetchAdjacentWeeks(week.from, ready && canSeeAnything && schedule.isSuccess);
 
   // Start from the live URL, not this render's params: router updates land in a
   // transition, so a quick second tap could otherwise undo the first one.
@@ -74,8 +79,19 @@ export default function SchedulePage() {
     { value: 'auditions', label: t('filter.auditions') },
   ];
 
+  const subtitle = canFilter ? t('subtitle') : canSeeAuditions ? t('subtitleAuditions') : canSeeClasses ? t('subtitleClasses') : undefined;
+
   let body;
-  if (!ready || schedule.isPending) body = <PageLoader />;
+  if (!canSeeAnything)
+    body = (
+      <EmptyState
+        icon={CalendarOff}
+        title={t('nothingToShow')}
+        description={t('nothingToShowHint')}
+        className="rounded-2xl border border-dashed border-line-strong"
+      />
+    );
+  else if (!ready || schedule.isPending) body = <PageLoader />;
   else if (schedule.isError && !schedule.data) body = <ErrorState error={schedule.error} onRetry={() => void schedule.refetch()} />;
   else
     body = (
@@ -94,30 +110,32 @@ export default function SchedulePage() {
 
   return (
     <div>
-      <PageHeader title={t('title')} subtitle={canSeeAuditions ? t('subtitle') : t('subtitleClasses')} />
+      <PageHeader title={t('title')} subtitle={subtitle} />
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div role="group" aria-label={t('weekNavigation')} className="flex min-w-0 items-center gap-2">
-          <StepButton icon={ChevronLeft} label={t('previousWeek')} onClick={() => stepWeek(-1)} />
-          <Button onClick={() => selectDate(today)} title={t('goToToday')}>
-            {t('common:actions.today')}
-          </Button>
-          <StepButton icon={ChevronRight} label={t('nextWeek')} onClick={() => stepWeek(1)} />
-          <h2 className="ms-1 flex min-w-0 items-center gap-2 text-base font-semibold text-ink" aria-live="polite">
-            <span className="truncate">{f.range(week.from, week.to)}</span>
-            {ready && schedule.isFetching && <Spinner className="size-4" />}
-          </h2>
+      {canSeeAnything && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div role="group" aria-label={t('weekNavigation')} className="flex min-w-0 items-center gap-2">
+            <StepButton icon={ChevronLeft} label={t('previousWeek')} onClick={() => stepWeek(-1)} />
+            <Button onClick={() => selectDate(today)} title={t('goToToday')}>
+              {t('common:actions.today')}
+            </Button>
+            <StepButton icon={ChevronRight} label={t('nextWeek')} onClick={() => stepWeek(1)} />
+            <h2 className="ms-1 flex min-w-0 items-center gap-2 text-base font-semibold text-ink" aria-live="polite">
+              <span className="truncate">{f.range(week.from, week.to)}</span>
+              {ready && schedule.isFetching && <Spinner className="size-4" />}
+            </h2>
+          </div>
+          {canFilter && (
+            <Segmented
+              label={t('filter.label')}
+              options={filterOptions}
+              value={filter}
+              onChange={setFilter}
+              className="w-full *:flex-1 sm:w-auto sm:*:flex-none"
+            />
+          )}
         </div>
-        {canSeeAuditions && (
-          <Segmented
-            label={t('filter.label')}
-            options={filterOptions}
-            value={filter}
-            onChange={setFilter}
-            className="w-full *:flex-1 sm:w-auto sm:*:flex-none"
-          />
-        )}
-      </div>
+      )}
 
       {body}
     </div>

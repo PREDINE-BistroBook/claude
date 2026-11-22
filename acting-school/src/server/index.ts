@@ -5,10 +5,18 @@ import path from 'node:path';
 import { createApp } from './app';
 import { loadConfig } from './config';
 import { createDb } from './db/client';
+import { users } from './db/schema';
+import { activeOwnerCount } from './lib/access';
 
 const config = loadConfig();
 const db = createDb(path.join(config.dataDir, 'app.db'));
 const app = createApp({ db, config });
+
+// Staff exist but nobody active holds an owner position (e.g. every former owner deactivated):
+// owner-only actions are out of reach until someone runs the recovery script.
+if (db.select({ id: users.id }).from(users).limit(1).get() && activeOwnerCount(db) === 0) {
+  console.warn('No active account holds an owner position. Give one back with: npm run owner -- someone@example.com');
+}
 
 // In production the same server hands out the built web app (dist/web).
 // In development Vite serves the web app and proxies /api here.

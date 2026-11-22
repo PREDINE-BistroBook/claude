@@ -4,7 +4,9 @@ What the school asked for, in the order we plan to build it. Update this file as
 
 **Phase 1 (the basics) — done (2026-11-22):** staff sign-in, students, classes with weekly schedules, attendance, actor roster with photos, castings with roles and submissions, combined schedule, home dashboard, staff and settings. English + Arabic, phone and desktop, demo data (`npm run seed`). Everything below is phase 2 onward.
 
-**Now building:** phase 2, step 1 — positions & permissions.
+**Phase 2, step 1 (positions & permissions) — done (2026-11-23):** the positions below are built in, editable on the Positions page, and enforced by the server; reviewed for security (23 issues found and fixed, each with a test).
+
+**Next:** step 2 — admissions.
 
 ## Decisions so far
 
@@ -31,7 +33,7 @@ Rules that hold for every position: owner accounts are visible and editable only
 
 ## Phase 2 — in build order
 
-1. **Positions & permissions.** Replace the four fixed roles with the positions above, editable as checkboxes per permission by owners (and by the Executive Director within her own limits). A person can hold several positions.
+1. ✅ **Positions & permissions.** Replace the four fixed roles with the positions above, editable as checkboxes per permission by owners (and by the Executive Director within her own limits). A person can hold several positions.
 2. **Admissions.** Leads (people asking about classes, from WhatsApp / email / Sheets / forms) → interview with Salma (notes + assessment) → Salma picks the coach and class → enrolled student. Follow-up reminders so no lead is forgotten.
 3. **Import from Google Sheets.** Upload a CSV/Excel export, match columns to fields (students, actors, leads). Optional automatic sync of new rows through a free Google Apps Script.
 4. **Coach rankings.** Coaches score their students on criteria (editable list), with notes and history; progress over time; top students surface for castings.

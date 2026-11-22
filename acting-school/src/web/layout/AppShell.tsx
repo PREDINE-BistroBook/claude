@@ -10,7 +10,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useOnline } from '../lib/hooks';
 import { usePositionNames } from '../lib/positions';
-import { NAV_ITEMS, mobileTabs, type NavItem } from './nav';
+import { NAV_ITEMS, mobileTabs, navItemOpen, type NavItem } from './nav';
 
 function useLanguageToggle() {
   const { user, refresh } = useAuth();
@@ -46,7 +46,7 @@ export function AppShell() {
     window.scrollTo(0, 0);
   }, [pathname]);
 
-  const items = NAV_ITEMS.filter((i) => !i.permission || can(i.permission));
+  const items = NAV_ITEMS.filter((i) => navItemOpen(i, can));
   const tabs = (user ? mobileTabs(can) : []).map((to) => items.find((i) => i.to === to)).filter(Boolean) as NavItem[];
   const myPositions = user ? positionNames(user.positions) : '';
   const moreItems = items.filter((i) => !tabs.includes(i));

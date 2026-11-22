@@ -5,7 +5,7 @@ import type { Permission } from '@shared/permissions';
 import type { MeResponse, SessionUser } from '@shared/schemas/auth';
 import { currentLanguage, setLanguage } from '../i18n';
 import { NoAccess, SplashScreen } from '../components/ui/States';
-import { api, setUnauthorizedHandler } from './api';
+import { api, setForbiddenHandler, setUnauthorizedHandler } from './api';
 
 interface AuthState {
   user: SessionUser | null;
@@ -22,15 +22,39 @@ interface AuthState {
 const AuthContext = createContext<AuthState | null>(null);
 export const ME_KEY = ['me'] as const;
 
+/** Is this cached query about the signed-in person themselves (kept when the cache is wiped)? */
+const isMeQuery = (key: readonly unknown[]) => key[0] === ME_KEY[0];
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
-  const me = useQuery({ queryKey: ME_KEY, queryFn: () => api.get<MeResponse>('/auth/me'), staleTime: 5 * 60_000, retry: 1 });
+  // Positions can change at any time (permissions are worked out on every request), so re-read fairly often.
+  const me = useQuery({ queryKey: ME_KEY, queryFn: () => api.get<MeResponse>('/auth/me'), staleTime: 60_000, retry: 1 });
   const user = me.data?.user ?? null;
 
   useEffect(() => {
     setUnauthorizedHandler(() => void qc.invalidateQueries({ queryKey: ME_KEY }));
-    return () => setUnauthorizedHandler(null);
+    // A refusal usually means this person's positions changed: re-read them (without restarting a read already under way).
+    setForbiddenHandler(() => void qc.invalidateQueries({ queryKey: ME_KEY }, { cancelRefetch: false }));
+    return () => {
+      setUnauthorizedHandler(null);
+      setForbiddenHandler(null);
+    };
   }, [qc]);
+
+  // Whenever the signed-in person changes — sign-out, a session that ended (expired, deactivated,
+  // password reset elsewhere), or someone else signing in on the same tab — drop everything cached
+  // for the previous person. Otherwise the next person would briefly see data their positions hide
+  // (contact details, other classes, owner accounts) while their own copy loads.
+  const lastUserId = useRef<number | null | undefined>(undefined);
+  const userId = me.isPending ? undefined : (user?.id ?? null);
+  useEffect(() => {
+    if (userId === undefined) return;
+    if (lastUserId.current !== undefined && lastUserId.current !== userId) {
+      // reset (not remove): queries still on screen start again from nothing instead of keeping old data.
+      void qc.resetQueries({ predicate: (q) => !isMeQuery(q.queryKey) });
+    }
+    lastUserId.current = userId;
+  }, [qc, userId]);
 
   // A signed-in person's saved language wins once per sign-in.
   const appliedFor = useRef<number | null>(null);

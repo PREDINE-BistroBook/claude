@@ -549,4 +549,18 @@ describe('class scope on the schedule and dashboard', () => {
     expect((await coach.get<DashboardData>('/api/dashboard')).body.counts).toEqual({ activeStudents: 1, activeCourses: 1 });
     expect((await (await t.as('admin')).get<DashboardData>('/api/dashboard')).body.counts).toMatchObject({ activeStudents: 3, activeCourses: 2 });
   });
+
+  it('attendance to-do needs courses.read as well as attendance.write (marking needs the roster)', async () => {
+    const t = await makeTestContext();
+    const s = seed(t);
+    const course = s.course();
+    s.session(course.id, { date: addDays(todayISO(), -1) });
+    s.enroll(course.id, s.student().id);
+    const clerk = await t.as({ permissions: ['attendance.write', 'classes.all'] });
+    const data = (await clerk.get<DashboardData>('/api/dashboard')).body;
+    expect(data.attendanceToDo).toBeUndefined();
+    expect(data.attendanceToDoCount).toBeUndefined();
+    const coach = await t.as({ permissions: ['attendance.write', 'classes.all', 'courses.read'] });
+    expect((await coach.get<DashboardData>('/api/dashboard')).body.attendanceToDoCount).toBe(1);
+  });
 });

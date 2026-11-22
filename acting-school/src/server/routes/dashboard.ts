@@ -13,7 +13,7 @@ import {
 import type { DB } from '../db/client';
 import { attendance, castings, classSessions, courses, enrollments, students, talent, users } from '../db/schema';
 import type { AppEnv } from '../env';
-import { courseScope, seesAllClasses, studentScope } from '../lib/access';
+import { courseScope, seesAllClasses, studentScope, takesAttendance } from '../lib/access';
 import { currentUser, requireAuth, userCan } from '../middleware/auth';
 import { loadAuditionEvents } from './schedule';
 
@@ -86,7 +86,7 @@ router.get('/', (c) => {
     ]);
   }
 
-  if (userCan(c, 'attendance.write')) {
+  if (takesAttendance(me)) {
     // Bounded by the 15-day window, so fetching the whole set to count it is cheap.
     const todo = loadClassSessions(
       db,

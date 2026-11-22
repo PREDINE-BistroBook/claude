@@ -75,6 +75,10 @@ export const STAFF_ERROR_CODES = {
   lastOwner: 'last_owner',
   /** 403 — the change would give or touch access the caller doesn't have. */
   exceedsYourAccess: 'exceeds_your_access',
-  /** 403 — only owners may give or take owner positions. */
+  /**
+   * 403 — only owners may give or take owner positions. (A safety net: to a
+   * non-owner owner positions don't exist, so naming one is the same 400
+   * staff:errors.positionNotFound as an unknown id.)
+   */
   ownerOnly: 'owner_only',
 } as const;

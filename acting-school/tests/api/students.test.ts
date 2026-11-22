@@ -614,4 +614,32 @@ describe('class scope (without classes.all)', () => {
     expect((await writer.delete(`/api/students/${layla.id}`)).status).toBe(404);
     expect(t.db.select().from(students).where(eq(students.id, layla.id)).get()).toBeTruthy();
   });
+
+  it('students.write without classes.all sees, changes and can enroll the students it added', async () => {
+    const t = await makeTestContext();
+    const admin = await t.as('admin');
+    const clerk = await t.as({ permissions: ['students.read', 'students.write', 'courses.read', 'courses.write'] });
+    const own = (
+      await admin.post('/api/courses', {
+        name: 'Own',
+        startDate: '2031-03-03',
+        endDate: '2031-03-30',
+        schedule: [{ weekday: 2, startTime: '18:00', endTime: '20:00' }],
+        teacherId: clerk.user.id,
+      })
+    ).body;
+    const created = await clerk.post<Student>('/api/students', { firstName: 'New', lastName: 'Kid' });
+    expect(created.status).toBe(201);
+    expect((await clerk.get(`/api/students/${created.body.id}`)).status).toBe(200);
+    expect((await clerk.get<{ items: StudentListItem[] }>('/api/students')).body.items.map((s) => s.id)).toEqual([created.body.id]);
+    expect((await clerk.patch(`/api/students/${created.body.id}`, { notes: 'Walk-in' })).status).toBe(200);
+    expect((await clerk.post(`/api/courses/${own.id}/enrollments`, { studentId: created.body.id })).status).toBe(201);
+    // Students someone else added stay out of scope.
+    const other = await admin.post<Student>('/api/students', { firstName: 'Other', lastName: 'Kid' });
+    expect((await clerk.get(`/api/students/${other.body.id}`)).status).toBe(404);
+    expect((await clerk.post(`/api/courses/${own.id}/enrollments`, { studentId: other.body.id })).status).toBe(400);
+    // Another coach without classes.all doesn't see the clerk's student until it's in their class.
+    const coach = await t.as('teacher');
+    expect((await coach.get(`/api/students/${created.body.id}`)).status).toBe(404);
+  });
 });

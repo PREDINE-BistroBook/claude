@@ -17,19 +17,19 @@ export const PERMISSIONS = [
   /** School name, default language, week start. */
   'settings.manage',
 
-  /** See students (only students in classes you teach, unless classes.all). */
+  /** See students (only students in your own classes or that you added, unless classes.all). */
   'students.read',
   /** See students' phone, email, guardian and emergency contacts. */
   'students.contact',
   /** Add/edit/delete students. */
   'students.write',
-  /** See classes and sessions (only ones you teach, unless classes.all). */
+  /** See classes and sessions (only your own — ones you teach, cover or created — unless classes.all). */
   'courses.read',
   /** Create/edit classes, schedules, enrollments, extra sessions. */
   'courses.write',
   /** Scope: see ALL classes, sessions and students, not only the ones you teach. */
   'classes.all',
-  /** Mark attendance (only sessions you teach, unless classes.all). */
+  /** Mark attendance (needs courses.read too; only sessions you teach, unless classes.all). */
   'attendance.write',
 
   /** See the actor database. */

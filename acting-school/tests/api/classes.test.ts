@@ -182,6 +182,8 @@ describe('mayMarkAttendance (unit)', () => {
     expect(mayMarkAttendance({ id: 5, permissions: [...casting] }, 5)).toBe(false);
     // Coach + finance: finance brings classes.all, so the coach may mark any session.
     expect(mayMarkAttendance({ id: 5, permissions: [...coach, 'classes.all'] }, 6)).toBe(true);
+    // Marking needs the roster, so courses.read too.
+    expect(mayMarkAttendance({ id: 5, permissions: ['attendance.write', 'classes.all'] }, 5)).toBe(false);
   });
 });
 
@@ -970,5 +972,68 @@ describe('class scope', () => {
     const refused = await lead.post(`/api/courses/${mine.id}/enrollments`, { studentId: stranger.id });
     expect(refused.status).toBe(400);
     expect(refused.body.error.issues[0]).toMatchObject({ path: ['studentId'], message: 'classes:errors.studentNotFound' });
+  });
+
+  it('courses.write without classes.all keeps seeing the classes it created, whoever teaches them', async () => {
+    const t = await makeTestContext();
+    const lead = await t.as({ permissions: ['courses.read', 'courses.write', 'students.read'] });
+    const other = await t.createUser('teacher');
+    const forOther = await lead.post('/api/courses', courseBody({ name: 'For other', teacherId: other.id }));
+    expect(forOther.status).toBe(201);
+    const noTeacher = await lead.post('/api/courses', courseBody({ name: 'No teacher' }));
+    expect(noTeacher.status).toBe(201);
+    for (const c of [forOther.body, noTeacher.body]) {
+      expect((await lead.get(`/api/courses/${c.id}`)).status).toBe(200);
+      expect((await lead.get(`/api/sessions/${c.sessions[0].id}`)).status).toBe(200);
+    }
+    expect((await lead.get('/api/courses')).body.items.map((c: any) => c.name)).toEqual(['For other', 'No teacher']);
+    // Seeing a class isn't teaching it: attendance stays with the teacher.
+    expect((await lead.get(`/api/sessions/${forOther.body.sessions[0].id}`)).body.canMarkAttendance).toBe(false);
+  });
+});
+
+describe('owner accounts as teachers', () => {
+  it('a non-owner can’t use a hidden owner as teacher or substitute (same answer as a missing id)', async () => {
+    const t = await makeTestContext();
+    const owner = await t.as('owner', { name: 'Ahmed Tamam CEO' });
+    const director = await t.as('admin');
+    const course = await mkCourse(director);
+    const session = course.sessions[0];
+    const missing = await director.patch(`/api/courses/${course.id}`, { teacherId: 9999 });
+    expect(missing.status).toBe(400);
+    const hidden = await director.patch(`/api/courses/${course.id}`, { teacherId: owner.user.id });
+    expect([hidden.status, hidden.body]).toEqual([missing.status, missing.body]);
+    const created = await director.post('/api/courses', courseBody({ teacherId: owner.user.id }));
+    expect([created.status, created.body]).toEqual([missing.status, missing.body]);
+    const sub = await director.patch(`/api/sessions/${session.id}`, { teacherId: owner.user.id });
+    expect([sub.status, sub.body]).toEqual([missing.status, missing.body]);
+    const extra = await director.post(`/api/courses/${course.id}/sessions`, { date: '2031-03-05', startTime: '10:00', endTime: '11:00', teacherId: owner.user.id });
+    expect([extra.status, extra.body]).toEqual([missing.status, missing.body]);
+    expect(t.db.select().from(classSessions).where(eq(classSessions.date, '2031-03-05')).all()).toHaveLength(0);
+    // Owners may; a class an owner already teaches stays editable for the director.
+    expect((await owner.patch(`/api/courses/${course.id}`, { teacherId: owner.user.id })).status).toBe(200);
+    const edit = await director.patch(`/api/courses/${course.id}`, { room: 'Hall', teacherId: owner.user.id });
+    expect(edit.status).toBe(200);
+    expect(edit.body).toMatchObject({ room: 'Hall', teacherId: owner.user.id });
+  });
+});
+
+describe('attendance needs courses.read too', () => {
+  it('attendance.write without courses.read can’t read a roster through PUT', async () => {
+    const t = await makeTestContext();
+    const admin = await t.as('admin');
+    const c = await mkCourse(admin);
+    const s = mkStudent(t, 'Roster', 'Kid');
+    t.db.insert(enrollments).values({ courseId: c.id, studentId: s.id, status: 'enrolled', enrolledOn: '2031-01-01' }).run();
+    const clerk = await t.as({ permissions: ['attendance.write', 'classes.all'] });
+    expect((await clerk.get(`/api/sessions/${c.sessions[0].id}`)).status).toBe(403);
+    for (const records of [[], [{ studentId: s.id, status: 'present' }]]) {
+      const put = await clerk.put(`/api/sessions/${c.sessions[0].id}/attendance`, { records });
+      expect(put.status).toBe(403);
+      expect(put.body?.roster).toBeUndefined();
+    }
+    // With courses.read as well it works.
+    const coach = await t.as({ permissions: ['attendance.write', 'classes.all', 'courses.read'] });
+    expect((await coach.put(`/api/sessions/${c.sessions[0].id}/attendance`, { records: [{ studentId: s.id, status: 'present' }] })).status).toBe(200);
   });
 });

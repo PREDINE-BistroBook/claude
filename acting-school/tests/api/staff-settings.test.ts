@@ -153,9 +153,10 @@ describe('POST /api/staff', () => {
     const t = await makeTestContext();
     const admin = await t.as('admin');
     const owner = await t.as('owner');
+    // Owner positions don't exist for her: the same answer as an unknown position.
     const denied = await admin.post('/api/staff', newStaff(t, { positionIds: [t.positionId('cfo')] }));
-    expect(denied.status).toBe(403);
-    expect(denied.body.error.code).toBe('owner_only');
+    expect(denied.status).toBe(400);
+    expect(denied.body.error.issues).toEqual([expect.objectContaining({ path: ['positionIds'], message: 'staff:errors.positionNotFound' })]);
     expect(t.db.select().from(users).where(eq(users.email, 'nadia@example.com')).get()).toBeUndefined();
     const ok = await owner.post('/api/staff', newStaff(t, { positionIds: [t.positionId('cfo')] }));
     expect(ok.status).toBe(201);
@@ -258,9 +259,9 @@ describe('PATCH /api/staff/:id', () => {
     expect((await admin.patch(`/api/staff/${otherOwner.id}`, { active: false })).status).toBe(404);
     expect((await admin.patch(`/api/staff/${otherOwner.id}`, { password: 'takeover123' })).status).toBe(404);
     const grant = await admin.patch(`/api/staff/${teacher.id}`, { positionIds: [t.positionId('ceo')] });
-    expect(grant.status).toBe(403);
-    expect(grant.body.error.code).toBe('owner_only');
-    expect((await admin.patch(`/api/staff/${admin.user.id}`, { positionIds: [t.positionId('ceo')] })).status).toBe(403);
+    expect(grant.status).toBe(400);
+    expect(grant.body.error.issues[0]).toMatchObject({ path: ['positionIds'], message: 'staff:errors.positionNotFound' });
+    expect((await admin.patch(`/api/staff/${admin.user.id}`, { positionIds: [t.positionId('ceo')] })).status).toBe(400);
     expect(t.db.select().from(users).where(eq(users.id, owner.user.id)).get()!.name).not.toBe('Hijack');
 
     const made = await owner.patch(`/api/staff/${teacher.id}`, { positionIds: [t.positionId('ceo')] });

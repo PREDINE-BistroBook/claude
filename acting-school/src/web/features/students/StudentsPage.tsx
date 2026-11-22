@@ -151,6 +151,8 @@ export default function StudentsPage() {
 
 function StudentRow({ student: s }: { student: StudentListItem }) {
   const { t } = useTranslation(['students', 'common']);
+  // A second guard behind the API's redaction: never show contacts the signed-in person's positions hide.
+  const showContact = useAuth().can('students.contact') && !s.contactHidden;
   const name = fullName(s);
   const age = ageOn(s.dateOfBirth);
   // Age keeps its place; a long phone/email (last) is cut at its own end ("+20 101 23…"), not its start.
@@ -161,7 +163,7 @@ function StudentRow({ student: s }: { student: StudentListItem }) {
         {t('common:units.years', { count: age })}
       </span>,
     );
-  const contact = s.phone ?? (age === null ? s.email : null);
+  const contact = showContact ? (s.phone ?? (age === null ? s.email : null)) : null;
   if (contact)
     details.push(
       <span key="contact" dir="ltr" className="min-w-0 truncate">

@@ -4,7 +4,7 @@
  * themselves are described in src/shared/permissions.ts.
  */
 import { and, asc, count, countDistinct, eq, inArray, ne, sql, type SQL } from 'drizzle-orm';
-import { BUILT_IN_POSITIONS, effectivePermissions, holdsAll, type Permission } from '../../shared/permissions';
+import { BUILT_IN_POSITIONS, PERMISSIONS, effectivePermissions, holdsAll, normalizePermissions, type Permission } from '../../shared/permissions';
 import type { PositionSummary, SessionUser } from '../../shared/schemas/auth';
 import type { DB } from '../db/client';
 import { classSessions, courses, enrollments, positions, students, userPositions, users } from '../db/schema';
@@ -42,6 +42,15 @@ export function ensureBuiltInPositions(db: Conn) {
 export const positionOrder = [asc(positions.sortOrder), sql`${positions.name} collate nocase`, asc(positions.id)];
 
 export type PositionRow = Pick<typeof positions.$inferSelect, 'id' | 'key' | 'name' | 'nameAr' | 'isOwner' | 'permissions'>;
+
+/**
+ * What a position actually allows: owner positions allow everything; anything
+ * else only the catalogue permissions in its stored list (a stored string that
+ * is no longer in the catalogue allows nothing).
+ */
+export function positionAllows(p: Pick<PositionRow, 'isOwner' | 'permissions'>): Permission[] {
+  return p.isOwner ? [...PERMISSIONS] : normalizePermissions(p.permissions);
+}
 
 export function toPositionSummary(p: PositionRow): PositionSummary {
   return { id: p.id, key: p.key, name: p.name, nameAr: p.nameAr, isOwner: p.isOwner };
@@ -140,16 +149,44 @@ export const notAnOwner = sql`not exists (
   where nup.user_id = "users"."id" and np.is_owner = 1
 )`;
 
-/** How many people hold a position (optionally only people who aren't owners). */
-export function holderCounts(db: Pick<DB, 'select'>, opts: { excludeOwners: boolean }): Map<number, number> {
+/**
+ * How many people hold each position — everyone, owners included, whoever
+ * asks: deleting a position needs nobody to hold it, so the count a
+ * non-owner sees must agree with that rule. (A bare number; who the holders
+ * are stays hidden.)
+ */
+export function holderCounts(db: Pick<DB, 'select'>, positionId?: number): Map<number, number> {
   const rows = db
     .select({ positionId: userPositions.positionId, n: count() })
     .from(userPositions)
-    .innerJoin(users, eq(users.id, userPositions.userId))
-    .where(opts.excludeOwners ? notAnOwner : undefined)
+    .where(positionId === undefined ? undefined : eq(userPositions.positionId, positionId))
     .groupBy(userPositions.positionId)
     .all();
   return new Map(rows.map((r) => [r.positionId, r.n]));
+}
+
+/**
+ * Positions the actor may not change because of who holds them: someone who
+ * isn't an owner and can do more than the actor (staff rule: someone who can
+ * do more than you is out of your reach — editing a position they hold would
+ * change their access just like editing their account). Owner holders don't
+ * count: a non-owner position changes nothing for them. Empty for owners.
+ * Pass `positionId` to look at one position only.
+ */
+export function positionsHeldBeyondReach(db: Pick<DB, 'select'>, actor: Actor, positionId?: number): Set<number> {
+  const out = new Set<number>();
+  if (actor.isOwner) return out;
+  const held = db
+    .select({ userId: userPositions.userId, positionId: userPositions.positionId })
+    .from(userPositions)
+    .where(positionId === undefined ? undefined : eq(userPositions.positionId, positionId))
+    .all();
+  const access = loadAccess(db, [...new Set(held.map((r) => r.userId))]);
+  for (const r of held) {
+    const a = access.get(r.userId)!;
+    if (!a.isOwner && !withinAccess(actor, a.permissions)) out.add(r.positionId);
+  }
+  return out;
 }
 
 // ── Permissions ─────────────────────────────────────────────────────────────
@@ -166,17 +203,23 @@ export function seesAllClasses(user: Pick<SessionUser, 'permissions'>): boolean 
 // ── "Classes you teach" scope ───────────────────────────────────────────────
 
 /**
- * Ids of the courses a person teaches: they're the course's teacher, or the
- * substitute on any of its sessions. (Subquery for `x in (…)`.)
+ * Ids of a person's own courses: they're the course's teacher, the substitute
+ * on any of its sessions, or they created it (so a class set up for another
+ * coach doesn't vanish from its creator). (Subquery for `x in (…)`.)
  */
 export function ownCourseIds(userId: number): SQL {
-  return sql`select oc.id from ${courses} oc where oc.teacher_id = ${userId}
+  return sql`select oc.id from ${courses} oc where oc.teacher_id = ${userId} or oc.created_by = ${userId}
     union select os.course_id from ${classSessions} os where os.teacher_id = ${userId}`;
 }
 
-/** Ids of the students with any enrollment in a course the person teaches. */
+/**
+ * Ids of a person's own students: any enrollment in one of their own courses,
+ * or they added the student (so a student they just added can be seen and
+ * enrolled).
+ */
 export function ownStudentIds(userId: number): SQL {
-  return sql`select oe.student_id from ${enrollments} oe where oe.course_id in (${ownCourseIds(userId)})`;
+  return sql`select oe.student_id from ${enrollments} oe where oe.course_id in (${ownCourseIds(userId)})
+    union select ost.id from ${students} ost where ost.created_by = ${userId}`;
 }
 
 /** WHERE for the courses this person may see (undefined: all of them). */
@@ -208,11 +251,31 @@ export function canSeeStudent(db: Pick<DB, 'select'>, user: Pick<SessionUser, 'i
 }
 
 /**
- * Attendance rule: needs attendance.write; without classes.all only for
- * sessions the person teaches (the session's substitute, else the course's teacher).
+ * The student exists and this person may open them: students.read, and the
+ * student is in their scope. Anything that shows or links a student from
+ * another module (e.g. a talent profile) goes through this.
+ */
+export function maySeeStudent(db: Pick<DB, 'select'>, user: Pick<SessionUser, 'id' | 'permissions'>, studentId: number): boolean {
+  if (!hasPermission(user, 'students.read')) return false;
+  return !!db
+    .select({ id: students.id })
+    .from(students)
+    .where(and(eq(students.id, studentId), studentScope(user)))
+    .get();
+}
+
+/** Takes attendance at all: attendance.write, plus courses.read (marking needs the session and its roster). */
+export function takesAttendance(user: Pick<SessionUser, 'permissions'>): boolean {
+  return hasPermission(user, 'attendance.write') && hasPermission(user, 'courses.read');
+}
+
+/**
+ * Attendance rule: needs attendance.write (and courses.read); without
+ * classes.all only for sessions the person teaches (the session's substitute,
+ * else the course's teacher).
  */
 export function mayMarkAttendance(user: Pick<SessionUser, 'id' | 'permissions'>, effectiveTeacherId: number | null): boolean {
-  if (!hasPermission(user, 'attendance.write')) return false;
+  if (!takesAttendance(user)) return false;
   if (!seesAllClasses(user)) return effectiveTeacherId === user.id;
   return true;
 }

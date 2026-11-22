@@ -69,6 +69,10 @@ function StudentView({ student: s, del }: { student: StudentDetail; del: ReturnT
   const age = ageOn(s.dateOfBirth);
   const isMinor = age !== null && age < 18;
   const canWrite = can('students.write');
+  // The API already redacts; also check the signed-in person's own permission so contacts never show to the wrong person.
+  const contactHidden = s.contactHidden || !can('students.contact');
+  // Casting team and others without "See classes" can't open a class, so its row isn't a link for them.
+  const canOpenClasses = can('courses.read');
 
   const onDelete = () =>
     del.mutate(undefined, {
@@ -134,7 +138,7 @@ function StudentView({ student: s, del }: { student: StudentDetail; del: ReturnT
 
       {/* grid-cols-1 (minmax(0, 1fr)) so long emails truncate instead of widening the page. */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {s.contactHidden ? (
+        {contactHidden ? (
           <Card title={t('detail.contact')} className="md:col-span-2">
             <ContactHidden />
           </Card>
@@ -185,7 +189,7 @@ function StudentView({ student: s, del }: { student: StudentDetail; del: ReturnT
               {s.enrollments.map((e) => (
                 <ListRow
                   key={e.id}
-                  to={`/classes/${e.courseId}`}
+                  to={canOpenClasses ? `/classes/${e.courseId}` : undefined}
                   leading={
                     <span className="flex size-8 items-center justify-center" aria-hidden>
                       <span className={clsx('size-3 rounded-full', courseColor(isCourseColor(e.courseColor) ? e.courseColor : null).dot)} />

@@ -2,6 +2,11 @@ import type { Namespace, TranslationOf } from '@web/i18n/types';
 
 const en = {
   title: 'Home',
+  noAccess: 'Your account can’t see anything yet',
+  empty: {
+    title: 'Nothing for you on Home',
+    hint: 'Open the sections your positions allow from the menu.',
+  },
   greeting: {
     morning: 'Good morning, {{name}}',
     afternoon: 'Good afternoon, {{name}}',
@@ -52,6 +57,11 @@ const en = {
 
 const ar: TranslationOf<typeof en> = {
   title: 'الرئيسية',
+  noAccess: 'لا يمكن لحسابك رؤية أي شيء بعد',
+  empty: {
+    title: 'لا شيء لك في الصفحة الرئيسية',
+    hint: 'افتح من القائمة الأقسام التي تسمح بها مناصبك.',
+  },
   greeting: {
     morning: 'صباح الخير، {{name}}',
     afternoon: 'طاب يومك، {{name}}',

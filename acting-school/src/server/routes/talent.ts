@@ -19,7 +19,7 @@ import type { DB } from '../db/client';
 import { castingRoles, castings, files, students, submissions, talent, talentPhotos } from '../db/schema';
 import type { AppEnv } from '../env';
 import type { SessionUser } from '../../shared/schemas/auth';
-import { hasPermission, redactContact, withoutContact } from '../lib/access';
+import { hasPermission, maySeeStudent, redactContact, withoutContact } from '../lib/access';
 import { ApiError, conflict, notFound } from '../lib/errors';
 import { body, paramId, query } from '../lib/validate';
 import { currentUser, requireAuth, requirePermission } from '../middleware/auth';
@@ -28,9 +28,12 @@ import { currentUser, requireAuth, requirePermission } from '../middleware/auth'
  * Talent: the agency's roster. talent.read shows it, talent.write changes it.
  * Phone and email need talent.contact: without it they come back null
  * (contactHidden: true) and are ignored on writes (search never looks at them).
- * A talent may be linked to one student (talent.student_id is unique). Photos
- * are attached after the profile exists; the primary headshot is always one of
- * the talent's own photos.
+ * A talent may be linked to one student (talent.student_id is unique). The
+ * link follows student access: only someone who may open that student
+ * (students.read, and the student in their class scope) sees it (studentId,
+ * student) or can make it — to anyone else a student they can't see is as
+ * unknown as a missing one. Photos are attached after the profile exists; the
+ * primary headshot is always one of the talent's own photos.
  */
 const router = new Hono<AppEnv>();
 router.use(requireAuth);
@@ -45,11 +48,16 @@ type PhotoRow = typeof talentPhotos.$inferSelect;
 
 const seesContact = (user: SessionUser) => hasPermission(user, 'talent.contact');
 
-function toTalent(r: TalentRow, user: SessionUser): Talent {
+/** The profile's linked student, if this person may see them (null otherwise, or when not linked). */
+function visibleStudentId(db: Conn, r: Pick<TalentRow, 'studentId'>, user: SessionUser): number | null {
+  return r.studentId !== null && maySeeStudent(db, user, r.studentId) ? r.studentId : null;
+}
+
+function toTalent(db: Conn, r: TalentRow, user: SessionUser): Talent {
   return redactContact(
     {
     id: r.id,
-    studentId: r.studentId,
+    studentId: visibleStudentId(db, r, user),
     firstName: r.firstName,
     lastName: r.lastName,
     stageName: r.stageName,
@@ -126,12 +134,12 @@ function normalizeInstagram(v: string | null | undefined): string | null | undef
 }
 
 /**
- * Linking a student: they must exist (field error on studentId) and must not
+ * Linking a student: they must exist and be someone this person may see
+ * (otherwise the same field error on studentId — no oracle), and must not
  * already be on the roster under another profile (409 student_already_talent).
  */
-function assertStudentLinkable(db: Conn, studentId: number, exceptTalentId?: number) {
-  const student = db.select({ id: students.id }).from(students).where(eq(students.id, studentId)).get();
-  if (!student) throw fieldError('studentId', 'talent:errors.studentNotFound');
+function assertStudentLinkable(db: Conn, user: SessionUser, studentId: number, exceptTalentId?: number) {
+  if (!maySeeStudent(db, user, studentId)) throw fieldError('studentId', 'talent:errors.studentNotFound');
   const linked = db.select({ id: talent.id }).from(talent).where(eq(talent.studentId, studentId)).get();
   if (linked && linked.id !== exceptTalentId) {
     throw new ApiError(409, 'student_already_talent', 'This student is already on the talent roster');
@@ -190,6 +198,8 @@ function ageCondition(age: number): SQL {
 router.get('/', canRead, (c) => {
   const { q, status, gender, age, skill, language, studentId } = query(c, talentListQuery);
   const db = c.get('db');
+  // Filtering by a student you can't see finds nothing (it would reveal whether they're on the roster).
+  if (studentId && !maySeeStudent(db, currentUser(c), studentId)) return c.json<ListResponse<TalentListItem>>({ items: [] });
 
   const conditions: SQL[] = [];
   if (status) conditions.push(eq(talent.status, status));
@@ -276,7 +286,7 @@ router.post('/', canWrite, async (c) => {
   const db = c.get('db');
 
   const created = db.transaction((tx) => {
-    if (input.studentId) assertStudentLinkable(tx, input.studentId);
+    if (input.studentId) assertStudentLinkable(tx, me, input.studentId);
     return tx
       .insert(talent)
       .values({
@@ -290,7 +300,7 @@ router.post('/', canWrite, async (c) => {
       .returning()
       .get();
   });
-  return c.json(toTalent(created, me), 201);
+  return c.json(toTalent(db, created, me), 201);
 });
 
 // ── Detail ──────────────────────────────────────────────────────────────────
@@ -326,15 +336,18 @@ router.get('/:id', canRead, (c) => {
     .orderBy(desc(submissions.updatedAt), desc(submissions.id))
     .all();
 
-  const student = row.studentId
-    ? (db
-        .select({ id: students.id, firstName: students.firstName, lastName: students.lastName })
-        .from(students)
-        .where(eq(students.id, row.studentId))
-        .get() ?? null)
-    : null;
+  const me = currentUser(c);
+  const studentId = visibleStudentId(db, row, me);
+  const student =
+    studentId !== null
+      ? (db
+          .select({ id: students.id, firstName: students.firstName, lastName: students.lastName })
+          .from(students)
+          .where(eq(students.id, studentId))
+          .get() ?? null)
+      : null;
 
-  const res: TalentDetail = { ...toTalent(row, currentUser(c)), photos, submissions: subs, student };
+  const res: TalentDetail = { ...toTalent(db, row, me), photos, submissions: subs, student };
   return c.json(res);
 });
 
@@ -365,14 +378,15 @@ router.patch('/:id', canWrite, async (c) => {
   if (input.instagram !== undefined) patch.instagram = normalizeInstagram(input.instagram);
   if (input.languages !== undefined) patch.languages = uniqueTags(input.languages);
   if (input.skills !== undefined) patch.skills = uniqueTags(input.skills);
-  if (!Object.keys(patch).length) return c.json(toTalent(existing, me));
+  if (!Object.keys(patch).length) return c.json(toTalent(db, existing, me));
 
   const updated = db.transaction((tx) => {
-    if (input.studentId && input.studentId !== existing.studentId) assertStudentLinkable(tx, input.studentId, id);
+    // Checked even when it's the current link: that answer must not tell someone who can't see the student which one it is.
+    if (input.studentId) assertStudentLinkable(tx, me, input.studentId, id);
     return tx.update(talent).set(patch).where(eq(talent.id, id)).returning().get();
   });
   if (!updated) throw notFound('Talent not found');
-  return c.json(toTalent(updated, me));
+  return c.json(toTalent(db, updated, me));
 });
 
 // ── Delete ──────────────────────────────────────────────────────────────────

@@ -19,6 +19,16 @@ export function setUnauthorizedHandler(fn: (() => void) | null) {
   onUnauthorized = fn;
 }
 
+let onForbidden: (() => void) | null = null;
+/**
+ * The auth provider registers this so a 403 re-reads /auth/me: permissions are
+ * worked out again on every request, so a refusal usually means someone changed
+ * this person's positions — the nav, guards and buttons should follow at once.
+ */
+export function setForbiddenHandler(fn: (() => void) | null) {
+  onForbidden = fn;
+}
+
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = { 'X-Requested-With': 'fetch', Accept: 'application/json' };
   let payload: BodyInit | undefined;
@@ -38,6 +48,7 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
   if (!res.ok) {
     const err = (data as ApiErrorBody | null)?.error;
     if (res.status === 401 && !url.startsWith('/auth/')) onUnauthorized?.();
+    if (res.status === 403 && !url.startsWith('/auth/')) onForbidden?.();
     throw new ApiError(res.status, err?.code ?? 'server_error', err?.message ?? res.statusText, err?.issues);
   }
   return data as T;

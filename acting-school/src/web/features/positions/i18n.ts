@@ -21,6 +21,7 @@ const en = {
   allows_other: 'Allows {{count}} things',
   allowsNothing: 'Allows nothing yet',
   locked: 'Includes access you don’t have',
+  lockedHolders: 'Held by someone who can do more than you',
   emptyTitle: 'No positions yet',
   form: {
     newTitle: 'New position',
@@ -39,6 +40,7 @@ const en = {
     ownerAccessHint: 'Owner positions allow everything, so there is nothing to tick.',
     cantGive: 'You can’t give access you don’t have',
     readOnly: 'This position allows things you can’t do yourself, so only an owner can change it.',
+    readOnlyHolders: 'Someone who holds this position can do more than you, and changing it would change their access too, so only an owner can change it.',
     builtInHint: 'A built-in position: you can rename it and change what it allows, but not delete it.',
     create: 'Create position',
   },
@@ -57,7 +59,7 @@ const en = {
   },
   errors: {
     nameTaken: 'Another position already has this name',
-    exceedsYourAccess: 'You can’t give access you don’t have.',
+    exceedsYourAccess: 'You can’t give access you don’t have, or change a position held by someone who can do more than you.',
     ownerOnly: 'Only an owner can create or change owner positions.',
     lastOwner: 'Nobody else would hold an owner position. Give someone else an owner position first.',
     inUse: 'Someone holds this position. Give them another position first.',
@@ -80,28 +82,31 @@ const en = {
       manage: { label: 'School settings', description: 'School name, default language and the first day of the week.' },
     },
     students: {
-      read: { label: 'See students', description: 'Only students in classes you teach — unless “All classes” is allowed too.' },
+      read: { label: 'See students', description: 'Only students in your own classes and students you added — unless “All classes” is allowed too.' },
       contact: { label: 'Students’ contact details', description: 'Phone, email, guardian and emergency contacts.' },
-      write: { label: 'Edit students', description: 'Add, edit and delete students.' },
+      write: { label: 'Edit students', description: 'Add, edit and delete students — without “All classes”, only the students you can see.' },
     },
     courses: {
-      read: { label: 'See classes', description: 'Classes and their sessions: only the ones you teach, unless “All classes” is allowed too.' },
-      write: { label: 'Edit classes', description: 'Create and edit classes, schedules, enrollments and extra sessions.' },
+      read: { label: 'See classes', description: 'Classes and their sessions: only your own (ones you teach, cover or set up), unless “All classes” is allowed too.' },
+      write: { label: 'Edit classes', description: 'Create, edit and delete classes, schedules, enrollments and sessions — without “All classes”, only your own classes.' },
     },
     classes: {
-      all: { label: 'All classes', description: 'See every class, session and student, not only the ones you teach.' },
+      all: { label: 'All classes', description: 'See every class, session and student, not only your own.' },
     },
     attendance: {
-      write: { label: 'Take attendance', description: 'Mark attendance: only for sessions you teach, unless “All classes” is allowed too.' },
+      write: { label: 'Take attendance', description: 'Mark attendance: only for sessions you teach, unless “All classes” is allowed too. Needs “See classes” as well.' },
     },
     talent: {
       read: { label: 'See actors', description: 'The actor database: profiles, photos and skills.' },
       contact: { label: 'Actors’ contact details', description: 'Actors’ phone and email.' },
-      write: { label: 'Edit actors', description: 'Add and edit actors and their photos.' },
+      write: { label: 'Edit actors', description: 'Add, edit and delete actors and their photos (deleting an actor also removes their casting history).' },
     },
     castings: {
       read: { label: 'See castings', description: 'Castings, their roles and shortlists.' },
-      write: { label: 'Work on castings', description: 'Create castings and roles, add actors to shortlists.' },
+      write: {
+        label: 'Work on castings',
+        description: 'Create, edit and delete castings and roles; add actors to shortlists, remove them, or mark them not selected or withdrawn.',
+      },
       send: { label: 'Send actors to clients', description: 'Put actors forward: submitted, audition, callback, booked.' },
     },
     payments: {
@@ -139,6 +144,7 @@ const ar: TranslationOf<typeof en> = {
   allows_other: 'يسمح بـ{{count}} صلاحية',
   allowsNothing: 'لا يسمح بشيء بعد',
   locked: 'يتضمّن صلاحيات لا تملكها',
+  lockedHolders: 'يشغله شخص يستطيع أكثر مما تستطيع',
   emptyTitle: 'لا توجد مناصب بعد',
   form: {
     newTitle: 'منصب جديد',
@@ -157,6 +163,7 @@ const ar: TranslationOf<typeof en> = {
     ownerAccessHint: 'مناصب المالكين تسمح بكل شيء، فلا حاجة إلى تحديد شيء.',
     cantGive: 'لا يمكنك منح صلاحية لا تملكها',
     readOnly: 'يسمح هذا المنصب بأمور لا يمكنك فعلها بنفسك، لذا لا يعدّله إلا مالك.',
+    readOnlyHolders: 'يشغل هذا المنصب شخص يستطيع أكثر مما تستطيع، وتعديله يغيّر صلاحياته أيضًا، لذا لا يعدّله إلا مالك.',
     builtInHint: 'منصب أساسي: يمكنك تغيير اسمه وما يسمح به، لكن لا يمكن حذفه.',
     create: 'إنشاء المنصب',
   },
@@ -179,7 +186,7 @@ const ar: TranslationOf<typeof en> = {
   },
   errors: {
     nameTaken: 'يوجد منصب آخر بهذا الاسم',
-    exceedsYourAccess: 'لا يمكنك منح صلاحية لا تملكها.',
+    exceedsYourAccess: 'لا يمكنك منح صلاحية لا تملكها، أو تعديل منصب يشغله شخص يستطيع أكثر مما تستطيع.',
     ownerOnly: 'لا ينشئ مناصب المالكين أو يعدّلها إلا مالك.',
     lastOwner: 'لن يبقى أحد يشغل منصب مالك. امنح شخصًا آخر منصب مالك أولًا.',
     inUse: 'هناك من يشغل هذا المنصب. امنحه منصبًا آخر أولًا.',
@@ -202,28 +209,31 @@ const ar: TranslationOf<typeof en> = {
       manage: { label: 'إعدادات المدرسة', description: 'اسم المدرسة واللغة الافتراضية وأول أيام الأسبوع.' },
     },
     students: {
-      read: { label: 'عرض الطلاب', description: 'الطلاب في الصفوف التي تدرّسها فقط، ما لم يُسمح أيضًا بـ«كل الصفوف».' },
+      read: { label: 'عرض الطلاب', description: 'الطلاب في صفوفك والطلاب الذين أضفتهم فقط، ما لم يُسمح أيضًا بـ«كل الصفوف».' },
       contact: { label: 'بيانات تواصل الطلاب', description: 'الهاتف والبريد الإلكتروني وبيانات وليّ الأمر وجهة الاتصال في الطوارئ.' },
-      write: { label: 'تعديل الطلاب', description: 'إضافة الطلاب وتعديل بياناتهم وحذفهم.' },
+      write: { label: 'تعديل الطلاب', description: 'إضافة الطلاب وتعديل بياناتهم وحذفهم، ودون «كل الصفوف» يقتصر ذلك على الطلاب الذين يمكنك رؤيتهم.' },
     },
     courses: {
-      read: { label: 'عرض الصفوف', description: 'الصفوف وحصصها، التي تدرّسها فقط، ما لم يُسمح أيضًا بـ«كل الصفوف».' },
-      write: { label: 'تعديل الصفوف', description: 'إنشاء الصفوف وتعديلها، والجداول، والتسجيل، والحصص الإضافية.' },
+      read: { label: 'عرض الصفوف', description: 'الصفوف وحصصها: صفوفك فقط (التي تدرّسها أو تنوب فيها أو أنشأتها)، ما لم يُسمح أيضًا بـ«كل الصفوف».' },
+      write: { label: 'تعديل الصفوف', description: 'إنشاء الصفوف وتعديلها وحذفها، والجداول، والتسجيل، والحصص، ودون «كل الصفوف» يقتصر ذلك على صفوفك.' },
     },
     classes: {
-      all: { label: 'كل الصفوف', description: 'عرض كل الصفوف والحصص والطلاب، لا ما تدرّسه فقط.' },
+      all: { label: 'كل الصفوف', description: 'عرض كل الصفوف والحصص والطلاب، لا صفوفك وطلابك فقط.' },
     },
     attendance: {
-      write: { label: 'تسجيل الحضور', description: 'تسجيل الحضور في الحصص التي تدرّسها فقط، ما لم يُسمح أيضًا بـ«كل الصفوف».' },
+      write: { label: 'تسجيل الحضور', description: 'تسجيل الحضور في الحصص التي تدرّسها فقط، ما لم يُسمح أيضًا بـ«كل الصفوف». تحتاج أيضًا إلى «عرض الصفوف».' },
     },
     talent: {
       read: { label: 'عرض الممثلين', description: 'قاعدة بيانات الممثلين: الملفات الشخصية والصور والمهارات.' },
       contact: { label: 'بيانات تواصل الممثلين', description: 'هاتف الممثلين وبريدهم الإلكتروني.' },
-      write: { label: 'تعديل الممثلين', description: 'إضافة الممثلين وتعديل بياناتهم وصورهم.' },
+      write: { label: 'تعديل الممثلين', description: 'إضافة الممثلين وتعديل بياناتهم وصورهم وحذفهم (حذف الممثل يحذف أيضًا سجلّ ترشيحاته).' },
     },
     castings: {
       read: { label: 'عرض تجارب الأداء', description: 'تجارب الأداء وأدوارها والقوائم المختصرة.' },
-      write: { label: 'العمل على تجارب الأداء', description: 'إنشاء تجارب الأداء والأدوار، وإضافة الممثلين إلى القوائم المختصرة.' },
+      write: {
+        label: 'العمل على تجارب الأداء',
+        description: 'إنشاء تجارب الأداء والأدوار وتعديلها وحذفها، وإضافة الممثلين إلى القوائم المختصرة أو إزالتهم منها أو تحديدهم بـ«لم يتم الاختيار» أو «منسحب».',
+      },
       send: { label: 'إرسال الممثلين إلى العملاء', description: 'ترشيح الممثلين: تم الترشيح، تجربة أداء، استدعاء ثانٍ، تم الاختيار.' },
     },
     payments: {

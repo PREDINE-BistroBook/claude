@@ -133,6 +133,8 @@ export const students = sqliteTable(
     /** Photo/filming consent (from the student, or the guardian for minors). */
     mediaConsent: integer('media_consent', { mode: 'boolean' }).notNull().default(false),
     notes: text('notes'),
+    /** Who added the student: without classes.all they still see the students they added (lib/access.ts). */
+    createdBy: integer('created_by').references(() => users.id, { onDelete: 'set null' }),
     ...timestamps(),
   },
   (t) => [index('students_name_idx').on(t.lastName, t.firstName), index('students_status_idx').on(t.status)],
@@ -152,6 +154,8 @@ export const courses = sqliteTable(
     endDate: text('end_date').notNull(),
     color: text('color', { enum: COURSE_COLORS }),
     status: text('status', { enum: COURSE_STATUSES }).notNull().default('active'),
+    /** Who created the class: without classes.all they still see the classes they created (lib/access.ts). */
+    createdBy: integer('created_by').references(() => users.id, { onDelete: 'set null' }),
     ...timestamps(),
   },
   (t) => [index('courses_status_idx').on(t.status), index('courses_teacher_idx').on(t.teacherId)],

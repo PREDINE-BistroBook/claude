@@ -26,6 +26,7 @@ import { useAuth } from '@web/lib/auth';
 import { errorMessageKey, useForm } from '@web/lib/forms';
 import { usePositionName } from '@web/lib/positions';
 import { positionsErrorKey, useCreatePosition, useDeletePosition, usePositions, useUpdatePosition } from './api';
+import { heldByOthersBeyondReach } from './utils';
 import { PermissionChecklist } from './components/PermissionList';
 
 /** /positions/new and /positions/:id — the same form; an existing position you can't edit opens read-only. */
@@ -62,6 +63,8 @@ function PositionForm({ position }: { position: Position | null }) {
 
   const isOwnerUser = !!user?.isOwner;
   const readOnly = !!position && !position.editable;
+  // Not editable although you hold everything it allows: someone holding it can do more than you.
+  const lockedByHolders = !!position && heldByOthersBeyondReach(position, user?.permissions ?? []);
   const form = useForm({
     name: position?.name ?? '',
     nameAr: position?.nameAr ?? '',
@@ -128,7 +131,7 @@ function PositionForm({ position }: { position: Position | null }) {
         }
       />
       <FormPage onSubmit={submit}>
-        {readOnly && <Notice icon={Lock}>{t('form.readOnly')}</Notice>}
+        {readOnly && <Notice icon={Lock}>{t(lockedByHolders ? 'form.readOnlyHolders' : 'form.readOnly')}</Notice>}
         {!readOnly && position?.key && <Notice icon={Info}>{t('form.builtInHint')}</Notice>}
         <FormError messageKey={form.formError} />
 

@@ -3,19 +3,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { createApp } from '../src/server/app';
 import type { AppConfig } from '../src/server/config';
-import { createDb, type DB } from '../src/server/db/client';
+import { PHASE_ONE_ROLE_POSITIONS, createDb, type DB } from '../src/server/db/client';
 import { eq, inArray } from 'drizzle-orm';
 import { positions, userPositions, users } from '../src/server/db/schema';
 import { hashPassword } from '../src/server/lib/password';
 import type { BuiltInPositionKey, Permission } from '../src/shared/permissions';
 
-/** Old role names from phase 1, kept so tests read naturally: each maps to the closest built-in position. */
-export const LEGACY_ROLES = {
-  owner: 'ceo',
-  admin: 'executive_director',
-  teacher: 'acting_coach',
-  agent: 'head_of_casting',
-} as const satisfies Record<string, BuiltInPositionKey>;
+/** Old role names from phase 1, kept so tests read naturally: each maps to the position an upgrade gives (db/client.ts). */
+export const LEGACY_ROLES = PHASE_ONE_ROLE_POSITIONS;
 export type LegacyRole = keyof typeof LEGACY_ROLES;
 
 /**

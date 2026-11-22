@@ -77,14 +77,15 @@ describe('GET /api/positions', () => {
   it('the director never sees owner positions; what she can edit/assign is limited to her own access', async () => {
     const t = await makeTestContext();
     const director = await t.as('admin');
-    // An owner who also holds a non-owner position isn't counted for her (owner accounts are hidden).
+    // An owner who also holds a non-owner position is counted for her too (a bare number, so the
+    // count agrees with "can't delete a position someone holds"); the account itself stays hidden.
     await t.createUser(['ceo', 'acting_coach']);
     await t.createUser('acting_coach');
     const res = await director.get<{ items: Position[] }>('/api/positions');
     expect(res.status).toBe(200);
     expect(res.body.items.map((p) => p.key)).toEqual(['executive_director', 'head_of_casting', 'casting_team', 'video_editor', 'acting_coach', 'finance']);
     expect(res.body.items.every((p) => !p.isOwner)).toBe(true);
-    expect(byKey(res.body.items, 'acting_coach')).toMatchObject({ holderCount: 1, editable: true, assignable: true });
+    expect(byKey(res.body.items, 'acting_coach')).toMatchObject({ holderCount: 2, editable: true, assignable: true });
     expect(byKey(res.body.items, 'executive_director')).toMatchObject({ holderCount: 1, editable: true, assignable: true });
     // Finance allows payments.manage, which she doesn't hold.
     expect(byKey(res.body.items, 'finance')).toMatchObject({ editable: false, assignable: false });
@@ -254,6 +255,36 @@ describe('PATCH /api/positions/:id', () => {
     expect((await owner.patch(`/api/positions/${ceo}`, { isOwner: false, permissions: ALL_BUT_MONEY })).status).toBe(200);
   });
 
+  it('a non-owner can’t edit a position held by someone whose access exceeds theirs (staff rule 4 holds here too)', async () => {
+    const t = await makeTestContext();
+    const owner = await t.as('owner');
+    const director = await t.as('admin');
+    const moaty = await t.createUser(['acting_coach', 'finance'], { email: 'moaty@example.com' }); // payments.manage via Finance
+    const coach = t.positionId('acting_coach');
+    const original = t.db.select().from(positions).where(eq(positions.id, coach)).get()!;
+    // Adding what she holds would hand Moaty staff.manage on top of payments.manage; taking away would cut him off.
+    const add = await director.patch(`/api/positions/${coach}`, { permissions: ['students.read', 'courses.read', 'attendance.write', 'staff.manage'] });
+    expect(add.status).toBe(403);
+    expect(add.body.error.code).toBe('exceeds_your_access');
+    for (const patch of [{ permissions: ['students.read'] }, { name: 'Coach' }]) {
+      const res = await director.patch(`/api/positions/${coach}`, patch);
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('exceeds_your_access');
+    }
+    expect(t.db.select().from(positions).where(eq(positions.id, coach)).get()).toMatchObject({ name: original.name, permissions: original.permissions });
+    expect((await (await t.login('moaty@example.com')).get('/api/auth/me')).body.user.permissions).not.toContain('staff.manage');
+    // The list says so: she may still give the position, not change it.
+    expect(byKey((await director.get<{ items: Position[] }>('/api/positions')).body.items, 'acting_coach')).toMatchObject({ editable: false, assignable: true });
+    // An owner may.
+    expect((await owner.patch(`/api/positions/${coach}`, { name: 'Coach' })).status).toBe(200);
+    // Owners holding it don't block her (their access doesn't change); once Moaty is within her reach, she may edit it.
+    t.setPositions(moaty.id, 'acting_coach');
+    await t.createUser(['ceo', 'acting_coach']);
+    const ok = await director.patch<Position>(`/api/positions/${coach}`, { name: 'Acting coach' });
+    expect(ok.status).toBe(200);
+    expect(ok.body.editable).toBe(true);
+  });
+
   it('403 without positions.manage', async () => {
     const t = await makeTestContext();
     const id = t.positionId('acting_coach');
@@ -352,11 +383,11 @@ describe('staff rules: no escalation when assigning positions', () => {
     expect(take.status).toBe(403);
     expect(take.body.error.code).toBe('exceeds_your_access');
 
-    // Owner positions: owner only, in both directions.
+    // Owner positions: owner only, in both directions (to her they don't exist).
     const other = await t.createUser('agent');
     const toOwner = await director.patch(`/api/staff/${other.id}`, { positionIds: [t.positionId('cfo')] });
-    expect(toOwner.status).toBe(403);
-    expect(toOwner.body.error.code).toBe('owner_only');
+    expect(toOwner.status).toBe(400);
+    expect(toOwner.body.error.issues[0]).toMatchObject({ path: ['positionIds'], message: 'staff:errors.positionNotFound' });
     expect((await owner.patch(`/api/staff/${other.id}`, { positionIds: [t.positionId('cfo')] })).status).toBe(200);
   });
 
@@ -427,5 +458,80 @@ describe('staff rules: self changes and the last owner', () => {
     const second = await t.as('cfo');
     t.db.update(users).set({ active: false }).where(eq(users.id, ceo.user.id)).run();
     expect((await second.patch(`/api/staff/${second.user.id}`, { active: false })).body.error.code).toBe('last_owner');
+  });
+});
+
+describe('owner positions and their holders stay invisible to non-owners', () => {
+  it('a hidden owner position answers like a missing one when giving positions', async () => {
+    const t = await makeTestContext();
+    const owner = await t.as('owner');
+    const director = await t.as('admin');
+    const coach = await t.createUser('teacher');
+    const custom = (await owner.post<Position>('/api/positions', { name: 'Board', isOwner: true, permissions: [] })).body;
+    const miss = await director.patch(`/api/staff/${coach.id}`, { positionIds: [9999] });
+    expect(miss.status).toBe(400);
+    for (const id of [t.positionId('ceo'), custom.id]) {
+      const own = await director.patch(`/api/staff/${coach.id}`, { positionIds: [id] });
+      expect([own.status, own.body]).toEqual([miss.status, miss.body]);
+      const created = await director.post('/api/staff', { name: 'New', email: `new${id}@example.com`, password: 'temporary1', positionIds: [id] });
+      expect(created.status).toBe(400);
+      expect(created.body.error.issues).toEqual(miss.body.error.issues);
+    }
+  });
+
+  it('holder counts include everyone, so the listed count and the delete rule agree', async () => {
+    const t = await makeTestContext();
+    const owner = await t.as('owner');
+    const director = await t.as('admin');
+    const helper = (await director.post<Position>('/api/positions', { name: 'Helper', permissions: ['students.read'] })).body;
+    t.db.insert(userPositions).values({ userId: owner.user.id, positionId: helper.id }).run();
+    const listed = (await director.get<{ items: Position[] }>('/api/positions')).body.items.find((p) => p.id === helper.id)!;
+    expect(listed.holderCount).toBe(1);
+    const del = await director.delete(`/api/positions/${helper.id}`);
+    expect(del.status).toBe(409);
+    expect(del.body.error.code).toBe('position_in_use');
+    expect((await director.patch<Position>(`/api/positions/${helper.id}`, { name: 'Helpers' })).body.holderCount).toBe(1);
+  });
+
+  it('position names are unique across every position, owner ones included, in English and Arabic', async () => {
+    const t = await makeTestContext();
+    const owner = await t.as('owner');
+    const director = await t.as('admin');
+    // Nobody can set up a look-alike of an owner position, even one they can't see.
+    const fakeCeo = await director.post('/api/positions', { name: 'ceo', permissions: [] });
+    expect(fakeCeo.status).toBe(409);
+    expect(fakeCeo.body.error).toMatchObject({ code: 'position_name_taken', issues: [expect.objectContaining({ path: ['name'] })] });
+    const fakeCeoAr = await director.post('/api/positions', { name: 'Chief', nameAr: 'الرئيس التنفيذي', permissions: [] });
+    expect(fakeCeoAr.status).toBe(409);
+    expect(fakeCeoAr.body.error.issues).toEqual([expect.objectContaining({ path: ['nameAr'], message: 'positions:errors.nameTaken' })]);
+    await owner.post('/api/positions', { name: 'Secret Board', isOwner: true, permissions: [] });
+    expect((await director.post('/api/positions', { name: 'SECRET board', permissions: [] })).body.error.code).toBe('position_name_taken');
+    // Renaming into a taken name (either language) is refused too.
+    const mine = (await director.post<Position>('/api/positions', { name: 'Runner', nameAr: 'مساعد', permissions: [] })).body;
+    expect((await director.patch(`/api/positions/${mine.id}`, { name: 'secret BOARD' })).body.error.code).toBe('position_name_taken');
+    const other = (await director.post<Position>('/api/positions', { name: 'Helper', permissions: [] })).body;
+    expect((await director.patch(`/api/positions/${other.id}`, { nameAr: 'مساعد' })).body.error.issues[0].path).toEqual(['nameAr']);
+    // Saving a position under the names it already has is always fine.
+    expect((await director.patch(`/api/positions/${mine.id}`, { name: 'Runner', nameAr: 'مساعد', sortOrder: 5 })).status).toBe(200);
+  });
+});
+
+describe('stored permission lists', () => {
+  it('a position GET /positions reports assignable can be assigned (stale permission string in storage)', async () => {
+    const t = await makeTestContext();
+    const director = await t.as('executive_director');
+    const stale = t.db
+      .insert(positions)
+      .values({ name: 'Old finance', isOwner: false, permissions: ['students.read', 'payments.view'] as never, sortOrder: 500 })
+      .returning()
+      .get();
+    const row = (await director.get<{ items: Position[] }>('/api/positions')).body.items.find((p) => p.id === stale.id)!;
+    expect(row).toMatchObject({ assignable: true, permissions: ['students.read'] });
+    const created = await director.post('/api/staff', { name: 'New Hire', email: 'new.hire@example.com', password: 'password123', positionIds: [stale.id] });
+    expect(created.status).toBe(201);
+    const coach = await t.createUser(['acting_coach']);
+    expect((await director.patch(`/api/staff/${coach.id}`, { positionIds: [t.positionId('acting_coach'), stale.id] })).status).toBe(200);
+    expect((await director.patch(`/api/staff/${coach.id}`, { positionIds: [t.positionId('acting_coach')] })).status).toBe(200);
+    t.cleanup();
   });
 });

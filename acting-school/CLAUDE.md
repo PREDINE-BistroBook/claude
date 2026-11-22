@@ -23,7 +23,7 @@ A standalone project. It shares nothing with the rest of this repository: not th
 ```
 npm run dev          # API on :3000 (tsx watch) + Vite on :5173 (proxies /api)
 npm run seed         # demo data into $DATA_DIR (default ./data) — see src/server/db/seed.ts for logins
-npm run owner -- a@b # give an existing account the CEO position (lockout / phase-1 upgrade)
+npm run owner -- a@b # lockout recovery: give an existing account an owner position (CEO) and reactivate it
 npm run typecheck    # tsc, whole project
 npm test             # vitest
 npm run build        # web → dist/web, server → dist/server
@@ -41,7 +41,7 @@ src/server/
   db/schema.ts       all tables; db/migrations/ generated SQL (applied at startup)
   middleware/auth.ts requireAuth, requirePermission/requireAnyPermission, currentUser, userCan
   lib/               access.ts (positions → permissions, class scope, contact redaction), errors.ts (ApiError), validate.ts (body/query/paramId), password.ts, settings.ts
-  db/grantOwner.ts   `npm run owner -- email`: give an account the CEO position (lockout / phase-1 upgrade)
+  db/grantOwner.ts   `npm run owner -- email`: lockout recovery — give an account an owner position (CEO) and reactivate it
   routes/<module>.ts one Hono router per module
 src/web/
   router.tsx         spreads each feature's routes
@@ -57,7 +57,7 @@ tests/helpers.ts     makeTestContext(): in-memory app, t.as('executive_director'
 
 ### Server
 - Every router: `router.use(requireAuth)` or per-route `requirePermission('x.y')`. Permissions are defined in `src/shared/permissions.ts` only; a person's effective permissions come from the positions they hold (`SessionUser.permissions`, worked out on every request; owner positions = all). The API is the guard; the UI hiding things is a courtesy.
-- Access rules beyond a single permission live in `src/server/lib/access.ts`: without `classes.all` a person only sees the classes they teach (course teacher or a session's substitute) and those classes' students — anything else is a 404; without `students.contact` / `talent.contact` contact fields come back null with `contactHidden: true`, aren't searched, and are ignored on writes. Non-owners never see owner accounts or owner positions and can't give, take or edit access beyond their own.
+- Access rules beyond a single permission live in `src/server/lib/access.ts`: without `classes.all` a person only sees their own classes (course teacher, a session's substitute, or the class's creator) and those classes' students plus the students they added — anything else is a 404 (and a student shown from another module, e.g. the student linked to a talent profile, follows the same rule: `maySeeStudent`); attendance needs `courses.read` as well as `attendance.write`; without `students.contact` / `talent.contact` contact fields come back null with `contactHidden: true`, aren't searched, and are ignored on writes. Non-owners never see owner accounts or owner positions (an owner's id — as a position, teacher or substitute — answers exactly like a missing one) and can't give, take or edit access beyond their own — including by editing a position held by someone who can do more than they can.
 - Validate everything: `await body(c, schema)`, `query(c, schema)`, `paramId(c)`. Throw `ApiError` / `notFound()` / `forbidden()` / `conflict()` — never return ad-hoc error JSON.
 - Response shapes must match the interfaces in `src/shared/schemas/<module>.ts`. Lists answer `{ items: [...] }`. Create answers 201 with the created resource. Delete answers 204 (`c.body(null, 204)`).
 - Multi-step writes go in `db.transaction((tx) => { … })`. **better-sqlite3 transactions are synchronous: no `await` inside** (do async work — hashing, file IO — before).

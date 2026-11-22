@@ -29,7 +29,7 @@ The first visit asks you to set up the school (school name + the first account, 
 
 (`tom.wilkins@demo.school`, a former coach, is deactivated.)
 
-Locked out, or upgrading a database from phase 1 (fixed roles are gone after the upgrade)? `npm run owner -- someone@example.com` gives that existing account the CEO position (and reactivates it); then assign everyone else's positions on the Staff screen.
+Locked out? `npm run owner -- someone@example.com` gives that existing account an owner position — CEO, or another owner position if CEO has been made an ordinary one — and reactivates it. (Upgrading a database from phase 1 needs nothing: each fixed role becomes the matching position — owner → CEO, admin → Executive Director, teacher → Acting coach, agent → Head of Casting. The server warns at startup if no active account holds an owner position.)
 
 Production: `npm run build && npm start` — one Node process serves the API and the app on `$PORT` (default 3000). Data lives in `$DATA_DIR` (default `./data`): `app.db` (SQLite) and `uploads/` (photos). Back up that folder. Put it behind HTTPS (the session cookie is `Secure` in production; set `COOKIE_SECURE=false` only to try it over plain http on a private network).
 
@@ -47,7 +47,9 @@ Access comes from **positions**. A person can hold several; their permissions ad
 | **Acting coach** | Only their own students and classes (as the class's teacher or a session's substitute): attendance for the sessions they teach. No contact details. |
 | **Finance** | Payment status and money; students with guardian/emergency contacts; all classes. |
 
-Rules that always hold: nobody can give anyone (or themselves) access they don't have; nobody changes their own positions or deactivates themselves; someone who can do more than you is out of your reach (no editing, password reset or deactivation); there is always at least one active account in an owner position. Built-in positions can be renamed and changed, not deleted.
+Rules that always hold: nobody can give anyone (or themselves) access they don't have; nobody changes their own positions or deactivates themselves; someone who can do more than you is out of your reach (no editing, password reset or deactivation — and no changing a position they hold); there is always at least one active account in an owner position. Built-in positions can be renamed and changed, not deleted.
+
+Without "All classes" a person sees their own classes — the ones they teach (or cover as a substitute) and the ones they created — and those classes' students plus the students they added. Taking attendance needs "See classes" as well.
 
 Students and actors don't have logins.
 

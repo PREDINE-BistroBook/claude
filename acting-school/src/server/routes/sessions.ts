@@ -21,7 +21,7 @@ import { assertActiveStaff, fieldError } from './courses';
 
 /**
  * Dated class sessions: list by range, detail with roster, edit/cancel/delete
- * (courses.write) and attendance (attendance.write). Without classes.all a
+ * (courses.write) and attendance (attendance.write + courses.read). Without classes.all a
  * person only sees sessions of the classes they teach (others are a 404) and
  * only marks attendance for sessions they teach themselves — the session's
  * substitute, else the course's teacher.
@@ -76,7 +76,7 @@ router.patch('/:id', requirePermission('courses.write'), async (c) => {
   const startTime = input.startTime ?? session.startTime;
   const endTime = input.endTime ?? session.endTime;
   if (endTime <= startTime) throw fieldError(['endTime'], 'errors.endBeforeStart');
-  if (input.teacherId && input.teacherId !== session.teacherId) assertActiveStaff(db, input.teacherId);
+  if (input.teacherId && input.teacherId !== session.teacherId) assertActiveStaff(db, currentUser(c), input.teacherId);
 
   db.transaction((tx) => {
     if (date !== session.date || startTime !== session.startTime) {
@@ -108,7 +108,9 @@ router.delete('/:id', requirePermission('courses.write'), (c) => {
   return c.body(null, 204);
 });
 
-router.put('/:id/attendance', requirePermission('attendance.write'), async (c) => {
+// Marking needs the session and its roster, so courses.read as well as attendance.write
+// (otherwise the answer would show a roster GET /sessions/:id refuses).
+router.put('/:id/attendance', requirePermission('courses.read'), requirePermission('attendance.write'), async (c) => {
   const id = paramId(c);
   const db = c.get('db');
   const me = currentUser(c);

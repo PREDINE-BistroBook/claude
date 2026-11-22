@@ -17,7 +17,7 @@ export default function ClassesPage() {
   const { t } = useTranslation('classes');
   const { user, can } = useAuth();
   const [params, setParams] = useSearchParams();
-  // Without classes.all the API only answers the classes you teach, so there's nothing to toggle.
+  // Without classes.all the API only answers your own classes (taught, covered or created), so there's nothing to toggle.
   const seesAll = can('classes.all');
   const status: CourseStatus = params.get('status') === 'archived' ? 'archived' : 'active';
   // People who see every class can narrow it to their own with ?mine=1.

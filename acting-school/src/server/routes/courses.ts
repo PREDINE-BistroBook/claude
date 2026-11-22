@@ -28,7 +28,7 @@ import {
   sameSchedule,
 } from '../lib/classSessions';
 import type { SessionUser } from '../../shared/schemas/auth';
-import { canSeeStudent, courseScope } from '../lib/access';
+import { canSeeStudent, courseScope, notAnOwner, type Actor } from '../lib/access';
 import { ApiError, notFound } from '../lib/errors';
 import { body, paramId, query } from '../lib/validate';
 import { currentUser, requireAuth, requirePermission } from '../middleware/auth';
@@ -37,8 +37,9 @@ import { currentUser, requireAuth, requirePermission } from '../middleware/auth'
  * Classes ("courses"): CRUD, weekly schedule → generated sessions, enrollments
  * and one-off extra sessions. Reading needs courses.read; everything that
  * changes a class needs courses.write. Without classes.all a person only sees
- * (and can only change) the classes they teach — as the course's teacher or as
- * the substitute on any of its sessions; any other class is a 404.
+ * (and can only change) their own classes — as the course's teacher, as the
+ * substitute on any of its sessions, or as the person who created it; any
+ * other class is a 404.
  */
 const router = new Hono<AppEnv>();
 router.use(requireAuth);
@@ -51,9 +52,18 @@ export function fieldError(path: (string | number)[], message: string): ApiError
   return new ApiError(400, 'validation', 'Some fields are missing or invalid', [{ path, code: 'custom', message }]);
 }
 
-/** A teacher (or substitute) must be an existing, active staff account. */
-export function assertActiveStaff(db: DB, userId: number, path: (string | number)[] = ['teacherId']) {
-  const row = db.select({ active: users.active }).from(users).where(eq(users.id, userId)).get();
+/**
+ * A teacher (or substitute) must be an existing, active staff account the
+ * actor can see: owner accounts don't exist for non-owners, so naming one gets
+ * the same answer as a missing id (otherwise ids would reveal hidden owners
+ * and their names).
+ */
+export function assertActiveStaff(db: DB, actor: Actor, userId: number, path: (string | number)[] = ['teacherId']) {
+  const row = db
+    .select({ active: users.active })
+    .from(users)
+    .where(and(eq(users.id, userId), actor.isOwner ? undefined : notAnOwner))
+    .get();
   if (!row?.active) throw fieldError(path, 'classes:errors.teacherInvalid');
 }
 
@@ -105,8 +115,9 @@ router.get('/', read, (c) => {
 router.post('/', write, async (c) => {
   const input = await body(c, courseInput);
   const db = c.get('db');
+  const me = currentUser(c);
   assertSpan(input.startDate, input.endDate);
-  if (input.teacherId) assertActiveStaff(db, input.teacherId);
+  if (input.teacherId) assertActiveStaff(db, me, input.teacherId);
   const occurrences = generateDates(input.schedule, input.startDate, input.endDate);
 
   const id = db.transaction((tx) => {
@@ -123,6 +134,7 @@ router.post('/', write, async (c) => {
         endDate: input.endDate,
         color: input.color ?? null,
         status: input.status ?? 'active',
+        createdBy: me.id,
       })
       .returning({ id: courses.id })
       .get();
@@ -142,13 +154,14 @@ router.get('/:id', read, (c) => {
 router.patch('/:id', write, async (c) => {
   const id = paramId(c);
   const db = c.get('db');
-  const course = requireCourse(db, id, currentUser(c));
+  const me = currentUser(c);
+  const course = requireCourse(db, id, me);
   const input = await body(c, courseUpdateInput);
 
   const startDate = input.startDate ?? course.startDate;
   const endDate = input.endDate ?? course.endDate;
   if (input.startDate !== undefined || input.endDate !== undefined) assertSpan(startDate, endDate);
-  if (input.teacherId && input.teacherId !== course.teacherId) assertActiveStaff(db, input.teacherId);
+  if (input.teacherId && input.teacherId !== course.teacherId) assertActiveStaff(db, me, input.teacherId);
 
   const storedSlots: ScheduleSlot[] = db
     .select({ weekday: courseSlots.weekday, startTime: courseSlots.startTime, endTime: courseSlots.endTime })
@@ -272,9 +285,10 @@ router.delete('/:id/enrollments/:enrollmentId', write, (c) => {
 router.post('/:id/sessions', write, async (c) => {
   const id = paramId(c);
   const db = c.get('db');
-  requireCourse(db, id, currentUser(c));
+  const me = currentUser(c);
+  requireCourse(db, id, me);
   const input = await body(c, sessionCreateInput);
-  if (input.teacherId) assertActiveStaff(db, input.teacherId);
+  if (input.teacherId) assertActiveStaff(db, me, input.teacherId);
 
   const sessionId = db.transaction((tx) => {
     const clash = tx

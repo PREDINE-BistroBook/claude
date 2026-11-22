@@ -6,8 +6,14 @@ export function parseDateParam(value: string | null): string | null {
   return value && isValidDate(value) ? value : null;
 }
 
-export function parseFilterParam(value: string | null, canSeeAuditions: boolean): ScheduleFilter {
-  if (!canSeeAuditions) return 'all';
+/**
+ * The ?show= filter. Someone who sees only one kind of event gets that kind
+ * (so an empty day says "No classes" / "No auditions"); only someone who sees
+ * both can pick.
+ */
+export function parseFilterParam(value: string | null, sees: { classes: boolean; auditions: boolean }): ScheduleFilter {
+  if (!sees.auditions) return sees.classes ? 'classes' : 'all';
+  if (!sees.classes) return 'auditions';
   return (SCHEDULE_FILTERS as readonly string[]).includes(value ?? '') ? (value as ScheduleFilter) : 'all';
 }
 
