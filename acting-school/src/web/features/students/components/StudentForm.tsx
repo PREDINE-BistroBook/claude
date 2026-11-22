@@ -241,7 +241,7 @@ export function StudentForm({ student }: { student?: Student }) {
 
       <FormSection title={t('form.notes')}>
         <Field htmlFor="f-notes" error={form.error('notes')}>
-          <Textarea rows={5} aria-label={t('form.notes')} placeholder={t('form.notesPlaceholder')} {...form.bind('notes')} />
+          <Textarea rows={5} dir="auto" aria-label={t('form.notes')} placeholder={t('form.notesPlaceholder')} {...form.bind('notes')} />
         </Field>
       </FormSection>
 

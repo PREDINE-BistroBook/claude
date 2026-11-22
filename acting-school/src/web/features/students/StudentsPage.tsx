@@ -23,6 +23,7 @@ import { useAuth } from '@web/lib/auth';
 import { ageOn, fullName } from '@web/lib/format';
 import { useDebounced } from '@web/lib/hooks';
 import { useStudents } from './api';
+import { BidiText } from './components/BidiText';
 
 type StatusFilter = StudentStatus | 'all';
 
@@ -172,7 +173,7 @@ function StudentRow({ student: s }: { student: StudentListItem }) {
     <ListRow
       to={`/students/${s.id}`}
       leading={<Avatar name={name} fileId={s.photoFileId} />}
-      title={name}
+      title={<BidiText>{name}</BidiText>}
       subtitle={
         details.length ? (
           <>

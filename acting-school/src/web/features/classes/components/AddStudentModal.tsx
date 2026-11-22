@@ -76,7 +76,7 @@ function AddStudentDialog({ onClose, course }: Props) {
       title={t('students.addTitle')}
       description={
         course.capacity !== null
-          ? t('students.placesTaken', { count: enrolledNow, capacity: course.capacity })
+          ? t('students.placesTaken', { taken: enrolledNow, capacity: course.capacity })
           : t('students.enrolledCount', { count: enrolledNow })
       }
       footer={

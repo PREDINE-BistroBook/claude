@@ -27,6 +27,7 @@ import { courseColor } from '@web/lib/colors';
 import { ageOn, fullName, useFormat } from '@web/lib/format';
 import { errorMessageKey } from '@web/lib/forms';
 import { useDeleteStudent, useStudent } from './api';
+import { BidiText } from './components/BidiText';
 
 const isCourseColor = (c: string | null): c is CourseColor => !!c && (COURSE_COLORS as readonly string[]).includes(c);
 
@@ -98,8 +99,9 @@ function StudentView({ student: s, del }: { student: StudentDetail; del: ReturnT
           <ButtonLink to={`/students/${s.id}/edit`} icon={Pencil}>
             {t('common:actions.edit')}
           </ButtonLink>
-          <Button variant="danger-ghost" icon={Trash2} onClick={() => setConfirmOpen(true)}>
-            {t('common:actions.delete')}
+          {/* Icon-only on phones so the actions stay on one row; the label stays for screen readers. */}
+          <Button variant="danger-ghost" icon={Trash2} onClick={() => setConfirmOpen(true)} title={t('common:actions.delete')} className="max-sm:px-3">
+            <span className="max-sm:sr-only">{t('common:actions.delete')}</span>
           </Button>
         </>
       )}
@@ -120,17 +122,18 @@ function StudentView({ student: s, del }: { student: StudentDetail; del: ReturnT
             <StatusBadge group="studentStatus" value={s.status} />
             {age !== null && <span>{t('common:units.years', { count: age })}</span>}
             {s.joinedOn && (
-              <>
-                <span aria-hidden>·</span>
-                <span>{t('detail.joined', { date: f.date(s.joinedOn) })}</span>
-              </>
+              <span className="whitespace-nowrap">
+                {age !== null && <span aria-hidden>· </span>}
+                {t('detail.joined', { date: f.date(s.joinedOn) })}
+              </span>
             )}
           </span>
         }
         actions={actions}
       />
 
-      <div className="grid gap-4 md:grid-cols-2">
+      {/* grid-cols-1 (minmax(0, 1fr)) so long emails truncate instead of widening the page. */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Card title={t('detail.contact')}>
           {s.phone || s.email ? (
             <ul className="-my-1 grid gap-1">
@@ -180,7 +183,7 @@ function StudentView({ student: s, del }: { student: StudentDetail; del: ReturnT
                       <span className={clsx('size-3 rounded-full', courseColor(isCourseColor(e.courseColor) ? e.courseColor : null).dot)} />
                     </span>
                   }
-                  title={e.courseName}
+                  title={<BidiText>{e.courseName}</BidiText>}
                   subtitle={t('detail.enrolledOn', { date: f.date(e.enrolledOn) })}
                   trailing={<StatusBadge group="enrollmentStatus" value={e.status} />}
                 />
@@ -229,7 +232,9 @@ function StudentView({ student: s, del }: { student: StudentDetail; del: ReturnT
 
         <Card title={t('detail.notes')} className="md:col-span-2">
           {s.notes ? (
-            <p className="text-sm leading-relaxed whitespace-pre-line break-words text-ink">{s.notes}</p>
+            <p dir="auto" className="text-start text-sm leading-relaxed whitespace-pre-line break-words text-ink">
+              {s.notes}
+            </p>
           ) : (
             <p className="text-sm text-muted">{t('detail.noNotes')}</p>
           )}
@@ -258,9 +263,9 @@ function ContactLink({ href, icon: Icon, label, value }: { href: string; icon: L
         </span>
         <span className="min-w-0">
           <span className="block text-xs text-muted">{label}</span>
-          <span className="block truncate text-sm font-medium text-ink">
-            <span dir="ltr">{value}</span>
-          </span>
+          <BidiText dir="ltr" className="text-sm font-medium text-ink">
+            {value}
+          </BidiText>
         </span>
       </a>
     </li>

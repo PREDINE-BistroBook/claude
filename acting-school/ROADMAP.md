@@ -5,15 +5,29 @@ What the school asked for, in the order we plan to build it. Phase 1 (the basics
 ## Decisions so far
 
 - **Users:** staff only in phase 1. Students get their own section in phase 2 (see "Student section").
-- **Who sees what:** the owner, Ahmed Tamam, and his father (the council) see everything. Every other employee sees and does only what their position allows. The real positions are still to be confirmed by the school; known so far: Salma (office manager — interviews new students and chooses each student's coach), acting coaches, video editors.
+- **Who sees what:** confirmed by the school (2026-11-22) — see "Positions" below. CEO and CFO see everything; Salma (Executive Director) manages everything below them; everyone else sees and does only what their position allows. One person can hold several positions (their permissions add up).
 - **Languages:** English + Arabic (right-to-left). Arabic uses Western digits.
 - **Budget:** $0. The only paid piece is the AI model: **Claude Haiku**, pay per use (estimated $1–5/month at the school's size). Everything else uses free tools (Google Sheets / Forms / Apps Script, Gmail, wa.me WhatsApp links, Google Drive).
 - **Requests arrive today via:** Google Sheets, WhatsApp, email.
 - **Hosting:** not decided. The app is one Node process + one data folder, so it can run on a free server (e.g. Oracle Cloud Always Free) or an always-on computer at the school.
 
+## Positions (confirmed by the school)
+
+| Position | People | Can see / do |
+|---|---|---|
+| **Owner** (CEO, CFO) | Ahmed Tamam (CEO), Abdelrahman Tamam (CFO) | Everything, including staff accounts, positions and all money. |
+| **Executive Director** | Salma | Everything operational, and manages staff accounts and positions — **except**: money is limited to each student's payment status (who paid / who owes; no totals, revenue or commissions); the CEO and CFO accounts are hidden from her and untouchable; she can never grant anyone a permission she doesn't hold herself. Runs admissions interviews and picks each student's coach; first stop for requests; may send actor profiles to clients. |
+| **Head of Casting** | Ahmed Abdellah, Ayman Farouk | Full actor database and castings; send actor profiles to clients; see coach scores and students (to spot talent). |
+| **Casting team** | Mohamed Hamzawy, Taha | Add and update actors, build shortlists for the heads. Cannot send to clients. |
+| **Video editor** | Ali El Gohary | Editors' work queue; add photos/videos to student packs and actor profiles; sees names and photos only (no contact details, no money). |
+| **Acting coach** | Moaty, plus more coaches (names to come) | Only their own students and classes: attendance, notes (each note can be marked "visible to student"), scores, highlights. |
+| **Finance** | Moaty | Tuition, payments, reminders, totals, commissions; student/guardian contact details for reminders. |
+
+Rules that hold for every position: owner accounts are visible and editable only by owners; nobody can give someone (or themselves) a permission they don't hold; holding two positions (Moaty: coach + finance) combines both.
+
 ## Phase 2 — in build order
 
-1. **Positions & permissions.** Replace the four fixed roles with positions the owners create and edit (checkbox per permission). Owners are fixed and see everything. Default positions until the school confirms: Office manager, Acting coach, Video editor, Casting agent.
+1. **Positions & permissions.** Replace the four fixed roles with the positions above, editable as checkboxes per permission by owners (and by the Executive Director within her own limits). A person can hold several positions.
 2. **Admissions.** Leads (people asking about classes, from WhatsApp / email / Sheets / forms) → interview with Salma (notes + assessment) → Salma picks the coach and class → enrolled student. Follow-up reminders so no lead is forgotten.
 3. **Import from Google Sheets.** Upload a CSV/Excel export, match columns to fields (students, actors, leads). Optional automatic sync of new rows through a free Google Apps Script.
 4. **Coach rankings.** Coaches score their students on criteria (editable list), with notes and history; progress over time; top students surface for castings.
@@ -31,7 +45,7 @@ What the school asked for, in the order we plan to build it. Phase 1 (the basics
 
 ## Waiting on the school
 
-- The real positions and who sees/does what.
+- Names of the other acting coaches.
 - A sample Google Sheet they use today (CSV/Excel export), to map the import.
 - The casting sources to watch (sites, pages, channels).
 - An Anthropic account with a small prepaid credit (the key is added through a secure form, never pasted in chat).
