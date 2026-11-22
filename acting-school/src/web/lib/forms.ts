@@ -21,6 +21,8 @@ export function issuesToErrors(issues: { path: PropertyKey[]; code: string; mess
 
 function messageKey(issue: { code: string; message: string; [k: string]: unknown }): string {
   if (issue.message?.startsWith('errors.')) return `common:${issue.message}`;
+  // A module's own wording: message 'staff:errors.emailTaken' is used as-is.
+  if (/^[a-z]+:errors\./i.test(issue.message ?? '')) return issue.message;
   switch (issue.code) {
     case 'too_small':
       return issue.minimum === 1 && issue.origin === 'string' ? 'common:errors.required' : 'common:errors.tooSmall';

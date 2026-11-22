@@ -53,7 +53,9 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
-    port: 5173,
-    proxy: { '/api': 'http://localhost:3000' },
+    port: Number(process.env.WEB_PORT ?? 5173),
+    strictPort: true,
+    // API_PORT lets several copies run side by side (default API on :3000).
+    proxy: { '/api': `http://localhost:${process.env.API_PORT ?? 3000}` },
   },
 });

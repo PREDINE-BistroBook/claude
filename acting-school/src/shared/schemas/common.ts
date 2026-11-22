@@ -11,6 +11,8 @@ import { DATETIME_RE, TIME_RE, isValidDate } from '../dates';
  *
  * Custom refinements use a message of the form 'errors.<key>' — the web app
  * shows the matching translation from the common namespace (src/web/i18n/common.ts).
+ * A module-specific message can name its namespace: '<ns>:errors.<key>'
+ * (e.g. 'staff:errors.emailTaken' → src/web/features/staff/i18n.ts errors.emailTaken).
  */
 const blankToNull = (v: unknown) => {
   if (typeof v === 'string') {
