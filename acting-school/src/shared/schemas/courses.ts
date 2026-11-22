@@ -173,3 +173,41 @@ export interface SessionDetail extends ClassSession {
   /** Whether the current user may mark attendance for this session. */
   canMarkAttendance: boolean;
 }
+
+// ── Additions (classes module) ──────────────────────────────────────────────
+
+/** A course may run for at most this many days between startDate and endDate. */
+export const MAX_COURSE_SPAN_DAYS = 731;
+/** GET /api/sessions answers at most this many days (to − from) at once. */
+export const MAX_SESSION_RANGE_DAYS = 62;
+
+/** Query string for GET /api/courses. `teacherId` matches the course's own teacher. */
+export const courseListQuery = z.object({
+  status: z.enum(COURSE_STATUSES).optional(),
+  teacherId: id.optional(),
+});
+export type CourseListQuery = z.infer<typeof courseListQuery>;
+
+export type CourseUpdateInput = z.infer<typeof courseUpdateInput>;
+export type EnrollmentInput = z.infer<typeof enrollmentInput>;
+export type EnrollmentUpdateInput = z.infer<typeof enrollmentUpdateInput>;
+export type SessionCreateInput = z.infer<typeof sessionCreateInput>;
+export type SessionUpdateInput = z.infer<typeof sessionUpdateInput>;
+export type AttendanceInput = z.infer<typeof attendanceInput>;
+
+/**
+ * Error codes (error.code) the classes API answers with besides the generic
+ * ones, so the web app can show a specific message.
+ */
+export const COURSE_ERROR_CODES = {
+  /** 409 — the student already has an 'enrolled' enrollment in this class. */
+  alreadyEnrolled: 'already_enrolled',
+  /** 409 — the student was in this class before (withdrawn/completed); re-enroll with PATCH. */
+  previouslyEnrolled: 'previously_enrolled',
+  /** 409 — capacity reached. */
+  classFull: 'class_full',
+  /** 409 — another session of this class already starts at that date + time. */
+  sessionExists: 'session_exists',
+  /** 409 — attendance can't be marked on a cancelled session. */
+  sessionCancelled: 'session_cancelled',
+} as const;
