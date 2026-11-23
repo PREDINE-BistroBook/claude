@@ -49,10 +49,24 @@ const timestamps = () => ({
 
 export const users = sqliteTable('users', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  /** Always stored lower-case. */
+  /**
+   * What the person signs in with (shared/usernames.ts: 3–20 of a–z 0–9 . _ -,
+   * starting with a letter; lower-case; unique). The column is nullable only
+   * because SQLite can't add a NOT NULL column to a table that has rows: every
+   * insert sets it, and initDb fills it for accounts older than the column
+   * (backfillUsernames, lib/usernames.ts). Read it through `usernameOf`.
+   */
+  username: text('username').unique(),
+  /** Always stored lower-case. Sign-in accepts it in place of the username. */
   email: text('email').notNull().unique(),
   name: text('name').notNull(),
   passwordHash: text('password_hash').notNull(),
+  /**
+   * The password was set by someone else (a manager adding the person or
+   * resetting it, the operator's tool): at the next sign-in the person must
+   * choose their own before anything else (requireOwnPassword, middleware/auth.ts).
+   */
+  mustChangePassword: integer('must_change_password', { mode: 'boolean' }).notNull().default(false),
   phone: text('phone'),
   locale: text('locale', { enum: LOCALES }).notNull().default('en'),
   active: integer('active', { mode: 'boolean' }).notNull().default(true),
@@ -157,9 +171,14 @@ export const fileChunks = sqliteTable(
 export const loginFailures = sqliteTable(
   'login_failures',
   {
-    /** "account:<email>|<address>", "account:<email>", "address:<address>" or "school". */
+    /** "account:<name>|<address>", "account:<name>", "address:<address>" or "school" — <name> as in `email` below. */
     key: text('key').primaryKey(),
-    /** Lower-cased email as typed at sign-in (the account may not exist); null for the address and school brakes. */
+    /**
+     * The account the failed sign-ins were for: its email address, whichever of
+     * username or email was typed (signInBrakeName, lib/usernames.ts); for a
+     * name that is nobody's, what was typed in its email form. null for the
+     * address and school brakes.
+     */
     email: text('email'),
     count: integer('count').notNull(),
     /** Epoch ms of the first failure in the window. */

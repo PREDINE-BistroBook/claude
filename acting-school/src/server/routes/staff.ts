@@ -1,8 +1,16 @@
-import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { ListResponse } from '../../shared/schemas/common';
 import { FRESH_UPLOAD_MS } from '../../shared/schemas/chat';
-import { STAFF_ERROR_CODES, staffCreateInput, staffUpdateInput, type StaffDirectoryEntry, type StaffMember } from '../../shared/schemas/staff';
+import {
+  STAFF_ERROR_CODES,
+  staffCreateInput,
+  staffUpdateInput,
+  usernameCheckQuery,
+  type StaffDirectoryEntry,
+  type StaffMember,
+  type UsernameCheck,
+} from '../../shared/schemas/staff';
 import { photoInput, TEAM_ERROR_KEYS } from '../../shared/schemas/team';
 import type { DB } from '../db/database';
 import { positions, userPositions, users } from '../db/schema';
@@ -23,7 +31,8 @@ import { ApiError, notFound } from '../lib/errors';
 import { claimUploads, releaseFile } from '../lib/fileRefs';
 import { hashPassword } from '../lib/password';
 import { getSettings } from '../lib/settings';
-import { body, paramId } from '../lib/validate';
+import { checkUsername, emailInUse, emailTakenError, newAccountNames, usernameChange, usernameOf } from '../lib/usernames';
+import { body, paramId, query } from '../lib/validate';
 import { currentUser, requireAuth, requirePermission, signOutUser } from '../middleware/auth';
 
 /**
@@ -36,7 +45,15 @@ import { currentUser, requireAuth, requirePermission, signOutUser } from '../mid
  * - they can only edit, deactivate or reset the password of someone who can't
  *   do anything they can't (otherwise a password reset would be a takeover).
  * Nobody changes their own positions or deactivates themselves, and at least
- * one active account always holds an owner position. There is no DELETE:
+ * one active account always holds an owner position.
+ *
+ * A password a manager sets — the first one when adding someone, or a reset —
+ * is temporary: the account is marked must_change_password and the person has
+ * to choose their own at the next sign-in before anything else opens.
+ *
+ * Usernames are unique across the whole team, owners included. A clash answers
+ * "taken" and nothing more: never whose it is (a non-owner must not learn an
+ * owner's account that way). There is no DELETE:
  * classes, uploads and history point at users, so people are deactivated
  * instead (which also signs them out everywhere).
  */
@@ -53,12 +70,14 @@ function toStaffMember(u: UserRow, access: UserAccess, actor: Actor): StaffMembe
   return {
     id: u.id,
     name: u.name,
+    username: usernameOf(u),
     email: u.email,
     phone: u.phone,
     locale: u.locale,
     active: u.active,
     lastLoginAt: u.lastLoginAt,
     createdAt: u.createdAt,
+    mustChangePassword: u.mustChangePassword,
     photoFileId: u.photoFileId,
     positions: access.positions,
     isOwner: access.isOwner,
@@ -72,22 +91,11 @@ function staffMember(db: Tx, u: UserRow, actor: Actor): StaffMember {
 
 const byName = sql`${users.name} collate nocase`;
 
-function emailTakenError(): ApiError {
-  return new ApiError(409, 'email_taken', 'Another staff account already uses this email', [
-    { path: ['email'], code: 'custom', message: 'staff:errors.emailTaken' },
-  ]);
-}
-
 const lastOwnerError = () =>
   new ApiError(409, STAFF_ERROR_CODES.lastOwner, 'Nobody else holds an owner position. Give someone else an owner position first.');
 const exceedsError = () =>
   new ApiError(403, STAFF_ERROR_CODES.exceedsYourAccess, 'That would give or touch access you don’t have yourself');
 const ownerOnlyError = () => new ApiError(403, STAFF_ERROR_CODES.ownerOnly, 'Only an owner can give or take an owner position');
-
-function emailInUse(db: Tx, email: string, exceptId?: number): boolean {
-  const where = exceptId === undefined ? eq(users.email, email) : and(eq(users.email, email), ne(users.id, exceptId));
-  return !!db.select({ id: users.id }).from(users).where(where).get();
-}
 
 type PositionRow = typeof positions.$inferSelect;
 
@@ -167,6 +175,17 @@ router.get('/', canManage, (c) => {
   return c.json<ListResponse<StaffMember>>({ items: rows.map((r) => toStaffMember(r, access.get(r.id)!, me)) });
 });
 
+/**
+ * For the add and edit forms, as the manager types: is this username valid and
+ * free, and which one to offer for this name (UsernameCheck). "Taken" covers
+ * every account, owners too, without saying whose. Registered before /:id.
+ */
+router.get('/username-check', canManage, (c) => {
+  const q = query(c, usernameCheckQuery);
+  const db = c.get('db');
+  return c.json<UsernameCheck>(checkUsername(db, q, getSettings(db).emailDomain));
+});
+
 /** One account. Owner accounts are a 404 for non-owners. */
 router.get('/:id', canManage, (c) => {
   const db = c.get('db');
@@ -184,22 +203,24 @@ router.post('/', canManage, async (c) => {
   const db = c.get('db');
   const chosen = findPositions(db, input.positionIds, me);
   assertMayAssign(me, chosen);
+  const settings = getSettings(db);
   // Cheap check first so a duplicate doesn't pay for a slow hash; re-checked in the transaction.
-  if (emailInUse(db, input.email)) throw emailTakenError();
+  // The username as typed (or made from the email, for an older copy of the app) and the address that goes with it.
+  const names = newAccountNames(db, input, settings.emailDomain);
   const passwordHash = await hashPassword(input.password);
-  const locale = input.locale ?? getSettings(db).defaultLocale;
+  const locale = input.locale ?? settings.defaultLocale;
 
   const created = db.transaction((tx) => {
-    if (emailInUse(tx, input.email)) return null;
+    const { username, email } = newAccountNames(tx, { ...input, username: names.username }, settings.emailDomain);
     const user = tx
       .insert(users)
-      .values({ name: input.name, email: input.email, passwordHash, phone: input.phone ?? null, locale, active: true })
+      // The manager knows this password: it is temporary, and the person chooses their own at the first sign-in.
+      .values({ name: input.name, username, email, passwordHash, mustChangePassword: true, phone: input.phone ?? null, locale, active: true })
       .returning()
       .get();
     for (const batch of insertBatches(userPositions, chosen.map((p) => ({ userId: user.id, positionId: p.id })))) tx.insert(userPositions).values(batch).run();
     return user;
   });
-  if (!created) throw emailTakenError();
   return c.json(staffMember(db, created, me), 201);
 });
 
@@ -240,6 +261,10 @@ router.patch('/:id', canManage, async (c) => {
     throw new ApiError(409, STAFF_ERROR_CODES.cannotChangeSelf, 'You can’t change your own positions or deactivate yourself');
   }
   if (input.email !== undefined && input.email !== target.email && emailInUse(db, input.email, id)) throw emailTakenError();
+  // A new username: free (409, never saying whose it is), and the automatic address follows it unless this request sets the email.
+  const emailDomain = getSettings(db).emailDomain;
+  const rename = (reader: Tx) => (input.username === undefined ? {} : usernameChange(reader, target, input.username, emailDomain, { keepEmail: input.email !== undefined }));
+  rename(db);
 
   const passwordHash = input.password !== undefined ? await hashPassword(input.password) : undefined;
 
@@ -249,7 +274,11 @@ router.patch('/:id', canManage, async (c) => {
   if (input.phone !== undefined) patch.phone = input.phone;
   if (input.locale !== undefined) patch.locale = input.locale;
   if (input.active !== undefined) patch.active = input.active;
-  if (passwordHash) patch.passwordHash = passwordHash;
+  if (passwordHash) {
+    patch.passwordHash = passwordHash;
+    // Someone else now knows their password: they choose their own at the next sign-in. (Your own, set here, is yours.)
+    patch.mustChangePassword = !isSelf;
+  }
 
   const signOutEverywhere = deactivating || passwordHash !== undefined;
   const currentSession = c.get('sessionId');
@@ -258,6 +287,7 @@ router.patch('/:id', canManage, async (c) => {
     // Re-check the rules that depend on other rows, now that nothing can change under us.
     if (losesOwner && activeOwnerCount(tx, { exceptUserId: id }) === 0) return 'last_owner' as const;
     if (patch.email !== undefined && patch.email !== target.email && emailInUse(tx, patch.email, id)) return 'email_taken' as const;
+    Object.assign(patch, rename(tx));
     const row = Object.keys(patch).length ? tx.update(users).set(patch).where(eq(users.id, id)).returning().get()! : target;
     if (nextPositions) {
       tx.delete(userPositions).where(eq(userPositions.userId, id)).run();

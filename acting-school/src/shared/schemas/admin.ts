@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { email } from './common';
+import { email, username } from './common';
 
 /**
  * Operator endpoints under /api/admin (routes/admin.ts), for running the app
@@ -16,8 +16,8 @@ export type SeedDemoInput = z.infer<typeof seedDemoInput>;
 
 export interface SeedDemoResult {
   ok: true;
-  /** The seeded sign-ins (all with the password sent). */
-  logins: { email: string; position: string; name: string }[];
+  /** The seeded sign-ins (all with the password sent): sign in with the username (the email works too). */
+  logins: { username: string; email: string; position: string; name: string }[];
   counts: { students: number; classes: number; talent: number; castings: number; enquiries: number };
   seconds: number;
 }
@@ -36,12 +36,16 @@ export interface SeedDemoWebsiteResult {
   enquiries: number;
 }
 
-/** POST /api/admin/grant-owner: lockout recovery, the same as `npm run owner -- email`. */
-export const grantOwnerInput = z.object({ email });
+/**
+ * POST /api/admin/grant-owner: lockout recovery, the same as `npm run owner -- <username or email>`.
+ * Name the account by `email` or by `username` (one of the two; `username` wins).
+ */
+export const grantOwnerInput = z.object({ email: email.optional(), username: username.optional() });
 export type GrantOwnerInput = z.infer<typeof grantOwnerInput>;
 
 export interface GrantOwnerResponse {
   ok: true;
+  username: string;
   email: string;
   name: string;
   /** The owner position given (CEO, or another owner position if CEO is no longer one). */

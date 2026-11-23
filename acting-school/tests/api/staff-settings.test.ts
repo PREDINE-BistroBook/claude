@@ -38,7 +38,7 @@ describe('GET /api/staff', () => {
     for (const s of res.body.items) {
       expect(s.passwordHash).toBeUndefined();
       expect(Object.keys(s).sort()).toEqual(
-        ['active', 'createdAt', 'email', 'id', 'isOwner', 'lastLoginAt', 'locale', 'manageable', 'name', 'phone', 'photoFileId', 'positions'].sort(),
+        ['active', 'createdAt', 'email', 'id', 'isOwner', 'lastLoginAt', 'locale', 'manageable', 'mustChangePassword', 'name', 'phone', 'photoFileId', 'positions', 'username'].sort(),
       );
     }
     const me = res.body.items.find((s: any) => s.id === owner.user.id);
@@ -429,6 +429,7 @@ describe('settings', () => {
       weekStartsOn: 1,
       interviewCriteria: DEFAULT_INTERVIEW_CRITERIA,
       defaultCountryCode: '20',
+      emailDomain: 'turquoisestudio.app',
     });
   });
 

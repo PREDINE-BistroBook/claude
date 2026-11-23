@@ -1,12 +1,15 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router';
 import type { Permission } from '@shared/permissions';
 import type { MeResponse, SessionUser } from '@shared/schemas/auth';
 import { currentLanguage, setLanguage } from '../i18n';
 import { ErrorState, NoAccess, SplashScreen } from '../components/ui/States';
 import { api, ApiError, setForbiddenHandler, setUnauthorizedHandler } from './api';
+import { authGate } from './authGate';
 import { stopPushOnThisBrowser } from './push';
+
+const ChoosePasswordPage = lazy(() => import('../pages/ChoosePasswordPage'));
 
 interface AuthState {
   user: SessionUser | null;
@@ -119,23 +122,39 @@ export function useAuth(): AuthState {
   return ctx;
 }
 
-/** Signed-in only: sends everyone else to /login (or /setup on first run). */
+/**
+ * Signed-in only: sends everyone else to /login (or /setup on first run).
+ * Someone who signed in with a temporary password gets the "Choose your own
+ * password" screen instead of the app, at every address, until they have
+ * chosen (authGate, lib/authGate.ts).
+ */
 export function RequireAuth({ children }: { children: ReactNode }) {
   const { user, loading, needsSetup, offline, refresh } = useAuth();
   const location = useLocation();
-  if (offline && !user)
-    return (
-      <div className="flex min-h-dvh items-center justify-center bg-canvas p-4">
-        <ErrorState error={new ApiError(0, 'network', 'Network error')} onRetry={() => void refresh()} />
-      </div>
-    );
-  if (loading) return <SplashScreen />;
-  if (!user) {
-    if (needsSetup) return <Navigate to="/setup" replace />;
-    const next = location.pathname + location.search;
-    return <Navigate to={next && next !== '/' ? `/login?next=${encodeURIComponent(next)}` : '/login'} replace />;
+  switch (authGate({ user, loading, needsSetup, offline })) {
+    case 'offline':
+      return (
+        <div className="flex min-h-dvh items-center justify-center bg-canvas p-4">
+          <ErrorState error={new ApiError(0, 'network', 'Network error')} onRetry={() => void refresh()} />
+        </div>
+      );
+    case 'loading':
+      return <SplashScreen />;
+    case 'setup':
+      return <Navigate to="/setup" replace />;
+    case 'login': {
+      const next = location.pathname + location.search;
+      return <Navigate to={next && next !== '/' ? `/login?next=${encodeURIComponent(next)}` : '/login'} replace />;
+    }
+    case 'choosePassword':
+      return (
+        <Suspense fallback={<SplashScreen />}>
+          <ChoosePasswordPage />
+        </Suspense>
+      );
+    case 'app':
+      return <>{children}</>;
   }
-  return <>{children}</>;
 }
 
 /** Renders children only for people whose positions allow the permission; a "no access" message otherwise. */

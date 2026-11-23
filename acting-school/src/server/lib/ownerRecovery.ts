@@ -1,7 +1,9 @@
 /**
  * Lockout recovery: give an existing staff account an owner position — the
- * CEO position — reactivate it, and lift the sign-in brakes on its email (so
- * someone who kept failing sign-ins as that email can't keep the owner out). Used by `npm run owner -- email` (Node,
+ * CEO position — reactivate it, and lift the sign-in brakes on it (so
+ * someone who kept failing sign-ins as that account can't keep the owner out).
+ * The account is named by its username or its email address, like at sign-in.
+ * Used by `npm run owner -- <username or email>` (Node,
  * db/grantOwner.ts) and POST /api/admin/grant-owner (Cloudflare, behind
  * ADMIN_TOKEN).
  *
@@ -15,12 +17,13 @@ import type { DB } from '../db/database';
 import { positions, userPositions, users } from '../db/schema';
 import { loadUserAccess, positionOrder } from './access';
 import { clearAccountBrakes } from './signInBrake';
+import { findSignInAccount } from './usernames';
 
 export type GrantOwnerResult =
   | { found: false }
   | {
       found: true;
-      user: { id: number; email: string; name: string };
+      user: { id: number; username: string; email: string; name: string };
       position: { id: number; key: string | null; name: string };
       wasActive: boolean;
       /** CEO had no owner flag and no other owner position existed: CEO is an owner position again. */
@@ -29,10 +32,10 @@ export type GrantOwnerResult =
       isOwner: boolean;
     };
 
-export function grantOwner(db: DB, rawEmail: string): GrantOwnerResult {
-  const email = rawEmail.trim().toLowerCase();
+export function grantOwner(db: DB, usernameOrEmail: string): GrantOwnerResult {
+  const name = usernameOrEmail.trim().toLowerCase();
   return db.transaction((tx): GrantOwnerResult => {
-    const user = tx.select().from(users).where(eq(users.email, email)).get();
+    const user = findSignInAccount(tx, name);
     if (!user) return { found: false };
     const ceo = tx.select().from(positions).where(eq(positions.key, FIRST_OWNER_POSITION)).get()!;
     // The CEO position if it's still an owner position, else any other owner position.
@@ -45,10 +48,11 @@ export function grantOwner(db: DB, rawEmail: string): GrantOwnerResult {
     }
     tx.insert(userPositions).values({ userId: user.id, positionId: given.id }).onConflictDoNothing().run();
     if (!user.active) tx.update(users).set({ active: true }).where(eq(users.id, user.id)).run();
-    clearAccountBrakes(tx, email);
+    // The brakes count under the account's email address, whichever name was typed at sign-in.
+    clearAccountBrakes(tx, user.email);
     return {
       found: true,
-      user: { id: user.id, email: user.email, name: user.name },
+      user: { id: user.id, username: user.username ?? '', email: user.email, name: user.name },
       position: { id: given.id, key: given.key, name: given.name },
       wasActive: user.active,
       restored,

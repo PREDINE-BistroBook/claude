@@ -7,13 +7,15 @@
  *
  * Builds the web app, starts `wrangler dev --local` on a fresh, throwaway
  * state folder, seeds the demo through POST /api/admin/seed-demo, then drives
- * every module through the Worker → Durable Object: each demo role signs in,
- * students / classes (a long schedule regenerated: hundreds of sessions, well
+ * every module through the Worker → Durable Object: each demo role signs in
+ * (by email address, and by username), students / classes (a long schedule regenerated: hundreds of sessions, well
  * past the 100-parameter limit) / sessions and attendance / talent with photo
  * uploads (one bigger than a FileStore chunk) / castings, roles, submissions
  * (a duplicate is a 409) / admissions (Arabic digits, duplicates, interview,
- * enrolment) / positions / staff / settings / schedule / dashboard, long Arabic
- * searches, and every delete twice (204, then 404). It then restarts the
+ * enrolment) / positions / staff (a team member added by username with a
+ * temporary first password: the forced "choose your own password" round trip,
+ * every other route 403 until then; renaming) / settings / schedule /
+ * dashboard, long Arabic searches, and every delete twice (204, then 404). It then restarts the
  * Worker on the same state (sessions, the sign-in brake and files survive),
  * checks the static assets and headers, finishes with the demo reset and
  * checks first-run setup then needs the setup code. Bodies over 1 MB are
@@ -204,6 +206,17 @@ export async function runApiSmoke(base: string, opts: { adminToken: string; pass
     clients[email] = c;
   }
   expectStatus(await new Client(base).post('/api/auth/login', { email: 'tom.wilkins@demo.school', password: opts.password }), 401, 'deactivated account');
+
+  step('sign in by username: the one field takes a username or an email address');
+  for (const name of ['director', ' Director ', 'director@demo.school', 'DIRECTOR@demo.school']) {
+    const signedIn = expectStatus(await new Client(base).post('/api/auth/login', { username: name, password: opts.password }), 200, `sign in as "${name}"`).body.user;
+    check(signedIn.username === 'director' && signedIn.email === 'director@demo.school' && signedIn.mustChangePassword === false, `"${name}" is the director, no password to choose`);
+  }
+  const wrongName = expectStatus(await new Client(base).post('/api/auth/login', { username: 'nobody.here', password: opts.password }), 401, 'unknown username');
+  const wrongPass = expectStatus(await new Client(base).post('/api/auth/login', { username: 'director', password: 'not-the-password' }), 401, 'wrong password');
+  check(JSON.stringify(wrongName.body) === JSON.stringify(wrongPass.body), 'an unknown username and a wrong password answer alike');
+  expectStatus(await new Client(base).post('/api/auth/login', { username: 'tom', password: opts.password }), 401, 'deactivated account, by username');
+  expectStatus(await new Client(base).post('/api/auth/login', { password: opts.password }), 400, 'sign-in without a name');
   expectStatus(await clients['editor@demo.school']!.get('/api/students'), 200, 'video editor reads students');
   expectStatus(await clients['editor@demo.school']!.get('/api/leads'), 403, 'video editor has no admissions');
   const owner = clients['owner@demo.school']!;
@@ -363,17 +376,65 @@ export async function runApiSmoke(base: string, opts: { adminToken: string; pass
   step('positions, staff, settings, schedule, profile');
   const position = expectStatus(await owner.post('/api/positions', { name: 'Smoke reader', permissions: ['students.read'] }), 201, 'create position').body;
   expectStatus(await owner.patch(`/api/positions/${position.id}`, { nameAr: 'قارئ' }), 200, 'patch position');
-  const staffEmail = `smoke.${Date.now()}@example.com`;
+
+  step('a team member added by username: automatic address, temporary first password, the forced change');
+  const offered = expectStatus(await owner.get('/api/staff/username-check?name=Smoke%20Tester&username=coach'), 200, 'username check').body;
+  check(offered.status === 'taken' && offered.suggestion === 'smoke', `"coach" is taken, "smoke" is offered (${JSON.stringify(offered)})`);
   const member = expectStatus(
-    await owner.post('/api/staff', { name: 'Smoke Staff', email: staffEmail, positionIds: [position.id], password: opts.password }),
+    await owner.post('/api/staff', { name: 'Smoke Tester', username: 'Smoke', positionIds: [position.id], password: opts.password }),
     201,
-    'create staff',
+    'add a team member by username',
   ).body;
-  expectStatus(await owner.post('/api/staff', { name: 'Again', email: staffEmail, positionIds: [position.id], password: opts.password }), 409, 'duplicate staff email');
+  check(member.username === 'smoke' && member.email === 'smoke@turquoisestudio.app' && member.mustChangePassword === true, `username, automatic address, temporary password (${member.username}, ${member.email})`);
+  const taken = expectStatus(await owner.post('/api/staff', { name: 'Again', username: 'smoke', positionIds: [position.id], password: opts.password }), 409, 'the same username again');
+  check(taken.body.error.code === 'username_taken' && taken.body.error.issues[0].path[0] === 'username', 'username_taken, on the username field');
+  expectStatus(await owner.post('/api/staff', { name: 'Again', username: 'smoke2', email: 'SMOKE@turquoisestudio.app', positionIds: [position.id], password: opts.password }), 409, 'duplicate email');
+  expectStatus(await owner.post('/api/staff', { name: 'Again', username: 'no', positionIds: [position.id], password: opts.password }), 400, 'a username that breaks the rules');
+
   const staffClient = new Client(base);
-  expectStatus(await staffClient.post('/api/auth/login', { email: staffEmail, password: opts.password }), 200, 'new staff signs in');
+  const first = expectStatus(await staffClient.post('/api/auth/login', { username: 'smoke', password: opts.password }), 200, 'the new member signs in with the temporary password').body.user;
+  check(first.mustChangePassword === true, 'the sign-in answer says a password must be chosen');
+  check(expectStatus(await staffClient.get('/api/auth/me'), 200, 'me behind the gate').body.user?.mustChangePassword === true, '/auth/me says so too');
+  for (const [method, url] of [['GET', '/api/students'], ['GET', '/api/team'], ['GET', '/api/settings'], ['POST', '/api/chat/conversations'], ['GET', '/api/files/00000000-0000-4000-8000-000000000000'], ['GET', '/api/nope']] as const) {
+    const refused = expectStatus(await staffClient.req(method, url, method === 'POST' ? { userId: 1 } : undefined), 403, `${method} ${url} with a temporary password`);
+    check(refused.body.error.code === 'password_change_required', `${url}: password_change_required`);
+  }
+  const sameAgain = expectStatus(await staffClient.post('/api/auth/choose-password', { newPassword: opts.password }), 400, 'the temporary password again');
+  check(sameAgain.body.error.issues[0].message === 'errors.passwordSameAsTemporary', 'must differ from the temporary one');
+  expectStatus(await staffClient.post('/api/auth/choose-password', { newPassword: 'short' }), 400, 'a password under the policy');
+  const elsewhere = new Client(base);
+  expectStatus(await elsewhere.post('/api/auth/login', { username: 'smoke@turquoisestudio.app', password: opts.password }), 200, 'a second device, by the address');
+  const ownPassword = `own-${opts.password}`;
+  const chosen = expectStatus(await staffClient.post('/api/auth/choose-password', { newPassword: ownPassword }), 200, 'choose your own password').body.user;
+  check(chosen.mustChangePassword === false && chosen.username === 'smoke', 'the gate is lifted');
+  check(expectStatus(await elsewhere.get('/api/auth/me'), 200, 'the other device').body.user === null, 'the other session ended');
+  expectStatus(await staffClient.post('/api/auth/choose-password', { newPassword: `again-${ownPassword}` }), 409, 'nothing left to choose');
+  expectStatus(await new Client(base).post('/api/auth/login', { username: 'smoke', password: opts.password }), 401, 'the temporary password is dead');
+  check(expectStatus(await new Client(base).post('/api/auth/login', { username: 'smoke', password: ownPassword }), 200, 'the chosen password signs in').body.user.mustChangePassword === false, 'no gate at the next sign-in');
   expectStatus(await staffClient.get('/api/students'), 200, 'new staff reads students');
   expectStatus(await staffClient.get('/api/castings'), 403, 'new staff has no castings');
+
+  step('usernames can be changed: your own in My profile, a member’s by a manager; the automatic address follows');
+  const renamed = expectStatus(await staffClient.patch('/api/auth/profile', { username: 'Smoke.Tester' }), 200, 'change my own username').body.user;
+  check(renamed.username === 'smoke.tester' && renamed.email === 'smoke.tester@turquoisestudio.app', `my username and address (${renamed.username}, ${renamed.email})`);
+  expectStatus(await staffClient.patch('/api/auth/profile', { username: 'director' }), 409, 'a taken username');
+  const byManager = expectStatus(await owner.patch(`/api/staff/${member.id}`, { username: 'smoketest' }), 200, 'a manager changes it').body;
+  check(byManager.username === 'smoketest' && byManager.email === 'smoketest@turquoisestudio.app' && byManager.mustChangePassword === false, 'renamed by the manager');
+  check(expectStatus(await owner.get('/api/staff'), 200, 'staff list').body.items.some((s: { username: string }) => s.username === 'smoketest'), 'the staff list carries usernames');
+  // A manager's reset is temporary again.
+  const resetPassword = `reset-${opts.password}`;
+  check(expectStatus(await owner.patch(`/api/staff/${member.id}`, { password: resetPassword }), 200, 'a manager resets the password').body.mustChangePassword === true, 'a reset password is temporary');
+  expectStatus(await staffClient.get('/api/students'), 401, 'the reset signed them out');
+  expectStatus(await staffClient.post('/api/auth/login', { username: 'smoketest', password: resetPassword }), 200, 'sign in with the reset password');
+  expectStatus(await staffClient.get('/api/students'), 403, 'gated again after the reset');
+  expectStatus(await staffClient.post('/api/auth/choose-password', { newPassword: ownPassword }), 200, 'choose again');
+  expectStatus(await staffClient.get('/api/students'), 200, 'and the app opens');
+  const staffEmail: string = byManager.email;
+  const domain = expectStatus(await owner.patch('/api/settings', { emailDomain: 'Smoke.Example' }), 200, 'change the email domain').body.emailDomain;
+  check(domain === 'smoke.example', 'email domain saved lower-case');
+  expectStatus(await owner.patch('/api/settings', { emailDomain: 'turquoisestudio.app' }), 200, 'restore the email domain');
+
+  step('team accounts: list, directory, deactivating; settings, schedule, profile');
   expectStatus(await owner.get('/api/staff'), 200, 'staff list');
   expectStatus(await owner.get('/api/staff/directory'), 200, 'staff directory');
   expectStatus(await owner.patch(`/api/staff/${member.id}`, { active: false }), 200, 'deactivate staff');
@@ -468,7 +529,8 @@ export async function runApiSmoke(base: string, opts: { adminToken: string; pass
 
   step('lockout recovery through the admin endpoint');
   const granted = expectStatus(await anon.post('/api/admin/grant-owner', { email: staffEmail }, bearer), 200, 'grant owner').body;
-  check(granted.reactivated === true && granted.position === 'CEO', 'grant-owner reactivated the account as CEO');
+  check(granted.reactivated === true && granted.position === 'CEO' && granted.username === 'smoketest', 'grant-owner reactivated the account as CEO');
+  expectStatus(await anon.post('/api/admin/grant-owner', { username: 'smoketest' }, bearer), 200, 'grant-owner by username');
   expectStatus(await anon.post('/api/admin/grant-owner', { email: 'nobody@example.com' }, bearer), 404, 'grant-owner unknown email');
 
   return { ownerCookie: owner.cookie!, bigId, bigSha: sha(big), studentCount: studentsBefore };
@@ -855,8 +917,10 @@ async function main() {
     check(noCode.body.error.code === 'setup_code_required' && mallory.cookie === null, 'no session for an anonymous setup');
     expectStatus(await mallory.post('/api/auth/setup', { ...setup, email: 'mallory@x.co', setupCode: 'guess-guess-guess-guess-guess' }), 403, 'setup with a wrong code');
     const realOwner = new Client(dev.url);
-    const created = expectStatus(await realOwner.post('/api/auth/setup', { ...setup, setupCode: vars.ADMIN_TOKEN }), 201, 'setup with the code');
+    const created = expectStatus(await realOwner.post('/api/auth/setup', { ...setup, username: 'ceo', setupCode: vars.ADMIN_TOKEN }), 201, 'setup with the code');
     check(created.body.user.isOwner === true && realOwner.cookie, 'the operator owns the school');
+    check(created.body.user.username === 'ceo' && created.body.user.mustChangePassword === false, 'the owner has the username they chose, and their own password');
+    expectStatus(await new Client(dev.url).post('/api/auth/login', { username: 'ceo', password }), 200, 'the owner signs in by username');
     check(expectStatus(await new Client(dev.url).get('/api/auth/me'), 200, 'me after setup').body.needsSetup === false, 'set up');
     expectStatus(await realOwner.get('/api/students'), 200, 'the new owner works');
     console.log(`\nCloudflare smoke passed: ${checks} checks.`);

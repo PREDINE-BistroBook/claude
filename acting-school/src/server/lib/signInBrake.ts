@@ -7,16 +7,23 @@
  * every hash an anonymous visitor can trigger delays every staff request; a
  * brake that has tripped answers 429 at the cost of one small query. Layers:
  *
- * - account from one address: 10 failures per email per address in 15 minutes
+ * - account from one address: 10 failures per account per address in 15 minutes
  *   (someone mistyping; an attacker on one address can't lock the real person
- *   out from everywhere else). Without a known address: per email.
- * - account from anywhere: 100 per email in 15 minutes (one password guessed
+ *   out from everywhere else). Without a known address: per account.
+ * - account from anywhere: 100 per account in 15 minutes (one password guessed
  *   at from many addresses).
- * - address: 30 per address in 15 minutes, whatever the emails (one machine
+ * - address: 30 per address in 15 minutes, whatever the accounts (one machine
  *   trying many accounts, or random ones to keep the server hashing).
  * - school: 30 per minute in total (many machines at once). Bounds the time
  *   failed sign-ins can take from the server to ~3 s a minute; while it holds,
  *   nobody can sign in, but everyone already signed in carries on.
+ *
+ * "Account" is a name, not what was typed: sign-in takes a username or an
+ * email address, and both of an account's names count on the same brakes —
+ * the caller resolves the typed name first (one indexed read, still no
+ * hashing) and passes signInBrakeName(...) from lib/usernames.ts: the
+ * account's email address, or the typed name in its email form when it is
+ * nobody's. The functions below call that name `account`.
  *
  * The address is the request's client IP when the runtime knows it
  * (CF-Connecting-IP on Cloudflare, the socket on Node: AppEnv clientIp).
@@ -43,11 +50,11 @@ interface Brake {
   windowMs: number;
 }
 
-/** The brakes a sign-in for `email` from `address` counts towards. */
-function brakesFor(email: string, address: string | null): Brake[] {
+/** The brakes a sign-in for `account` (signInBrakeName) from `address` counts towards. */
+function brakesFor(account: string, address: string | null): Brake[] {
   const brakes: Brake[] = [
-    { key: `account:${email}|${address ?? ''}`, email, ...SIGN_IN_BRAKES.accountFromAddress },
-    { key: `account:${email}`, email, ...SIGN_IN_BRAKES.account },
+    { key: `account:${account}|${address ?? ''}`, email: account, ...SIGN_IN_BRAKES.accountFromAddress },
+    { key: `account:${account}`, email: account, ...SIGN_IN_BRAKES.account },
     { key: 'school', email: null, ...SIGN_IN_BRAKES.school },
   ];
   if (address) brakes.push({ key: `address:${address}`, email: null, ...SIGN_IN_BRAKES.address });
@@ -55,8 +62,8 @@ function brakesFor(email: string, address: string | null): Brake[] {
 }
 
 /** True when any brake for this sign-in has tripped (answer 429 without hashing anything). */
-export function signInBlocked(db: DB, email: string, address: string | null, now = Date.now()): boolean {
-  const brakes = brakesFor(email, address);
+export function signInBlocked(db: DB, account: string, address: string | null, now = Date.now()): boolean {
+  const brakes = brakesFor(account, address);
   const rows = db
     .select()
     .from(loginFailures)
@@ -69,11 +76,11 @@ export function signInBlocked(db: DB, email: string, address: string | null, now
 }
 
 /** One more failure on every brake this sign-in counts towards (a brake whose window is over starts again at 1). */
-export function recordSignInFailure(db: DB, email: string, address: string | null, now = Date.now()) {
+export function recordSignInFailure(db: DB, account: string, address: string | null, now = Date.now()) {
   db.transaction((tx) => {
     // Windows that are over, of anyone: keeps the table small.
     tx.delete(loginFailures).where(lt(loginFailures.firstAt, now - LONGEST_WINDOW)).run();
-    for (const b of brakesFor(email, address)) {
+    for (const b of brakesFor(account, address)) {
       const over = sql`${loginFailures.firstAt} < ${now - b.windowMs}`;
       tx.insert(loginFailures)
         .values({ key: b.key, email: b.email, count: 1, firstAt: now })
@@ -90,11 +97,11 @@ export function recordSignInFailure(db: DB, email: string, address: string | nul
 }
 
 /** A successful sign-in clears that person's count from this address (not the wider brakes). */
-export function clearSignInFailures(db: DB, email: string, address: string | null) {
-  db.delete(loginFailures).where(eq(loginFailures.key, brakesFor(email, address)[0]!.key)).run();
+export function clearSignInFailures(db: DB, account: string, address: string | null) {
+  db.delete(loginFailures).where(eq(loginFailures.key, brakesFor(account, address)[0]!.key)).run();
 }
 
-/** Lift every brake on this email (lockout recovery: POST /api/admin/grant-owner, npm run owner). */
+/** Lift every brake on the account with this email address (lockout recovery: POST /api/admin/grant-owner, npm run owner). */
 export function clearAccountBrakes(db: DB, email: string) {
   db.delete(loginFailures).where(eq(loginFailures.email, email)).run();
 }

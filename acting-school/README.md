@@ -2,7 +2,7 @@
 
 Internal app for the team of an acting school that is also a talent agency (the "staff app" in this repository; on screen it always says **Team**, never Staff). Works in the browser on desktop and phone (installable to the home screen), in English and Arabic. Its address is `team.turquoisestudio.app`.
 
-**Status:** phase 1 built — sign-in and first-run setup, team accounts and settings, students, workshops (weekly schedule, sessions, attendance), talent roster with headshots, castings with roles and submissions, the combined schedule and the home dashboard, in English and Arabic (right-to-left). Phase 2, step 1 built — editable positions and permissions. Phase 2, step 2 built — admissions: enquiries from every source with follow-up reminders, pre-written WhatsApp messages (wa.me links, English or Arabic), interviews scored on the criteria in Settings, decisions and enrolment into a workshop, with interviews on the schedule and follow-ups on the home screen. Phase 2, step 3 built — the app is split into three sections, **School**, **Casting** and **Website**, switched with tabs at the top, and the studio has a **public website** run from the Website section: workshops with an apply form, a casting call with photos, about & coaches, and a link-in-bio page. Its forms feed Admissions (enquiries with source "website") and Casting › Applications. The team pack built (2026-11-23) — one **Team** page for everyone (with *Manage the team* it is also where team members are added and edited), profile photos, pictures and files on workshops, castings and in chat, one-to-one messages between everyone on the team, "call to the office", and alerts (in the app, and pushed to phones once the VAPID keys are set). The rest of phase 2 is in `ROADMAP.md`.
+**Status:** phase 1 built — sign-in and first-run setup, team accounts and settings, students, workshops (weekly schedule, sessions, attendance), talent roster with headshots, castings with roles and submissions, the combined schedule and the home dashboard, in English and Arabic (right-to-left). Phase 2, step 1 built — editable positions and permissions. Phase 2, step 2 built — admissions: enquiries from every source with follow-up reminders, pre-written WhatsApp messages (wa.me links, English or Arabic), interviews scored on the criteria in Settings, decisions and enrolment into a workshop, with interviews on the schedule and follow-ups on the home screen. Phase 2, step 3 built — the app is split into three sections, **School**, **Casting** and **Website**, switched with tabs at the top, and the studio has a **public website** run from the Website section: workshops with an apply form, a casting call with photos, about & coaches, and a link-in-bio page. Its forms feed Admissions (enquiries with source "website") and Casting › Applications. The team pack built (2026-11-23) — one **Team** page for everyone (with *Manage the team* it is also where team members are added and edited), profile photos, pictures and files on workshops, castings and in chat, one-to-one messages between everyone on the team, "call to the office", and alerts (in the app, and pushed to phones once the VAPID keys are set). Usernames and temporary first passwords built (2026-11-23) — people sign in with a **username** (their email address works in the same field), and a password someone else set for them works once: the first sign-in asks them to choose their own (see "Signing in" below). The rest of phase 2 is in `ROADMAP.md`.
 
 ## Run it
 
@@ -14,22 +14,29 @@ npm install
 npm run dev        # open http://localhost:5173
 ```
 
-The first visit asks you to set up the school (school name + the first account, which gets the CEO position). To start with demo data instead: `npm run seed` (or `npm run seed -- --reset` to wipe an existing `$DATA_DIR` first), then sign in with one of the demo logins below, all with the password `demo1234`. The demo data is dated relative to today, so it always looks current.
+The first visit asks you to set up the school (school name + the first account, which gets the CEO position). To start with demo data instead: `npm run seed` (or `npm run seed -- --reset` to wipe an existing `$DATA_DIR` first), then sign in with one of the demo usernames below, all with the password `demo1234`. (Each account also has the address `<username>@demo.school`, which signs in just the same.) The demo accounts are not asked to choose their own password — a demo is one shared password. The demo data is dated relative to today, so it always looks current.
 
-| Login | Position(s) | Fictional person |
+| Username | Position(s) | Fictional person |
 |---|---|---|
-| `owner@demo.school` | CEO | Karim Mansour |
-| `cfo@demo.school` | CFO | Hisham Mansour |
-| `director@demo.school` | Executive Director | Dalia Fathy |
-| `head@demo.school` | Head of Casting | Sherif Adel |
-| `casting@demo.school` | Casting team | Tarek Samir |
-| `editor@demo.school` | Video editor | Hany Nabil |
-| `coach@demo.school` | Acting coach (teaches workshops) | Layla Haddad |
-| `coach2@demo.school` | Acting coach + Finance (teaches workshops) | Daniel Price |
+| `owner` | CEO | Karim Mansour |
+| `cfo` | CFO | Hisham Mansour |
+| `director` | Executive Director | Dalia Fathy |
+| `head` | Head of Casting | Sherif Adel |
+| `casting` | Casting team | Tarek Samir |
+| `editor` | Video editor | Hany Nabil |
+| `coach` | Acting coach (teaches workshops) | Layla Haddad |
+| `coach2` | Acting coach + Finance (teaches workshops) | Daniel Price |
 
-(`tom.wilkins@demo.school`, a former coach, is deactivated.) The demo also has 16 enquiries in every admissions stage — follow-ups overdue, due today and later, interviews coming up, recorded (with scores) and one no-show, one enquiry enrolled into Screen Acting I and two lost — taken by the director — plus a filled-in website: studio texts and contact lines, three coach profiles, four workshops shown (no prices: the school's decision), an open casting call, three custom links, four casting applications with photos (one a minor with guardian consent) and two enquiries sent through the website.
+(`tom`, a former coach — `tom.wilkins@demo.school` — is deactivated.) The demo also has 16 enquiries in every admissions stage — follow-ups overdue, due today and later, interviews coming up, recorded (with scores) and one no-show, one enquiry enrolled into Screen Acting I and two lost — taken by the director — plus a filled-in website: studio texts and contact lines, three coach profiles, four workshops shown (no prices: the school's decision), an open casting call, three custom links, four casting applications with photos (one a minor with guardian consent) and two enquiries sent through the website.
 
-Locked out? `npm run owner -- someone@example.com` gives that existing account an owner position — CEO, or another owner position if CEO has been made an ordinary one — reactivates it and lifts the sign-in brakes on its email. (Upgrading a database from phase 1 needs nothing: each fixed role becomes the matching position — owner → CEO, admin → Executive Director, teacher → Acting coach, agent → Head of Casting. The server warns at startup if no active account holds an owner position.)
+Locked out? `npm run owner -- ceo` (the account's username, or its email address: `npm run owner -- someone@example.com`) gives that existing account an owner position — CEO, or another owner position if CEO has been made an ordinary one — reactivates it and lifts the sign-in brakes on it. (Upgrading a database from phase 1 needs nothing: each fixed role becomes the matching position — owner → CEO, admin → Executive Director, teacher → Acting coach, agent → Head of Casting. The server warns at startup if no active account holds an owner position.)
+
+### Signing in: usernames and first passwords
+
+- **Username.** Everyone signs in with a username: 3–20 characters from `a–z 0–9 . _ -`, starting with a letter, lower-case, unique. The sign-in field also takes the account's email address, in any letter case. Accounts made before usernames existed get one at the first start after the upgrade, from the first part of their email address (`owner@…` → `owner`; a clash gets a number; an address with nothing usable gets `user<id>`) — nobody is locked out, and the email keeps working.
+- **Adding a team member** (Team › Add team member, *Manage the team*): name, username (offered from the first name; `first.last` when that is taken), position(s) and a first password. The email isn't asked for: the account gets `<username>@<email domain>` — the domain is in **Settings › Team email addresses**, `turquoisestudio.app` by default — unless the manager types another address.
+- **Changing a username:** your own in **My profile**, a member's on their page (managers). An address that was the automatic one follows the new username; one the person typed themself stays.
+- **A first password is temporary.** Whenever someone else sets a person's password — a manager adding them, a manager's reset, the operator's tool — the person's next sign-in shows one screen and nothing else: **Choose your own password** (at least 8 characters, not the temporary one again). Until they do, the app refuses everything else for that sign-in; once they have, their other devices are signed out. That is what makes a simple first password safe to hand over: it stops working the first time it is used.
 
 Production on a server of your own: `npm run build && npm start` — one Node process serves the API and the app on `$PORT` (default 3000). Data lives in `$DATA_DIR` (default `./data`): `app.db` (SQLite) and `uploads/` (photos). Back up that folder. Put it behind HTTPS (the session cookie is `Secure` in production; set `COOKIE_SECURE=false` only to try it over plain http on a private network). The school's time zone (the server's "today") is `SCHOOL_TIME_ZONE`, default `Africa/Cairo`.
 
@@ -61,15 +68,16 @@ curl -X POST https://<worker-url>/api/admin/seed-demo -H "Authorization: Bearer 
 # The demo website is never public by itself: see "Publishing the website" below.
 curl -X POST https://<worker-url>/api/admin/seed-demo-website -H "Authorization: Bearer $ADMIN_TOKEN"
 
-# Locked out: same as npm run owner -- someone@example.com (also lifts the sign-in brakes on that email)
+# Locked out: same as npm run owner -- ceo (also lifts the sign-in brakes on that account).
+# Name the account by its username, or by its email address: -d '{"email":"someone@example.com"}'
 curl -X POST https://<worker-url>/api/admin/grant-owner -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H 'Content-Type: application/json' -d '{"email":"someone@example.com"}'
+  -H 'Content-Type: application/json' -d '{"username":"ceo"}'
 
 # Demo deployments only (ALLOW_DEMO_RESET=true): delete every row and file; the next visit asks for setup again (with the setup code).
 curl -X POST https://<worker-url>/api/admin/reset -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
-Sign-in brakes (both runtimes, kept in the database): 10 failed sign-ins per email from one address in 15 minutes, 100 per email from anywhere, 30 per address whatever the email, and 30 a minute across the whole school. They're checked before the password is hashed, so a flood of bad sign-ins can't stall the one Durable Object (scrypt runs on its only thread); while the school-wide brake holds nobody can sign in, but everyone already signed in carries on. Request bodies over 1 MB are refused (413) before they're read (uploads: 8 MB).
+Sign-in brakes (both runtimes, kept in the database): 10 failed sign-ins per account from one address in 15 minutes, 100 per account from anywhere, 30 per address whatever the account, and 30 a minute across the whole school. An account's username and its email address count together, so typing one and then the other gives no extra guesses. They're checked before the password is hashed, so a flood of bad sign-ins can't stall the one Durable Object (scrypt runs on its only thread); while the school-wide brake holds nobody can sign in, but everyone already signed in carries on. Request bodies over 1 MB are refused (413) before they're read (uploads: 8 MB).
 
 The Durable Object speaks Workers RPC (`extends DurableObject`), so wrangler's local explorer can run SQL against the local database (`npm run cf:dev` prints its address).
 

@@ -1,7 +1,9 @@
 import { useMutation } from '@tanstack/react-query';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate, useNavigate } from 'react-router';
 import { setupInput, type SetupInput } from '@shared/schemas/auth';
+import { usernameCandidates } from '@shared/usernames';
 import { Button } from '../components/ui/Button';
 import { Field, TextField } from '../components/ui/Field';
 import { FormError, SplashScreen } from '../components/ui/States';
@@ -17,7 +19,10 @@ export default function SetupPage() {
   const { t } = useTranslation();
   const { user, loading, needsSetup, setupCodeRequired, refresh } = useAuth();
   const navigate = useNavigate();
-  const form = useForm({ schoolName: '', schoolNameAr: '', name: '', email: '', password: '', setupCode: '' });
+  const form = useForm({ schoolName: '', schoolNameAr: '', name: '', username: '', email: '', password: '', setupCode: '' });
+  // The username is offered from the name (its first word in Latin letters) until the owner types one.
+  const [usernameTouched, setUsernameTouched] = useState(false);
+  const username = usernameTouched ? form.values.username : (usernameCandidates(form.values.name)[0] ?? '');
   usePageTitle(t('auth.setupTitle'));
 
   const setup = useMutation({
@@ -39,8 +44,14 @@ export default function SetupPage() {
         className="grid gap-4"
         onSubmit={(e) => {
           e.preventDefault();
-          const { setupCode, ...values } = form.values;
-          const data = form.validate(setupInput, { ...values, ...(setupCodeRequired ? { setupCode } : {}), locale: currentLanguage() });
+          const { setupCode, username: _typed, ...values } = form.values;
+          // No username: the server makes one from the email address.
+          const data = form.validate(setupInput, {
+            ...values,
+            ...(username.trim() ? { username } : {}),
+            ...(setupCodeRequired ? { setupCode } : {}),
+            locale: currentLanguage(),
+          });
           if (data) setup.mutate(data);
         }}
       >
@@ -68,7 +79,25 @@ export default function SetupPage() {
           error={form.error('schoolNameAr')}
         />
         <TextField label={t('auth.yourName')} autoComplete="name" {...form.bind('name')} error={form.error('name')} />
-        <TextField label={t('fields.email')} type="email" autoComplete="username" inputMode="email" dir="ltr" {...form.bind('email')} error={form.error('email')} />
+        <TextField
+          label={t('fields.username')}
+          type="text"
+          autoComplete="username"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          dir="ltr"
+          maxLength={60}
+          {...form.bind('username')}
+          value={username}
+          onChange={(e) => {
+            setUsernameTouched(true);
+            form.set('username', e.target.value);
+          }}
+          error={form.error('username')}
+          hint={t('auth.setupUsernameHint')}
+        />
+        <TextField label={t('fields.email')} type="email" autoComplete="email" inputMode="email" dir="ltr" {...form.bind('email')} error={form.error('email')} />
         <Field label={t('fields.password')} htmlFor="f-password" error={form.error('password')} hint={t('auth.passwordHint')}>
           <PasswordInput autoComplete="new-password" {...form.bind('password')} />
         </Field>

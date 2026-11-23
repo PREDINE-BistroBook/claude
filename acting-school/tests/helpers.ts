@@ -5,6 +5,8 @@ import { eq, inArray } from 'drizzle-orm';
 import { positions, userPositions, users } from '../src/server/db/schema';
 import { sqliteFileStore, type FileStore } from '../src/server/lib/fileStore';
 import { hashPassword } from '../src/server/lib/password';
+import { usernameInUse } from '../src/server/lib/usernames';
+import { firstFreeUsername, usernameFromEmail } from '../src/shared/usernames';
 import { durableObjectLimits } from '../src/server/lib/sqlLimits';
 import { DEFAULT_TIME_ZONE, epochAt, nowTimeIn, todayIn } from '../src/server/lib/clock';
 import type { BuiltInPositionKey, Permission } from '../src/shared/permissions';
@@ -149,13 +151,19 @@ export async function makeTestContext(
     return db.select({ id: positions.id }).from(positions).where(eq(positions.key, k)).get()!.id;
   }
 
-  /** Create a staff account directly in the database, holding the given position(s). */
+  /**
+   * Create a staff account directly in the database, holding the given position(s).
+   * Its username (unless given) is the first part of its email address, numbered if taken —
+   * 'teach@example.com' → 'teach'; either one signs in. The password is its own (not temporary).
+   */
   async function createUser(spec: PositionSpec, overrides: Partial<typeof users.$inferInsert> = {}) {
     n++;
     const label = specLabel(spec);
+    const email = overrides.email ?? `${label.replace(/[^a-z0-9_]/gi, '_')}${n}@test.local`;
+    const username = overrides.username ?? firstFreeUsername([usernameFromEmail(email) ?? `user${n}`], (c) => usernameInUse(db, c))!;
     const user = db
       .insert(users)
-      .values({ email: `${label.replace(/[^a-z0-9_]/gi, '_')}${n}@test.local`, name: `${label} ${n}`, passwordHash: await hashed!, ...overrides })
+      .values({ email, username, name: `${label} ${n}`, passwordHash: await hashed!, ...overrides })
       .returning()
       .get()!;
     const ids = positionIdsFor(spec);
@@ -174,9 +182,9 @@ export async function makeTestContext(
       .run();
   }
 
-  /** Sign in as an existing user and return a client carrying their cookie. */
-  async function login(emailAddr: string, password = PASSWORD): Promise<Client> {
-    const res = await makeClient(app).post('/api/auth/login', { email: emailAddr, password });
+  /** Sign in as an existing user — by username or by email address, as on the sign-in page — and return a client carrying their cookie. */
+  async function login(usernameOrEmail: string, password = PASSWORD): Promise<Client> {
+    const res = await makeClient(app).post('/api/auth/login', { username: usernameOrEmail, password });
     if (res.status !== 200) throw new Error(`login failed: ${res.status} ${JSON.stringify(res.body)}`);
     const setCookie = res.headers.get('set-cookie') ?? '';
     return makeClient(app, setCookie.split(';')[0]);

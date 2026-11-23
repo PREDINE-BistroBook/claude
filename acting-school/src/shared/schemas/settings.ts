@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { LOCALES, type Locale } from '../enums';
 import { COUNTRY_CODE_RE } from '../phone';
+import { EMAIL_DOMAIN_RE } from '../usernames';
 import { optText, reqText } from './common';
 
 /** A stable slug for an interview criterion: lower-case letters, digits and "_", starting with a letter. */
@@ -32,6 +33,12 @@ const countryCode = z.preprocess(
   z.string().regex(COUNTRY_CODE_RE, { message: 'settings:errors.countryCode' }),
 );
 
+/** "@Turquoisestudio.app " → "turquoisestudio.app"; anything else is left for the regex to reject. */
+const emailDomain = z.preprocess(
+  (v) => (typeof v === 'string' ? v.trim().replace(/^@/, '').toLowerCase() : v),
+  z.string().regex(EMAIL_DOMAIN_RE, { message: 'settings:errors.emailDomain' }),
+);
+
 export const settingsInput = z
   .object({
     schoolName: reqText(120),
@@ -53,6 +60,12 @@ export const settingsInput = z
       }),
     /** Calling code used to turn local numbers (01012345678) into WhatsApp numbers (201012345678). Digits only, e.g. "20". */
     defaultCountryCode: countryCode,
+    /**
+     * The domain of the team's addresses: a new team member whose email isn't
+     * typed gets <username>@<emailDomain>. Changing it doesn't touch the
+     * addresses accounts already have.
+     */
+    emailDomain,
   })
   .partial();
 export type SettingsInput = z.infer<typeof settingsInput>;
@@ -66,6 +79,8 @@ export interface AppSettings {
   weekStartsOn: 0 | 1 | 6;
   interviewCriteria: InterviewCriterion[];
   defaultCountryCode: string;
+  /** Domain of the automatic email addresses (<username>@<emailDomain>). */
+  emailDomain: string;
 }
 
 /** Until the school tells us what Salma assesses (ROADMAP "Waiting on the school"). */
@@ -87,4 +102,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   interviewCriteria: DEFAULT_INTERVIEW_CRITERIA,
   /** Egypt. */
   defaultCountryCode: '20',
+  /** The studio's own domain. */
+  emailDomain: 'turquoisestudio.app',
 };

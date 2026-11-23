@@ -473,14 +473,20 @@ describe('push subscriptions end with the sign-in', () => {
     expect(await pingFrom(dalia, coach.user.id)).toEqual([]);
     expect(t.db.select().from(pushSubscriptions).all()).toEqual([]);
 
+    // The manager's password is temporary: nothing opens — alerts included — until the person has chosen their own.
+    const first = await t.login(coach.user.email, 'a-brand-new-one');
+    const refused = await first.post('/api/push/subscribe', (await fakeBrowser()).subscription);
+    expect([refused.status, refused.body.error.code]).toEqual([403, 'password_change_required']);
+    expect((await first.post('/api/auth/choose-password', { newPassword: 'chosen-by-layla' })).status).toBe(200);
+
     // Changing your own password signs out (and silences) your other devices, not this one.
-    const tablet = await t.login(coach.user.email, 'a-brand-new-one');
-    const phone = await t.login(coach.user.email, 'a-brand-new-one');
+    const tablet = await t.login(coach.user.email, 'chosen-by-layla');
+    const phone = await t.login(coach.user.email, 'chosen-by-layla');
     const tabletBrowser = await fakeBrowser();
     const phoneBrowser = await fakeBrowser();
     await tablet.post('/api/push/subscribe', tabletBrowser.subscription);
     await phone.post('/api/push/subscribe', phoneBrowser.subscription);
-    expect((await phone.post('/api/auth/password', { currentPassword: 'a-brand-new-one', newPassword: 'another-new-one' })).status).toBe(200);
+    expect((await phone.post('/api/auth/password', { currentPassword: 'chosen-by-layla', newPassword: 'another-new-one' })).status).toBe(200);
     expect(await pingFrom(dalia, coach.user.id)).toEqual([phoneBrowser.endpoint, phoneBrowser.endpoint]);
     expect(t.db.select({ endpoint: pushSubscriptions.endpoint }).from(pushSubscriptions).all()).toEqual([{ endpoint: phoneBrowser.endpoint }]);
   });

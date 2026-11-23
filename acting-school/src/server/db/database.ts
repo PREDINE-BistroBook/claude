@@ -11,6 +11,7 @@ import type { BuiltInPositionKey } from '../../shared/permissions';
 import { upgradeBuiltInPositions } from '../lib/access';
 import { backfillPhoneDigits } from '../lib/phone';
 import { ensureSiteFormSecret } from '../lib/siteContent';
+import { backfillUsernames } from '../lib/usernames';
 import { insertBatches } from '../lib/sqlLimits';
 import { applyMigrations } from './migrate';
 import * as schema from './schema';
@@ -69,10 +70,11 @@ function carryOverPhaseOneRoles(db: DB, roles: { id: number; role: string }[]) {
  * positions (CEO, Acting coach, …) if any are missing plus any permissions
  * granted to built-in positions since this database last started
  * (BUILT_IN_GRANTS in shared/permissions.ts), then rows written before a
- * column existed get it filled in (phone_digits), and the public forms' token
- * secret (settings 'siteFormSecret') is created once if missing. A phase-1
- * database (fixed roles) also gets each account's role carried over to the
- * matching position.
+ * column existed get it filled in (phone_digits; usernames for accounts made
+ * when sign-in was by email only), and the public forms' token secret
+ * (settings 'siteFormSecret') is created once if missing. A phase-1 database
+ * (fixed roles) also gets each account's role carried over to the matching
+ * position.
  */
 export function initDb(db: DB): DB {
   // Read before migrating: the positions migration drops the column.
@@ -81,6 +83,7 @@ export function initDb(db: DB): DB {
   upgradeBuiltInPositions(db);
   if (phaseOneRoles?.length) carryOverPhaseOneRoles(db, phaseOneRoles);
   backfillPhoneDigits(db);
+  backfillUsernames(db);
   ensureSiteFormSecret(db);
   return db;
 }

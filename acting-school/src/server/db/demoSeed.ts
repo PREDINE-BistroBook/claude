@@ -13,16 +13,21 @@
  *
  * Dates are relative to today, so the demo always looks current.
  *
- * Logins (one password for all) — fictional people in the school's real positions:
- *   owner@demo.school     CEO                      (Karim Mansour)
- *   cfo@demo.school       CFO                      (Hisham Mansour)
- *   director@demo.school  Executive Director       (Dalia Fathy)
- *   head@demo.school      Head of Casting          (Sherif Adel)
- *   casting@demo.school   Casting team             (Tarek Samir)
- *   editor@demo.school    Video editor             (Hany Nabil)
- *   coach@demo.school     Acting coach             (Layla Haddad — teaches classes)
- *   coach2@demo.school    Acting coach + Finance   (Daniel Price — teaches classes)
- *   tom.wilkins@demo.school  former Acting coach, deactivated
+ * Logins (usernames; one password for all) — fictional people in the school's real positions.
+ * Each also has the address <username>@demo.school, which signs in just the same:
+ *   owner     CEO                      (Karim Mansour)
+ *   cfo       CFO                      (Hisham Mansour)
+ *   director  Executive Director       (Dalia Fathy)
+ *   head      Head of Casting          (Sherif Adel)
+ *   casting   Casting team             (Tarek Samir)
+ *   editor    Video editor             (Hany Nabil)
+ *   coach     Acting coach             (Layla Haddad — teaches classes)
+ *   coach2    Acting coach + Finance   (Daniel Price — teaches classes)
+ *   tom       former Acting coach, deactivated (tom.wilkins@demo.school)
+ *
+ * The demo accounts are not asked to choose their own password at the first
+ * sign-in (the API marks every password a manager sets as temporary; the seed
+ * clears that mark): a demo is signed into by many people with the one password.
  */
 import { and, asc, eq, gt, gte, inArray, max } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
@@ -73,14 +78,14 @@ import { lookFor, renderPortrait } from './seedPortraits';
 
 /** The seeded sign-ins (active accounts), in the order the CLI prints them. */
 export const DEMO_LOGINS: SeedDemoResult['logins'] = [
-  { email: 'owner@demo.school', position: 'CEO', name: 'Karim Mansour' },
-  { email: 'cfo@demo.school', position: 'CFO', name: 'Hisham Mansour' },
-  { email: 'director@demo.school', position: 'Executive Director', name: 'Dalia Fathy' },
-  { email: 'head@demo.school', position: 'Head of Casting', name: 'Sherif Adel' },
-  { email: 'casting@demo.school', position: 'Casting team', name: 'Tarek Samir' },
-  { email: 'editor@demo.school', position: 'Video editor', name: 'Hany Nabil' },
-  { email: 'coach@demo.school', position: 'Acting coach', name: 'Layla Haddad' },
-  { email: 'coach2@demo.school', position: 'Acting coach + Finance', name: 'Daniel Price' },
+  { username: 'owner', email: 'owner@demo.school', position: 'CEO', name: 'Karim Mansour' },
+  { username: 'cfo', email: 'cfo@demo.school', position: 'CFO', name: 'Hisham Mansour' },
+  { username: 'director', email: 'director@demo.school', position: 'Executive Director', name: 'Dalia Fathy' },
+  { username: 'head', email: 'head@demo.school', position: 'Head of Casting', name: 'Sherif Adel' },
+  { username: 'casting', email: 'casting@demo.school', position: 'Casting team', name: 'Tarek Samir' },
+  { username: 'editor', email: 'editor@demo.school', position: 'Video editor', name: 'Hany Nabil' },
+  { username: 'coach', email: 'coach@demo.school', position: 'Acting coach', name: 'Layla Haddad' },
+  { username: 'coach2', email: 'coach2@demo.school', position: 'Acting coach + Finance', name: 'Daniel Price' },
 ];
 
 export interface SeedDemoOptions {
@@ -134,8 +139,8 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
     };
   }
 
-  async function login(email: string) {
-    const { cookie } = await call(null, 'POST', '/auth/login', { email, password: PASSWORD });
+  async function login(username: string) {
+    const { cookie } = await call(null, 'POST', '/auth/login', { username, password: PASSWORD });
     return as(cookie!);
   }
 
@@ -182,6 +187,7 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
     schoolName: 'Turquoise Studio',
     schoolNameAr: 'استوديو تركواز',
     name: 'Karim Mansour',
+    username: 'owner',
     email: 'owner@demo.school',
     password: PASSWORD,
     locale: 'en',
@@ -194,17 +200,17 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
   // The built-in positions exist from the start; staff are given them by key.
   const positionIds = Object.fromEntries((await owner.get<{ items: Position[] }>('/positions')).items.map((p) => [p.key, p.id])) as Record<BuiltInPositionKey, number>;
 
-  const staffSpec: { key: string; name: string; email: string; positions: BuiltInPositionKey[]; phone: string | null; locale?: 'ar' | 'en' }[] = [
-    { key: 'cfo', name: 'Hisham Mansour', email: 'cfo@demo.school', positions: ['cfo'], phone: '+20 100 555 0100' },
-    { key: 'director', name: 'Dalia Fathy', email: 'director@demo.school', positions: ['executive_director'], phone: '+20 100 555 0101' },
-    { key: 'head', name: 'Sherif Adel', email: 'head@demo.school', positions: ['head_of_casting'], phone: '+20 100 555 0104', locale: 'ar' },
-    { key: 'casting', name: 'Tarek Samir', email: 'casting@demo.school', positions: ['casting_team'], phone: '+20 100 555 0105' },
-    { key: 'editor', name: 'Hany Nabil', email: 'editor@demo.school', positions: ['video_editor'], phone: '+20 100 555 0106' },
-    { key: 'layla', name: 'Layla Haddad', email: 'coach@demo.school', positions: ['acting_coach'], phone: '+20 100 555 0102' },
+  const staffSpec: { key: string; name: string; username: string; email: string; positions: BuiltInPositionKey[]; phone: string | null; locale?: 'ar' | 'en' }[] = [
+    { key: 'cfo', name: 'Hisham Mansour', username: 'cfo', email: 'cfo@demo.school', positions: ['cfo'], phone: '+20 100 555 0100' },
+    { key: 'director', name: 'Dalia Fathy', username: 'director', email: 'director@demo.school', positions: ['executive_director'], phone: '+20 100 555 0101' },
+    { key: 'head', name: 'Sherif Adel', username: 'head', email: 'head@demo.school', positions: ['head_of_casting'], phone: '+20 100 555 0104', locale: 'ar' },
+    { key: 'casting', name: 'Tarek Samir', username: 'casting', email: 'casting@demo.school', positions: ['casting_team'], phone: '+20 100 555 0105' },
+    { key: 'editor', name: 'Hany Nabil', username: 'editor', email: 'editor@demo.school', positions: ['video_editor'], phone: '+20 100 555 0106' },
+    { key: 'layla', name: 'Layla Haddad', username: 'coach', email: 'coach@demo.school', positions: ['acting_coach'], phone: '+20 100 555 0102' },
     // Coaches and also keeps the books (one person, two positions: their permissions add up).
-    { key: 'daniel', name: 'Daniel Price', email: 'coach2@demo.school', positions: ['acting_coach', 'finance'], phone: '+20 100 555 0103' },
+    { key: 'daniel', name: 'Daniel Price', username: 'coach2', email: 'coach2@demo.school', positions: ['acting_coach', 'finance'], phone: '+20 100 555 0103' },
     // Taught the (now archived) Shakespeare course; deactivated at the end.
-    { key: 'tom', name: 'Tom Wilkins', email: 'tom.wilkins@demo.school', positions: ['acting_coach'], phone: null },
+    { key: 'tom', name: 'Tom Wilkins', username: 'tom', email: 'tom.wilkins@demo.school', positions: ['acting_coach'], phone: null },
   ];
   const staff: Record<string, number> = {};
   for (const s of staffSpec) {
@@ -212,6 +218,10 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
     const created = await owner.post<{ id: number }>('/staff', { ...input, positionIds: positions.map((k) => positionIds[k]), password: PASSWORD });
     staff[key] = created.id;
   }
+  // A password a manager sets is temporary: the API would have each of these people choose their own
+  // at the first sign-in, and open nothing until they did. A demo is one shared password, so the mark
+  // comes off (the one thing here the API has no way to say).
+  db.update(users).set({ mustChangePassword: false }).run();
 
   // ── 2. Students ─────────────────────────────────────────────────────────────
 
@@ -293,8 +303,8 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
 
   // ── 3. Classes, enrolments, attendance ──────────────────────────────────────
 
-  const layla = await login('coach@demo.school');
-  const daniel = await login('coach2@demo.school');
+  const layla = await login('coach');
+  const daniel = await login('coach2');
   const teacherClient: Record<number, ReturnType<typeof as>> = { [staff.layla]: layla, [staff.daniel]: daniel };
 
   interface CourseSpec {
@@ -507,7 +517,7 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
   // ── 4. Talent roster ────────────────────────────────────────────────────────
 
   // Heads of casting build the roster and send talent to clients.
-  const agent = await login('head@demo.school');
+  const agent = await login('head');
 
   interface TalentSpec {
     key: string;
@@ -812,7 +822,7 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
   // ── 6. Admissions ───────────────────────────────────────────────────────────
 
   // The director runs admissions: she takes the enquiries, interviews and enrols.
-  const director = await login('director@demo.school');
+  const director = await login('director');
 
   type LeadStep =
     | { do: 'contact'; daysAgo: number; type: LeadContactType; body?: string; followUp?: number | null; status?: LeadStatus; lostReason?: LeadLostReason }
@@ -1159,7 +1169,7 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
     }
 
     // Chat: three conversations (one in Arabic, one with a photo, one with a document).
-    const tarek = await login('casting@demo.school');
+    const tarek = await login('casting');
     const sent: { id: number; minutesAgo: number }[] = [];
     async function say(client: ReturnType<typeof as>, conversationId: number, minutesAgo: number, body: string | null, fileIds?: string[]) {
       const m = await client.post<{ id: number }>(`/chat/conversations/${conversationId}/messages`, { body, ...(fileIds ? { fileIds } : {}) });

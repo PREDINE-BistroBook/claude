@@ -33,7 +33,10 @@ describe('npm run seed', () => {
     const first = seed();
     expect(first.stderr).toBe('');
     expect(first.status).toBe(0);
-    expect(first.stdout).toContain('owner@demo.school');
+    // The sign-ins it prints are usernames now (each account's email address still works).
+    expect(first.stdout).toMatch(/^\s+owner\s+CEO\s/m);
+    expect(first.stdout).toMatch(/^\s+coach2\s+Acting coach \+ Finance\s/m);
+    expect(first.stdout).not.toContain('owner@demo.school');
 
     const count = (sql: string) => {
       const db = new Database(path.join(dataDir, 'app.db'), { readonly: true });
@@ -44,6 +47,10 @@ describe('npm run seed', () => {
       }
     };
     expect(count('select count(*) as n from users')).toBe(9);
+    // Every demo account has its username, and none is asked to choose a password (one shared demo password).
+    expect(count(`select count(*) as n from users where username in ('owner', 'cfo', 'director', 'head', 'casting', 'editor', 'coach', 'coach2', 'tom')`)).toBe(9);
+    expect(count(`select count(*) as n from users u where u.username = 'coach2' and u.email = 'coach2@demo.school'`)).toBe(1);
+    expect(count('select count(*) as n from users where must_change_password = 1')).toBe(0);
     expect(count('select count(*) as n from positions')).toBe(8);
     // Everyone holds a position; coach2 holds two (acting coach + finance).
     expect(count('select count(*) as n from users where id not in (select user_id from user_positions)')).toBe(0);
@@ -107,9 +114,17 @@ describe('npm run seed', () => {
     expect(again.status).toBe(1);
     expect(again.stderr).toContain('--reset');
     expect(count('select count(*) as n from users')).toBe(9);
+    // Every demo account has its username, and none is asked to choose a password (one shared demo password).
+    expect(count(`select count(*) as n from users where username in ('owner', 'cfo', 'director', 'head', 'casting', 'editor', 'coach', 'coach2', 'tom')`)).toBe(9);
+    expect(count(`select count(*) as n from users u where u.username = 'coach2' and u.email = 'coach2@demo.school'`)).toBe(1);
+    expect(count('select count(*) as n from users where must_change_password = 1')).toBe(0);
 
     const reset = seed('--reset');
     expect(reset.status).toBe(0);
     expect(count('select count(*) as n from users')).toBe(9);
+    // Every demo account has its username, and none is asked to choose a password (one shared demo password).
+    expect(count(`select count(*) as n from users where username in ('owner', 'cfo', 'director', 'head', 'casting', 'editor', 'coach', 'coach2', 'tom')`)).toBe(9);
+    expect(count(`select count(*) as n from users u where u.username = 'coach2' and u.email = 'coach2@demo.school'`)).toBe(1);
+    expect(count('select count(*) as n from users where must_change_password = 1')).toBe(0);
   }, 90_000);
 });

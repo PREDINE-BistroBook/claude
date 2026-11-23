@@ -21,7 +21,7 @@ import { body } from '../lib/validate';
  *   POST /api/admin/seed-demo-website           the website demo, only while the website is empty
  *                                               (no 'site' settings key and no coaches; else 409)
  *   POST /api/admin/reset                      wipes everything; only with ALLOW_DEMO_RESET=true
- *   POST /api/admin/grant-owner  { email }     same as `npm run owner -- email`
+ *   POST /api/admin/grant-owner  { email } or { username }   same as `npm run owner -- <username or email>`
  *
  * Every call needs `Authorization: Bearer <ADMIN_TOKEN>` (compared in constant
  * time; the token is never logged). Without ADMIN_TOKEN configured the routes
@@ -78,12 +78,15 @@ export function adminRoutes(deps: { request: (path: string, init: RequestInit) =
 
     if (action === 'grant-owner') {
       const input = await body(c, grantOwnerInput);
-      const result = grantOwner(db, input.email);
-      if (!result.found) throw notFound('No staff account uses that email');
+      const name = input.username ?? input.email;
+      if (!name) throw new ApiError(400, 'validation', 'Send the account’s username or email', [{ path: ['username'], code: 'custom', message: 'errors.required' }]);
+      const result = grantOwner(db, name);
+      if (!result.found) throw notFound('No team account has that username or email');
       if (!result.isOwner) throw new ApiError(409, 'not_owner', 'Could not make this account an owner; check the positions');
       console.log(`Admin: owner position given to account ${result.user.id}.`);
       return c.json<GrantOwnerResponse>({
         ok: true,
+        username: result.user.username,
         email: result.user.email,
         name: result.user.name,
         position: result.position.name,

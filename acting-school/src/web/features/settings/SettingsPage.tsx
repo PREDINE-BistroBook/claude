@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LOCALES, type Locale } from '@shared/enums';
 import { COUNTRY_CODE_RE, internationalPhone } from '@shared/phone';
+import { EMAIL_DOMAIN_RE } from '@shared/usernames';
 import { settingsInput, type AppSettings, type SettingsInput } from '@shared/schemas/settings';
 import {
   Button,
@@ -27,6 +28,8 @@ import { CriteriaEditor, type CriterionDraft } from './CriteriaEditor';
 import { fromDrafts, toDrafts } from './utils';
 
 const SETTINGS_KEY = ['settings'] as const;
+/** The email domain as it is saved: no "@" in front, lower-case (the same clean-up as settingsInput). */
+const cleanDomain = (v: string) => v.trim().replace(/^@/, '').toLowerCase();
 /** Offered week starts, in calendar order for the region: Saturday, Sunday, Monday. */
 const WEEK_STARTS = [6, 0, 1] as const;
 
@@ -59,6 +62,7 @@ function SettingsForm({ settings }: { settings: AppSettings }) {
     defaultLocale: settings.defaultLocale as Locale,
     weekStartsOn: String(settings.weekStartsOn),
     defaultCountryCode: settings.defaultCountryCode,
+    emailDomain: settings.emailDomain,
   });
   // Criteria are a list, edited beside the plain fields; errors come back as 'interviewCriteria.<i>.<field>'.
   const [criteria, setCriteria] = useState<CriterionDraft[]>(() => toDrafts(settings.interviewCriteria));
@@ -71,6 +75,7 @@ function SettingsForm({ settings }: { settings: AppSettings }) {
       setCriteria(toDrafts(saved.interviewCriteria));
       form.set('defaultCountryCode', saved.defaultCountryCode);
       form.set('schoolNameAr', saved.schoolNameAr ?? '');
+      form.set('emailDomain', saved.emailDomain);
       toast.success(t('saved'));
       // The school name (and its Arabic name) in the shell comes from /auth/me; the schedule reads the week start from ['settings'].
       await Promise.all([qc.invalidateQueries({ queryKey: SETTINGS_KEY }), qc.invalidateQueries({ queryKey: ME_KEY })]);
@@ -86,6 +91,7 @@ function SettingsForm({ settings }: { settings: AppSettings }) {
     candidate.defaultLocale !== settings.defaultLocale ||
     candidate.weekStartsOn !== settings.weekStartsOn ||
     candidate.defaultCountryCode.replace(/[\s+]/g, '') !== settings.defaultCountryCode ||
+    cleanDomain(candidate.emailDomain) !== settings.emailDomain ||
     JSON.stringify(interviewCriteria) !== JSON.stringify(settings.interviewCriteria);
   const code = candidate.defaultCountryCode.replace(/[\s+]/g, '');
   const example = COUNTRY_CODE_RE.test(code) ? internationalPhone('01012345678', code) : null;
@@ -167,6 +173,24 @@ function SettingsForm({ settings }: { settings: AppSettings }) {
           {...form.bind('defaultCountryCode')}
           error={form.error('defaultCountryCode')}
           hint={example ? t('whatsapp.example', { local: '01012345678', link: `wa.me/${example}` }) : t('whatsapp.countryCodeHint')}
+        />
+      </FormSection>
+
+      <FormSection title={t('email.title')} description={t('email.description')}>
+        <TextField
+          label={t('email.domain')}
+          type="text"
+          inputMode="url"
+          autoComplete="off"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          dir="ltr"
+          required
+          className="sm:max-w-sm"
+          {...form.bind('emailDomain')}
+          error={form.error('emailDomain')}
+          hint={t('email.domainHint', { example: `name@${EMAIL_DOMAIN_RE.test(cleanDomain(candidate.emailDomain)) ? cleanDomain(candidate.emailDomain) : settings.emailDomain}` })}
         />
       </FormSection>
 

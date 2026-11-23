@@ -2,13 +2,14 @@ import { and, eq, gt, isNull, ne, or } from 'drizzle-orm';
 import type { Context, MiddlewareHandler } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { Permission } from '../../shared/permissions';
-import type { SessionUser } from '../../shared/schemas/auth';
+import { AUTH_ERROR_CODES, type SessionUser } from '../../shared/schemas/auth';
 import type { DB } from '../db/database';
 import { authSessions, positions, pushSubscriptions, userPositions, users } from '../db/schema';
 import type { AppEnv } from '../env';
 import { accessFrom, hasPermission, positionOrder } from '../lib/access';
 import { ApiError } from '../lib/errors';
 import { newToken, sha256 } from '../lib/password';
+import { usernameOf } from '../lib/usernames';
 
 export const SESSION_COOKIE = 'as_session';
 const DAY = 24 * 60 * 60 * 1000;
@@ -42,12 +43,14 @@ export const loadSession: MiddlewareHandler<AppEnv> = async (c, next) => {
       .select({
         expiresAt: authSessions.expiresAt,
         id: users.id,
+        username: users.username,
         email: users.email,
         name: users.name,
         phone: users.phone,
         locale: users.locale,
         photoFileId: users.photoFileId,
         active: users.active,
+        mustChangePassword: users.mustChangePassword,
         positionId: positions.id,
         positionKey: positions.key,
         positionName: positions.name,
@@ -71,12 +74,14 @@ export const loadSession: MiddlewareHandler<AppEnv> = async (c, next) => {
       );
       const user: SessionUser = {
         id: row.id,
+        username: usernameOf(row),
         email: row.email,
         name: row.name,
         phone: row.phone,
         locale: row.locale,
         photoFileId: row.photoFileId,
         ...accessFrom(held),
+        mustChangePassword: row.mustChangePassword,
       };
       c.set('user', user);
       c.set('sessionId', id);
@@ -107,6 +112,24 @@ export const requireAjaxHeader: MiddlewareHandler<AppEnv> = async (c, next) => {
 /** 401 unless signed in. Use on every non-public router: `router.use(requireAuth)`. */
 export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
   if (!c.get('user')) throw new ApiError(401, 'unauthorized', 'Please sign in');
+  await next();
+};
+
+/**
+ * The first-password gate. Someone whose password was set by somebody else (a
+ * manager adding them or resetting it, the operator's tool:
+ * users.must_change_password) has a session — so GET /api/auth/me can say
+ * `mustChangePassword: true` and the app shows "Choose your own password" —
+ * but that session opens nothing else: every route mounted after this
+ * middleware answers 403 `password_change_required` until they have chosen
+ * (POST /api/auth/choose-password). app.ts mounts it right after /api/auth, so
+ * the auth routes are the only ones in front of it; signed-out requests pass
+ * through to the usual 401.
+ */
+export const requireOwnPassword: MiddlewareHandler<AppEnv> = async (c, next) => {
+  if (c.get('user')?.mustChangePassword) {
+    throw new ApiError(403, AUTH_ERROR_CODES.passwordChangeRequired, 'Choose your own password first');
+  }
   await next();
 };
 

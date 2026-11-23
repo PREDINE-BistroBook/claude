@@ -1,7 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Navigate, useSearchParams } from 'react-router';
-import { loginInput } from '@shared/schemas/auth';
+import { loginInput, type LoginInput } from '@shared/schemas/auth';
 import { Button } from '../components/ui/Button';
 import { Field, TextField } from '../components/ui/Field';
 import { FormError, SplashScreen } from '../components/ui/States';
@@ -22,12 +22,13 @@ export default function LoginPage() {
   const { t } = useTranslation();
   const { user, can, loading, needsSetup, refresh } = useAuth();
   const [params] = useSearchParams();
-  const form = useForm({ email: '', password: '' });
+  // One field for the username; an email address typed there signs in too (the server tells them apart).
+  const form = useForm({ username: '', password: '' });
   const school = useSchoolName();
   usePageTitle(t('auth.signIn'));
 
   const login = useMutation({
-    mutationFn: (data: { email: string; password: string }) => api.post('/auth/login', data),
+    mutationFn: (data: LoginInput) => api.post('/auth/login', data),
     // Once /auth/me is re-read this page renders with the person and sends them on (below) —
     // with *their* permissions, which a redirect from here (still the signed-out render) wouldn't have.
     onSuccess: refresh,
@@ -52,7 +53,20 @@ export default function LoginPage() {
         }}
       >
         <FormError messageKey={form.formError} />
-        <TextField label={t('fields.email')} type="email" autoComplete="username" inputMode="email" dir="ltr" autoFocus {...form.bind('email')} error={form.error('email')} />
+        <TextField
+          label={t('fields.username')}
+          type="text"
+          autoComplete="username"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          inputMode="email"
+          dir="ltr"
+          autoFocus
+          {...form.bind('username')}
+          error={form.error('username')}
+          hint={t('auth.usernameHint')}
+        />
         <Field label={t('fields.password')} htmlFor="f-password" error={form.error('password')}>
           <PasswordInput autoComplete="current-password" {...form.bind('password')} />
         </Field>

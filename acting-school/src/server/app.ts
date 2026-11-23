@@ -5,7 +5,7 @@ import type { DB } from './db/database';
 import type { AppEnv } from './env';
 import { ApiError, sqliteConstraint } from './lib/errors';
 import type { FileStore } from './lib/fileStore';
-import { loadSession, requireAjaxHeader } from './middleware/auth';
+import { loadSession, requireAjaxHeader, requireOwnPassword } from './middleware/auth';
 import { limitBody, MAX_JSON_BODY_BYTES } from './middleware/bodyLimit';
 import { adminRoutes } from './routes/admin';
 import authRoutes from './routes/auth';
@@ -94,6 +94,10 @@ export function createApp(deps: AppDeps) {
 
   app.get('/api/health', (c) => c.json({ ok: true }));
   app.route('/api/auth', authRoutes);
+  // The first-password gate: someone still on a password that somebody else set gets 403
+  // `password_change_required` from every route below this line until they choose their own.
+  // Only /api/auth (above) is in front of it — a new router goes below, never above.
+  app.use('/api/*', requireOwnPassword);
   app.route('/api/files', fileRoutes);
   app.route('/api/staff', staffRoutes);
   app.route('/api/positions', positionRoutes);

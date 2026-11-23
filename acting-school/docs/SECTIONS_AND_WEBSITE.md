@@ -787,6 +787,16 @@ They also said to keep "the website information we pulled from Instagram".
 - **Changing your own username:** anyone can, in My profile, under the same rules and uniqueness check. If their email was the automatic one, it follows the username. Managers can change a member's username on the member page.
 - **Where the username shows:** on the Team list for people with `staff.manage`, on the member page, and on My profile.
 
+**Built 2026-11-23.** Notes for whoever builds on it:
+- The rules are `src/shared/usernames.ts`; the server side is `src/server/lib/usernames.ts`. An account gets or changes its username and email only through `newAccountNames(db, { name, username?, email? }, emailDomain)` and `usernameChange(db, account, next, emailDomain)` — the operator tool (I3) should call `newAccountNames` for each account it creates (inside its transaction) rather than write its own uniqueness check.
+- The sign-in request's field is `username` (a username **or** an email address); `email` is still read as its old name. Look an account up from a typed name with `findSignInAccount`.
+- The brakes count under the account's email address whichever name was typed (`signInBrakeName`); a name that is nobody's counts in its email form, so "ghost" and "ghost@<emailDomain>" share a brake exactly as a real account's two names do.
+- Migration `0007_usernames` adds `users.username` (nullable, unique index) and `users.must_change_password`; `initDb` → `backfillUsernames` fills usernames for older accounts (`owner@…` → `owner`, a clash numbered, nothing usable → `user<id>`), in id order.
+- Setup takes an optional `username` (else from the email); `POST /api/staff` takes `username` (required by the form; an older copy of the app that sends only an email still works: the username is made from the address). `GET /api/staff/username-check?username=&name=&exceptId=` is the live check and the suggestion.
+- A "taken" answer never says whose username it is (409 `username_taken`, the same body for an owner's as for anyone's).
+- `POST /api/admin/grant-owner` and `npm run owner` name the account by username or email.
+- The demo: usernames `owner`, `cfo`, `director`, `head`, `casting`, `editor`, `coach`, `coach2` (and `tom`, deactivated); their `…@demo.school` addresses still sign in.
+
 ### I2. A first password is temporary
 - **`users.must_change_password`** (boolean, default false).
 - **When it is set:** whenever someone else sets a person's password. That is: a manager adding a team member, a manager resetting a password, and the operator's clear-and-recreate tool.
@@ -796,6 +806,13 @@ They also said to keep "the website information we pulled from Instagram".
 - **Rules for the new password:** it must meet the normal password policy and differ from the temporary one.
 - **After choosing:** the flag clears and their other sessions end.
 - **Why:** this makes simple first passwords ("salma123") safe to hand out. They stop working as soon as the person signs in once.
+
+**Built 2026-11-23.** Notes for whoever builds on it:
+- The gate is `requireOwnPassword` (`middleware/auth.ts`), mounted in `app.ts` right after `/api/auth`: every router registered below it answers 403 `password_change_required` to such a session. `/api/auth/*` still answers (so the language can be switched and the person can sign out); `/api/admin/*` is bearer-only and not affected.
+- `POST /api/auth/choose-password { newPassword }` (only while the flag is set; no current password asked: two fields on the screen) → `{ user }`. 400 `errors.passwordTooShort` / `errors.passwordSameAsTemporary` on `newPassword`; 409 `password_change_not_required` once chosen. `POST /api/auth/password` (current + new) clears the flag too.
+- A manager resetting **their own** password through `PATCH /api/staff/:id` does not set the flag (it is their own choice); the first owner (setup) and the demo accounts never have it.
+- **For the operator tool (I3):** insert each account with `mustChangePassword: true`; the password may be shorter than the policy (`hashPassword` takes any length and sign-in accepts any length), the person's own choice then has to meet it.
+- The web side: `RequireAuth` → `authGate` → `pages/ChoosePasswordPage.tsx` (no route of its own).
 
 ### I3. Clear the demo and create the real team (operator tool)
 - **`POST /api/admin/clear-demo`**, bearer `ADMIN_TOKEN`, with a **dry run first** (the default): it changes nothing and returns the exact plan and a `confirm` code. The real run must send that code, and is refused if the data changed in between.

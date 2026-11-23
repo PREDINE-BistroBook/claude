@@ -66,6 +66,10 @@ export function errorMessageKey(err: unknown): string {
         return 'common:errors.requestTooLarge';
       case 'setup_locked':
         return 'common:errors.setupLocked';
+      case 'password_change_required':
+        return 'common:errors.passwordChangeRequired';
+      case 'username_taken':
+        return 'common:errors.usernameTaken';
       case 'validation':
         return 'common:errors.invalid';
     }

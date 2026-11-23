@@ -43,10 +43,17 @@ const en = {
     countryCodeHint: 'Digits only, without “+” or leading zeros — e.g. 20 for Egypt.',
     example: '{{local}} opens {{link}}',
   },
+  email: {
+    title: 'Team email addresses',
+    description: 'Every team member has an address made from their username. People can also sign in with it.',
+    domain: 'Email domain',
+    domainHint: 'A new team member gets an address like {{example}}. Addresses that accounts already have stay as they are.',
+  },
   errors: {
     criterionKey: 'This criterion’s key isn’t valid',
     criterionKeyTaken: 'Two criteria have the same key',
     countryCode: 'Enter 1 to 4 digits, e.g. 20',
+    emailDomain: 'Enter a domain like turquoisestudio.app, without “@”',
   },
   saved: 'Settings saved',
 };
@@ -93,10 +100,17 @@ const ar: TranslationOf<typeof en> = {
     countryCodeHint: 'أرقام فقط، دون «+» أو أصفار في البداية، مثل 20 لمصر.',
     example: 'الرقم {{local}} يفتح {{link}}',
   },
+  email: {
+    title: 'عناوين بريد الفريق',
+    description: 'لكل عضو في الفريق عنوان بريد يتكوّن من اسم المستخدم، ويمكنه تسجيل الدخول به أيضًا.',
+    domain: 'نطاق البريد',
+    domainHint: 'يحصل عضو الفريق الجديد على عنوان مثل \u2066{{example}}\u2069. العناوين الحالية للحسابات تبقى كما هي.',
+  },
   errors: {
     criterionKey: 'مفتاح هذا المعيار غير صالح',
     criterionKeyTaken: 'لمعيارين المفتاح نفسه',
     countryCode: 'أدخل من رقم إلى 4 أرقام، مثل 20',
+    emailDomain: 'أدخل نطاقًا مثل \u2066turquoisestudio.app\u2069 دون «@»',
   },
   saved: 'تم حفظ الإعدادات',
 };

@@ -1,17 +1,27 @@
-import { count, eq } from 'drizzle-orm';
+import { and, count, eq } from 'drizzle-orm';
 import { Hono, type Context } from 'hono';
 import { FIRST_OWNER_POSITION } from '../../shared/permissions';
-import { changePasswordInput, loginInput, profileInput, setupInput, type MeResponse } from '../../shared/schemas/auth';
+import {
+  AUTH_ERROR_CODES,
+  changePasswordInput,
+  choosePasswordInput,
+  loginInput,
+  profileInput,
+  setupInput,
+  signInNameOf,
+  type MeResponse,
+} from '../../shared/schemas/auth';
 import { FRESH_UPLOAD_MS } from '../../shared/schemas/chat';
 import { photoInput, TEAM_ERROR_KEYS } from '../../shared/schemas/team';
 import { positions, userPositions, users } from '../db/schema';
 import type { AppEnv } from '../env';
 import { ensureBuiltInPositions, toSessionUser } from '../lib/access';
-import { ApiError } from '../lib/errors';
+import { ApiError, fieldError } from '../lib/errors';
 import { claimUploads, releaseFile } from '../lib/fileRefs';
 import { getDummyHash, hashPassword, sameSecret, verifyPassword } from '../lib/password';
 import { getSettings, saveSettings } from '../lib/settings';
 import { clearSignInFailures, recordSignInFailure, signInBlocked } from '../lib/signInBrake';
+import { emailDomainOf, findSignInAccount, newAccountNames, signInBrakeName, usernameChange } from '../lib/usernames';
 import { body } from '../lib/validate';
 import { currentUser, endSession, requireAuth, signOutUser, startSession } from '../middleware/auth';
 
@@ -35,21 +45,33 @@ router.get('/me', (c) => {
   return c.json(res);
 });
 
+/**
+ * Sign in with a username or an email address (one field: loginInput). The
+ * same steps whether or not the name is anyone's — the lookup, the brakes, one
+ * password hash (a dummy for nobody), one answer — so neither the response nor
+ * its timing says which names exist.
+ */
 router.post('/login', async (c) => {
   const input = await body(c, loginInput);
+  const typed = signInNameOf(input);
+  if (typed === null) throw fieldError(['username'], 'errors.required');
   const db = c.get('db');
   const address = c.get('clientIp');
-  // Before hashing: a tripped brake costs one query, a hash ~90 ms (lib/signInBrake.ts).
-  if (signInBlocked(db, input.email, address)) throw new ApiError(429, 'too_many_attempts', 'Too many attempts. Try again in a few minutes.');
-  const user = db.select().from(users).where(eq(users.email, input.email)).get();
+  // Whose name is it? One indexed read. The brakes are per account: an account's username and
+  // its email address count together (signInBrakeName).
+  const user = findSignInAccount(db, typed);
+  const account = signInBrakeName(user, typed, emailDomainOf(db));
+  // Before hashing: a tripped brake costs a few small queries, a hash ~90 ms (lib/signInBrake.ts).
+  if (signInBlocked(db, account, address)) throw new ApiError(429, 'too_many_attempts', 'Too many attempts. Try again in a few minutes.');
   const ok = await verifyPassword(input.password, user?.passwordHash ?? (await getDummyHash()));
   if (!user || !ok || !user.active) {
-    recordSignInFailure(db, input.email, address);
-    throw new ApiError(401, 'invalid_credentials', 'Email or password is incorrect');
+    recordSignInFailure(db, account, address);
+    throw new ApiError(401, 'invalid_credentials', 'Username or password is incorrect');
   }
-  clearSignInFailures(db, input.email, address);
+  clearSignInFailures(db, account, address);
   db.update(users).set({ lastLoginAt: Date.now() }).where(eq(users.id, user.id)).run();
   startSession(c, user.id);
+  // With a temporary password the answer says so (user.mustChangePassword): the session opens only /api/auth.
   return c.json({ user: toSessionUser(db, user) });
 });
 
@@ -87,9 +109,11 @@ router.post('/setup', async (c) => {
     // Re-check inside the transaction: two setup requests must not both win.
     const n = tx.select({ n: count() }).from(users).get()?.n ?? 0;
     if (n > 0) return null;
+    // The first account: the username typed, or one made from the email address. They chose this password themself.
+    const names = newAccountNames(tx, { name: input.name, username: input.username, email: input.email }, emailDomainOf(tx));
     const user = tx
       .insert(users)
-      .values({ email: input.email, name: input.name, passwordHash, locale: input.locale ?? 'en', lastLoginAt: Date.now() })
+      .values({ ...names, name: input.name, passwordHash, locale: input.locale ?? 'en', lastLoginAt: Date.now() })
       .returning()
       .get();
     ensureBuiltInPositions(tx);
@@ -107,12 +131,21 @@ router.post('/setup', async (c) => {
   return c.json({ user: toSessionUser(db, created) }, 201);
 });
 
+/**
+ * Your own name, phone, language — and your own username: the same rules and
+ * uniqueness check as when a manager sets it (409 `username_taken`, never
+ * saying whose it is), and an email address that was the automatic one follows it.
+ */
 router.patch('/profile', requireAuth, async (c) => {
-  const input = await body(c, profileInput);
+  const { username, ...details } = await body(c, profileInput);
   const me = currentUser(c);
   const db = c.get('db');
-  const updated = db.update(users).set(input).where(eq(users.id, me.id)).returning().get();
-  return c.json({ user: toSessionUser(db, updated!) });
+  const updated = db.transaction((tx) => {
+    const row = tx.select().from(users).where(eq(users.id, me.id)).get()!;
+    const patch = { ...details, ...(username === undefined ? {} : usernameChange(tx, row, username, emailDomainOf(tx))) };
+    return Object.keys(patch).length ? tx.update(users).set(patch).where(eq(users.id, me.id)).returning().get()! : row;
+  });
+  return c.json({ user: toSessionUser(db, updated) });
 });
 
 /**
@@ -150,14 +183,53 @@ router.post('/password', requireAuth, async (c) => {
       { path: ['currentPassword'], code: 'custom', message: 'errors.wrongPassword' },
     ]);
   }
+  // Someone still on a temporary password may change it this way too — to their own, not to the same one again.
+  if (row.mustChangePassword && input.newPassword === input.currentPassword) throw sameAsTemporaryError();
   const passwordHash = await hashPassword(input.newPassword);
   const sid = c.get('sessionId');
   db.transaction((tx) => {
-    tx.update(users).set({ passwordHash }).where(eq(users.id, me.id)).run();
+    tx.update(users).set({ passwordHash, mustChangePassword: false }).where(eq(users.id, me.id)).run();
     // Sign out every other device (and stop their notifications).
     if (sid) signOutUser(tx, me.id, sid);
   });
   return c.json({ ok: true });
+});
+
+const sameAsTemporaryError = () => fieldError(['newPassword'], 'errors.passwordSameAsTemporary');
+
+/**
+ * "Choose your own password": the one thing a session on a temporary password
+ * can do (requireOwnPassword, middleware/auth.ts). No current password is asked
+ * for — they signed in with it a moment ago, and the screen is two fields for
+ * people who are not at home with computers. The new one meets the normal
+ * policy and must not be the temporary one again. Then the flag is cleared and
+ * the person's other sessions end. Answers { user } with mustChangePassword false.
+ */
+router.post('/choose-password', requireAuth, async (c) => {
+  const input = await body(c, choosePasswordInput);
+  const me = currentUser(c);
+  const db = c.get('db');
+  const row = db.select().from(users).where(eq(users.id, me.id)).get();
+  if (!row?.mustChangePassword) {
+    throw new ApiError(409, AUTH_ERROR_CODES.passwordChangeNotRequired, 'You already chose your own password. Change it in My profile.');
+  }
+  if (await verifyPassword(input.newPassword, row.passwordHash)) throw sameAsTemporaryError();
+  const passwordHash = await hashPassword(input.newPassword);
+  const sid = c.get('sessionId');
+  const updated = db.transaction((tx) => {
+    // Only if the temporary password is still the one this session signed in against (a manager may have reset it meanwhile).
+    const user = tx
+      .update(users)
+      .set({ passwordHash, mustChangePassword: false })
+      .where(and(eq(users.id, me.id), eq(users.passwordHash, row.passwordHash), eq(users.mustChangePassword, true)))
+      .returning()
+      .get();
+    // Sign out every other device (and stop their notifications).
+    if (user && sid) signOutUser(tx, me.id, sid);
+    return user;
+  });
+  if (!updated) throw new ApiError(409, 'conflict', 'Your password was changed meanwhile. Sign in again.');
+  return c.json({ user: toSessionUser(db, updated) });
 });
 
 export default router;
