@@ -1,16 +1,12 @@
 import clsx from 'clsx';
 import { useId } from 'react';
+import { BRAND_CUT_WIDTH, BRAND_CUTS_PATH as CUTS, BRAND_MARK_PATH as MARK } from '@shared/brand';
 
 /*
- * Turquoise Studio's mark: the slanted turquoise "T" on a black disc, drawn on a
- * 100×100 grid. Interim drawing traced from the studio's Instagram avatar until
- * they send the original logo file. public/icon.svg (and the PNG icons rendered
- * from it by scripts/render-icons.mjs) use the same paths.
+ * Turquoise Studio's mark: the slanted turquoise "T" on a black disc. The path
+ * data lives in src/shared/brand.ts, shared with the public website's header
+ * and favicon; here the colours come from the theme's --brand-* tokens.
  */
-/** The "T": the slanted top bar and the stem that slants down to a point. */
-const MARK = 'M11.39 48.48L46.84 27.59L76.58 27.59L41.77 48.48ZM41.14 42.78L54.68 34.56L70.89 58.61L70.89 87.09Z';
-/** The two thin cuts that split the bar and the stem into ribbons. */
-const CUTS = 'M25.68 49.26L62.42 26.81M51.91 42.39L72.15 72.51';
 
 /** The studio logo as a round badge; size it with `className` (e.g. "size-9"). Decorative: the name is always shown next to it. */
 export function BrandMark({ className }: { className?: string }) {
@@ -29,7 +25,7 @@ export function BrandMark({ className }: { className?: string }) {
         </radialGradient>
         <mask id={`${id}-cut`} maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
           <rect width="100" height="100" fill="white" />
-          <path d={CUTS} stroke="black" strokeWidth="1.4" />
+          <path d={CUTS} stroke="black" strokeWidth={BRAND_CUT_WIDTH} />
         </mask>
       </defs>
       <circle cx="50" cy="50" r="50" className="fill-brand-tile" />

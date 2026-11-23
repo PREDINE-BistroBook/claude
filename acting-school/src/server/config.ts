@@ -25,6 +25,15 @@ export interface AppConfig {
    * Without an ADMIN_TOKEN, setup is then impossible until one is set.
    */
   requireSetupCode: boolean;
+  /**
+   * Hosts that serve the public website at their root (PUBLIC_SITE_HOSTS,
+   * comma-separated, e.g. "turquoisestudio.app,www.turquoisestudio.app"):
+   * lower case, no port. On those hosts the Worker (and the Node server) maps
+   * /x to the app's /site/x and nothing of the staff app answers; the site's
+   * links are bare paths there (src/server/site/paths.ts). Empty: the site is
+   * only at /site on every host.
+   */
+  publicSiteHosts: string[];
 }
 
 /** Shortest ADMIN_TOKEN accepted; a shorter one is ignored (admin routes stay off) so a weak token can't be guessed. */
@@ -69,7 +78,18 @@ export function configFromVars(vars: ConfigVars, defaults: RuntimeDefaults): App
     allowDemoReset: vars.ALLOW_DEMO_RESET === 'true',
     // Can be switched on, never off where the runtime requires it (Cloudflare).
     requireSetupCode: defaults.requireSetupCode || vars.REQUIRE_SETUP_CODE === 'true',
+    publicSiteHosts: parsePublicSiteHosts(vars.PUBLIC_SITE_HOSTS),
   };
+}
+
+/** "turquoisestudio.app, WWW.turquoisestudio.app:443" → ["turquoisestudio.app", "www.turquoisestudio.app"]: lower case, no port, no blanks or repeats. */
+export function parsePublicSiteHosts(value: string | undefined): string[] {
+  const out: string[] = [];
+  for (const part of (value ?? '').split(',')) {
+    const host = part.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/[/:].*$/, '').replace(/\.$/, '');
+    if (host && /^[a-z0-9.-]+$/.test(host) && !out.includes(host)) out.push(host);
+  }
+  return out;
 }
 
 /** A complete config for tests and scripts: development defaults plus `overrides`. */
@@ -82,6 +102,7 @@ export function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     adminToken: null,
     allowDemoReset: false,
     requireSetupCode: false,
+    publicSiteHosts: [],
     ...overrides,
   };
 }
