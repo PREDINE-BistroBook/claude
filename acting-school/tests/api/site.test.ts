@@ -392,6 +392,13 @@ describe('/api/site/summary', () => {
         en: { home: 'http://localhost/site/en', workshops: 'http://localhost/site/en/workshops', castingCall: 'http://localhost/site/en/casting-call', links: 'http://localhost/site/en/links' },
         ar: { home: 'http://localhost/site/ar', workshops: 'http://localhost/site/ar/workshops', castingCall: 'http://localhost/site/ar/casting-call', links: 'http://localhost/site/ar/links' },
       },
+      // Not public until someone switches it on; without a domain of its own the previews are the same addresses.
+      published: false,
+      publicHost: null,
+      previewUrls: {
+        en: { home: 'http://localhost/site/en', workshops: 'http://localhost/site/en/workshops', castingCall: 'http://localhost/site/en/casting-call', links: 'http://localhost/site/en/links' },
+        ar: { home: 'http://localhost/site/ar', workshops: 'http://localhost/site/ar/workshops', castingCall: 'http://localhost/site/ar/casting-call', links: 'http://localhost/site/ar/links' },
+      },
     });
     const viaHost = await t.app.request('https://studio.example/api/site/summary', { headers: { cookie: director.cookie!, 'x-requested-with': 'fetch' } });
     expect(((await viaHost.json()) as SiteSummary).urls.ar.links).toBe('https://studio.example/site/ar/links');
@@ -415,6 +422,96 @@ describe('/api/site/summary with the studio’s own domain (PUBLIC_SITE_HOSTS)',
     });
     // The staff API itself still doesn't answer on the public host.
     expect(siteUrls('http://127.0.0.1:8790', ['turquoisestudio.app']).ar.links).toBe('https://turquoisestudio.app/ar/links');
+  });
+
+  it('names the public host and gives the previews on the host the staff app is used on', async () => {
+    const t = await makeTestContext({ config: { publicSiteHosts: ['turquoisestudio.app', 'www.turquoisestudio.app'] } });
+    const director = await t.as('executive_director');
+    const res = await t.app.request('https://team.turquoisestudio.app/api/site/summary', { headers: { cookie: director.cookie!, 'x-requested-with': 'fetch' } });
+    const summary = (await res.json()) as SiteSummary;
+    expect(summary.publicHost).toBe('turquoisestudio.app');
+    expect(summary.published).toBe(false);
+    expect(summary.previewUrls.en).toEqual({
+      home: 'https://team.turquoisestudio.app/site/en',
+      workshops: 'https://team.turquoisestudio.app/site/en/workshops',
+      castingCall: 'https://team.turquoisestudio.app/site/en/casting-call',
+      links: 'https://team.turquoisestudio.app/site/en/links',
+    });
+    expect(summary.previewUrls.ar.links).toBe('https://team.turquoisestudio.app/site/ar/links');
+  });
+});
+
+describe('the publish switch: "Website is public" (content.published)', () => {
+  it('is off by default, part of GET/PUT /api/site/content, and reported by the summary', async () => {
+    const t = await makeTestContext();
+    const director = await t.as('executive_director');
+    expect((await director.get<SiteContent>('/api/site/content')).body.published).toBe(false);
+    expect((await director.get<SiteSummary>('/api/site/summary')).body.published).toBe(false);
+    expect(DEFAULT_SITE_CONTENT.published).toBe(false);
+
+    const on = await director.put<SiteContent>('/api/site/content', content({ published: true }));
+    expect(on.status).toBe(200);
+    expect(on.body.published).toBe(true);
+    expect((await director.get<SiteContent>('/api/site/content')).body.published).toBe(true);
+    expect((await director.get<SiteSummary>('/api/site/summary')).body.published).toBe(true);
+    expect(getSiteContent(t.db).published).toBe(true);
+
+    const off = await director.put<SiteContent>('/api/site/content', { ...on.body, published: false });
+    expect(off.body.published).toBe(false);
+    expect((await director.get<SiteSummary>('/api/site/summary')).body.published).toBe(false);
+  });
+
+  it('saving the content without it never publishes or unpublishes', async () => {
+    const t = await makeTestContext();
+    const director = await t.as('executive_director');
+    // Off stays off…
+    expect((await director.put<SiteContent>('/api/site/content', content())).body.published).toBe(false);
+    // …and on stays on, whatever else is saved (a screen that knows nothing about the switch, an older copy of the app).
+    await director.put('/api/site/content', content({ published: true }));
+    const texts = await director.put<SiteContent>('/api/site/content', content({ tagline: { en: 'New line', ar: '' } }));
+    expect(texts.status).toBe(200);
+    expect(texts.body).toMatchObject({ published: true, tagline: { en: 'New line' } });
+    expect((await director.put<SiteContent>('/api/site/content', content({ published: null }))).status).toBe(400);
+    expect(getSiteContent(t.db).published).toBe(true);
+  });
+
+  it('must be true or false', async () => {
+    const t = await makeTestContext();
+    const director = await t.as('executive_director');
+    for (const bad of ['yes', 1, 'true', {}]) {
+      const res = await director.put('/api/site/content', content({ published: bad }));
+      expect(res.status, String(bad)).toBe(400);
+      expect(res.body.error.issues[0].path, String(bad)).toEqual(['published']);
+    }
+    expect(getSiteContent(t.db).published).toBe(false);
+  });
+
+  it('needs website.manage: nobody else reads or flips it', async () => {
+    const t = await makeTestContext();
+    expect((await t.anon.get('/api/site/content')).status).toBe(401);
+    expect((await t.anon.put('/api/site/content', content({ published: true }))).status).toBe(401);
+    for (const position of ['acting_coach', 'head_of_casting', 'casting_team', 'finance', 'video_editor'] as const) {
+      const person = await t.as(position);
+      expect((await person.get('/api/site/content')).status, position).toBe(403);
+      expect((await person.get('/api/site/summary')).status, position).toBe(403);
+      expect((await person.put('/api/site/content', content({ published: true }))).status, position).toBe(403);
+    }
+    expect(getSiteContent(t.db).published).toBe(false);
+    const web = await t.as({ permissions: ['website.manage'] });
+    expect((await web.put<SiteContent>('/api/site/content', content({ published: true }))).body.published).toBe(true);
+  });
+
+  it('content stored before the switch existed is not public; a stored value that is not true or false neither', async () => {
+    const t = await makeTestContext();
+    t.db.insert(settings).values({ key: 'site', value: { tagline: { en: 'Kept', ar: '' }, whatsappWorkshops: '01094635959' } }).run();
+    expect(getSiteContent(t.db)).toMatchObject({ published: false, tagline: { en: 'Kept' }, whatsappWorkshops: '01094635959' });
+    t.db.update(settings).set({ value: { tagline: { en: 'Kept', ar: '' }, published: 'yes' } }).where(eq(settings.key, 'site')).run();
+    expect(getSiteContent(t.db)).toMatchObject({ published: false, tagline: { en: 'Kept' } });
+    t.db.update(settings).set({ value: { tagline: { en: 'Kept', ar: '' }, published: true } }).where(eq(settings.key, 'site')).run();
+    expect(getSiteContent(t.db).published).toBe(true);
+    // saveSiteContent without it (the demo seed, a library caller): not public.
+    saveSiteContent(t.db, { ...DEFAULT_SITE_CONTENT, published: undefined } as unknown as SiteContent);
+    expect(getSiteContent(t.db).published).toBe(false);
   });
 });
 
@@ -796,6 +893,8 @@ describe('POST /api/admin/seed-demo-website', () => {
     expect(await res.json()).toEqual({ ok: true, coaches: 3, workshops: 2, applications: 4, enquiries: 2 });
 
     const site = getSiteContent(t.db);
+    // The demo is made up: it is never public by itself.
+    expect(site.published).toBe(false);
     expect(site.castingCall.open).toBe(true);
     expect(site.whatsappWorkshops).toBe('01094635959');
     expect(site.whatsappCasting).toBe('01119003100');

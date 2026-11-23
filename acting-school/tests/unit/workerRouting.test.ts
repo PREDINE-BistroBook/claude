@@ -1,5 +1,7 @@
+import { count } from 'drizzle-orm';
 import { describe, expect, it, vi } from 'vitest';
 import { createApp } from '../../src/server/app';
+import { castingApplications, leads, rateLimits } from '../../src/server/db/schema';
 import { parsePublicSiteHosts, testConfig } from '../../src/server/config';
 import { sqliteFileStore } from '../../src/server/lib/fileStore';
 import { getSiteContent, saveSiteContent } from '../../src/server/lib/siteContent';
@@ -199,16 +201,23 @@ describe('the Worker on the public hosts (turquoisestudio.app)', () => {
 });
 
 describe('the real app behind the Worker', () => {
-  function realApp() {
+  /** The app with the studio's domain configured and a little content; `published` is the "Website is public" switch. */
+  function realApp(opts: { published?: boolean } = {}) {
     const db = testDb();
     const app = createApp({ db, config: testConfig({ publicSiteHosts: HOSTS }), files: sqliteFileStore(db) });
-    saveSiteContent(db, { ...getSiteContent(db), whatsappWorkshops: '01094635959', castingCall: { open: true, intro: { en: 'Open', ar: 'مفتوح' }, lookingFor: { en: '', ar: '' } } });
+    saveSiteContent(db, {
+      ...getSiteContent(db),
+      published: opts.published ?? true,
+      tagline: { en: 'Draft tagline', ar: '' },
+      whatsappWorkshops: '01094635959',
+      castingCall: { open: true, intro: { en: 'Open', ar: 'مفتوح' }, lookingFor: { en: '', ar: '' } },
+    });
     const deps: WorkerDeps = {
       assets: { fetch: async () => new Response('staff app', { headers: { 'content-type': 'text/html' } }) },
       school: () => ({ fetch: async (r: Request) => app.fetch(r) }),
       publicSiteHosts: HOSTS,
     };
-    return { deps };
+    return { deps, db };
   }
 
   it('on the public host: / redirects to a bare language path; pages link with bare paths; the API is the site’s 404 page', async () => {
@@ -284,5 +293,83 @@ describe('the real app behind the Worker', () => {
     expect(preview).toContain('<meta property="og:url" content="https://turquoisestudio.app/en">');
     const links = await (await routeRequest(req('https://team.turquoisestudio.app/site/ar/links'), deps)).text();
     expect(links).toContain('<link rel="canonical" href="https://turquoisestudio.app/ar/links">');
+    // The website is public here: no "Preview" banner.
+    expect(preview).not.toContain(SITE_STRINGS.en.soon.previewBanner);
+  });
+
+  it('a public host while the website is not public: one "coming soon" page, everything else back to it, no images, no forms, www → apex as ever', async () => {
+    const { deps, db } = realApp({ published: false });
+    const stored = () => ({
+      leads: db.select({ n: count() }).from(leads).get()!.n,
+      applications: db.select({ n: count() }).from(castingApplications).get()!.n,
+      limits: db.select({ n: count() }).from(rateLimits).get()!.n,
+    });
+    const before = stored();
+
+    const root = await routeRequest(req('https://turquoisestudio.app/', { headers: { 'accept-language': 'ar' } }), deps);
+    expect(root.status).toBe(200);
+    expect(root.headers.get('cache-control')).toBe('no-store');
+    expect(root.headers.get('x-robots-tag')).toBe('noindex');
+    expect(root.headers.get('content-security-policy')).toBe(SITE_CSP);
+    const html = await root.text();
+    expect(html).toContain('<html lang="ar" dir="rtl">');
+    expect(html).toContain(SITE_STRINGS.ar.soon.title);
+    expect(html).toContain(SITE_STRINGS.en.soon.title);
+    expect(html).toContain('<meta name="robots" content="noindex">');
+    expect(html).toContain('href="https://wa.me/201094635959?text=');
+    // Nothing of the drafts, no way into the site, nothing of the staff app.
+    expect(html).not.toContain('Draft tagline');
+    expect(html).not.toMatch(/href="\/(en|ar|site|media|api)/);
+    expect(html).not.toContain('staff app');
+
+    for (const path of ['/en', '/ar/workshops', '/en/casting-call', '/ar/links', '/en/thanks?k=apply', '/en/', '/api/health', '/api/auth/me', '/login', '/sw.js', '/assets/index-abc.js', '/site/en', '//evil.example/', '/%5Cevil.example/', '/%0D%0ASet-Cookie:x=1/']) {
+      const res = await routeRequest(req(`https://turquoisestudio.app${path}`), deps);
+      expect(res.status, path).toBe(302);
+      expect(res.headers.get('location'), path).toBe('/');
+      expect(res.headers.get('cache-control'), path).toBe('no-store');
+      expect(res.headers.get('set-cookie'), path).toBeNull();
+      expect(await res.text(), path).not.toContain('staff app');
+    }
+    expect((await routeRequest(req('https://turquoisestudio.app/media/00000000-0000-4000-8000-000000000000'), deps)).status).toBe(404);
+
+    // Forms: the same page with 503, and nothing stored or counted (a bot's trap field included).
+    for (const [path, init] of [
+      ['/en/apply', { method: 'POST', body: 'website=spam', headers: { 'content-type': 'application/x-www-form-urlencoded' } }],
+      ['/ar/casting-call', { method: 'POST', body: 'firstName=A', headers: { 'content-type': 'application/x-www-form-urlencoded', origin: 'https://turquoisestudio.app' } }],
+      ['/api/auth/login', { method: 'POST', body: '{}', headers: { 'content-type': 'application/json' } }],
+    ] as const) {
+      const res = await routeRequest(req(`https://turquoisestudio.app${path}`, init), deps);
+      expect(res.status, path).toBe(503);
+      expect(res.headers.get('cache-control'), path).toBe('no-store');
+      expect(await res.text(), path).toContain(SITE_STRINGS.en.soon.title);
+    }
+    expect(stored()).toEqual(before);
+
+    // www → the apex, exactly as when public.
+    const www = await routeRequest(req('https://www.turquoisestudio.app/ar/links?from=ig'), deps);
+    expect([www.status, www.headers.get('location')]).toEqual([301, 'https://turquoisestudio.app/ar/links?from=ig']);
+
+    // The staff host is untouched: the app, the API, and the whole site as a preview with its banner.
+    expect(await (await routeRequest(req('https://team.turquoisestudio.app/students/1'), deps)).text()).toBe('staff app');
+    expect((await routeRequest(req('https://team.turquoisestudio.app/api/health'), deps)).status).toBe(200);
+    const preview = await routeRequest(req('https://team.turquoisestudio.app/site/en'), deps);
+    expect(preview.status).toBe(200);
+    const page = await preview.text();
+    expect(page).toContain('Draft tagline');
+    expect(page).toContain(SITE_STRINGS.en.soon.previewBanner);
+    expect(page).toContain('<meta name="robots" content="noindex">');
+    expect(page).toContain('href="/site/en/workshops"');
+    // …and a form sent from the preview is handled (the trap field: a pretend thank-you).
+    const bot = await routeRequest(
+      req('https://team.turquoisestudio.app/site/en/apply', { method: 'POST', body: 'website=spam', headers: { 'content-type': 'application/x-www-form-urlencoded' } }),
+      deps,
+    );
+    expect([bot.status, bot.headers.get('location')]).toEqual([303, '/site/en/thanks?k=apply#thanks']);
+
+    // Switched on: the domain serves the site.
+    saveSiteContent(db, { ...getSiteContent(db), published: true });
+    const open = await routeRequest(req('https://turquoisestudio.app/', { headers: { 'accept-language': 'ar' } }), deps);
+    expect([open.status, open.headers.get('location')]).toEqual([302, '/ar']);
+    expect(await (await routeRequest(req('https://turquoisestudio.app/en'), deps)).text()).toContain('Draft tagline');
   });
 });

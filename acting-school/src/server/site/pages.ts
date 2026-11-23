@@ -9,7 +9,7 @@ import type { PublicCoach, PublicWorkshop } from '../lib/siteContent';
 import { contactBlock, feesButton, pageHead, pick, waButton, waHref, whatsappNumber, workshopCard, workshopFacts } from './components';
 import type { SiteCtx } from './context';
 import { DOB_PART_FIELDS, checkbox, dobField, errorSummary, fileField, hiddenFields, radios, textArea, textField, type FormState } from './forms';
-import { fmt } from './i18n';
+import { SITE_STRINGS, fmt } from './i18n';
 import { layout } from './layout';
 import type { SiteThanksKind } from './paths';
 import { brandMark, excerpt, icon, instagramUrl, paragraphs, waLink, type Html } from './render';
@@ -94,7 +94,7 @@ ${c.photoFileId ? html`<img src="${ctx.paths.media(c.photoFileId)}" alt="${name}
 }
 
 function base(ctx: SiteCtx) {
-  return { lang: ctx.lang, t: ctx.t, paths: ctx.paths, origin: ctx.origin, canonicalOrigin: ctx.canonicalOrigin, studioName: ctx.studioName, content: ctx.content };
+  return { lang: ctx.lang, t: ctx.t, paths: ctx.paths, origin: ctx.origin, canonicalOrigin: ctx.canonicalOrigin, preview: ctx.preview, studioName: ctx.studioName, content: ctx.content };
 }
 
 // ── Workshops ───────────────────────────────────────────────────────────────
@@ -372,6 +372,54 @@ ${custom.map((l) => html`<a class="btn btn-line" href="${l.url}" rel="noopener">
     alternates: both((l) => paths.links(l)),
     current: 'links',
     ogImage: ogImage(ctx),
+    bare: true,
+    body,
+  });
+}
+
+// ── Coming soon (the public hosts while the website is not public) ──────────
+
+/**
+ * What a visitor to the studio's domain gets while "Website is public" is off
+ * (index.ts): the brand, the studio's name and "coming soon" in the visitor's
+ * language with the other language's line under it, then only the contact
+ * lines staff saved — the two WhatsApp numbers, Instagram, the address — and
+ * nothing else of the content (texts, workshops, coaches and photos may still
+ * be drafts). No menu and no links into the site: every other address leads
+ * back here.
+ */
+export function comingSoonPage(ctx: SiteCtx): Html {
+  const { t, lang, content } = ctx;
+  const other: Locale = lang === 'ar' ? 'en' : 'ar';
+  const otherT = SITE_STRINGS[other];
+  const wa = (number: string | null, message: string, label: string) => waButton(number ? waLink(number, ctx.countryCode, fmt(message, { name: ctx.studioName })) : null, label);
+  const ig = instagramUrl(content.instagram);
+  const address = pick(ctx, content.address);
+  const reachable = !!(content.whatsappWorkshops || content.whatsappCasting || ig);
+  const body = html`${brandMark('mark')}
+<h1>${ctx.studioName}</h1>
+<div class="soon">
+<p class="lead">${t.soon.title}</p>
+<p class="also" lang="${other}" dir="${other === 'ar' ? 'rtl' : 'ltr'}">${otherT.soon.title}</p>
+${reachable ? html`<p class="reach">${t.soon.reach}</p>` : ''}
+<div class="stack">
+${wa(content.whatsappWorkshops, t.whatsapp.general, t.links.whatsappWorkshops)}
+${wa(content.whatsappCasting, t.whatsapp.casting, t.links.whatsappCasting)}
+${ig ? html`<a class="btn btn-line" href="${ig}" rel="noopener">${icon('instagram')}<span>${t.links.instagram}<small dir="ltr">@${content.instagram}</small></span></a>` : ''}
+</div>
+${address ? html`<p class="addr">${icon('pin')}<span>${address}</span></p>` : ''}
+</div>`;
+  return layout({
+    lang,
+    t,
+    paths: ctx.paths,
+    origin: ctx.origin,
+    studioName: ctx.studioName,
+    title: title(ctx, t.soon.pageTitle),
+    description: t.soon.title,
+    alternates: null,
+    content: null,
+    noindex: true,
     bare: true,
     body,
   });

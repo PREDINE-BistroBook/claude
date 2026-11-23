@@ -1294,6 +1294,9 @@ export async function seedDemoWebsite(opts: SeedDemoWebsiteOptions): Promise<See
 
   // ── Studio info, casting call, links ──
   const content: SiteContentParsed = {
+    // The demo is made up: it never goes public by itself. Someone with website.manage switches the
+    // website on ("Website is public") once the texts, coaches and workshops are the studio's own.
+    published: false,
     tagline: { en: 'Acting workshops and casting in Giza', ar: 'ورش تمثيل وكاستينج في الجيزة' },
     about: {
       en:

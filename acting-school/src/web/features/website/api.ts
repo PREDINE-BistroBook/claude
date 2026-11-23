@@ -44,9 +44,9 @@ export function useUpdateSiteContent() {
     },
     onSuccess: (saved) => {
       qc.setQueryData(siteKeys.content, saved);
-      // The home's casting-call switch follows at once (the refetch below confirms it).
+      // The home's switches (casting call, "Website is public") follow at once (the refetch below confirms them).
       const summary = qc.getQueryData<SiteSummary>(siteKeys.summary);
-      if (summary) qc.setQueryData(siteKeys.summary, { ...summary, castingCallOpen: saved.castingCall.open });
+      if (summary) qc.setQueryData(siteKeys.summary, { ...summary, castingCallOpen: saved.castingCall.open, published: saved.published });
       invalidateSite(qc);
     },
   });

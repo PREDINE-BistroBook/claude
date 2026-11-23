@@ -58,6 +58,7 @@ curl -X POST https://<worker-url>/api/admin/seed-demo -H "Authorization: Bearer 
 
 # The website demo alone (texts, coaches, workshops shown, casting call, links, applications), for a school seeded before
 # the website existed. Only while the website is empty (nothing saved, no coaches); else 409. seed-demo includes it already.
+# The demo website is never public by itself: see "Publishing the website" below.
 curl -X POST https://<worker-url>/api/admin/seed-demo-website -H "Authorization: Bearer $ADMIN_TOKEN"
 
 # Locked out: same as npm run owner -- someone@example.com (also lifts the sign-in brakes on that email)
@@ -107,11 +108,17 @@ The staff app has three sections, switched with the tabs under the header (on ph
 |---|---|---|---|
 | **School** (turquoise) | `/school` | today's sessions, follow-ups, new website enquiries; Schedule (workshops + interviews), Admissions, Students, Workshops | anyone with *See workshops*, *See students* or *See admissions* |
 | **Casting** (gold) | `/casting` | upcoming auditions, castings closing soon, new casting applications; Talent, Castings, Applications, Audition schedule | anyone with *See actors* or *See castings* |
-| **Website** (indigo) | `/website` | "Open the website", the casting call switch, every public page with Open / Copy link; Studio & contact, Workshops on the website, Casting call, Coaches, Link-in-bio | *Edit the website* (`website.manage`): owners and the Executive Director |
+| **Website** (indigo) | `/website` | The "Website is public" switch, "Open the website" ("Preview the website" until it is public), the casting call switch, every public page with Open / Copy link; Studio & contact, Workshops on the website, Casting call, Coaches, Link-in-bio | *Edit the website* (`website.manage`): owners and the Executive Director |
 
 People who see only one section get no tabs (a coach sees School only). `/` opens the section you were last in; each tab goes back to the last page you had open in that section. Old links (`/students/12`, `/classes/3`, …) still work.
 
 ## The public website
+
+**Publishing the website.** The website is **not public until someone switches it on**: Website section → the card at the top, **"Website is public"** (needs *Edit the website*; it asks before turning on). The demo content is made up, so replace the texts, coaches and workshops with the studio's own first. While it is off:
+- visitors to the studio's domain see one **"coming soon"** page: the studio's name and, if they were saved, the WhatsApp buttons for workshops and casting, Instagram and the address. Every other address on the domain leads back to that page, no photo is served, and a form sent to it anyway is refused (503) with nothing stored;
+- the team still sees the whole site at `/site/en` and `/site/ar` on the staff app's address ("Preview the website"), with a "Preview — the website is not public yet" line at the top of every page. The forms work there, so they can be tried: what is sent lands in Admissions and Casting › Applications like any other.
+
+A deployment made before this switch existed comes up **not public** after the update, whatever it showed before: switch it on when the content is ready. After switching it off, someone who had a page open in the last minute may still see it for up to a minute.
 
 Server-rendered pages in English and Arabic (no JavaScript, no prices — workshop cards and pages have an **"Ask about fees on WhatsApp"** button instead):
 

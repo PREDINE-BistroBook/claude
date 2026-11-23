@@ -10,6 +10,7 @@ import { castingRoles, castings, courseSlots, courses, fileChunks, files, leads,
 import { findDuplicates, findStudentMatches } from '../../src/server/lib/admissions';
 import { sqliteConstraint } from '../../src/server/lib/errors';
 import { FILE_CHUNK_BYTES, fallbackFileStore, memoryFileStore, sqliteFileStore } from '../../src/server/lib/fileStore';
+import { getSiteContent } from '../../src/server/lib/siteContent';
 import { insertBatches, MAX_BOUND_PARAMS, rowsPerInsert } from '../../src/server/lib/sqlLimits';
 import { MAX_JSON_BODY_BYTES } from '../../src/server/middleware/bodyLimit';
 import { folderFileStore } from '../../src/server/nodeFileStore';
@@ -544,6 +545,10 @@ describe('/api/admin (operator endpoints)', () => {
     expect((await t.anon.post('/api/auth/login', { email: 'director@demo.school', password: 'demo1234' })).status).toBe(401);
     expect((await t.anon.post('/api/auth/login', { email: 'director@demo.school', password: 'deployed-demo-password' })).status).toBe(200);
     expect(t.db.select().from(files).all().length).toBeGreaterThan(5);
+    // The demo website is there, and not public: its content is made up.
+    const site = getSiteContent(t.db);
+    expect(site.whatsappWorkshops).toBe('01094635959');
+    expect(site.published).toBe(false);
     expect((await call('seed-demo', { password: 'deployed-demo-password' })).status).toBe(409);
 
     // Reset is off unless ALLOW_DEMO_RESET=true.

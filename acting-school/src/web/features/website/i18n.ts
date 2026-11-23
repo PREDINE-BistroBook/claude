@@ -14,6 +14,7 @@ const en = {
   },
   links: {
     open: 'Open',
+    preview: 'Preview',
     copy: 'Copy link',
     copied: 'Link copied',
     copyFailed: 'Couldn’t copy. Press and hold the link to copy it.',
@@ -22,6 +23,7 @@ const en = {
   home: {
     subtitle: 'Your public website: what visitors see',
     open: 'Open the website',
+    preview: 'Preview the website',
     status: 'At a glance',
     newEnquiries: 'New website enquiries',
     newApplications: 'New casting applications',
@@ -33,6 +35,7 @@ const en = {
     coachesShown: 'Coaches shown',
     pages: 'Your website’s pages',
     pagesHint: 'Open a page to see it, or copy its link to send on WhatsApp or put on Instagram.',
+    pagesHintNotPublic: 'The website is not public yet: these links show visitors a “coming soon” page. “Preview” opens the page as your team sees it.',
     pageLanguage: 'Language of the pages',
     page: {
       home: 'Home',
@@ -44,6 +47,20 @@ const en = {
   castingToast: {
     opened: 'The casting call is now open',
     closed: 'The casting call is now closed',
+  },
+  /** The master switch at the top of the Website home. {{host}} is the studio's domain (turquoisestudio.app). */
+  publish: {
+    title: 'Who can see the website',
+    switch: 'Website is public',
+    on: 'Anyone can see the site at {{host}}.',
+    off: 'Visitors to {{host}} see a “coming soon” page. Only your team can preview the site.',
+    onNoHost: 'Anyone can see the site.',
+    offNoHost: 'Visitors see a “coming soon” page. Only your team can preview the site.',
+    confirmTitle: 'Make the website public?',
+    confirmMessage: 'First check that the texts, coaches and workshops are real: the demo content is made up. Once it is public, anyone can see the site.',
+    confirmYes: 'Yes, make it public',
+    toastOn: 'The website is now public',
+    toastOff: 'The website is no longer public: visitors see “coming soon”',
   },
   studio: {
     title: 'Studio & contact',
@@ -209,6 +226,7 @@ const ar: TranslationOf<typeof en> = {
   },
   links: {
     open: 'فتح',
+    preview: 'معاينة',
     copy: 'نسخ الرابط',
     copied: 'تم نسخ الرابط',
     copyFailed: 'تعذّر النسخ. اضغط على الرابط مطولًا لنسخه.',
@@ -217,6 +235,7 @@ const ar: TranslationOf<typeof en> = {
   home: {
     subtitle: 'موقعك العام: ما يراه الزوار',
     open: 'افتح الموقع',
+    preview: 'معاينة الموقع',
     status: 'نظرة سريعة',
     newEnquiries: 'استفسارات جديدة من الموقع',
     newApplications: 'طلبات انضمام جديدة',
@@ -228,6 +247,7 @@ const ar: TranslationOf<typeof en> = {
     coachesShown: 'المدربون المعروضون',
     pages: 'صفحات موقعك',
     pagesHint: 'افتح الصفحة لتراها، أو انسخ رابطها لإرساله على واتساب أو وضعه على إنستجرام.',
+    pagesHintNotPublic: 'الموقع غير منشور بعد: هذه الروابط تعرض للزوار صفحة «قريبًا». زر «معاينة» يفتح الصفحة كما يراها فريقك.',
     pageLanguage: 'لغة الصفحات',
     page: {
       home: 'الرئيسية',
@@ -239,6 +259,19 @@ const ar: TranslationOf<typeof en> = {
   castingToast: {
     opened: 'إعلان الكاستينج مفتوح الآن',
     closed: 'إعلان الكاستينج مغلق الآن',
+  },
+  publish: {
+    title: 'من يرى الموقع',
+    switch: 'الموقع منشور للزوار',
+    on: 'أي شخص يستطيع رؤية الموقع على \u2066{{host}}\u2069.',
+    off: 'زوار \u2066{{host}}\u2069 يرون صفحة «قريبًا». فريقك فقط يستطيع معاينة الموقع.',
+    onNoHost: 'أي شخص يستطيع رؤية الموقع.',
+    offNoHost: 'الزوار يرون صفحة «قريبًا». فريقك فقط يستطيع معاينة الموقع.',
+    confirmTitle: 'نشر الموقع للزوار؟',
+    confirmMessage: 'تأكد أولًا أن النصوص والمدربين والورش حقيقية: المحتوى التجريبي غير حقيقي. بعد النشر يستطيع أي شخص رؤية الموقع.',
+    confirmYes: 'نعم، انشر الموقع',
+    toastOn: 'الموقع منشور الآن للزوار',
+    toastOff: 'الموقع لم يعد منشورًا: الزوار يرون صفحة «قريبًا»',
   },
   studio: {
     title: 'الاستوديو والتواصل',

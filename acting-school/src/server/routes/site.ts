@@ -27,13 +27,15 @@ import { currentUser, requireAuth, requirePermission, userCan } from '../middlew
 
 /**
  * The public website, staff side (website.manage for every route):
- *   GET/PUT /api/site/content            the site content object (settings 'site')
+ *   GET/PUT /api/site/content            the site content object (settings 'site'), `published` — the
+ *                                        "Website is public" switch — included (left out of a PUT: unchanged)
  *   /api/site/coaches                    coaches shown on the site (list, create, read, edit, delete, order)
  *   /api/site/workshops                  which active/upcoming workshops the site shows, with public texts
- *   GET /api/site/summary                the Website home: counts and the public URLs (the studio's domain when configured)
+ *   GET /api/site/summary                the Website home: counts, whether the site is public, the public URLs (the
+ *                                        studio's domain when configured) and the preview URLs (/site on this host)
  * Images named here (hero, coach photos, workshop covers) become public while
- * they're on the site (lib/siteContent.ts isPublicFile); a casting
- * application's photo can't be used. Coaches' staff links follow the staff
+ * they're on the site (lib/siteContent.ts isPublicFile); a file used anywhere
+ * outside the website can't be used (assertSiteImage). Coaches' staff links follow the staff
  * rules: an owner account is invisible to non-owners (as a link it reads as
  * none, and naming one answers like a missing id).
  */
@@ -51,9 +53,11 @@ router.put('/content', async (c) => {
   const input = await body(c, siteContent);
   const db = c.get('db');
   const saved = db.transaction((tx) => {
+    const current = getSiteContent(tx);
     // Checked when it changes (as a coach's photo and a workshop's cover are): the form sends the whole content back every time.
-    if (input.heroFileId && input.heroFileId !== getSiteContent(tx).heroFileId) assertSiteImage(tx, input.heroFileId, ['heroFileId']);
-    return saveSiteContent(tx, input);
+    if (input.heroFileId && input.heroFileId !== current.heroFileId) assertSiteImage(tx, input.heroFileId, ['heroFileId']);
+    // "Website is public" changes only when it is sent: saving texts never publishes or unpublishes.
+    return saveSiteContent(tx, { ...input, published: input.published ?? current.published });
   });
   return c.json<SiteContent>(saved);
 });
@@ -315,16 +319,22 @@ router.get('/summary', (c) => {
   const today = schoolToday(c);
   const n = (q: { get(): { n: number } | undefined }) => q.get()?.n ?? 0;
   const counted = sql<number>`count(*)`.mapWith(Number);
+  const content = getSiteContent(db);
+  const origin = new URL(c.req.url).origin;
+  const publicHosts = c.get('config').publicSiteHosts;
   const res: SiteSummary = {
     newWebsiteLeads: userCan(c, 'admissions.read')
       ? n(db.select({ n: counted }).from(leads).where(and(eq(leads.source, 'website'), eq(leads.status, 'new'))))
       : null,
     newCastingApplications: userCan(c, 'talent.read') ? n(db.select({ n: counted }).from(castingApplications).where(eq(castingApplications.status, 'new'))) : null,
-    castingCallOpen: getSiteContent(db).castingCall.open,
+    castingCallOpen: content.castingCall.open,
     visibleWorkshops: n(db.select({ n: counted }).from(siteWorkshops).innerJoin(courses, eq(courses.id, siteWorkshops.courseId)).where(workshopOnSite(today))),
     visibleCoaches: n(db.select({ n: counted }).from(siteCoaches).where(eq(siteCoaches.visible, true))),
     // The studio's own domain when configured (PUBLIC_SITE_HOSTS), else this host's /site previews.
-    urls: siteUrls(new URL(c.req.url).origin, c.get('config').publicSiteHosts),
+    urls: siteUrls(origin, publicHosts),
+    published: content.published,
+    publicHost: publicHosts[0] ?? null,
+    previewUrls: siteUrls(origin),
   };
   return c.json(res);
 });

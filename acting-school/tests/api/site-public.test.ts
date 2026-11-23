@@ -51,6 +51,7 @@ function content(o: Partial<SiteContent> = {}): SiteContent {
 }
 function getSiteContentDefaults(): SiteContent {
   return {
+    published: false,
     tagline: { en: '', ar: '' },
     about: { en: '', ar: '' },
     address: { en: '', ar: '' },
@@ -242,7 +243,8 @@ describe('/site pages', () => {
 
   it('every page renders in both languages with lang/dir, the security headers and a one-minute cache', async () => {
     const t = await ctx();
-    saveSiteContent(t.db, content());
+    // Public ("Website is public" on): while it is off these pages are previews and are not cached (see the publish switch below).
+    saveSiteContent(t.db, content({ published: true }));
     const w = workshop(t);
     for (const lang of ['en', 'ar'] as const) {
       for (const path of ['', '/workshops', `/workshops/${w.id}`, '/apply', '/casting-call', '/links']) {
@@ -1149,5 +1151,279 @@ describe('the staff app and the site stay apart', () => {
     const res = await director.get('/api/leads?source=website');
     expect(res.body.items.map((l: { firstName: string }) => l.firstName)).toEqual(['Mona']);
     expect(t.db.select().from(leadActivities).where(and(eq(leadActivities.type, 'note'))).all().length).toBeGreaterThan(0);
+  });
+});
+
+describe('the publish switch: what visitors and the team see', () => {
+  const PUBLIC = 'https://turquoisestudio.app';
+  /** A school with the studio's domain configured; requests carry an address as on Cloudflare. */
+  const studio = () =>
+    makeTestContext({
+      config: { publicSiteHosts: ['turquoisestudio.app', 'www.turquoisestudio.app'] },
+      clientIp: (c) => c.req.header(IP_HEADER) ?? `198.18.${Math.floor(++requestNo / 250) % 250}.${requestNo % 250}`,
+    });
+  /** A request to the studio's domain as the Worker / Node server hand it to the app: /x there is /site/x here. */
+  const visit = (t: Ctx, path: string, init: RequestInit = {}) => t.app.request(`${PUBLIC}/site${path === '/' ? '' : path}`, init);
+  const rows = (t: Ctx) => ({
+    leads: t.db.select({ n: count() }).from(leads).get()!.n,
+    applications: applicationCount(t),
+    files: t.db.select({ n: count() }).from(files).get()!.n,
+    limits: t.db.select({ n: count() }).from(rateLimits).get()!.n,
+  });
+
+  it('not public (the default): the studio’s domain answers one "coming soon" page, with the saved contact lines and nothing else of the content', async () => {
+    const t = await studio();
+    saveSiteContent(t.db, content());
+    workshop(t, { name: 'Secret Draft Workshop' });
+    t.db.insert(siteCoaches).values({ nameEn: 'Draft Coach', visible: true }).run();
+
+    const res = await visit(t, '/');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/html');
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(res.headers.get('x-robots-tag')).toBe('noindex');
+    expect(res.headers.get('vary')).toContain('Accept-Language');
+    expect(res.headers.get('content-security-policy')).toBe(SITE_CSP);
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+    const html = await res.text();
+    expect(html).toContain('<html lang="en" dir="ltr">');
+    expect(html).toContain('<meta name="robots" content="noindex">');
+    // The studio's name, the line in the visitor's language and the other language's under it.
+    expect(html).toContain('<h1>Acting School</h1>');
+    expect(html).toContain('<title>Coming soon · Acting School</title>');
+    expect(html).toContain(SITE_STRINGS.en.soon.title);
+    expect(html).toContain(`<p class="also" lang="ar" dir="rtl">${SITE_STRINGS.ar.soon.title}</p>`);
+    // What staff saved to be reached by: both WhatsApp lines, Instagram, the address.
+    expect(html).toContain('href="https://wa.me/201094635959?text=');
+    expect(html).toContain('href="https://wa.me/201119003100?text=');
+    expect(html).toContain('href="https://www.instagram.com/turquoisecastingstudio/"');
+    expect(html).toContain('Mohandessin, Giza');
+    // Nothing else of the content: no texts, workshops, coaches, casting call, custom links, map, phone line.
+    for (const draft of ['Acting workshops in Giza', 'We teach acting', 'Secret Draft Workshop', 'Draft Coach', 'We are casting a new series', 'Showreel', 'vimeo.com', 'maps.google.com', 'tel:']) {
+      expect(html, draft).not.toContain(draft);
+    }
+    // No menu, no form, no script, no way into the site, nothing of the team's app.
+    expect(html).not.toMatch(/<nav|<form|<script|<input/);
+    expect(html).not.toMatch(/href="\/(en|ar|site|media|api|login)/);
+    expect(html).not.toContain(SITE_STRINGS.en.soon.previewBanner);
+
+    // Arabic browsers get it the other way round.
+    const ar = await (await visit(t, '/', { headers: { 'accept-language': 'ar-EG,ar;q=0.9,en;q=0.5' } })).text();
+    expect(ar).toContain('<html lang="ar" dir="rtl">');
+    expect(ar).toContain(`<p class="lead">${SITE_STRINGS.ar.soon.title}</p>`);
+    expect(ar).toContain(`<p class="also" lang="en" dir="ltr">${SITE_STRINGS.en.soon.title}</p>`);
+    expect(ar).toContain('المهندسين، الجيزة');
+    expect(ar).toContain(SITE_STRINGS.ar.links.whatsappWorkshops);
+    // HEAD answers like GET.
+    expect((await visit(t, '/', { method: 'HEAD' })).status).toBe(200);
+  });
+
+  it('with nothing saved yet the page has no buttons at all', async () => {
+    const t = await studio();
+    const html = await (await visit(t, '/')).text();
+    expect(html).toContain(SITE_STRINGS.en.soon.title);
+    expect(html).not.toContain('wa.me');
+    expect(html).not.toContain('instagram.com');
+    expect(html).not.toContain(SITE_STRINGS.en.soon.reach);
+    expect(html).not.toContain('class="addr"');
+  });
+
+  it('every other address on the domain leads back to its root, never off the host; no image is served', async () => {
+    const t = await studio();
+    const director = await t.as('executive_director');
+    const [hero, coachPhoto] = [await uploadPng(director), await uploadPng(director)];
+    saveSiteContent(t.db, content({ heroFileId: hero }));
+    t.db.insert(siteCoaches).values({ nameEn: 'A', photoFileId: coachPhoto, visible: true }).run();
+    const w = workshop(t);
+
+    const elsewhere = [
+      '/en',
+      '/ar',
+      '/en/workshops',
+      `/en/workshops/${w.id}`,
+      `/ar/workshops/${w.id}/apply`,
+      '/en/apply',
+      '/ar/casting-call',
+      '/en/links',
+      '/en/thanks?k=apply',
+      '/en/',
+      '/no-such-page',
+      // Nothing of the team's app either.
+      '/api/health',
+      '/api/auth/me',
+      '/login',
+      '/sw.js',
+      '/site/en',
+      // Addresses made to look like another host.
+      '//evil.example/',
+      '/%5Cevil.example/',
+      '/%2F%2Fevil.example/',
+      '/%09/evil.example/',
+      '/%0D%0ASet-Cookie:x=1/',
+      '/en?next=https://evil.example/',
+    ];
+    for (const path of elsewhere) {
+      const res = await visit(t, path);
+      expect(res.status, path).toBe(302);
+      expect(res.headers.get('location'), path).toBe('/');
+      expect(res.headers.get('cache-control'), path).toBe('no-store');
+      expect(res.headers.get('set-cookie'), path).toBeNull();
+      expect(res.headers.get('content-security-policy'), path).toBe(SITE_CSP);
+      expect(await res.text(), path).not.toContain('Acting workshops in Giza');
+    }
+    for (const id of [hero, coachPhoto, '00000000-0000-4000-8000-000000000000']) {
+      const res = await visit(t, `/media/${id}`);
+      expect(res.status, id).toBe(404);
+      expect(res.headers.get('cache-control'), id).toBe('no-store');
+      expect((await res.arrayBuffer()).byteLength, id).toBeLessThan(40);
+    }
+    expect((await visit(t, '/media')).status).toBe(404);
+    // The team's previews keep their images (another host: /site/…).
+    expect((await get(t, `/site/media/${hero}`)).status).toBe(200);
+    expect((await get(t, `/site/media/${coachPhoto}`)).status).toBe(200);
+  });
+
+  it('forms sent to the domain anyway get the same page with 503: nothing is stored, counted or read', async () => {
+    const t = await studio();
+    saveSiteContent(t.db, content());
+    const w = workshop(t);
+    const before = rows(t);
+    const form = (path: string, fields: Record<string, string>) => {
+      const body = new URLSearchParams(fields).toString();
+      return visit(t, path, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', origin: PUBLIC }, body });
+    };
+
+    for (const res of [
+      await form('/en/apply', applyFields(t)),
+      await form(`/ar/workshops/${w.id}/apply`, applyFields(t)),
+      await visit(t, '/en/casting-call', { method: 'POST', body: castingForm(t), headers: { origin: PUBLIC } }),
+      // A bot's filled trap field would be a pretend "thank you" on a public site: here it is the same 503.
+      await form('/en/apply', applyFields(t, { [HONEYPOT_FIELD]: 'spam' })),
+      await visit(t, '/', { method: 'POST', body: 'x=1', headers: { 'content-type': 'application/x-www-form-urlencoded' } }),
+      await visit(t, '/api/auth/login', { method: 'POST', body: '{}', headers: { 'content-type': 'application/json' } }),
+      await visit(t, '/en/apply', { method: 'PUT', body: 'x=1' }),
+      await visit(t, '/media/x', { method: 'DELETE' }),
+    ]) {
+      expect(res.status).toBe(503);
+      expect(res.headers.get('cache-control')).toBe('no-store');
+      expect(res.headers.get('location')).toBeNull();
+      expect(await res.text()).toContain(SITE_STRINGS.en.soon.title);
+    }
+    expect(rows(t)).toEqual(before);
+
+    // A body that never ends is not waited for: the answer comes without reading it.
+    const endless = new ReadableStream<Uint8Array>({ pull: (controller) => controller.enqueue(new Uint8Array(1024)) });
+    const held = await Promise.race([
+      visit(t, '/en/casting-call', { method: 'POST', body: endless, headers: { 'content-type': 'multipart/form-data; boundary=x' }, duplex: 'half' } as RequestInit),
+      tick(2000).then(() => null),
+    ]);
+    expect(held?.status).toBe(503);
+    expect(castingBytesReserved()).toBe(0);
+    expect(rows(t)).toEqual(before);
+  });
+
+  it('switched on: the domain serves the site — pages, images and forms — and off again takes it all back', async () => {
+    const t = await studio();
+    const director = await t.as('executive_director');
+    const hero = await uploadPng(director);
+    saveSiteContent(t.db, content({ heroFileId: hero }));
+    expect((await visit(t, '/')).status).toBe(200);
+
+    const saved = (await director.get<SiteContent>('/api/site/content')).body;
+    expect((await director.put<SiteContent>('/api/site/content', { ...saved, published: true })).body.published).toBe(true);
+
+    const root = await visit(t, '/', { headers: { 'accept-language': 'ar' } });
+    expect([root.status, root.headers.get('location')]).toEqual([302, '/ar']);
+    const home = await visit(t, '/en');
+    expect(home.status).toBe(200);
+    expect(home.headers.get('cache-control')).toBe('public, max-age=60');
+    expect(home.headers.get('x-robots-tag')).toBeNull();
+    const html = await home.text();
+    expect(html).toContain('Acting workshops in Giza');
+    expect(html).toContain('href="/en/workshops"');
+    expect(html).not.toContain('noindex');
+    expect(html).not.toContain(SITE_STRINGS.en.soon.title);
+    expect(html).not.toContain(SITE_STRINGS.en.soon.previewBanner);
+    expect((await visit(t, `/media/${hero}`)).status).toBe(200);
+    const body = new URLSearchParams(applyFields(t)).toString();
+    const sent = await visit(t, '/en/apply', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', origin: PUBLIC }, body });
+    expect([sent.status, sent.headers.get('location')]).toEqual([303, '/en/thanks?k=apply#thanks']);
+    expect(websiteLeads(t)).toHaveLength(1);
+
+    // Off again.
+    await director.put('/api/site/content', { ...saved, published: false });
+    expect((await visit(t, '/en')).status).toBe(302);
+    expect((await visit(t, `/media/${hero}`)).status).toBe(404);
+    const again = await visit(t, '/en/apply', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', origin: PUBLIC }, body: new URLSearchParams(applyFields(t, { phone: '0101 999 0000' })).toString() });
+    expect(again.status).toBe(503);
+    expect(websiteLeads(t)).toHaveLength(1);
+  });
+
+  it('the team’s preview (/site on any other host) always shows the whole site, with a banner on every page while it is not public — and its forms work', async () => {
+    const t = await studio();
+    saveSiteContent(t.db, content());
+    const w = workshop(t);
+    const banner = '<p class="preview" role="status">';
+    const pages = [
+      ['/site/en', 'en'],
+      ['/site/ar', 'ar'],
+      ['/site/en/workshops', 'en'],
+      [`/site/ar/workshops/${w.id}`, 'ar'],
+      ['/site/en/apply', 'en'],
+      ['/site/ar/casting-call', 'ar'],
+      // The link-in-bio page has its own bare layout.
+      ['/site/en/links', 'en'],
+      ['/site/en/thanks?k=casting', 'en'],
+    ] as const;
+    for (const [path, lang] of pages) {
+      const res = await get(t, path);
+      expect(res.status, path).toBe(200);
+      const html = await res.text();
+      expect(html, path).toContain(banner);
+      expect(html, path).toContain(SITE_STRINGS[lang].soon.previewBanner);
+      expect(html.indexOf('class="preview"'), path).toBeLessThan(html.indexOf('<main'));
+      // A preview of a site that is not public stays out of search results, and out of caches:
+      // the banner must go the moment the switch is turned.
+      expect(html, path).toContain('<meta name="robots" content="noindex">');
+      expect(res.headers.get('cache-control'), path).toBe('no-store');
+      expect(html, path).not.toContain(SITE_STRINGS[lang].soon.title);
+    }
+    const home = await (await get(t, '/site/en')).text();
+    expect(home).toContain('Acting workshops in Giza');
+    expect(home).toContain('href="/site/en/workshops"');
+    // Error pages on the preview say it too.
+    const missing = await get(t, '/site/en/nothing-here');
+    expect(missing.status).toBe(404);
+    expect(await missing.text()).toContain(SITE_STRINGS.en.soon.previewBanner);
+
+    // The forms work there, so the team can try them before going public.
+    const sent = await postForm(t, '/site/en/apply', applyFields(t));
+    expect([sent.status, sent.headers.get('location')]).toEqual([303, '/site/en/thanks?k=apply#thanks']);
+    expect(websiteLeads(t)).toHaveLength(1);
+    const bounced = await (await postForm(t, '/site/ar/apply', applyFields(t, { firstName: '' }))).text();
+    expect(bounced).toContain(SITE_STRINGS.ar.soon.previewBanner);
+    expect((await postCasting(t, 'en', castingForm(t))).status).toBe(303);
+    expect(applicationCount(t)).toBe(1);
+
+    // Public: the banner goes, and the pages may be indexed again (they name the studio's domain as their address).
+    saveSiteContent(t.db, { ...content(), published: true });
+    for (const [path, lang] of pages) {
+      const html = await (await get(t, path)).text();
+      expect(html, path).not.toContain('class="preview"');
+      expect(html, path).not.toContain(SITE_STRINGS[lang].soon.previewBanner);
+    }
+    const publicNow = await get(t, '/site/en');
+    expect(publicNow.headers.get('cache-control')).toBe('public, max-age=60');
+    expect(await publicNow.text()).not.toContain('noindex');
+  });
+
+  it('without a domain of its own (no PUBLIC_SITE_HOSTS) there is no "coming soon": /site is the preview, banner and all', async () => {
+    const t = await ctx();
+    const res = await get(t, '/site/en');
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain(SITE_STRINGS.en.soon.previewBanner);
+    expect(html).not.toContain(SITE_STRINGS.en.soon.title);
+    expect((await get(t, '/site')).status).toBe(302);
   });
 });

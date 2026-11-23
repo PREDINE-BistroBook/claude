@@ -113,10 +113,18 @@ export const siteLinkInput = z
  * ≤ 4000 characters per language, tagline ≤ 160, address ≤ 300, casting-call
  * texts ≤ 2000, link labels ≤ 60, at most 20 links (in order). Phones are
  * normalised; links and the map link must be https. `heroFileId` must be an
- * uploaded image (POST /api/files) that isn't a casting application's photo
- * or a student's or talent's photo.
+ * uploaded image (POST /api/files) that nothing outside the website uses (not
+ * a casting application's, a student's, a talent's or a team member's photo,
+ * a workshop's or casting's file, a chat attachment).
+ *
+ * `published` is the master switch ("Website is public"): while it is false
+ * the public hosts answer a "coming soon" page and nothing else (the /site
+ * previews on the staff app's address always show the full site). Left out of
+ * a PUT it keeps its stored value, so saving texts never publishes or
+ * unpublishes; content stored before the switch existed reads as not published.
  */
 export const siteContent = z.object({
+  published: z.boolean().optional(),
   tagline: bilingual(160),
   about: bilingual(4000),
   address: bilingual(300),
@@ -155,6 +163,11 @@ export interface SiteLink {
 
 /** GET/PUT /api/site/content answer (and what the public site reads). */
 export interface SiteContent {
+  /**
+   * "Website is public". False (the default): visitors to the public hosts see a
+   * "coming soon" page; only the /site previews show the site.
+   */
+  published: boolean;
   tagline: Bilingual;
   about: Bilingual;
   address: Bilingual;
@@ -174,8 +187,9 @@ export interface SiteContent {
 
 const emptyBi = (): Bilingual => ({ en: '', ar: '' });
 
-/** No 'site' settings key yet: empty texts, no contact lines, the casting call closed, no links. */
+/** No 'site' settings key yet: not published, empty texts, no contact lines, the casting call closed, no links. */
 export const DEFAULT_SITE_CONTENT: SiteContent = {
+  published: false,
   tagline: emptyBi(),
   about: emptyBi(),
   address: emptyBi(),
@@ -321,6 +335,12 @@ export interface SiteSummary {
   visibleCoaches: number;
   /** On the studio's own domain when PUBLIC_SITE_HOSTS is set (https://turquoisestudio.app/en/workshops), else the request's origin + /site/…. */
   urls: Record<Locale, SiteUrls>;
+  /** "Website is public" (SiteContent.published). While false, `urls` on the studio's domain lead to its "coming soon" page. */
+  published: boolean;
+  /** The first PUBLIC_SITE_HOSTS entry ("turquoisestudio.app"): where visitors go. Null when this install has no domain of its own. */
+  publicHost: string | null;
+  /** The same pages as previews on the host the staff app is used on (origin + /site/…): always the full site, published or not. */
+  previewUrls: Record<Locale, SiteUrls>;
 }
 
 // ── Public forms (the public site's POST handlers validate with these) ─────

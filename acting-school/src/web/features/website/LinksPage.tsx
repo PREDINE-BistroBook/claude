@@ -23,7 +23,7 @@ import { BigSwitch } from './components/BigSwitch';
 import { BilingualField } from './components/BilingualField';
 import { MoveButtons } from './components/MoveButtons';
 import { PublicLinkRow } from './components/PublicLink';
-import { linkLabel, moveItem, replaceLink, shortUrl } from './utils';
+import { linkLabel, moveItem, previewUrlFor, replaceLink, shortUrl } from './utils';
 
 /**
  * /website/links — the link-in-bio page: its address to put in the Instagram
@@ -45,11 +45,11 @@ export default function LinksPage() {
       ) : (
         // Block layout, not grid: a grid item would grow to fit a long link that is meant to be cut with "…".
         <div className="space-y-4 sm:space-y-5">
-          <Card title={t('linkPage.bioTitle')} description={t('linkPage.bioHint')} padded={false}>
+          <Card title={t('linkPage.bioTitle')} description={summary.data && !summary.data.published ? `${t('linkPage.bioHint')} ${t('home.pagesHintNotPublic')}` : t('linkPage.bioHint')} padded={false}>
             {summary.data ? (
               <ul className="divide-y divide-line">
-                <PublicLinkRow label={t('linkPage.arabicPage')} url={summary.data.urls.ar.links} />
-                <PublicLinkRow label={t('linkPage.englishPage')} url={summary.data.urls.en.links} />
+                <PublicLinkRow label={t('linkPage.arabicPage')} url={summary.data.urls.ar.links} previewUrl={previewUrlFor(summary.data, 'ar', 'links')} />
+                <PublicLinkRow label={t('linkPage.englishPage')} url={summary.data.urls.en.links} previewUrl={previewUrlFor(summary.data, 'en', 'links')} />
               </ul>
             ) : summary.isError ? (
               <ErrorState error={summary.error} onRetry={() => void summary.refetch()} className="py-6" />

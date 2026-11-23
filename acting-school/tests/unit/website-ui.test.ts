@@ -25,11 +25,14 @@ import {
   linkLocale,
   moveItem,
   pickBilingual,
+  previewUrlFor,
+  publishStateKey,
   replaceLink,
   shortUrl,
   withContentChange,
   workshopTitle,
 } from '../../src/web/features/website/utils';
+import website from '../../src/web/features/website/i18n';
 import { NAV_ITEMS } from '../../src/web/layout/nav';
 
 describe('moveItem (Move up / Move down)', () => {
@@ -100,6 +103,63 @@ describe('site content changes', () => {
       ['b', false],
       ['c', true],
     ]);
+  });
+});
+
+describe('"Website is public": the switch on the Website home', () => {
+  const urls = (base: string) => ({ home: `${base}/en`, workshops: `${base}/en/workshops`, castingCall: `${base}/en/casting-call`, links: `${base}/en/links` });
+  const summary = (published: boolean) => ({
+    published,
+    previewUrls: { en: urls('https://team.turquoisestudio.app/site'), ar: urls('https://team.turquoisestudio.app/site') },
+  });
+
+  it('while the website is not public, "Open" becomes "Preview" and leads to the team’s preview; once public, to the public address', () => {
+    expect(previewUrlFor(summary(false), 'en', 'home')).toBe('https://team.turquoisestudio.app/site/en');
+    expect(previewUrlFor(summary(false), 'ar', 'links')).toBe('https://team.turquoisestudio.app/site/en/links');
+    expect(previewUrlFor(summary(true), 'en', 'home')).toBeUndefined();
+    expect(previewUrlFor(summary(true), 'ar', 'castingCall')).toBeUndefined();
+  });
+
+  it('each state is said in plain words, naming the studio’s domain when there is one', () => {
+    expect(publishStateKey(false, 'turquoisestudio.app')).toBe('publish.off');
+    expect(publishStateKey(true, 'turquoisestudio.app')).toBe('publish.on');
+    expect(publishStateKey(false, null)).toBe('publish.offNoHost');
+    expect(publishStateKey(true, null)).toBe('publish.onNoHost');
+    for (const lang of ['en', 'ar'] as const) {
+      const p = website[lang].publish;
+      for (const key of ['on', 'off'] as const) expect(p[key], `${lang} ${key}`).toContain('{{host}}');
+      for (const key of ['onNoHost', 'offNoHost'] as const) expect(p[key], `${lang} ${key}`).not.toContain('{{');
+    }
+    expect(website.en.publish.switch).toBe('Website is public');
+    expect(website.ar.publish.switch).toBe('الموقع منشور للزوار');
+    expect(website.en.publish.off).toBe('Visitors to {{host}} see a “coming soon” page. Only your team can preview the site.');
+    expect(website.en.publish.on).toBe('Anyone can see the site at {{host}}.');
+    // The domain is Latin inside an Arabic sentence: isolated, so it isn't reordered.
+    expect(website.ar.publish.off).toContain('\u2066{{host}}\u2069');
+    expect(website.ar.publish.on).toContain('\u2066{{host}}\u2069');
+  });
+
+  it('turning it on asks first, reminding that the demo content is made up; the big button says Preview until then', () => {
+    const page = fs.readFileSync(new URL('../../src/web/features/website/WebsiteHomePage.tsx', import.meta.url), 'utf8');
+    // On → the dialog; off → at once.
+    expect(page).toContain('onChange={(next) => (next ? setConfirmPublish(true) : setPublished(false))}');
+    expect(page).toContain("title={t('publish.confirmTitle')}");
+    expect(page).toContain('onConfirm={() => setPublished(true)}');
+    expect(page).toContain("t(data.published ? 'home.open' : 'home.preview')");
+    expect(website.en.publish.confirmMessage).toMatch(/texts, coaches and workshops are real/);
+    expect(website.en.publish.confirmMessage).toMatch(/demo content is made up/);
+    expect(website.ar.publish.confirmMessage).toMatch(/النصوص والمدربين والورش حقيقية/);
+    expect(website.en.home.preview).toBe('Preview the website');
+    expect(website.ar.home.preview).toBe('معاينة الموقع');
+    // The card comes first on the page, before the big button and the numbers.
+    expect(page.indexOf("aria-label={t('publish.title')}")).toBeGreaterThan(0);
+    expect(page.indexOf("aria-label={t('publish.title')}")).toBeLessThan(page.indexOf("aria-label={t('home.status')}"));
+  });
+
+  it('a change of the switch is one field of the content; everything else comes from the copy just read', () => {
+    const current = { ...DEFAULT_SITE_CONTENT, instagram: 'studio' };
+    expect(withContentChange(current, { published: true })).toEqual({ ...current, published: true });
+    expect(current.published).toBe(false);
   });
 });
 

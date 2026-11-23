@@ -17,6 +17,13 @@
  *   GET  /site/media/:id                    a public image (lib/siteContent.ts findPublicFile)
  *   anything else under /site               a friendly 404 page in the right language
  *
+ * The publish switch ("Website is public", content.published): while it is off
+ * a public host answers only a "coming soon" page — 200 at its root, every
+ * other GET → 302 to the root, /media/* 404, every POST the same page with 503
+ * and nothing stored. The /site previews on any other host always show the
+ * whole site (forms included, so the team can try them), with a "Preview"
+ * banner on every page while it is off.
+ *
  * Headers on every response: the CSP below, nosniff, Referrer-Policy; pages
  * "public, max-age=60", form responses, redirects and errors "no-store",
  * images "public, max-age=3600". Rendering only through hono/html's escaping
@@ -27,11 +34,11 @@ import type { Locale } from '../../shared/enums';
 import type { AppEnv } from '../env';
 import { schoolToday } from '../lib/clock';
 import { issueFormToken } from '../lib/siteForms';
-import { findPublicFile, findPublicWorkshop, loadPublicCoaches, loadPublicWorkshops } from '../lib/siteContent';
+import { findPublicFile, findPublicWorkshop, getSiteContent, loadPublicCoaches, loadPublicWorkshops } from '../lib/siteContent';
 import { bareSiteCtx, isLocale, langForPath, pathsFor, preferredLang, siteCtx, type SiteCtx } from './context';
 import { emptyForm } from './forms';
 import { SITE_MEDIA_CACHE, SITE_PAGE_CACHE, SITE_SECURITY_HEADERS } from './headers';
-import { applyPage, castingPage, errorPage, homePage, linksPage, thanksPage, workshopPage, workshopsPage } from './pages';
+import { applyPage, castingPage, comingSoonPage, errorPage, homePage, linksPage, thanksPage, workshopPage, workshopsPage } from './pages';
 import { SITE_BASE } from './paths';
 import { htmlString, type Html } from './render';
 import { sendError, submitApply, submitCasting } from './submit';
@@ -43,6 +50,39 @@ site.use('*', async (c, next) => {
   await next();
   for (const [name, value] of Object.entries(SITE_SECURITY_HEADERS)) c.header(name, value);
   if (!c.res.headers.has('Cache-Control')) c.header('Cache-Control', 'no-store');
+});
+
+/**
+ * The publish switch. On a public host (the studio's domain) with "Website is public" off, nothing of
+ * the site answers — not its pages, not its images, not its forms: visitors get the "coming soon" page
+ * at the root (in their browser's language, with the other language's line under it), every other
+ * address leads back there, and a form sent anyway is answered with that page and 503 before a byte of
+ * its body is read, so nothing is stored or counted. A /site preview (any other host) always shows the
+ * whole site: that is where the team looks at it and tries its forms before switching it on. While it
+ * is off, preview pages are not cached, so the "Preview" banner goes the moment the switch is turned.
+ * (A visitor's browser may keep a public page it loaded in the last minute — SITE_PAGE_CACHE — after
+ * the switch is turned off.)
+ */
+site.use('*', async (c, next) => {
+  const paths = pathsFor(c);
+  const published = getSiteContent(c.get('db')).published;
+  if (paths.base === SITE_BASE) {
+    await next();
+    if (!published && c.res.headers.get('Cache-Control') === SITE_PAGE_CACHE) c.header('Cache-Control', 'no-store');
+    return;
+  }
+  if (published) return next();
+  c.header('Cache-Control', 'no-store');
+  const reading = c.req.method === 'GET' || c.req.method === 'HEAD';
+  const path = new URL(c.req.url).pathname;
+  // Images: none is public yet.
+  if (reading && (path === `${SITE_BASE}/media` || path.startsWith(`${SITE_BASE}/media/`))) return c.text('Not found', 404);
+  // Every other address: back to the root. A fixed Location ("/"), so it can't lead off the host.
+  if (reading && path !== SITE_BASE) return c.redirect(paths.root(), 302);
+  c.header('Vary', 'Accept-Language');
+  c.header('X-Robots-Tag', 'noindex');
+  const body = htmlString(comingSoonPage(siteCtx(c, preferredLang(c.req.header('accept-language')))));
+  return c.html(body, reading ? 200 : 503);
 });
 
 /**

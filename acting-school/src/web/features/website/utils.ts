@@ -60,6 +60,25 @@ export function replaceLink(links: readonly SiteLink[], link: SiteLink): SiteLin
   return links.map((l) => (l.id === link.id ? link : l));
 }
 
+/**
+ * Where "Open" should lead for a page of the site: while the website is not
+ * public its public address only shows "coming soon", so the button opens the
+ * preview (and says so); once public, undefined — the public address itself.
+ */
+export function previewUrlFor<K extends string>(
+  summary: { published: boolean; previewUrls: Record<Locale, Record<K, string>> },
+  lang: Locale,
+  page: K,
+): string | undefined {
+  return summary.published ? undefined : summary.previewUrls[lang][page];
+}
+
+/** The two plain sentences under the "Website is public" switch (keys in website:publish), with or without a domain to name. */
+export function publishStateKey(published: boolean, publicHost: string | null): 'publish.on' | 'publish.off' | 'publish.onNoHost' | 'publish.offNoHost' {
+  if (publicHost) return published ? 'publish.on' : 'publish.off';
+  return published ? 'publish.onNoHost' : 'publish.offNoHost';
+}
+
 /** Which language's public links to show first: the screen's language. */
 export function linkLocale(lang: string): Locale {
   return lang === 'ar' ? 'ar' : 'en';

@@ -24,7 +24,10 @@
  * else uses it), and /site/media serving only public images. The studio's
  * own domain: `Host: turquoisestudio.app` gets the site at the root and none
  * of the staff app (wrangler is started with --infer-origin-from-routes=false,
- * scripts/cf-local.ts, so the Host header really reaches the Worker), the
+ * scripts/cf-local.ts, so the Host header really reaches the Worker) — first
+ * with the website not public, as the demo leaves it ("coming soon" at the
+ * root, everything else back to it, no images, forms 503, previews with their
+ * banner), then switched on ("Website is public") — the
  * staff app hands out links on that domain, and it lives on
  * team.turquoisestudio.app with its old address staff. forwarding. The team
  * pack: the Team page, a chat round trip with a photo, a workshop document, a
@@ -530,6 +533,11 @@ async function siteChecks(base: string, opts: { password: string }) {
   if (root.status !== 302 || root.headers.get('location') !== '/site/ar') throw new Error(`/site with Arabic: ${root.status} ${root.headers.get('location')}`);
   siteHeaders(root.headers, '/site redirect', 'no-store');
   const workshopsEn = await page('/site/en/workshops');
+  // The demo website is not public: this address (not a public host) is the team's preview, and says so on every page.
+  check(workshopsEn.text.includes('class="preview"') && workshopsEn.text.includes('Preview — the website is not public yet'), 'a preview page carries the "not public yet" banner');
+  check(workshopsEn.text.includes('<meta name="robots" content="noindex">'), 'a preview of a site that is not public is noindex');
+  const linksAr = await page('/site/ar/links');
+  check(linksAr.text.includes('معاينة — الموقع غير منشور للزوار بعد'), 'the Arabic preview banner (the link-in-bio page too)');
   const workshopHref = /href="(\/site\/en\/workshops\/\d+)#apply"/.exec(workshopsEn.text)?.[1];
   check(workshopHref, 'the demo has a workshop taking applications on the site');
   const workshopPath = workshopHref!.replace('/site/en', '');
@@ -540,7 +548,9 @@ async function siteChecks(base: string, opts: { password: string }) {
       if (res.status !== 200) throw new Error(`/site/${lang}${p}: expected 200, got ${res.status} ${res.text.slice(0, 200)}`);
       check(res.text.includes(`<html lang="${lang}" dir="${lang === 'ar' ? 'rtl' : 'ltr'}">`), `lang/dir on /site/${lang}${p}`);
       check(!/<script/i.test(res.text), `no script on /site/${lang}${p}`);
-      siteHeaders(res.headers, `/site/${lang}${p}`, 'public, max-age=60');
+      // Previews of a website that is not public yet are never cached (the banner must follow the switch at once).
+      siteHeaders(res.headers, `/site/${lang}${p}`, 'no-store');
+      check(res.text.includes('class="preview"'), `the preview banner on /site/${lang}${p}`);
     }
   }
   const home = await page('/site/en');
@@ -674,24 +684,75 @@ async function siteChecks(base: string, opts: { password: string }) {
  * www → the apex. The staff app is on team.turquoisestudio.app, and its old address, staff., forwards there.
  */
 async function publicHostChecks(base: string, opts: { password: string }) {
-  step('studio domain: turquoisestudio.app serves the site at the root, www → apex, no staff app there');
   const { hostname, port } = new URL(base);
-  const get = (p: string, host: string) =>
+  /** One request with a chosen Host header (the Worker routes by it). */
+  const send = (method: string, p: string, host: string, headers: Record<string, string | number> = {}, body?: string) =>
     new Promise<{ status: number; headers: http.IncomingHttpHeaders; body: string }>((resolve, reject) => {
-      const req = http.request({ host: hostname, port, path: p, headers: { host, 'accept-language': 'ar' } }, (res) => {
-        let body = '';
+      const req = http.request({ host: hostname, port, path: p, method, headers: { host, 'accept-language': 'ar', ...headers } }, (res) => {
+        let text = '';
         res.setEncoding('utf8');
-        res.on('data', (c: string) => (body += c));
-        res.on('end', () => resolve({ status: res.statusCode ?? 0, headers: res.headers, body }));
+        res.on('data', (c: string) => (text += c));
+        res.on('end', () => resolve({ status: res.statusCode ?? 0, headers: res.headers, body: text }));
       });
       req.on('error', reject);
-      req.end();
+      req.end(body);
     });
-  const root = await get('/', 'turquoisestudio.app');
-  if (root.status === 200 && root.body.includes('<div id="root">')) {
+  const get = (p: string, host: string) => send('GET', p, host);
+
+  // ── The publish switch, off (as the demo leaves it): the studio's domain shows "coming soon" and nothing else. ──
+  step('studio domain, website not public: "coming soon" at the root, everything else back to it, no images, forms 503');
+  const director = new Client(base);
+  expectStatus(await director.post('/api/auth/login', { email: 'director@demo.school', password: opts.password }), 200, 'director signs in');
+  const before = expectStatus(await director.get('/api/site/summary'), 200, 'site summary').body;
+  check(before.published === false && before.publicHost === 'turquoisestudio.app', `the demo website is not public (${before.published}, ${before.publicHost})`);
+  check(before.previewUrls.en.home === `${base}/site/en`, `the preview address is /site on this host (${before.previewUrls.en.home})`);
+  const soon = await get('/', 'turquoisestudio.app');
+  if (soon.status === 200 && soon.body.includes('<div id="root">')) {
     throw new Error('The Worker did not see "Host: turquoisestudio.app": wrangler dev is rewriting the host (is --infer-origin-from-routes=false still passed in scripts/cf-local.ts?)');
   }
+  check(soon.status === 200 && soon.body.includes('موقعنا الجديد قريبًا') && soon.body.includes('Our new website is coming soon'), `the root is the "coming soon" page, both languages (${soon.status})`);
+  check(soon.body.includes('<html lang="ar" dir="rtl">'), 'in the browser’s language');
+  check(soon.body.includes('<meta name="robots" content="noindex">') && soon.headers['x-robots-tag'] === 'noindex', '"coming soon" is noindex');
+  check(soon.headers['cache-control'] === 'no-store' && soon.headers['content-security-policy']?.includes("default-src 'none'"), '"coming soon": no-store, the site CSP');
+  check(soon.body.includes('https://wa.me/201094635959') && soon.body.includes('https://wa.me/201119003100') && soon.body.includes('instagram.com/turquoisecastingstudio'), 'with the saved WhatsApp lines and Instagram');
+  check(!/href="\/(en|ar|site|media|api)/.test(soon.body) && !soon.body.includes('<nav') && !soon.body.includes('<form'), 'no way into the site from it');
+  check(!soon.body.includes('Acting workshops and casting in Giza') && !soon.body.includes('Layla'), 'none of the demo texts or coaches on it');
+  for (const p of ['/en', '/ar/workshops', '/en/casting-call', '/ar/links', '/api/health', '/login', '/sw.js', '/students/1', '/site/en', '//evil.example/', '/%5Cevil.example/']) {
+    const res = await get(p, 'turquoisestudio.app');
+    check(res.status === 302 && res.headers.location === '/' && res.headers['cache-control'] === 'no-store', `${p} → the root while not public (${res.status} ${res.headers.location})`);
+  }
+  const coachPhoto = expectStatus(await director.get('/api/site/coaches'), 200, 'site coaches').body.items.find((c: any) => c.visible && c.photoFileId)?.photoFileId;
+  check(coachPhoto, 'a shown coach with a photo (demo)');
+  check((await get(`/media/${coachPhoto}`, 'turquoisestudio.app')).status === 404, 'no image is served on the domain while not public');
+  check((await get(`/site/media/${coachPhoto}`, `${hostname}:${port}`)).status === 200, 'the preview keeps its images');
+  const leadsBefore = expectStatus(await director.get('/api/leads?source=website'), 200, 'website leads').body.items.length;
+  const closedForm = 'firstName=Nour&lastName=Closed&phone=01012345678';
+  for (const p of ['/en/apply', '/ar/casting-call', '/api/auth/login']) {
+    const res = await send('POST', p, 'turquoisestudio.app', { origin: 'https://turquoisestudio.app', 'content-type': 'application/x-www-form-urlencoded', 'content-length': Buffer.byteLength(closedForm) }, closedForm);
+    check(res.status === 503 && res.body.includes('Our new website is coming soon') && res.headers['cache-control'] === 'no-store', `POST ${p} while not public: 503 with the page (${res.status})`);
+  }
+  check(expectStatus(await director.get('/api/leads?source=website'), 200, 'website leads').body.items.length === leadsBefore, 'nothing was stored');
+  const wwwSoon = await get('/ar/links?from=ig', 'www.turquoisestudio.app');
+  check(wwwSoon.status === 301 && /^https?:\/\/turquoisestudio\.app\/ar\/links\?from=ig$/.test(String(wwwSoon.headers.location)), `www → apex, public or not (${wwwSoon.status})`);
+  // The staff app's own switch: only with website.manage; saving other content leaves it alone.
+  const coach = new Client(base);
+  expectStatus(await coach.post('/api/auth/login', { email: 'coach@demo.school', password: opts.password }), 200, 'coach signs in');
+  expectStatus(await coach.put('/api/site/content', { published: true }), 403, 'a coach can’t publish the website');
+  const content = expectStatus(await director.get('/api/site/content'), 200, 'site content').body;
+  check(content.published === false, 'content.published is false');
+  const { published: _omitted, ...withoutSwitch } = content;
+  check(expectStatus(await director.put('/api/site/content', withoutSwitch), 200, 'save the content without the switch').body.published === false, 'saving texts doesn’t publish');
+
+  // ── Switched on: the site itself, as before. ──
+  step('studio domain, website public: turquoisestudio.app serves the site at the root, www → apex, no staff app there');
+  check(expectStatus(await director.put('/api/site/content', { ...content, published: true }), 200, 'switch the website on').body.published === true, 'the website is public');
+  check(expectStatus(await director.get('/api/site/summary'), 200, 'site summary').body.published === true, 'the summary says so');
+  const root = await get('/', 'turquoisestudio.app');
   check(root.status === 302 && root.headers.location === '/ar', `apex / → /ar (${root.status} ${root.headers.location})`);
+  check((await get(`/media/${coachPhoto}`, 'turquoisestudio.app')).status === 200, 'images are served on the domain once public');
+  const previewNow = await get('/site/en', `${hostname}:${port}`);
+  check(previewNow.status === 200 && !previewNow.body.includes('class="preview"') && !previewNow.body.includes('noindex'), 'no preview banner once public');
+  check(previewNow.headers['cache-control'] === 'public, max-age=60', `pages are cached for a minute once public (${previewNow.headers['cache-control']})`);
   const home = await get('/en/workshops', 'turquoisestudio.app');
   check(home.status === 200 && home.body.includes('href="/en/casting-call"') && !home.body.includes('href="/site/'), `bare links on the public host (${home.status})`);
   check(home.headers['content-security-policy']?.includes("default-src 'none'"), 'site CSP on the public host');
@@ -738,8 +799,6 @@ async function publicHostChecks(base: string, opts: { password: string }) {
   );
   // The staff app hands out the studio's own addresses (Website home, the link for the Instagram bio), and a
   // /site preview names that domain as the page's real address.
-  const director = new Client(base);
-  expectStatus(await director.post('/api/auth/login', { email: 'director@demo.school', password: opts.password }), 200, 'director signs in');
   const urls = expectStatus(await director.get('/api/site/summary'), 200, 'site summary').body.urls;
   check(urls.ar.links === 'https://turquoisestudio.app/ar/links' && urls.en.home === 'https://turquoisestudio.app/en', `public links are on the studio's domain (${urls.ar.links})`);
   const preview = await get('/site/en', `${hostname}:${port}`);

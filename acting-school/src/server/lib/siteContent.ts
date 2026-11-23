@@ -52,7 +52,8 @@ function withLinkIds(links: readonly { id: string | null; label: Bilingual; url:
  */
 function fromStored(value: unknown): SiteContent {
   const whole = siteContentSchema.safeParse(value);
-  if (whole.success) return { ...whole.data, links: withLinkIds(whole.data.links) };
+  // Content stored before the publish switch existed has no `published`: not public.
+  if (whole.success) return { ...whole.data, published: whole.data.published === true, links: withLinkIds(whole.data.links) };
   const out = cloneDefaults() as unknown as Record<string, unknown>;
   const stored = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
   for (const [key, field] of Object.entries(siteContentSchema.shape)) {
@@ -60,7 +61,7 @@ function fromStored(value: unknown): SiteContent {
     if (r.success) out[key] = r.data;
   }
   const content = out as unknown as SiteContent;
-  return { ...content, links: withLinkIds(content.links as SiteContentParsed['links']) };
+  return { ...content, published: content.published === true, links: withLinkIds(content.links as SiteContentParsed['links']) };
 }
 
 /** The site content; without a 'site' key: empty texts, no contact lines, the casting call closed (DEFAULT_SITE_CONTENT). */
@@ -72,9 +73,12 @@ export function getSiteContent(db: Reader): SiteContent {
 /**
  * Store the whole object (already validated with `siteContent`); new links get
  * an id. Returns what was stored. Callers check heroFileId first (assertSiteImage).
+ * `published` missing means not published: a caller that must keep the stored
+ * switch (PUT /api/site/content) passes it in.
  */
 export function saveSiteContent(db: Pick<DB, 'insert'>, content: SiteContentParsed | SiteContent): SiteContent {
   const stored: SiteContent = {
+    published: content.published === true,
     tagline: { ...content.tagline },
     about: { ...content.about },
     address: { ...content.address },

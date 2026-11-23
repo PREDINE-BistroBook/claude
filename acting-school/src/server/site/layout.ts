@@ -40,6 +40,7 @@ img{max-width:100%;height:auto;display:block}
 [dir=rtl] .flip{transform:scaleX(-1)}
 .skip{position:absolute;inset-inline-start:8px;top:-100px;background:var(--focus);color:#000;padding:12px 16px;border-radius:10px;font-weight:700;z-index:9}
 .skip:focus{top:8px}
+.preview{display:flex;align-items:center;justify-content:center;gap:8px;margin:0;padding:8px 16px;background:var(--focus);color:#000;font-weight:800;font-size:.95rem;text-align:center}
 .top{background:var(--tile);color:#fff}
 .top-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:12px}
 .brand{display:flex;align-items:center;gap:12px;color:#fff;text-decoration:none;font-weight:800;font-size:1.1rem;min-height:48px}
@@ -139,6 +140,10 @@ html[lang=ar] .dob{grid-template-columns:minmax(0,1fr) minmax(0,1.5fr) minmax(0,
 .bio .btn-line{background:#101817;color:#fff;border-color:#2e3d3b}
 .bio small{display:block;font-weight:600;opacity:.8}
 .bio .lang{margin-top:24px}
+.soon .lead{color:var(--mint);font-size:1.35rem;font-weight:700;margin-bottom:.4em}
+.soon .also{color:#d7efec;font-size:1.15rem;margin-bottom:24px}
+.soon .reach{color:#d7efec;margin:8px 0 16px}
+.soon .addr{justify-content:center;color:#d7efec;margin-top:24px}
 @media (max-width:350px){.dob,html[lang=ar] .dob{grid-template-columns:1fr}}
 @media (min-width:600px){.nav{display:flex;flex-wrap:wrap}}
 @media (min-width:760px){
@@ -176,6 +181,8 @@ export interface LayoutOptions {
   noindex?: boolean;
   /** The link-in-bio page: no header/footer, dark. */
   bare?: boolean;
+  /** A /site preview of a website that is not public yet: the banner at the top of the page, and noindex. */
+  preview?: boolean;
   body: Html;
 }
 
@@ -204,7 +211,7 @@ export function layout(o: LayoutOptions): Html {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${o.title}</title>
 <meta name="description" content="${o.description}">
-${o.noindex ? raw('<meta name="robots" content="noindex">') : ''}
+${o.noindex || o.preview ? raw('<meta name="robots" content="noindex">') : ''}
 ${o.alternates
   ? html`<link rel="canonical" href="${canon(o.alternates[lang])}">
 <link rel="alternate" hreflang="en" href="${canon(o.alternates.en)}">
@@ -222,11 +229,15 @@ ${o.ogImage ? html`<meta property="og:image" content="${abs(o.ogImage)}"><meta n
 <link rel="icon" href="${FAVICON_HREF}">
 <style>${raw(CSS)}</style>`;
 
+  // Staff looking at the site before it is public: one slim line above everything, on every preview page.
+  const previewBanner = o.preview ? html`<p class="preview" role="status">${icon('eye')}<span>${t.soon.previewBanner}</span></p>` : '';
+
   if (o.bare) {
     return html`<!doctype html>
 <html lang="${lang}" dir="${lang === 'ar' ? 'rtl' : 'ltr'}">
 <head>${head}</head>
 <body class="bio">
+${previewBanner}
 <main id="main">${o.body}${langSwitch}</main>
 </body>
 </html>`;
@@ -237,6 +248,7 @@ ${o.ogImage ? html`<meta property="og:image" content="${abs(o.ogImage)}"><meta n
 <head>${head}</head>
 <body>
 <a class="skip" href="#main">${t.meta.skip}</a>
+${previewBanner}
 <header class="top">
 <div class="wrap top-row"><a class="brand" href="${paths.home(lang)}">${brandMark('mark')}<span>${o.studioName}</span></a>${langSwitch}</div>
 <nav class="wrap nav" aria-label="${t.meta.mainMenu}">${nav}</nav>

@@ -120,6 +120,7 @@ Design rule for everything here: **made for older, non-technical people.**
 - **Site content:** stored in the existing `settings` table under the key `site` as one JSON object, validated by `siteContent` (zod, `src/shared/schemas/site.ts`). The helpers `getSiteContent(db)` / `saveSiteContent(db, content)` live in `src/server/lib/siteContent.ts`; a missing key means defaults with empty texts and the casting call closed. Shape (each `Bilingual` is `{ en: string, ar: string }`, both may be empty):
   ```
   {
+    published: boolean   (the "Website is public" switch — see "Publish switch" in Part D; default false),
     tagline: Bilingual, about: Bilingual, address: Bilingual,
     mapUrl: string|null, instagram: string|null (handle without @),
     whatsappWorkshops: string|null, whatsappCasting: string|null, phone: string|null, email: string|null,
@@ -225,7 +226,8 @@ Design rule for everything here: **made for older, non-technical people.**
 ## Part C — Website section and Casting applications (staff web UI)
 
 - **`/website` — Website home:**
-  - A big "Open the website" button: opens `/site` in a new tab, `rel="noopener"`.
+  - First, a prominent card with the big switch **"Website is public" / «الموقع منشور للزوار»** (the publish switch, Part D), and one plain sentence for its state: "Visitors to turquoisestudio.app see a 'coming soon' page. Only your team can preview the site." / "Anyone can see the site at turquoisestudio.app." Turning it **on** asks first, with a reminder to check that the texts, coaches and workshops are real (the demo content is made up); turning it off is immediate.
+  - A big "Open the website" button: opens the site in a new tab, `rel="noopener"`. While the website is not public it reads **"Preview the website"** and opens the `/site` preview; the "Open" button of each page below does the same ("Preview"), while "Copy link" keeps copying the public address.
   - Status cards (from `/api/site/summary`): new website enquiries (link to Admissions filtered to website), new casting applications (link to Casting › Applications), casting call open/closed with a quick switch, workshops shown, coaches shown.
   - "Your website's pages": Home, Workshops, Casting call, Links. Each row has "Open" and "Copy link" buttons, with a toast "Link copied". An English/Arabic toggle picks which language's links are shown.
 - **`/website/pages` — "Studio & contact":** one `FormPage`.
@@ -286,6 +288,12 @@ Design rule for everything here: **made for older, non-technical people.**
   - **`run_worker_first`:** with static assets, a path on a public host must reach the Worker before assets. So `wrangler.jsonc` uses `"run_worker_first": true`, and the Worker passes staff-host asset requests to `env.ASSETS` exactly as before; the embedded variant already runs the Worker first.
   - **Tests:** cover the public-host routing (Worker-level unit tests in `tests/unit/`, using a fake ASSETS and DO stub) and the link building in `paths.ts`.
   - **Custom domains in the configs:** the deployer adds `routes` with `custom_domain: true` when switching the domain on (done: both configs carry them). Builders don't add `routes`. Local runs (`cf:dev`, `cf:smoke`) pass `--infer-origin-from-routes=false` so wrangler doesn't rewrite every request's host to the first route.
+
+### Publish switch (added 2026-11-23, the operator's decision)
+The demo content is made up, and it sits next to the studio's real phone numbers: the website must not be public until the owner says so. So the site content has one master switch, **`published`** (default `false`; in the existing `site` settings JSON, no migration), shown as "Website is public" at the top of the Website home (`website.manage`). It is part of `GET`/`PUT /api/site/content` (left out of a `PUT` it keeps its stored value, so saving texts never publishes or unpublishes; content stored before the switch existed reads as not public) and `GET /api/site/summary` reports it, with `publicHost` (the first `PUBLIC_SITE_HOSTS` entry) and `previewUrls` (the `/site` pages on the host the staff app is used on). The demo seed leaves it off.
+- **On a public host while not published,** nothing of the site answers. `GET /` is a **"coming soon" page** rendered by the site code (same brand; the visitor's language by `Accept-Language`, with the other language's line under it): the studio's name, "Our new website is coming soon" / «موقعنا الجديد قريبًا», and — only from the saved content — the WhatsApp workshops and WhatsApp casting buttons, Instagram and the address. No other content (texts, workshops, coaches and photos may be drafts), no menu, no links into the site. It answers 200 with `noindex` (meta and `X-Robots-Tag`) and `no-store`. Every other `GET` redirects (302, `no-store`) to `/` — a fixed `Location`, so it can never lead off the host; `/media/*` answers 404; every `POST` (or other method) answers the same page with **503** before a byte of its body is read, so nothing is stored or counted. `www` → apex is unchanged, and nothing of the staff app answers, as before.
+- **On any other host** (`/site/…` on `team.turquoisestudio.app`, workers.dev, localhost) the whole site **always** renders: that is the preview, and its forms keep working so the team can try them. While not published, every preview page carries a slim banner at the top, "Preview — the website is not public yet" / «معاينة — الموقع غير منشور للزوار بعد», is `noindex`, and is not cached (`no-store`), so the banner goes the moment the switch is turned.
+- **When it is turned off again,** a visitor's browser may keep a page it loaded in the last minute (pages are cached for 60 s); the next request gets "coming soon".
 
 ### Pages (`:lang` is `en` or `ar`)
 - **`GET /site`:** redirects (302) to `/site/ar` if `Accept-Language` prefers Arabic, otherwise `/site/en`.
@@ -392,12 +400,13 @@ Design rule for everything here: **made for older, non-technical people.**
   - minor needs guardian + consent;
   - photo magic-bytes check, too many photos, too large;
   - a closed casting call refuses submissions (410);
+  - the publish switch: default off, toggled only with `website.manage`, kept when a `PUT` leaves it out; a public host in both states (the "coming soon" page, redirects that never leave the host, media 404, forms 503 with nothing stored), the preview banner, and the Worker routing for an unpublished public host;
   - accept creates talent + photos and is not repeatable (409);
   - delete removes files not used by talent;
   - `/site/media` only serves public files;
   - the `BUILT_IN_GRANTS` v2 upgrade gives the director `website.manage` once.
 - **Unit tests:** `sectionForPath`, `visibleSections`, `mobileTabs(section, can)`.
-- **`scripts/cf-smoke.ts`:** extend with the public pages (both languages), one apply, one casting application with a photo, `/site/media`, accept → talent, and the headers on `/site`. Run `npm run cf:smoke` and `npm run cf:smoke -- --embedded`.
+- **`scripts/cf-smoke.ts`:** extend with the public pages (both languages), one apply, one casting application with a photo, `/site/media`, accept → talent, and the headers on `/site`; the studio's domain in both states of the publish switch (not public as the demo leaves it, then switched on). Run `npm run cf:smoke` and `npm run cf:smoke -- --embedded`.
 - **Docs:** update `README.md`, `CLAUDE.md` (layout, the sections model, the public site rules: no raw HTML, the rate limits, `/site` paths) and `ROADMAP.md`.
 
 ---

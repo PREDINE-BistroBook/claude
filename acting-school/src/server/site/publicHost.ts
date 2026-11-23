@@ -11,6 +11,10 @@
  *   site's pages, /media/:id, and its friendly 404 for everything else —
  *   /api/*, /login, the staff app's files and service worker included;
  * - any other host: not ours to touch ('staff').
+ *
+ * Whether the site is public yet (the publish switch) is the app's business,
+ * not this routing's: while it is off the site router answers "coming soon"
+ * for whatever is mapped here (index.ts).
  */
 import { SITE_BASE, isPublicSiteHost, normalizeHost } from './paths';
 

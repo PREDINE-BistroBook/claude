@@ -215,6 +215,13 @@ const en = {
     home: 'Go to the home page',
     backToForm: 'Back to the form',
   },
+  /** While the website is not public ("Website is public" off): the page visitors get, and the banner on the team's previews. */
+  soon: {
+    pageTitle: 'Coming soon',
+    title: 'Our new website is coming soon',
+    reach: 'Until then, you can reach us here:',
+    previewBanner: 'Preview — the website is not public yet',
+  },
   footer: {
     rights: '© {year} {name}',
   },
@@ -426,6 +433,12 @@ const ar: SiteStrings = {
     errorText: 'من فضلك حاول مرة أخرى بعد قليل، أو راسلنا على واتساب.',
     home: 'اذهب إلى الصفحة الرئيسية',
     backToForm: 'العودة إلى النموذج',
+  },
+  soon: {
+    pageTitle: 'قريبًا',
+    title: 'موقعنا الجديد قريبًا',
+    reach: 'وحتى ذلك الحين، تواصل معنا من هنا:',
+    previewBanner: 'معاينة — الموقع غير منشور للزوار بعد',
   },
   footer: {
     rights: '© {year} {name}',

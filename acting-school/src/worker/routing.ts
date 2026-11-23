@@ -9,6 +9,9 @@
  * - every path /x → the Durable Object as /site/x (the public website at the
  *   root); nothing of the staff app — /api/*, /login, its static files, the
  *   service worker — answers there: those paths get the site's 404 page.
+ *   While the website is not public (the publish switch, content.published)
+ *   the app answers its "coming soon" page there instead, for every path
+ *   (src/server/site/index.ts) — the Worker routes the same either way.
  *
  * On any other host (team.turquoisestudio.app, workers.dev, localhost):
  * - /api/* and /site, /site/* → the Durable Object (the API and the public

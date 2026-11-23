@@ -25,6 +25,12 @@ export interface SiteCtx {
    * (without /site), so the preview isn't a second copy of the site for search engines and link previews.
    */
   canonicalOrigin?: string;
+  /**
+   * A /site preview of a website that is not public yet (content.published false): every page says so
+   * in a slim banner at the top and stays out of search results. Never set on a public host — there an
+   * unpublished site is the "coming soon" page (index.ts).
+   */
+  preview?: boolean;
   studioName: string;
   content: SiteContent;
   /** For wa.me links (settings.defaultCountryCode). */
@@ -71,14 +77,16 @@ export function siteCtx(c: Context<AppEnv>, lang: Locale): SiteCtx {
   const name = (lang === 'ar' ? settings.schoolNameAr || settings.schoolName : settings.schoolName)?.trim() || t.meta.studioName;
   const paths = pathsFor(c);
   const publicHost = c.get('config').publicSiteHosts[0];
+  const content = getSiteContent(db);
   return {
     lang,
     t,
     paths,
     origin: new URL(c.req.url).origin,
     canonicalOrigin: publicHost && paths.base === SITE_BASE ? `https://${publicHost}` : undefined,
+    preview: paths.base === SITE_BASE && !content.published,
     studioName: name,
-    content: getSiteContent(db),
+    content,
     countryCode: settings.defaultCountryCode,
     today: schoolToday(c),
   };

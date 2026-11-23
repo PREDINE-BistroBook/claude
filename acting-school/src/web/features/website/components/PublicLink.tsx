@@ -16,9 +16,12 @@ export function useCopyLink() {
 
 /**
  * One public page: its name, its address (always left-to-right, selectable so
- * it can also be copied by hand), and big "Open" / "Copy link" buttons.
+ * it can also be copied by hand), and big "Open" / "Copy link" buttons. While
+ * the website is not public (`previewUrl` given) the first button reads
+ * "Preview" and opens the page as the team sees it, since the public address
+ * only shows "coming soon"; "Copy link" still copies the public address.
  */
-export function PublicLinkRow({ label, url, icon }: { label: ReactNode; url: string; icon?: ReactNode }) {
+export function PublicLinkRow({ label, url, previewUrl, icon }: { label: ReactNode; url: string; previewUrl?: string; icon?: ReactNode }) {
   const { t } = useTranslation('website');
   const copy = useCopyLink();
   return (
@@ -33,9 +36,9 @@ export function PublicLinkRow({ label, url, icon }: { label: ReactNode; url: str
         </div>
       </div>
       <div className="grid grid-cols-2 gap-2 sm:flex">
-        <a href={url} target="_blank" rel="noopener" className={buttonClasses('secondary', 'lg', 'px-4')}>
+        <a href={previewUrl ?? url} target="_blank" rel="noopener" className={buttonClasses('secondary', 'lg', 'px-4')}>
           <ExternalLink className="size-4 shrink-0 rtl:-scale-x-100" aria-hidden />
-          {t('links.open')}
+          {t(previewUrl ? 'links.preview' : 'links.open')}
           <span className="sr-only">
             {' '}
             {t('links.opensNewTab')}
