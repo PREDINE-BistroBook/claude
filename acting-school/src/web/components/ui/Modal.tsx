@@ -103,6 +103,7 @@ export function ConfirmDialog({
   title,
   message,
   confirmLabel,
+  cancelLabel,
   tone = 'danger',
   loading,
   onConfirm,
@@ -112,6 +113,8 @@ export function ConfirmDialog({
   title?: ReactNode;
   message?: ReactNode;
   confirmLabel?: string;
+  /** The way out, when "Cancel" would read like the action itself (cancelling an order: "Keep the order"). */
+  cancelLabel?: string;
   tone?: 'danger' | 'primary';
   loading?: boolean;
   onConfirm: () => void;
@@ -128,7 +131,7 @@ export function ConfirmDialog({
         <>
           {/* 48 px: these confirm something destructive, for people who must not mis-tap. */}
           <Button size="lg" onClick={onCancel} disabled={loading}>
-            {t('common:actions.cancel')}
+            {cancelLabel ?? t('common:actions.cancel')}
           </Button>
           <Button size="lg" variant={tone === 'danger' ? 'danger' : 'primary'} onClick={onConfirm} loading={loading}>
             {confirmLabel ?? t('common:actions.delete')}

@@ -74,8 +74,9 @@ import * as t from './schema';
  *   account's photo stays; the website's main photo stays if the content does).
  * - 'bytes': the stored bytes of the files table (file_chunks): they follow
  *   their files row, through the FileStore, after the transaction.
- * - 'stay': left as it is (positions; settings, where only the website's
- *   content object changes, as `keepSiteContent` says).
+ * - 'stay': left as it is (positions; the cafeteria's menu; settings, where
+ *   only the website's content object changes, as `keepSiteContent` says —
+ *   the cafeteria's switch and places are settings too, and stay).
  */
 export type ClearDemoRows = 'all' | 'accounts' | 'unused' | 'bytes' | 'stay';
 
@@ -97,7 +98,10 @@ export interface ClearDemoTable {
  * before the accounts go.
  */
 export const CLEAR_DEMO_TABLES: readonly ClearDemoTable[] = [
-  // The team pack
+  // The cafeteria's orders (they point at accounts); its menu stays (below)
+  { table: t.cafeOrderItems, rows: 'all' },
+  { table: t.cafeOrders, rows: 'all' },
+  // The team pack (notifications: every kind, the cafeteria's included)
   { table: t.pushSubscriptions, rows: 'all', volatile: true },
   { table: t.notifications, rows: 'all' },
   { table: t.summons, rows: 'all' },
@@ -141,6 +145,7 @@ export const CLEAR_DEMO_TABLES: readonly ClearDemoTable[] = [
   { table: t.fileChunks, rows: 'bytes' },
   // What stays
   { table: t.positions, rows: 'stay' },
+  { table: t.cafeItems, rows: 'stay' },
   { table: t.settings, rows: 'stay' },
 ];
 
@@ -150,6 +155,7 @@ const NAME = {
   userPositions: tableName(t.userPositions),
   files: tableName(t.files),
   positions: tableName(t.positions),
+  cafeItems: tableName(t.cafeItems),
   settings: tableName(t.settings),
 };
 
@@ -453,6 +459,7 @@ export function planClearDemo(db: DB, input: ClearDemoInput): ClearDemoPlan {
       [NAME.userPositions]: accounts.reduce((n, a) => n + a.positions.length, 0),
       [NAME.files]: filesAfter,
       [NAME.positions]: allPositions.length,
+      [NAME.cafeItems]: rowCount(db, t.cafeItems),
       [NAME.settings]: rowCount(db, t.settings) - (site.write === 'remove' ? 1 : 0),
     },
     site,

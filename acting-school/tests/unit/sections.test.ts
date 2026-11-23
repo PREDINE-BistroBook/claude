@@ -225,8 +225,8 @@ describe('where "/" starts (defaultSection, startSection)', () => {
     expect(start(builtIn('casting_team'))).toBe('casting');
     expect(start(['students.read', 'talent.read'])).toBe('casting');
     expect(start(['students.read', 'castings.read', 'website.manage'])).toBe('casting');
-    // Everyone else keeps the tab order.
-    for (const key of ['ceo', 'cfo', 'executive_director', 'head_of_casting', 'video_editor', 'acting_coach', 'finance']) expect(start(builtIn(key)), key).toBe('school');
+    // Everyone else keeps the tab order (the Heads of Casting: the next test).
+    for (const key of ['ceo', 'cfo', 'executive_director', 'video_editor', 'acting_coach', 'finance']) expect(start(builtIn(key)), key).toBe('school');
     expect(start(['students.read', 'courses.read', 'talent.read'])).toBe('school');
     expect(start(['students.read', 'admissions.read', 'castings.read'])).toBe('school');
     // Only the student list and no Casting: School it is.
@@ -236,6 +236,31 @@ describe('where "/" starts (defaultSection, startSection)', () => {
     expect(start(['website.manage'])).toBe('website');
     expect(start([])).toBeNull();
     expect(defaultSection([], canWith([]))).toBeNull();
+  });
+
+  it('someone who writes castings and has no admissions starts in Casting — the Heads of Casting, though they read the workshops (the operator’s decision)', () => {
+    const head = builtIn('head_of_casting');
+    expect(head).toEqual(expect.arrayContaining(['courses.read', 'castings.write']));
+    expect(head).not.toContain('admissions.read');
+    expect(keys(head)).toEqual(['school', 'casting']);
+    expect(start(head)).toBe('casting');
+    expect(defaultSection(visibleSections(canWith(head)), canWith(head))).toBe('casting');
+    expect(currentSection('/profile', visibleSections(canWith(head)), null, canWith(head))).toBe('casting');
+    // castings.write with workshops, the website too: still Casting.
+    expect(start(['students.read', 'courses.read', 'castings.read', 'castings.write'])).toBe('casting');
+    expect(start(['courses.read', 'castings.read', 'castings.write', 'website.manage'])).toBe('casting');
+    // Admissions keeps someone in School, whatever else they hold: the director, the owners.
+    expect(start(['courses.read', 'admissions.read', 'castings.read', 'castings.write'])).toBe('school');
+    expect(start([...head, 'admissions.read'])).toBe('school');
+    expect(start(builtIn('executive_director'))).toBe('school');
+    expect(start(PERMISSIONS)).toBe('school');
+    // Reading castings without writing them changes nothing (the video editor, a coach who reads talent).
+    expect(start(['students.read', 'courses.read', 'castings.read'])).toBe('school');
+    expect(start(['courses.read', 'talent.read'])).toBe('school');
+    // castings.write without Casting showing (a hand-made position with no castings.read/talent.read) can't start there.
+    expect(start(['courses.read', 'castings.write'])).toBe('school');
+    // A Head of Casting who chose School last time goes back to School.
+    expect(start(head, 'school')).toBe('school');
   });
 
   it('a remembered section the person still sees always wins; one they no longer see doesn’t', () => {

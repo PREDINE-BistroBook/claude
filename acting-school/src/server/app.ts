@@ -10,6 +10,7 @@ import { loadSession, requireAjaxHeader, requireOwnPassword } from './middleware
 import { limitBody, MAX_JSON_BODY_BYTES } from './middleware/bodyLimit';
 import { adminRoutes } from './routes/admin';
 import authRoutes from './routes/auth';
+import cafeRoutes from './routes/cafe';
 import castingApplicationRoutes from './routes/castingApplications';
 import chatRoutes from './routes/chat';
 import castingRoutes from './routes/castings';
@@ -129,6 +130,8 @@ export function createApp(deps: AppDeps) {
   app.route('/api/summons', summonsRoutes);
   app.route('/api/notifications', notificationRoutes);
   app.route('/api/push', pushRoutes);
+  // The cafeteria: the menu, ordering, the orders board (Part J).
+  app.route('/api/cafe', cafeRoutes);
 
   app.all('/api/*', (c) => c.json({ error: { code: 'not_found', message: 'No such API route' } }, 404));
 

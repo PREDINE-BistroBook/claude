@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { LOCALES, type Locale } from '../enums';
 import { COUNTRY_CODE_RE } from '../phone';
 import { EMAIL_DOMAIN_RE } from '../usernames';
+import { DEFAULT_CAFE_PLACES, type CafePlace } from './cafe';
 import { optText, reqText } from './common';
 
 /** A stable slug for an interview criterion: lower-case letters, digits and "_", starting with a letter. */
@@ -66,6 +67,8 @@ export const settingsInput = z
      * addresses accounts already have.
      */
     emailDomain,
+    /** The cafeteria (ordering, the orders board, the menu): off hides all of it and every /api/cafe route answers 409. */
+    cafeteriaEnabled: z.boolean(),
   })
   .partial();
 export type SettingsInput = z.infer<typeof settingsInput>;
@@ -81,6 +84,10 @@ export interface AppSettings {
   defaultCountryCode: string;
   /** Domain of the automatic email addresses (<username>@<emailDomain>). */
   emailDomain: string;
+  /** Cafeteria ordering is switched on (the default). */
+  cafeteriaEnabled: boolean;
+  /** Where a cafeteria order can come, in order. Changed with PUT /api/cafe/places (cafeteria.serve or settings.manage), not PATCH /api/settings. */
+  cafePlaces: CafePlace[];
 }
 
 /** Until the school tells us what Salma assesses (ROADMAP "Waiting on the school"). */
@@ -104,4 +111,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultCountryCode: '20',
   /** The studio's own domain. */
   emailDomain: 'turquoisestudio.app',
+  cafeteriaEnabled: true,
+  cafePlaces: DEFAULT_CAFE_PLACES,
 };

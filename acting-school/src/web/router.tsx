@@ -2,6 +2,7 @@ import { lazy } from 'react';
 import { createBrowserRouter } from 'react-router';
 import { admissionsRoutes } from './features/admissions/routes';
 import { applicationsRoutes } from './features/applications/routes';
+import { cafeRoutes } from './features/cafe/routes';
 import { castingsRoutes } from './features/castings/routes';
 import { chatRoutes } from './features/chat/routes';
 import { classesRoutes } from './features/classes/routes';
@@ -52,6 +53,7 @@ export const router = createBrowserRouter([
       ...settingsRoutes,
       ...teamRoutes,
       ...chatRoutes,
+      ...cafeRoutes,
       { path: 'profile', element: <ProfilePage /> },
       { path: '*', element: <NotFoundPage /> },
     ],

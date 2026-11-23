@@ -1,5 +1,5 @@
 import { Clapperboard, Globe, School, type LucideIcon } from 'lucide-react';
-import type { Permission } from '@shared/permissions';
+import { SECTION_PERMISSIONS, type Permission } from '@shared/permissions';
 
 /**
  * The staff app's three sections, switched with the tabs at the top
@@ -17,7 +17,7 @@ export interface Section {
   icon: LucideIcon;
   /** Key in the common namespace. */
   labelKey: `sections.${SectionKey}`;
-  /** Shown to anyone holding at least one of these. */
+  /** Shown to anyone holding at least one of these (SECTION_PERMISSIONS in shared/permissions.ts: the server reads the same lists). */
   anyPermission: readonly Permission[];
   /** Paths that belong to the section: the prefix itself or anything under it ("/talent", "/talent/12"). */
   prefixes: readonly string[];
@@ -29,7 +29,7 @@ export const SECTIONS: readonly Section[] = [
     home: '/school',
     icon: School,
     labelKey: 'sections.school',
-    anyPermission: ['courses.read', 'students.read', 'admissions.read'],
+    anyPermission: SECTION_PERMISSIONS.school,
     prefixes: ['/school', '/schedule', '/admissions', '/students', '/classes', '/sessions'],
   },
   {
@@ -37,7 +37,7 @@ export const SECTIONS: readonly Section[] = [
     home: '/casting',
     icon: Clapperboard,
     labelKey: 'sections.casting',
-    anyPermission: ['talent.read', 'castings.read'],
+    anyPermission: SECTION_PERMISSIONS.casting,
     // "/casting" covers /casting/schedule and /casting/applications.
     prefixes: ['/casting', '/talent', '/castings'],
   },
@@ -46,7 +46,7 @@ export const SECTIONS: readonly Section[] = [
     home: '/website',
     icon: Globe,
     labelKey: 'sections.website',
-    anyPermission: ['website.manage'],
+    anyPermission: SECTION_PERMISSIONS.website,
     prefixes: ['/website'],
   },
 ];
@@ -78,14 +78,21 @@ export function sectionForPath(pathname: string): SectionKey | null {
 /**
  * Where someone starts when nothing is remembered ("/" on a first visit, and
  * the menu shown on profile / admin pages then): their first section in tab
- * order — School, Casting, Website — with one exception. Someone whose School
- * is only the student list (students.read without courses.read or
- * admissions.read) and who sees Casting starts in Casting: for the casting
- * team, School is one card and their work is all under Casting.
+ * order — School, Casting, Website — with two exceptions, both for people who
+ * see Casting and don't run admissions (no admissions.read):
+ * - someone whose School is only the student list (students.read without
+ *   courses.read): for the casting team, School is one card and their work is
+ *   all under Casting;
+ * - someone who writes castings (castings.write): the Heads of Casting read
+ *   the workshops too, but their work is the castings (the operator's
+ *   decision, 2026-11-23).
  */
 export function defaultSection(visible: readonly Section[], can: (p: Permission) => boolean): SectionKey | null {
   const keys = visible.map((s) => s.key);
-  if (keys.includes('school') && keys.includes('casting') && !can('courses.read') && !can('admissions.read')) return 'casting';
+  if (keys.includes('casting') && !can('admissions.read')) {
+    if (keys.includes('school') && !can('courses.read')) return 'casting';
+    if (can('castings.write')) return 'casting';
+  }
   return keys[0] ?? null;
 }
 

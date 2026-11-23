@@ -6,7 +6,7 @@
  * English and Arabic (NOTIFICATION_TEXT; Arabic is typed against English).
  * Arabic wording avoids gendered verbs: the names can be anyone's.
  */
-import { and, count, eq, gt, inArray, isNull, lt, ne, or } from 'drizzle-orm';
+import { and, count, eq, gt, inArray, isNull, lt, ne, notInArray, or } from 'drizzle-orm';
 import { SUMMONS_EXPIRY_MS, type Locale, type NotificationKind, type SummonsAnswer } from '../../shared/enums';
 import { MESSAGE_PREVIEW_LENGTH } from '../../shared/schemas/chat';
 import type { NotificationItem } from '../../shared/schemas/notifications';
@@ -27,6 +27,16 @@ const en = {
   answerAbout: 'About: {{note}}',
   testTitle: 'Alerts are on',
   testBody: 'Messages and calls to the office will show up here.',
+  // The cafeteria: a new order (to whoever serves), then what became of it (to whoever ordered).
+  cafeNewOrderTitle: 'New order from {{name}}',
+  cafeOrderBody: '{{items}} — to {{place}}',
+  cafeOnTheWayTitle: 'Your order is on the way',
+  cafeDeliveredTitle: 'Your order was delivered',
+  cafeCancelledTitle: 'Sorry, your order can’t be made',
+  cafeCancelledBody: 'Reason: {{reason}}',
+  // To whoever serves, replacing "New order from …" once it no longer waits (quietly, on the phone).
+  cafeOrderTakenTitle: 'Order from {{name}}: on the way',
+  cafeOrderCancelledTitle: 'Order from {{name}}: cancelled',
 };
 const ar: Record<keyof typeof en, string> = {
   messageTitle: 'رسالة جديدة من {{name}}',
@@ -40,6 +50,14 @@ const ar: Record<keyof typeof en, string> = {
   answerAbout: 'بخصوص: {{note}}',
   testTitle: 'التنبيهات تعمل',
   testBody: 'ستظهر هنا الرسائل وطلبات الحضور إلى المكتب.',
+  cafeNewOrderTitle: 'طلب جديد من {{name}}',
+  cafeOrderBody: '{{items}} — إلى {{place}}',
+  cafeOnTheWayTitle: 'طلبك في الطريق',
+  cafeDeliveredTitle: 'تم توصيل طلبك',
+  cafeCancelledTitle: 'عذرًا، تعذّر تنفيذ طلبك',
+  cafeCancelledBody: 'السبب: {{reason}}',
+  cafeOrderTakenTitle: 'طلب {{name}}: في الطريق',
+  cafeOrderCancelledTitle: 'طلب {{name}}: أُلغي',
 };
 
 export const NOTIFICATION_TEXT: Record<Locale, typeof en> = { en, ar };
@@ -109,6 +127,18 @@ export function markNotificationsRead(tx: Conn, userId: number, kind: Notificati
     .run();
 }
 
+/**
+ * Mark everyone's unread notifications of this kind and link as read: the
+ * thing they point at is done with for all of them (a cafeteria order someone
+ * has taken, or that was cancelled, leaves every server's bell).
+ */
+export function markNotificationsReadForEveryone(tx: Conn, kind: NotificationKind, link: string, now: number): void {
+  tx.update(notifications)
+    .set({ readAt: now })
+    .where(and(eq(notifications.kind, kind), eq(notifications.link, link), isNull(notifications.readAt)))
+    .run();
+}
+
 /** Mark some of a person's notifications read (others' ids are ignored), or all of them. */
 export function markRead(tx: Conn, userId: number, ids: readonly number[] | 'all', now: number): void {
   const mine = and(eq(notifications.userId, userId), isNull(notifications.readAt));
@@ -122,9 +152,12 @@ export function markRead(tx: Conn, userId: number, ids: readonly number[] | 'all
 /**
  * Unread notifications of a person. A call to the office past its two hours
  * can't be answered any more, so its notification counts as read (it was
- * written in the same transaction as the call, with the same time).
+ * written in the same transaction as the call, with the same time). Kinds in
+ * `hidden` don't count (and aren't listed): what the person can't open now —
+ * new cafeteria orders once they no longer serve, or while the cafeteria is
+ * switched off (`hiddenNotificationKinds` in lib/cafe.ts).
  */
-export function unreadNotificationCount(db: Pick<DB, 'select'>, userId: number, now = Date.now()): number {
+export function unreadNotificationCount(db: Pick<DB, 'select'>, userId: number, now = Date.now(), hidden: readonly NotificationKind[] = []): number {
   return (
     db
       .select({ n: count() })
@@ -134,6 +167,7 @@ export function unreadNotificationCount(db: Pick<DB, 'select'>, userId: number, 
           eq(notifications.userId, userId),
           isNull(notifications.readAt),
           or(ne(notifications.kind, 'summon'), gt(notifications.createdAt, now - SUMMONS_EXPIRY_MS)),
+          hidden.length ? notInArray(notifications.kind, [...hidden]) : undefined,
         ),
       )
       .get()?.n ?? 0
@@ -148,6 +182,7 @@ export function toNotificationItem(r: typeof notifications.$inferSelect, now = D
 }
 
 // ── Links ───────────────────────────────────────────────────────────────────
+// (The cafeteria's links are in lib/cafe.ts: cafeBoardLink, cafeOrderLink.)
 
 export const conversationLink = (conversationId: number) => `/messages/${conversationId}`;
 /** The caller's link to one call (its answer's notification): the Team page with that person's row and answer. */

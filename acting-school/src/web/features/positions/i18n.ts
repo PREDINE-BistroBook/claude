@@ -72,6 +72,7 @@ const en = {
     admissions: 'Admissions',
     money: 'Money',
     website: 'Website',
+    cafeteria: 'Cafeteria',
   },
   perm: {
     staff: {
@@ -135,6 +136,17 @@ const en = {
       manage: {
         label: 'Edit the website',
         description: 'Change the public website: studio text and contact details, coaches, which workshops are shown, the casting call and the link-in-bio links.',
+      },
+    },
+    cafeteria: {
+      serve: {
+        label: 'Serve cafeteria orders and manage the menu',
+        description:
+          'The orders board: see what people ordered and where, mark an order “On the way” and “Delivered”, or say why it can’t be done. Also add and change what is on the menu and the places. Alerts about new orders go only to people who have this and no School, Casting or Website section (the office helper). Ordering itself needs no permission: everyone on the team can order.',
+      },
+      report: {
+        label: 'See monthly cafeteria consumption',
+        description: 'A page with what each team member had from the cafeteria in a month, item by item, and the total of each item. Delivered orders only. No prices.',
       },
     },
   },
@@ -223,6 +235,7 @@ const ar: TranslationOf<typeof en> = {
     admissions: 'القبول',
     money: 'المال',
     website: 'الموقع',
+    cafeteria: 'البوفيه',
   },
   perm: {
     staff: {
@@ -286,6 +299,17 @@ const ar: TranslationOf<typeof en> = {
       manage: {
         label: 'تعديل الموقع',
         description: 'تغيير الموقع العام: نصوص الاستوديو وبيانات التواصل، والمدربون، والورش المعروضة، وإعلان الكاستينج، وروابط صفحة الروابط.',
+      },
+    },
+    cafeteria: {
+      serve: {
+        label: 'تنفيذ طلبات البوفيه وإدارة المنيو',
+        description:
+          'لوحة الطلبات: معرفة ما طُلب وأين يُسلَّم، وتحديد الطلب بـ«في الطريق» ثم «تم التوصيل»، أو ذكر سبب تعذّر تنفيذه. وكذلك إضافة أصناف المنيو والأماكن وتعديلها. تنبيهات الطلبات الجديدة تصل فقط لمن لديه هذه الصلاحية وليس لديه قسم المدرسة أو الكاستينج أو الموقع (عامل المكتب). الطلب نفسه لا يحتاج إلى صلاحية: كل أعضاء الفريق يمكنهم الطلب.',
+      },
+      report: {
+        label: 'عرض استهلاك البوفيه الشهري',
+        description: 'صفحة بما أخذه كل عضو في الفريق من البوفيه خلال شهر، صنفًا صنفًا، ومجموع كل صنف. الطلبات التي تم توصيلها فقط. بدون أسعار.',
       },
     },
   },

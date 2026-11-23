@@ -24,3 +24,16 @@ export function authGate(state: {
   if (!state.user) return state.needsSetup ? 'setup' : 'login';
   return state.user.mustChangePassword ? 'choosePassword' : 'app';
 }
+
+/**
+ * The language to switch this device to when someone has just signed in: their
+ * own saved language (SessionUser.locale), or null when the app is in it
+ * already. Asked once per sign-in by AuthProvider — before the first screen is
+ * painted, and whatever that screen is: an account the operator's tool or a
+ * manager created in Arabic sees its very first screen, "Choose your own
+ * password", in Arabic (the temporary password changes nothing here).
+ */
+export function signInLanguage<L extends string>(user: { locale: L } | null, current: L): L | null {
+  if (!user) return null;
+  return user.locale !== current ? user.locale : null;
+}

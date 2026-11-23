@@ -1,12 +1,12 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router';
 import type { Permission } from '@shared/permissions';
 import type { MeResponse, SessionUser } from '@shared/schemas/auth';
 import { currentLanguage, setLanguage } from '../i18n';
 import { ErrorState, NoAccess, SplashScreen } from '../components/ui/States';
 import { api, ApiError, setForbiddenHandler, setUnauthorizedHandler } from './api';
-import { authGate } from './authGate';
+import { authGate, signInLanguage } from './authGate';
 import { stopPushOnThisBrowser } from './push';
 
 const ChoosePasswordPage = lazy(() => import('../pages/ChoosePasswordPage'));
@@ -69,12 +69,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     lastUserId.current = userId;
   }, [qc, userId]);
 
-  // A signed-in person's saved language wins once per sign-in.
+  // A signed-in person's saved language wins once per sign-in — before anything is painted (a layout
+  // effect), so their first screen is already in it, the "Choose your own password" screen included.
   const appliedFor = useRef<number | null>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (user && appliedFor.current !== user.id) {
       appliedFor.current = user.id;
-      if (user.locale !== currentLanguage()) setLanguage(user.locale);
+      const next = signInLanguage(user, currentLanguage());
+      if (next) setLanguage(next);
     }
     if (!user) appliedFor.current = null;
   }, [user]);

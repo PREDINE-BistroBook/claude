@@ -57,6 +57,13 @@
       "when": 1795452399579,
       "tag": "0007_usernames",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1795461593961,
+      "tag": "0008_cafeteria",
+      "breakpoints": true
     }
   ]
 }

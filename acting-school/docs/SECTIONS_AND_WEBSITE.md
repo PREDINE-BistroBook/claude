@@ -42,7 +42,7 @@ Design rule for everything here: **made for older, non-technical people.**
   - Anything else (`/profile`, `/staff`, `/positions`, `/settings`) returns `null` and keeps the last remembered section.
 - **`NavItem` in `src/web/layout/nav.ts`** gets `section: 'school' | 'casting' | 'website' | 'admin'`, which replaces `group`. Admin items (Staff, Positions, Settings) appear in every section, under an "Administration" heading at the end of the sidebar and in the phone "More" sheet. Profile stays where it is today.
 - **Section homes:** `/school`, `/casting`, `/website`.
-  - `/` redirects to the remembered section's home if the person can still see it, otherwise to the first visible section — except that someone whose School is only the student list (`students.read` without `courses.read` or `admissions.read`) and who sees Casting starts in Casting (the casting team: `defaultSection`). The remembered section is kept per signed-in person.
+  - `/` redirects to the remembered section's home if the person can still see it, otherwise to the first visible section — except that someone who sees Casting and has no `admissions.read` starts in Casting when their School is only the student list (`students.read` without `courses.read`: the casting team) or when they write castings (`castings.write`: the Heads of Casting — the operator's decision, 2026-11-23) (`defaultSection`). The remembered section is kept per signed-in person.
   - After sign-in, a `?next=` page the person can't open (a section they don't see, a menu page their positions don't open — on a shared phone, the last person's page) becomes `/`, never a "No access" screen (`landingAfterSignIn`).
   - `/schedule` is the School schedule; an old link that was after auditions (`?show=auditions`, or anyone who sees auditions but no workshops or interviews) goes on to `/casting/schedule`, the date kept.
   - If the person sees **no** section, `/` shows a small home: greeting, profile link and a "nothing assigned yet" note.
@@ -849,6 +849,7 @@ They also said to keep "the website information we pulled from Instagram".
   - `'contact'` also empties the casting call's texts (they are not on the list above; the demo's copy would go public when the call is switched on).
   - `POST /api/admin/restore` asks the runtime first, so local `wrangler dev` answers 501 whatever the body, as Node does.
 - **Restore points:** the runtime hands them to the app (`createApp({ restore })`, `lib/restorePoint.ts`). Cloudflare: `src/worker/pointInTimeRecovery.ts` — `GET /api/admin/restore-point` → `{ bookmark, at }`, `POST /api/admin/restore { bookmark } | { minutesAgo: 1–43200 }` → 202 `{ restoringTo, undoBookmark }`, then `ctx.abort()` half a second later. Local `wrangler dev` has no recovery (Cloudflare's docs say so; workerd answers a stand-in bookmark and throws for the rest): 501 `not_supported`, and a run's `restorePoint` is null. So **the restore path has only run against a fake**; its first real use is on the deployment. Node: the database is copied to `$DATA_DIR/app.before-clear-demo.<time>.db` (the database only, not `uploads/`).
+- **Release 2 (merged with Part J, 2026-11-23):** the tool knows the cafeteria (see Part J, "Tools"); `positions` may also name `reception` and `office_helper`. Each account's `locale` (default: the school's language) is honoured from the first sign-in — the web app switches to the signed-in person's language before its first screen is painted (`signInLanguage`, `lib/authGate.ts`), so an account created with `"locale": "ar"` sees "Choose your own password" in Arabic.
 
 ### The real team (from the school's confirmed positions)
 
@@ -874,3 +875,97 @@ Each person is asked to choose their own password the first time they sign in.
 - **Team form and profile:** adding a member, changing a username.
 - **The tool:** dry-run accuracy, confirm code, plan drift, atomicity, no orphan rows in any table (the test walks the schema), files, owner guarantee, website content modes, token rules, the app working afterwards.
 - **`cf:smoke`** covers the whole flow.
+
+---
+
+## Part J — Reception and Office helper positions; cafeteria orders (asked 2026-11-23)
+
+The school asked for two more jobs: **Reception** and **Office helper**. "Office helper is like the cafeteria, so food and beverage are on him." They chose **ordering from the app**. They will explain what Reception does later.
+
+### Positions
+- **Two new built-in positions**, with English and Arabic names, that appear once in existing databases as well as new ones:
+  - `reception` — "Reception" / "الاستقبال". **No section permissions yet**: it waits for the school's description. A receptionist can already use Team, Messages, Alerts, My profile and cafeteria ordering, and can be called to the office.
+  - `office_helper` — "Office helper" / "عامل المكتب". Holds the new permission `cafeteria.serve`.
+- **New permission `cafeteria.serve`** ("Serve cafeteria orders and manage the menu"), in a new "cafeteria" group with EN and AR labels. Owners hold it by definition. The Executive Director does **not** get it by default; they can still edit the menu through `settings.manage`.
+- **Ordering needs no permission:** every signed-in team member can order. A settings switch, `cafeteriaEnabled` (default on, `settings.manage`), turns the whole feature off.
+
+### Data (one new add-only migration)
+- **`cafe_items`:** id, `name_en`, `name_ar`, `category` (`hot` | `cold` | `food` | `other`), `available` (bool), `sort_order`, timestamps.
+- **`cafe_orders`:**
+  - id, `user_id` (who ordered), `place` (≤ 80), `note` (≤ 200);
+  - `status` (`new` | `on_the_way` | `delivered` | `cancelled`);
+  - `handled_by_id`, `created_at`, `on_the_way_at`, `delivered_at`, `cancelled_at`.
+- **`cafe_order_items`:** id, `order_id` (cascade), `item_id` (nullable, set null), `name_en` and `name_ar` (copied at order time), `qty` (1–10), `options` (≤ 60, e.g. "no sugar").
+- **Settings:** `cafeteriaEnabled`, and `cafePlaces` (ordered list of `{ en, ar }` names; defaults Office, Reception, Studio 1, Studio 2).
+- **No prices and no tabs.** That was offered and not chosen.
+
+### For everyone: ordering
+- **Where:** "Cafeteria" / "البوفيه" in the account / "More" menu of every section, plus an "Order a drink" quick action on each section home.
+- **The order screen:**
+  - the menu grouped by category, with big rows and − / + buttons; unavailable items are greyed out with "Not available now";
+  - "Where should it come?": the places as big buttons plus "Somewhere else" with a short text field; the person's last place is remembered;
+  - an optional note;
+  - **Send order**.
+- **After sending:** the screen shows the order's status in large words: "Sent — waiting", "On the way", "Delivered ✓". "Cancel order" is available while it is still new. Recent orders are listed below with "Order again".
+- **Alerts:** the person gets an alert, and a push when alerts are on, when their order is on the way and when it is delivered.
+- **Limits:** 10 orders an hour per person, 10 lines per order.
+
+### For the office helper: the orders board
+- **His home screen.** He sees no School, Casting or Website section, so the start page for someone with `cafeteria.serve` is the board.
+- **New orders** are at the top as big cards: who (photo and name), where, what (quantities, options, note), and how long ago. One big button moves each along: **On the way** → **Delivered**. "Can't do this one" cancels, with a short reason that the orderer sees.
+- **New-order alert:** an alert, a push when alerts are on, and a short sound and vibration on the open board where the browser allows it. The board refreshes every 10 seconds while open.
+- **Today's delivered and cancelled orders** are listed below.
+- **"Menu" tab:** add, rename (EN/AR), reorder (up/down), and switch "Available" on or off per item; a "Places" list editor. When the menu is empty, an "Add the usual items" button creates a default set: tea, coffee, Turkish coffee, Nescafé, green tea, water, juice, soft drink, sandwich, biscuits (EN + AR).
+
+### API (`/api/cafe`)
+- **Any signed-in member:**
+  - `GET /menu`;
+  - `POST /orders`;
+  - `GET /orders/mine`;
+  - `POST /orders/:id/cancel` (own order, while new).
+- **`cafeteria.serve`:**
+  - `GET /orders?status=`;
+  - `POST /orders/:id/status` `{ status, reason? }`;
+  - menu CRUD and ordering.
+- **Places:** `PUT /places` (`cafeteria.serve` or `settings.manage`).
+- **Counts** for the board badge go through the existing unread poll.
+- **Privacy:** orders are visible to the orderer, to people with `cafeteria.serve`, and to owners.
+
+### Tests and checks
+- **API tests:**
+  - permissions;
+  - status rules: only forward, cancel rules;
+  - limits;
+  - copied names survive an item rename or delete;
+  - alerts created for the right people;
+  - the feature switch;
+  - the new positions exist once in an upgraded database and aren't recreated if renamed.
+- **Unit tests:** the board ordering and the order form logic.
+- **Tools:** the clear-demo tool and `wipe.ts` must handle the new tables (their coverage tests enforce it); orders are cleared, and the menu and places are kept.
+- **`cf:smoke`:** an order from start to delivered.
+- **Phone walkthrough** in English and Arabic at 375 px.
+
+### The school's decisions (2026-11-23, after the first build)
+Asked after the first build; these override the text above where they differ.
+- **D1 — Order alerts go only to the office helper.** New-order alerts and pushes go **only** to the dedicated office helper(s): active people who hold `cafeteria.serve` **and** see no School, Casting or Website section — the same rule that makes the board their start page (`servesFromBoard` in `src/shared/permissions.ts`; the web's `boardIsHome` follows the same section lists, `SECTION_PERMISSIONS`). Owners and anyone else with a section get **no** order alerts, even though they hold the permission; they can still open the board from the Cafeteria entry. New-order alerts already in someone's bell are hidden once they no longer serve from the board (permission taken away, or a section given). The orderer's own alerts (on the way / delivered / can't do) are unchanged.
+- **D2 — The Executive Director can create the office helper's account.** The built-in `executive_director` position holds `cafeteria.serve` — in `BUILT_IN_POSITIONS` and, for existing databases, through `BUILT_IN_GRANTS` **version 4** (`{ executive_director: ['cafeteria.serve'] }`) — so the "nobody gives access they don't hold" rule lets her assign the Office helper position and manage his account. Because of D1 she gets no order alerts from it. (This replaces an interim exception that let `settings.manage` reach `cafeteria.serve`; there is no such exception: an owner who removes `cafeteria.serve` from her position takes the office helper's account out of her reach again.)
+- **D3 — A monthly consumption page for the owners.** New permission **`cafeteria.report`** ("See monthly cafeteria consumption" / «عرض استهلاك البوفيه الشهري», in the cafeteria group); owners hold it by definition, **no other built-in position gets it** (the Executive Director's list leaves it out). Page **`/cafeteria/report`** — the **Monthly** / «استهلاك الشهر» tab of the Cafeteria pages (on the order screen and the board), and a link on the board for someone whose home it is: a month picker (opens on the current month in the school's time zone; Previous / Next month, no further than the current one), then per person (photo, name, number of orders) the delivered items with quantities for that month, and the total of each item. Cancelled (and still open) orders are not counted; an order counts in the month it was **delivered** (school time zone); deactivated people are still listed for the months they ordered in; an item still on the menu is counted under its current name, one deleted since under the names it had on the orders; **no prices anywhere**. API **`GET /api/cafe/report?month=YYYY-MM`** (`cafeteria.report`; without `month`, the current month), answering `CafeReport` (`month`, `currentMonth`, `people[] { person, orders, items[] }`, `totals[]`, `orders`); aggregated in SQL (a fixed handful of bound parameters, the 100-parameter rule), people read with `loadPersons` in slices. Like every `/api/cafe` route it answers 409 `cafeteria_off` while the cafeteria is switched off.
+- **D4 — The live menu starts empty.** Nothing is seeded on the live database; "Add the usual items" stays (one tap fills the ten usual items in both languages).
+
+**Built 2026-11-23.** Notes for whoever builds on it:
+- **Positions.** `reception` and `office_helper` are the last two entries of `BUILT_IN_POSITIONS`; `ensureBuiltInPositions` creates each once where its key is missing, so no `BUILT_IN_GRANTS` entry was needed (the latest version is still 3). If the school had already made a position called "Reception" or "Office helper" by hand (same English name in any letter case, or same Arabic name; not an owner position), that one is taken over — it gets the key and what the built-in allows, keeping its people — instead of a second one appearing. The Executive Director holds `cafeteria.serve` since `BUILT_IN_GRANTS` v4 (D2), so she can give both positions; her list leaves `cafeteria.report` out (`EXECUTIVE_DIRECTOR_PERMISSIONS`).
+- **One column more than the list above:** `cafe_orders.cancel_reason` — the reason the orderer must be able to read on their order (an alert alone can be marked read and is cleared after 60 days).
+- **Menu and places** are edited with `cafeteria.serve` **or** `settings.manage` (that is how "the director can still edit the menu" works); the board and the status buttons need `cafeteria.serve`. Reordering is `POST /api/cafe/menu/order { ids }` (like the website's coaches); "Add the usual items" is `POST /api/cafe/menu/defaults` (409 unless the menu is empty). A name typed in one language only is stored in both.
+- **Status moves one step at a time** (new → on_the_way → delivered); a skipped or repeated step, or anything after delivered / cancelled, is a 409 with the order as it is. "Can't do this one" requires a reason.
+- **Places** are stored on an order by the configured place's English name and shown in the reader's language; anything typed stays as typed.
+- **The switch:** with `cafeteriaEnabled` off every `/api/cafe` route answers 409 `cafeteria_off`; the web app learns it from the poll (`GET /api/chat/unread` → `cafe.enabled`) and shows nothing. Orders, menu and places are kept.
+- **Who is alerted about a new order:** only someone who serves from the board (D1, `cafeServers` → `servesFromBoard`). The same people get the board as home and the "orders are waiting" banner on other screens; owners and the director open the board from the Cafeteria entry, where the count of waiting orders shows.
+- **A new or existing school starts with an empty menu** (nothing is seeded at startup, D4): the order screen says "The menu is not ready yet" until someone with the Menu tab taps "Add the usual items".
+- **After the review (2026-11-23):**
+  - *Server.* Switching an account off cancels that person's open orders ("No longer on the team"), off the board and out of every bell. Switching the cafeteria off cancels what is still open ("The cafeteria is closed now"), tells each person who ordered in their language and clears the bells; the Settings switch saves the moment it is turned and asks first before switching off. New-order alerts are hidden from the bell while the cafeteria is off. No two places may share a name (either language, ignoring case and spaces). When a new order is taken or cancelled, the servers' "New order" push is replaced quietly (same tag and topic, `quiet`), and the open board closes such notifications on its phone. Ready-made reasons and the sugar/milk choices are stored by their English words and shown in each reader's language, alerts included.
+  - *Order screen.* On a hot drink, **Sugar and extras** has one-tap choices — «سادة» No sugar, «على الريحة» A little sugar, «مضبوط» Medium sugar, «سكر زيادة» Sweet (one sugar level at a time), «باللبن» With milk — that write into the field, which stays editable. The place it will be brought to is always shown above **Send order** ("Bring it to: Studio 1 · Change"); with no place chosen, Send scrolls to the picker. "Somewhere else" is its own flag, so a place called "other" is just a place. Notices ("It is on your order…", "not available now") are said in the sticky bar, never as a toast over it (toasts let taps through everywhere). Cancelling asks "Cancel this order?" with **Keep the order** / **Yes, cancel the order**. Only the latest finished order stays large.
+  - *Board.* A coloured status strip on every card (**New order** / **On the way**); the buttons say what the helper does — **I'm taking it now**, then in green **I've delivered it** (the statuses keep the spec's words: On the way, Delivered) — and after any tap every step button rests for two seconds with the cards held in place, so a double tap can't mark an order delivered or take the next one. The ring follows the audio's state (the strip asks for a tap again when the phone took the sound back), repeats once a minute while an order waits untouched, and says what to check when nothing is heard; the screen is kept on; the board offers "Alerts on this phone" (the Profile card) for whoever's home it is. The helper's bottom bar is Orders, Menu, My order (no second row of tabs, no subtitle). Long unbroken words wrap inside the cards.
+  - *Menu tab.* "Available now" / "Not available now" in words; name fields in the screen's language first, with "one language is enough" above them; Move up / Move down behind "Change the order" per group; places show "Not saved yet" with a sticky **Save places**, and removing a saved place asks first.
+  - *Words.* Arabic: «المنيو» for the menu, «تكرار الطلب», «إضافة … بطريقة مختلفة», «اعتذار عن الطلب», «طلبات جديدة» / «انتهت اليوم», and the other fixes the review listed; English: "Where should we bring it?". Reception's start page says "Here is what you can use". The bell shows a plain bell for an alert kind it doesn't know.
+- **Tools.** `db/wipe.ts` (the demo reset) deletes the three tables with everything else (`WIPE_ORDER`, checked against the schema by a test). The clear-demo tool of Part I (merged with this part in release 2, 2026-11-23) deletes `cafe_order_items` and `cafe_orders` (orders point at accounts) — counted in the dry run and covered by the confirm code like every emptied table — and every alert, the cafeteria's included; it keeps `cafe_items` (`stay`) and the places and the switch (settings). The migration is `0008_cafeteria`, after Part I's `0007_usernames` (found by its tag in the tests).
+- **Not built (not asked):** prices and tabs; order history beyond a person's last 20, the board's "today" and the owners' monthly page; a time-out for an order nobody takes (it stays on the board until someone moves or cancels it).

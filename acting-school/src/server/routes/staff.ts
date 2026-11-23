@@ -26,6 +26,7 @@ import {
   type Actor,
   type UserAccess,
 } from '../lib/access';
+import { cancelOpenCafeOrders, sendCafeAutoCancel } from '../lib/cafe';
 import { inChunks, insertBatches } from '../lib/sqlLimits';
 import { ApiError, notFound } from '../lib/errors';
 import { claimUploads, releaseFile } from '../lib/fileRefs';
@@ -293,6 +294,7 @@ router.patch('/:id', canManage, async (c) => {
 
   const signOutEverywhere = deactivating || passwordHash !== undefined;
   const currentSession = c.get('sessionId');
+  const now = Date.now();
 
   const result = db.transaction((tx) => {
     // Re-check the rules that depend on other rows, now that nothing can change under us.
@@ -310,11 +312,15 @@ router.patch('/:id', canManage, async (c) => {
       // The person's push subscriptions go with their sessions: a lost phone stops getting notifications.
       signOutUser(tx, id, isSelf ? currentSession : null);
     }
-    return row;
+    // Someone who leaves the team has nobody to bring their cafeteria orders to: cancelled
+    // ("No longer on the team"), and off the board and out of every server's bell.
+    const cafe = deactivating ? cancelOpenCafeOrders(tx, { userId: id, reason: 'left', tell: false }, now) : null;
+    return { row, cafe };
   });
   if (result === 'last_owner') throw lastOwnerError();
   if (result === 'email_taken') throw emailTakenError();
-  return c.json(staffMember(db, result, me));
+  if (result.cafe) sendCafeAutoCancel(c, result.cafe);
+  return c.json(staffMember(db, result.row, me));
 });
 
 /**

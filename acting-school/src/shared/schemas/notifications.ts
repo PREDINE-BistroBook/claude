@@ -53,6 +53,12 @@ export interface PushPayload {
   kind: NotificationKind | 'test';
   /** Notifications with the same tag replace each other ("conversation-12", "summons-3"). */
   tag: string;
+  /**
+   * Replaces the notification with the same tag without a sound, a buzz or
+   * staying on screen: an update on something already shown (a new
+   * cafeteria order that has been taken or cancelled meanwhile).
+   */
+  quiet?: boolean;
 }
 
 /** GET /api/push/config?endpoint=. */

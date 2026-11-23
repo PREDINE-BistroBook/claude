@@ -87,7 +87,7 @@ describe('npm run owner', () => {
     const columns = query<{ name: string }>(dataDir, `select name from pragma_table_info('users')`).map((c) => c.name);
     expect(columns).not.toContain('role');
     expect(query<{ key: string }>(dataDir, 'select key from positions order by sort_order').map((p) => p.key)).toEqual([
-      'ceo', 'cfo', 'executive_director', 'head_of_casting', 'casting_team', 'video_editor', 'acting_coach', 'finance',
+      'ceo', 'cfo', 'executive_director', 'head_of_casting', 'casting_team', 'video_editor', 'acting_coach', 'finance', 'reception', 'office_helper',
     ]);
     // The upgrade carried the phase-1 roles over; the script reactivated the owner.
     expect(held(dataDir)).toEqual([

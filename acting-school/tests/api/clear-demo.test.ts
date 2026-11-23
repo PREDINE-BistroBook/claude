@@ -11,6 +11,9 @@ import { createDb, type NodeDB } from '../../src/server/db/client';
 import * as schema from '../../src/server/db/schema';
 import {
   authSessions,
+  cafeItems,
+  cafeOrderItems,
+  cafeOrders,
   conversationMembers,
   conversations,
   courses,
@@ -19,6 +22,7 @@ import {
   loginFailures,
   messageAttachments,
   messages,
+  notifications,
   positions,
   pushSubscriptions,
   settings,
@@ -34,6 +38,7 @@ import { insertBatches } from '../../src/server/lib/sqlLimits';
 import { nodeRestorePoints } from '../../src/server/nodeRestore';
 import { addDays } from '../../src/shared/dates';
 import { clearDemoInput, type ClearDemoResult } from '../../src/shared/schemas/admin';
+import { DEFAULT_CAFE_PLACES, type CafeItem, type CafeMenu, type CafeOrder } from '../../src/shared/schemas/cafe';
 import { DEFAULT_SITE_CONTENT } from '../../src/shared/schemas/site';
 import { makeTestContext, todayISO, uploadPng, type Client } from '../helpers';
 
@@ -314,6 +319,9 @@ describe('on the demo school (run in order)', () => {
     const content = (await director.get('/api/site/content')).body;
     expect((await director.put('/api/site/content', { ...content, heroFileId, published: true })).status).toBe(200);
     expect((await t.anon.post('/api/auth/login', { username: 'director', password: 'not-the-password' })).status).toBe(401);
+    // The cafeteria's settings as a school stores them once someone has touched them: a place of their own, the switch saved on.
+    expect((await director.put('/api/cafe/places', { places: [...DEFAULT_CAFE_PLACES, { en: 'Roof', ar: 'السطح' }] })).status).toBe(200);
+    expect((await director.patch('/api/settings', { cafeteriaEnabled: true })).status).toBe(200);
     const session = t.db.select().from(authSessions).limit(1).get()!;
     t.db.insert(pushSubscriptions).values({ userId: session.userId, sessionId: session.id, endpoint: 'https://fcm.googleapis.com/fcm/send/demo', p256dh: 'key', auth: 'secret' }).run();
   }, 120_000);
@@ -355,6 +363,9 @@ describe('on the demo school (run in order)', () => {
       if (rows === 'all') expect(dry.willDelete[nameOf(table)], nameOf(table)).toBe(counts[nameOf(table)]);
     }
     expect(dry.willDelete).toMatchObject({ users: counts.users, user_positions: counts.user_positions, files: counts.files, students: 25, courses: 6, leads: 18, site_coaches: 3 });
+    // The cafeteria: its orders go (with their lines and alerts), its menu stays — so the menu is no count here.
+    expect(dry.willDelete).toMatchObject({ cafe_orders: 7, cafe_order_items: 11 });
+    expect(dry.willDelete).not.toHaveProperty('cafe_items');
     expect(Object.keys(dry.willDelete).sort()).toEqual(CLEAR_DEMO_TABLES.filter((x) => x.rows !== 'stay' && x.rows !== 'bytes').map((x) => nameOf(x.table)).sort());
     // …and what happens to the website's content.
     expect(dry.siteContent).toEqual({
@@ -467,6 +478,7 @@ describe('on the demo school (run in order)', () => {
     const plan = (await admin<DryRun>(t, 'clear-demo', REAL_REQUEST)).body;
     const before = rowCounts(t);
     const positionsBefore = t.db.select().from(positions).all();
+    const menuBefore = t.db.select().from(cafeItems).all();
     const settingsBefore = t.db.select().from(settings).all();
     const siteBefore = getSiteContent(t.db);
     const storedKeys = t.db.select({ key: files.storageKey }).from(files).all();
@@ -510,6 +522,11 @@ describe('on the demo school (run in order)', () => {
         case 'positions':
           expect(rows).toEqual(positionsBefore);
           break;
+        case 'cafe_items':
+          // The cafeteria's menu stays as it was (no order points at it any more).
+          expect(rows).toEqual(menuBefore);
+          expect(rows).toHaveLength(10);
+          break;
         case 'settings':
           expect(rows.filter((r) => r.key !== 'site')).toEqual(settingsBefore.filter((r) => r.key !== 'site'));
           expect(rows.map((r) => r.key)).toContain('site');
@@ -536,6 +553,9 @@ describe('on the demo school (run in order)', () => {
     const settingsNow = Object.fromEntries(t.db.select().from(settings).all().map((r) => [r.key, r.value]));
     expect(settingsNow[SITE_FORM_SECRET_SETTING]).toBe(settingsBefore.find((r) => r.key === SITE_FORM_SECRET_SETTING)!.value);
     expect(settingsNow.builtInGrantsVersion).toBeGreaterThan(0);
+    // …the cafeteria's switch and places…
+    expect(settingsNow.cafeteriaEnabled).toBe(true);
+    expect(settingsNow.cafePlaces).toEqual([...DEFAULT_CAFE_PLACES, { en: 'Roof', ar: 'السطح' }]);
     // …and of the website, the studio's own words and contact lines.
     const site = getSiteContent(t.db);
     expect(site).toEqual({ ...siteBefore, published: false, heroFileId: null, links: [], castingCall: { open: false, intro: { en: '', ar: '' }, lookingFor: { en: '', ar: '' } } });
@@ -640,7 +660,128 @@ describe('on the demo school (run in order)', () => {
       expect((await t.anon.raw(`/site/${lang}/casting-call`, {})).status).toBe(200);
     }
     expect((await t.anon.raw(`/site/media/${heroFileId}`, {})).status).toBe(404);
+
+    // The cafeteria: the menu and the places are there, no order is; the first real order goes through.
+    const menu = (await ceo.get<CafeMenu>('/api/cafe/menu')).body;
+    expect(menu.items).toHaveLength(10);
+    expect(menu.places).toEqual([...DEFAULT_CAFE_PLACES, { en: 'Roof', ar: 'السطح' }]);
+    expect((await ceo.get('/api/cafe/orders')).body.items).toEqual([]);
+    expect((await ceo.get('/api/cafe/orders/mine')).body.items).toEqual([]);
+    const tea = menu.items.find((i) => i.nameEn === 'Tea')!;
+    expect((await ceo.post('/api/cafe/orders', { place: 'Roof', items: [{ itemId: tea.id, qty: 1 }] })).status).toBe(201);
     expect((t.db as NodeDB).$client.pragma('foreign_key_check')).toEqual([]);
+  });
+});
+
+// ── Each new account's language ─────────────────────────────────────────────
+
+describe('a new account’s language ("locale" in create)', () => {
+  it('is honoured from the first sign-in: an Arabic account is Arabic while it still has to choose its password, and after; without one, the school’s language', async () => {
+    const t = await makeTestContext({ config: { adminToken: TOKEN } });
+    const owner = await t.as('owner');
+    const team = [
+      { name: 'Ahmed Tamam', username: 'ceo', password: 'first-ceo', positions: ['ceo'] },
+      { name: 'Taha', username: 'taha', password: 'first-taha', positions: ['casting_team'], locale: 'ar' },
+      { name: 'Ali El Gohary', username: 'ali', password: 'first-ali', positions: ['video_editor'], locale: 'en' },
+    ];
+    // The school's language is Arabic: an account without "locale" gets it; "en" stays English.
+    expect((await owner.patch('/api/settings', { defaultLocale: 'ar' })).status).toBe(200);
+    await silently(() => clear(t, { create: team, owner: 'ceo', keepSiteContent: 'contact' }));
+    const stored = Object.fromEntries(t.db.select({ username: users.username, locale: users.locale }).from(users).all().map((u) => [u.username, u.locale]));
+    expect(stored).toEqual({ ceo: 'ar', taha: 'ar', ali: 'en' });
+
+    // Taha's first sign-in: the answer the app sets its language from says Arabic, on the temporary password,
+    // and so does /auth/me — the one place the first-password screen reads (everything else is closed to him).
+    const signIn = await t.anon.post('/api/auth/login', { username: 'taha', password: 'first-taha' });
+    expect(signIn.status).toBe(200);
+    expect(signIn.body.user).toMatchObject({ username: 'taha', locale: 'ar', mustChangePassword: true });
+    const taha = await t.login('taha', 'first-taha');
+    expect((await taha.get('/api/auth/me')).body.user).toMatchObject({ locale: 'ar', mustChangePassword: true });
+    expect((await taha.get('/api/team')).body.error.code).toBe('password_change_required');
+    // A refusal on the screen comes back as a message key: the screen shows it in Arabic.
+    const again = await taha.post('/api/auth/choose-password', { newPassword: 'first-taha' });
+    expect([again.status, again.body.error.issues[0].message]).toEqual([400, 'errors.passwordSameAsTemporary']);
+    expect((await taha.post('/api/auth/choose-password', { newPassword: 'taha-own-pass' })).body.user).toMatchObject({ locale: 'ar', mustChangePassword: false });
+    expect((await t.login('ali', 'first-ali').then((c) => c.get('/api/auth/me'))).body.user.locale).toBe('en');
+  });
+});
+
+// ── The cafeteria (Part J): orders go, the menu and its settings stay ───────
+
+describe('the cafeteria', () => {
+  const team = [
+    { name: 'Ahmed Tamam', username: 'ceo', password: 'first-ceo', positions: ['ceo'] },
+    { name: 'Salma', username: 'salma', password: 'first-salma', positions: ['executive_director'] },
+    { name: 'Sayed', username: 'sayed', password: 'first-sayed', positions: ['office_helper'], locale: 'ar' },
+  ];
+  const request = { create: team, owner: 'ceo', keepSiteContent: 'contact' };
+  const PLACES = [{ en: 'Office', ar: 'المكتب' }, { en: 'Roof', ar: 'السطح' }];
+
+  it('deletes every order (their lines and their alerts too), keeps the menu, the switch and the places; counted in the dry run and the code', async () => {
+    const t = await makeTestContext({ config: { adminToken: TOKEN } });
+    const owner = await t.as('owner');
+    const helper = await t.as('office_helper', { name: 'Old Helper' });
+    const coach = await t.as('acting_coach', { name: 'Old Coach' });
+    const menu = (await helper.post<{ items: CafeItem[] }>('/api/cafe/menu/defaults')).body.items;
+    const tea = menu.find((i) => i.nameEn === 'Tea')!;
+    const water = menu.find((i) => i.nameEn === 'Water')!;
+    expect((await helper.put('/api/cafe/places', { places: PLACES })).status).toBe(200);
+    expect((await owner.patch('/api/settings', { cafeteriaEnabled: true })).status).toBe(200);
+    // An order on its way (two lines), one the coach cancelled, one turned down by the helper.
+    const order = async (items: { itemId: number; qty: number }[]) => (await coach.post<CafeOrder>('/api/cafe/orders', { place: 'Office', items })).body;
+    const onTheWay = await order([{ itemId: tea.id, qty: 2 }, { itemId: water.id, qty: 1 }]);
+    expect((await helper.post(`/api/cafe/orders/${onTheWay.id}/status`, { status: 'on_the_way' })).status).toBe(200);
+    const cancelled = await order([{ itemId: tea.id, qty: 1 }]);
+    expect((await coach.post(`/api/cafe/orders/${cancelled.id}/cancel`)).status).toBe(200);
+    const turnedDown = await order([{ itemId: water.id, qty: 1 }]);
+    expect((await helper.post(`/api/cafe/orders/${turnedDown.id}/status`, { status: 'cancelled', reason: 'No water today' })).status).toBe(200);
+    const cafeAlerts = () => t.db.select().from(notifications).where(sql`${notifications.kind} like 'cafe_%'`).all();
+    expect(cafeAlerts().length).toBeGreaterThan(0);
+    const menuBefore = t.db.select().from(cafeItems).all();
+    const settingsBefore = t.db.select().from(settings).all();
+
+    // The dry run counts the orders and their lines like every emptied table; the menu is not among them.
+    const dry = (await admin<DryRun>(t, 'clear-demo', request)).body;
+    expect(dry.willDelete).toMatchObject({ cafe_orders: 3, cafe_order_items: 4 });
+    expect(dry.willDelete.notifications).toBe(t.db.select({ n: count() }).from(notifications).get()!.n);
+    expect(dry.willDelete).not.toHaveProperty('cafe_items');
+
+    // An order placed after the dry run changes the plan: refused, nothing changed.
+    const late = await order([{ itemId: tea.id, qty: 1 }]);
+    const before = snapshot(t);
+    const refused = await admin(t, 'clear-demo', { ...request, dryRun: false, confirm: dry.confirm });
+    expect([refused.status, refused.body.error.code]).toEqual([409, 'plan_changed']);
+    expect(snapshot(t)).toBe(before);
+    // A fresh dry run counts it, with a new code.
+    const fresh = (await admin<DryRun>(t, 'clear-demo', request)).body;
+    expect(fresh.willDelete).toMatchObject({ cafe_orders: 4, cafe_order_items: 5 });
+    expect(fresh.confirm).not.toBe(dry.confirm);
+
+    // The real run.
+    const real = await silently(() => admin<RealRun>(t, 'clear-demo', { ...request, dryRun: false, confirm: fresh.confirm }));
+    expect(real.status).toBe(200);
+    expect(real.body.deleted).toEqual(fresh.willDelete);
+    expect(t.db.select().from(cafeOrders).all()).toEqual([]);
+    expect(t.db.select().from(cafeOrderItems).all()).toEqual([]);
+    expect(cafeAlerts()).toEqual([]);
+    expect(t.db.select().from(cafeItems).all()).toEqual(menuBefore);
+    expect(t.db.select().from(settings).all().filter((r) => r.key !== 'site')).toEqual(settingsBefore.filter((r) => r.key !== 'site'));
+    expect((t.db as NodeDB).$client.pragma('foreign_key_check')).toEqual([]);
+    expect(late.id).toBeGreaterThan(turnedDown.id);
+
+    // The new team: the director orders from the kept menu to a kept place; the new helper (in Arabic) sees only that order.
+    const salma = await t.login('salma', 'first-salma');
+    expect((await salma.post('/api/auth/choose-password', { newPassword: 'salma-own-pass' })).status).toBe(200);
+    const kept = (await salma.get<CafeMenu>('/api/cafe/menu')).body;
+    expect(kept.items.map((i) => i.id)).toEqual(menu.map((i) => i.id));
+    expect(kept.places).toEqual(PLACES);
+    expect((await salma.get('/api/cafe/orders/mine')).body.items).toEqual([]);
+    const first = await salma.post<CafeOrder>('/api/cafe/orders', { place: 'Roof', items: [{ itemId: tea.id, qty: 1 }] });
+    expect(first.status).toBe(201);
+    const sayed = await t.login('sayed', 'first-sayed');
+    expect((await sayed.post('/api/auth/choose-password', { newPassword: 'sayed-own-pass' })).status).toBe(200);
+    expect((await sayed.get('/api/auth/me')).body.user.locale).toBe('ar');
+    expect((await sayed.get<{ items: CafeOrder[] }>('/api/cafe/orders')).body.items.map((o) => o.id)).toEqual([first.body.id]);
   });
 });
 

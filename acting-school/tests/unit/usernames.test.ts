@@ -233,9 +233,9 @@ describe('migration 0007 and the username backfill (initDb), on a database that 
       'CREATE UNIQUE INDEX `users_username_unique` ON `users` (`username`);',
     ]);
     expect(text).not.toMatch(/PRAGMA|DROP|__new_|RENAME/i);
-    // Migrations 0000–0006 are applied on the live database: frozen. The new one comes after them.
+    // Migrations 0000–0006 are applied on the live database: frozen. This one comes right after them (then the cafeteria's, 0008).
     const entries = bundle.journal.entries;
-    expect(entries.map((e) => e.tag)).toEqual(['0000_init', '0001_positions', '0002_created_by', '0003_admissions', '0004_cloudflare', '0005_website', '0006_team', '0007_usernames']);
+    expect(entries.slice(0, 8).map((e) => e.tag)).toEqual(['0000_init', '0001_positions', '0002_created_by', '0003_admissions', '0004_cloudflare', '0005_website', '0006_team', '0007_usernames']);
     expect(entries[7]!.when).toBeGreaterThan(entries[6]!.when);
   });
 

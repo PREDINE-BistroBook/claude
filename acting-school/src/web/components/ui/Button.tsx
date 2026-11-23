@@ -4,7 +4,7 @@ import { LoaderCircle } from 'lucide-react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { Link, type LinkProps } from 'react-router';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'danger-ghost';
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'danger-ghost' | 'success';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 const base =
@@ -15,6 +15,8 @@ const variants: Record<ButtonVariant, string> = {
   ghost: 'text-ink hover:bg-surface-2',
   danger: 'bg-danger text-danger-ink hover:opacity-90 shadow-sm',
   'danger-ghost': 'text-danger hover:bg-danger-soft',
+  /** A step that finishes something ("I've delivered it"): green, so it never looks like the step before it. */
+  success: 'bg-success text-success-ink hover:opacity-90 shadow-sm',
 };
 const sizes: Record<ButtonSize, string> = {
   sm: 'h-8 px-3 text-sm',

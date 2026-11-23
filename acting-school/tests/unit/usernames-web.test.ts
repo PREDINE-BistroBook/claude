@@ -16,7 +16,7 @@ import {
 } from '../../src/web/features/staff/utils';
 import common from '../../src/web/i18n/common';
 import { ApiError } from '../../src/web/lib/api';
-import { authGate } from '../../src/web/lib/authGate';
+import { authGate, signInLanguage } from '../../src/web/lib/authGate';
 import { errorMessageKey, issuesToErrors } from '../../src/web/lib/forms';
 
 /**
@@ -53,6 +53,38 @@ describe('what a signed-in-only screen shows (authGate)', () => {
     const auth = src('lib/auth.tsx');
     expect(auth).toMatch(/case 'choosePassword':\s+return \(\s+<Suspense fallback=\{<SplashScreen \/>\}>\s+<ChoosePasswordPage \/>/);
     expect(src('router.tsx')).not.toContain('ChoosePassword');
+  });
+});
+
+describe('a new account’s language (the operator tool’s per-account "locale")', () => {
+  it('is the language of the very first screen: the "Choose your own password" screen of an Arabic account is in Arabic', () => {
+    // Signed in with a temporary password, in Arabic, on a device that was in English: switch to Arabic.
+    const salma = { id: 3, locale: 'ar' as const, mustChangePassword: true };
+    expect(authGate({ loading: false, needsSetup: false, offline: false, user: salma })).toBe('choosePassword');
+    const chosen = { ...salma, mustChangePassword: false };
+    const ali = { id: 4, locale: 'en' as const, mustChangePassword: true };
+    expect(signInLanguage(salma, 'en')).toBe('ar');
+    expect(signInLanguage(chosen, 'en')).toBe('ar');
+    // Already in it, or nobody signed in: nothing to change.
+    expect(signInLanguage(salma, 'ar')).toBeNull();
+    expect(signInLanguage(ali, 'en')).toBeNull();
+    expect(signInLanguage(null, 'en')).toBeNull();
+    expect(signInLanguage(ali, 'ar')).toBe('en');
+  });
+
+  it('AuthProvider — around RequireAuth, so for the first-password screen too — applies it before the first paint, once per sign-in', () => {
+    const auth = src('lib/auth.tsx');
+    expect(auth).toMatch(/useLayoutEffect\(\(\) => \{\s+if \(user && appliedFor\.current !== user\.id\) \{\s+appliedFor\.current = user\.id;\s+const next = signInLanguage\(user, currentLanguage\(\)\);\s+if \(next\) setLanguage\(next\);/);
+    // The language rule doesn't look at the temporary password: only the gate does.
+    expect(src('lib/authGate.ts').split('export function signInLanguage')[1]).not.toContain('mustChangePassword');
+    expect(src('main.tsx')).toMatch(/<AuthProvider>/);
+  });
+
+  it('the first-password screen has every word in Arabic', () => {
+    const en = common.en.auth.choosePassword as Record<string, unknown>;
+    const ar = common.ar.auth.choosePassword as Record<string, unknown>;
+    expect(Object.keys(ar).sort()).toEqual(Object.keys(en).sort());
+    for (const key of ['title', 'subtitle']) expect(String(ar[key]), key).toMatch(/[\u0600-\u06FF]/);
   });
 });
 

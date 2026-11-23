@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { FileKind } from '../enums';
+import type { CafeUnread } from './cafe';
 import { id } from './common';
 import type { SummonsView } from './summons';
 import type { PersonRef } from './team';
@@ -130,7 +131,8 @@ export interface ChatMessagesResponse {
 
 /**
  * GET /api/chat/unread — the one poll (every 20 s while the app is visible)
- * behind the Messages badge, the bell's count and the "call to the office" banner.
+ * behind the Messages badge, the bell's count, the "call to the office" banner
+ * and the cafeteria (switched on or not; orders waiting on the board).
  */
 export interface ChatUnreadResponse {
   /** Unread messages across all my conversations (the Messages badge). */
@@ -139,6 +141,8 @@ export interface ChatUnreadResponse {
   notifications: number;
   /** Summonses waiting for my answer (pending, not expired), newest first: the full-width banner. */
   summons: SummonsView[];
+  /** The cafeteria: whether it is switched on, and the counts behind the orders board's badge. */
+  cafe: CafeUnread;
 }
 
 /** Error codes (error.code) of the chat API besides the generic ones. */

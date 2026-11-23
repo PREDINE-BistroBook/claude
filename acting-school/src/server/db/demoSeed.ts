@@ -23,6 +23,8 @@
  *   editor    Video editor             (Hany Nabil)
  *   coach     Acting coach             (Layla Haddad — teaches classes)
  *   coach2    Acting coach + Finance   (Daniel Price — teaches classes)
+ *   reception Reception                (Nour Hassan — no section yet: Team, Messages, the cafeteria)
+ *   helper    Office helper            (Sayed Ramadan — the cafeteria's orders board; his account is in Arabic)
  *   tom       former Acting coach, deactivated (tom.wilkins@demo.school)
  *
  * The demo accounts are not asked to choose their own password at the first
@@ -45,6 +47,7 @@ import type {
 } from '../../shared/enums';
 import type { Interview, LeadDetail } from '../../shared/schemas/admissions';
 import type { BuiltInPositionKey } from '../../shared/permissions';
+import type { CafeItem } from '../../shared/schemas/cafe';
 import type { CourseDetail, CourseEnrollment } from '../../shared/schemas/courses';
 import type { Position } from '../../shared/schemas/positions';
 import type { SeedDemoResult, SeedDemoWebsiteResult } from '../../shared/schemas/admin';
@@ -52,12 +55,14 @@ import { castingApplicationInput } from '../../shared/schemas/castingApplication
 import { siteApplyInput, type SiteContentParsed } from '../../shared/schemas/site';
 import { createWebsiteLead } from '../lib/admissions';
 import { createCastingApplication } from '../lib/castingApplications';
+import { cafeBoardLink, cafeOrderLink } from '../lib/cafe';
 import { epochAt, todayIn } from '../lib/clock';
 import type { FileStore } from '../lib/fileStore';
 import { summonsInboxLink, summonsLink } from '../lib/notifications';
 import { findPublicWorkshop, saveSiteContent } from '../lib/siteContent';
 import type { DB } from './database';
 import {
+  cafeOrders,
   castingApplications,
   conversations,
   courses,
@@ -86,6 +91,8 @@ export const DEMO_LOGINS: SeedDemoResult['logins'] = [
   { username: 'editor', email: 'editor@demo.school', position: 'Video editor', name: 'Hany Nabil' },
   { username: 'coach', email: 'coach@demo.school', position: 'Acting coach', name: 'Layla Haddad' },
   { username: 'coach2', email: 'coach2@demo.school', position: 'Acting coach + Finance', name: 'Daniel Price' },
+  { username: 'reception', email: 'reception@demo.school', position: 'Reception', name: 'Nour Hassan' },
+  { username: 'helper', email: 'helper@demo.school', position: 'Office helper', name: 'Sayed Ramadan' },
 ];
 
 export interface SeedDemoOptions {
@@ -209,6 +216,9 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
     { key: 'layla', name: 'Layla Haddad', username: 'coach', email: 'coach@demo.school', positions: ['acting_coach'], phone: '+20 100 555 0102' },
     // Coaches and also keeps the books (one person, two positions: their permissions add up).
     { key: 'daniel', name: 'Daniel Price', username: 'coach2', email: 'coach2@demo.school', positions: ['acting_coach', 'finance'], phone: '+20 100 555 0103' },
+    // Reception has no section yet (the school will say what it does); the Office helper runs the cafeteria, in Arabic.
+    { key: 'reception', name: 'Nour Hassan', username: 'reception', email: 'reception@demo.school', positions: ['reception'], phone: '+20 100 555 0107' },
+    { key: 'helper', name: 'Sayed Ramadan', username: 'helper', email: 'helper@demo.school', positions: ['office_helper'], phone: '+20 100 555 0108', locale: 'ar' },
     // Taught the (now archived) Shakespeare course; deactivated at the end.
     { key: 'tom', name: 'Tom Wilkins', username: 'tom', email: 'tom.wilkins@demo.school', positions: ['acting_coach'], phone: null },
   ];
@@ -1094,9 +1104,81 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
 
   await seedTeam();
 
-  // ── 8. The public website ──────────────────────────────────────────────────
+  // ── 8. The cafeteria: the usual menu, a few days of delivered orders, one order delivered this morning, one waiting on the board ──
+
+  await seedCafe();
+
+  // ── 9. The public website ──────────────────────────────────────────────────
 
   await seedDemoWebsite({ db, files: opts.files, timeZone, today });
+
+  /**
+   * The cafeteria as a working morning: the usual menu ("Add the usual
+   * items"; the places are the defaults), a few orders delivered on the days
+   * before (so the owners' monthly page has something to show) and one turned
+   * down, the director's coffee delivered to the office an hour ago, and
+   * Layla's teas for Studio 1 still waiting on the Office helper's board —
+   * through the API, then backdated.
+   */
+  async function seedCafe() {
+    const { items } = await owner.post<{ items: CafeItem[] }>('/cafe/menu/defaults');
+    const item = (nameEn: string) => items.find((i) => i.nameEn === nameEn)!.id;
+    const helper = await login('helper');
+    const reception = await login('reception');
+    const tarek = await login('casting');
+    const ago = (minutes: number) => Date.now() - minutes * 60_000;
+    const DAY = 24 * 60;
+
+    // The days before: delivered (or turned down) and long read — nothing of it in anyone's bell as new.
+    const past: { client: ReturnType<typeof as>; daysAgo: number; place: string; items: { itemId: number; qty: number; options?: string }[]; turnDown?: string }[] = [
+      { client: reception, daysAgo: 1, place: 'Reception', items: [{ itemId: item('Tea'), qty: 1, options: 'Medium sugar' }] },
+      { client: tarek, daysAgo: 1, place: 'Studio 2', items: [{ itemId: item('Coffee'), qty: 2 }, { itemId: item('Water'), qty: 2 }] },
+      { client: layla, daysAgo: 2, place: 'Studio 1', items: [{ itemId: item('Tea'), qty: 3 }, { itemId: item('Biscuits'), qty: 1 }] },
+      { client: director, daysAgo: 2, place: 'Office', items: [{ itemId: item('Turkish coffee'), qty: 1, options: 'مضبوط' }] },
+      { client: tarek, daysAgo: 3, place: 'Studio 2', items: [{ itemId: item('Sandwich'), qty: 1 }], turnDown: 'Sorry, it is not available now' },
+    ];
+    for (const p of past) {
+      const o = await p.client.post<{ id: number }>('/cafe/orders', { place: p.place, items: p.items });
+      if (p.turnDown) await helper.post(`/cafe/orders/${o.id}/status`, { status: 'cancelled', reason: p.turnDown });
+      else {
+        await helper.post(`/cafe/orders/${o.id}/status`, { status: 'on_the_way' });
+        await helper.post(`/cafe/orders/${o.id}/status`, { status: 'delivered' });
+      }
+      const at = ago(p.daysAgo * DAY + 120);
+      db.update(cafeOrders)
+        .set(p.turnDown ? { createdAt: at, cancelledAt: at + 3 * 60_000 } : { createdAt: at, onTheWayAt: at + 3 * 60_000, deliveredAt: at + 8 * 60_000 })
+        .where(eq(cafeOrders.id, o.id))
+        .run();
+      for (const link of [cafeBoardLink(o.id), cafeOrderLink(o.id)]) {
+        db.update(notifications).set({ createdAt: at, readAt: at + 10 * 60_000 }).where(eq(notifications.link, link)).run();
+      }
+    }
+
+    const coffee = await director.post<{ id: number }>('/cafe/orders', {
+      place: 'Office',
+      items: [
+        { itemId: item('Turkish coffee'), qty: 1, options: 'مضبوط' },
+        { itemId: item('Water'), qty: 1 },
+      ],
+    });
+    await helper.post(`/cafe/orders/${coffee.id}/status`, { status: 'on_the_way' });
+    await helper.post(`/cafe/orders/${coffee.id}/status`, { status: 'delivered' });
+
+    const teas = await layla.post<{ id: number }>('/cafe/orders', {
+      place: 'Studio 1',
+      note: 'For the break, around 11',
+      items: [
+        { itemId: item('Tea'), qty: 2 },
+        { itemId: item('Tea'), qty: 1, options: 'no sugar' },
+      ],
+    });
+
+    db.update(cafeOrders).set({ createdAt: ago(75), onTheWayAt: ago(72), deliveredAt: ago(68) }).where(eq(cafeOrders.id, coffee.id)).run();
+    db.update(notifications).set({ createdAt: ago(75), readAt: ago(72) }).where(and(eq(notifications.kind, 'cafe_order'), eq(notifications.link, cafeBoardLink(coffee.id)))).run();
+    db.update(notifications).set({ createdAt: ago(68) }).where(and(eq(notifications.kind, 'cafe_status'), eq(notifications.link, cafeOrderLink(coffee.id)))).run();
+    db.update(cafeOrders).set({ createdAt: ago(4) }).where(eq(cafeOrders.id, teas.id)).run();
+    db.update(notifications).set({ createdAt: ago(4) }).where(and(eq(notifications.kind, 'cafe_order'), eq(notifications.link, cafeBoardLink(teas.id)))).run();
+  }
 
   /**
    * Everyone's profile photo (generated portraits, like the talent's; the two
@@ -1124,6 +1206,8 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
       { key: 'editor', person: 415, gender: 'male', hair: 'Black' },
       { key: 'layla', person: 300, gender: 'female', hair: 'Black' },
       { key: 'daniel', person: 301, gender: 'male', hair: 'Brown' },
+      { key: 'reception', person: 417, gender: 'female', hair: 'Dark brown' },
+      { key: 'helper', person: 418, gender: 'male', hair: 'Black' },
     ];
     for (const l of looks) {
       const fileId = await portrait(owner, l.person, l.gender, l.hair, `${l.key}.png`);
