@@ -677,3 +677,58 @@ Free to run (no paid services). Built in its own migration, after the website's.
   - the workshop files scope (a coach sees only their own workshops' files), casting files permissions.
 - **Unit tests:** the push crypto against the RFC 8291 vectors, the VAPID JWT structure, `PersonActions` visibility rules.
 - **`cf:smoke`:** a chat round trip with a photo, a summons answered, notifications.
+
+---
+
+## Part H — Studio email addresses (`name@turquoisestudio.app`), forwarded to each person's real inbox
+
+Decided by the school on 2026-11-23.
+- Every account signs in with a studio address: `ceo@`, `cfo@`, `salma@`, then the person's first name, all `@turquoisestudio.app`.
+- **Every worker, the CEO and CFO included, enters their own real email in the app**, and the app does the rest: mail sent to their studio address is forwarded to that inbox (Cloudflare Email Routing, free).
+- Receiving only for now; replying "as" the studio address is a later, optional step.
+- Built **after the Team pack is merged**, because it touches the same staff and profile screens. Its own migration.
+
+### Data and settings
+- `users.personal_email` (nullable, normalised lower-case, a real address).
+  - **Private:** visible only to the person themself and to `staff.manage`; owners see it the same way. Never in Team-directory or chat payloads.
+  - The sign-in email (`users.email`) stays the studio address.
+- `users.forwarding_status`: `none` | `pending_confirmation` | `active` | `error` | `disabled`, plus `forwarding_error` (short text).
+- Settings (`settings.manage`):
+  - `emailDomain` (default `turquoisestudio.app`);
+  - `infoForwardTo` (a staff member, for `info@`);
+  - `catchAllForwardTo` (a staff member, or off);
+  - the forwarding status of `info@` and the catch-all.
+
+### Screens
+- **Add staff (`staff.manage`):** the email field fills itself with `firstname@<emailDomain>` from the Latin first name (lower-case, letters only; duplicates get `firstname.lastname@`). It can be edited. If the name is only in Arabic, the field is left for the person adding to type.
+- **Profile, "Your email":**
+  - shows the studio address;
+  - asks for "Your personal email, where your studio mail should arrive";
+  - shows the status in plain words: "Check your inbox and click the confirmation link from Cloudflare" / "Working ✓" / "Something went wrong — ask the manager".
+  - `staff.manage` can set or change it for anyone on the staff detail page.
+- **Staff list (`staff.manage`):** a small forwarding-status badge per person.
+- **When an account is deactivated:** its forwarding rule is switched off (former staff stop receiving studio mail). Optionally it forwards to `infoForwardTo` instead, as the deactivation dialog chooses.
+
+### How forwarding is set up (`src/server/lib/emailForwarding.ts`)
+- **Calls the Cloudflare API from the app:**
+  - `POST /accounts/{account}/email/routing/addresses { email }` creates the destination; Cloudflare sends the person a confirmation email;
+  - `GET` it to read whether it is `verified`;
+  - zone rules `POST/PUT/DELETE /zones/{zone}/email/routing/rules` with `matchers [{ type: 'literal', field: 'to', value: <studio address> }]` and `actions [{ type: 'forward', value: [<personal email>] }]`;
+  - the catch-all rule (`/zones/{zone}/email/routing/rules/catch_all`).
+- **Configuration:**
+  - vars `CF_ACCOUNT_ID`, `CF_EMAIL_ZONE_ID`;
+  - secret `CF_EMAIL_TOKEN`: a Cloudflare API token limited to **Account › Email Routing Addresses: Edit** and **Zone (turquoisestudio.app) › Email Routing Rules: Edit**, created by the owner in the dashboard; README explains it step by step;
+  - env vars on Node.
+  - Without them: personal emails are still saved and the status shows "Waiting for the administrator to switch on forwarding".
+- **Syncing:**
+  - sync on change (after the database transaction; failures saved as `error` with a short reason);
+  - a "Check again" button;
+  - the nightly cron also refreshes `pending_confirmation` statuses;
+  - the operator can run `npm run email:sync` from a machine with Cloudflare credentials to sync everything at once.
+- **Email Routing must be enabled on the zone once**, which adds its MX/SPF DNS records. The operator does this at deploy with the owner's approval; the app doesn't enable it.
+
+### Tests
+- **Mock the Cloudflare API with a fake fetch:** create, update, verify, delete and catch-all calls with the right shapes, plus error handling.
+- **Privacy:** `personal_email` never leaves in other people's payloads.
+- **Rules:** auto-fill naming rules and duplicates; deactivation switches the rule off.
+- **No-config mode.**
