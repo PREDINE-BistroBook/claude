@@ -20,6 +20,7 @@ import {
 import { checkFormToken, FORM_TOKEN_MAX_AGE_MS, issueFormToken } from '../../src/server/lib/siteForms';
 import { publicHostSitePaths, sitePaths } from '../../src/server/site/paths';
 import { addDays } from '../../src/shared/dates';
+import { withContentChange } from '../../src/web/features/website/utils';
 import { BUILT_IN_GRANTS, BUILT_IN_GRANTS_SETTING, BUILT_IN_POSITIONS, LATEST_BUILT_IN_GRANTS_VERSION } from '../../src/shared/permissions';
 import { castingApplicationInput } from '../../src/shared/schemas/castingApplications';
 import type { LeadDetail, LeadListItem } from '../../src/shared/schemas/admissions';
@@ -473,6 +474,26 @@ describe('the publish switch: "Website is public" (content.published)', () => {
     expect(texts.body).toMatchObject({ published: true, tagline: { en: 'New line' } });
     expect((await director.put<SiteContent>('/api/site/content', content({ published: null }))).status).toBe(400);
     expect(getSiteContent(t.db).published).toBe(true);
+  });
+
+  it('a save of texts from the Website screens cannot undo a switch turned in the meantime', async () => {
+    // The screens read the content, change part of it and put it back (withContentChange). Between that read
+    // and the save arriving, someone else hides the website: the late save must not publish it again.
+    const t = await makeTestContext();
+    const director = await t.as('executive_director');
+    const owner = await t.as('ceo');
+    await owner.put('/api/site/content', content({ published: true }));
+    const read = (await director.get<SiteContent>('/api/site/content')).body;
+    expect(read.published).toBe(true);
+    expect((await owner.put<SiteContent>('/api/site/content', withContentChange(read, { published: false }))).body.published).toBe(false);
+    const late = await director.put<SiteContent>('/api/site/content', withContentChange(read, { tagline: { en: 'Saved late', ar: '' } }));
+    expect(late.status).toBe(200);
+    expect(late.body).toMatchObject({ published: false, tagline: { en: 'Saved late' } });
+    expect(getSiteContent(t.db).published).toBe(false);
+    // The other way round too: a late save does not hide a website that was just made public.
+    const stale = (await director.get<SiteContent>('/api/site/content')).body;
+    await owner.put('/api/site/content', withContentChange(stale, { published: true }));
+    expect((await director.put<SiteContent>('/api/site/content', withContentChange(stale, { links: [] }))).body.published).toBe(true);
   });
 
   it('must be true or false', async () => {

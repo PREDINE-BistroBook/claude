@@ -96,6 +96,18 @@ describe('site content changes', () => {
     expect(current.castingCall.open).toBe(false);
   });
 
+  it('a save that is not about "Website is public" never carries the switch (the API then keeps the stored one)', () => {
+    for (const published of [true, false]) {
+      const current = { ...DEFAULT_SITE_CONTENT, published, links: [link('a')] };
+      expect('published' in withContentChange(current, { tagline: { en: 'New', ar: 'جديد' } })).toBe(false);
+      expect('published' in withContentChange(current, { castingCall: { ...current.castingCall, open: true } })).toBe(false);
+      expect('published' in withContentChange(current, { links: [] })).toBe(false);
+      expect('published' in withContentChange(current, {})).toBe(false);
+      // …and it is all that is left out.
+      expect({ ...withContentChange(current, {}), published }).toEqual(current);
+    }
+  });
+
   it('replaceLink edits one link in place', () => {
     const links = [link('a'), link('b'), link('c')];
     expect(replaceLink(links, { ...link('b'), visible: false }).map((l) => [l.id, l.visible])).toEqual([
@@ -159,6 +171,7 @@ describe('"Website is public": the switch on the Website home', () => {
   it('a change of the switch is one field of the content; everything else comes from the copy just read', () => {
     const current = { ...DEFAULT_SITE_CONTENT, instagram: 'studio' };
     expect(withContentChange(current, { published: true })).toEqual({ ...current, published: true });
+    expect(withContentChange({ ...current, published: true }, { published: false })).toEqual({ ...current, published: false });
     expect(current.published).toBe(false);
   });
 });

@@ -46,13 +46,23 @@ export function shortUrl(url: string): string {
   return url.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '');
 }
 
+/** What PUT /api/site/content takes: the whole content, with "Website is public" only when it is being changed. */
+export type SiteContentSave = Omit<SiteContent, 'published'> & { published?: boolean };
+
 /**
  * The content to PUT after changing part of it. Always start from the content
  * just read from the server, so a change made on another screen (or by someone
  * else) isn't overwritten with an old copy.
+ *
+ * "Website is public" (`published`) is sent only when it is the thing being
+ * changed. Every other save leaves it out and the API then keeps the stored
+ * switch — so a save of texts that is slow to arrive (a phone on a bad line)
+ * can never carry an old copy of the switch and undo what someone turned in
+ * the meantime: hiding the website must stick.
  */
-export function withContentChange(current: SiteContent, change: Partial<SiteContent>): SiteContent {
-  return { ...current, ...change };
+export function withContentChange(current: SiteContent, change: Partial<SiteContent>): SiteContentSave {
+  const { published: _stored, ...rest } = current;
+  return { ...rest, ...change };
 }
 
 /** Replace one custom link (same id), keeping the order. */
