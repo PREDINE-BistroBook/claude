@@ -31,6 +31,7 @@ export function typedEmail(value: string): string | undefined {
 export function usernameCheckError(check: Pick<UsernameCheck, 'username' | 'status'> | undefined, typed: string): string | null {
   if (!check || check.username !== normalizeUsername(typed)) return null;
   if (check.status === 'taken') return 'common:errors.usernameTaken';
+  if (check.status === 'reserved') return 'common:errors.usernameReserved';
   if (check.status === 'invalid') return 'common:errors.usernameInvalid';
   return null;
 }

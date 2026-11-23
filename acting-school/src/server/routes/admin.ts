@@ -144,8 +144,11 @@ export function adminRoutes(deps: {
 
     if (action === 'restore') {
       const restore = deps.restore;
-      // Where there is nothing to restore from, say so whatever the body.
+      // Where there is nothing to restore from, say so whatever the body: no restoreTo at all (Node,
+      // tests), or a runtime whose recovery turns out not to be there (local workerd: `current` answers
+      // null). A probe that throws for another reason doesn't stop a restore on Cloudflare.
       if (!restore?.restoreTo) throw notSupported();
+      if (restore.current && (await restore.current().catch(() => undefined)) === null) throw notSupported();
       const input = await body(c, restoreInput);
       let result: RestoreResponse | null;
       try {

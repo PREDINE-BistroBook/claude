@@ -796,6 +796,12 @@ They also said to keep "the website information we pulled from Instagram".
 - A "taken" answer never says whose username it is (409 `username_taken`, the same body for an owner's as for anyone's).
 - `POST /api/admin/grant-owner` and `npm run owner` name the account by username or email.
 - The demo: usernames `owner`, `cfo`, `director`, `head`, `casting`, `editor`, `coach`, `coach2` (and `tom`, deactivated); their `…@demo.school` addresses still sign in.
+- After review (2026-11-23):
+  - A username also ends with a letter or digit and never has two of `. _ -` in a row (`abc.` and `a..b` made addresses the member page could not save).
+  - `RESERVED_USERNAMES` (admin, administrator, hostmaster, postmaster, webmaster, info, abuse, root, support, noreply, …) are nobody's username: their automatic address is one the studio's domain needs (certificate checks, Part H's `info@`). Refused everywhere (`errors.usernameReserved`, live check `status: 'reserved'`); the backfill and the suggestions step around them (`admin@…` → `admin2`).
+  - `ROLE_USERNAMES` (ceo, cfo, owner, director, manager, …) are given by a manager or the operator; nobody takes one for themselves in My profile (`errors.usernameForManagers`).
+  - `username-check`'s `exceptId` follows the reach of `GET /api/staff/:id`: an owner's id, for a non-owner, answers exactly like a missing one (it confirmed owners' usernames).
+  - The brakes count under `signInBrakeNames`: the account's email and its username's automatic address (when the email is another one); for nobody, a typed address and the automatic address of its first part too. Ten failures under one name, then the other name, answer the same whether or not the account exists.
 
 ### I2. A first password is temporary
 - **`users.must_change_password`** (boolean, default false).
@@ -813,6 +819,7 @@ They also said to keep "the website information we pulled from Instagram".
 - A manager resetting **their own** password through `PATCH /api/staff/:id` does not set the flag (it is their own choice); the first owner (setup) and the demo accounts never have it.
 - **For the operator tool (I3):** insert each account with `mustChangePassword: true`; the password may be shorter than the policy (`hashPassword` takes any length and sign-in accepts any length), the person's own choice then has to meet it.
 - The web side: `RequireAuth` → `authGate` → `pages/ChoosePasswordPage.tsx` (no route of its own).
+- After review (2026-11-23): `POST /api/auth/password` checks "not the temporary one again" against the stored hash as choose-password does (a full-width spelling, "ｓalma123", is the same password to scrypt).
 
 ### I3. Clear the demo and create the real team (operator tool)
 - **`POST /api/admin/clear-demo`**, bearer `ADMIN_TOKEN`, with a **dry run first** (the default): it changes nothing and returns the exact plan and a `confirm` code. The real run must send that code, and is refused if the data changed in between.
@@ -836,6 +843,11 @@ They also said to keep "the website information we pulled from Instagram".
 - **Every table is listed** in `CLEAR_DEMO_TABLES` with what happens to its rows; a new table must be added there (a test walks the schema). At the end of the transaction the row counts are compared with the plan, and a difference rolls the run back.
 - **`'all'` keeps the content object** (texts, contact lines, links, main photo, casting call, the public switch). The coaches and the workshops shown are deleted in every mode: a workshop row can't outlive its course, and the coaches were the demo's.
 - **The owner** gets the CEO position only when none of its positions is an owner position (CFO or another owner position if the school made CEO an ordinary one; 409 `no_owner_position` if none is left). A kept owner that was deactivated is switched on again.
+- **After review (2026-11-23):**
+  - The confirm code's plan half also covers the ids of the accounts that go and the last rowid of every emptied table, so a code works **once**: after a run, the same request plans to delete the accounts that run created (new ids) and answers `plan_changed` — a re-sent command can no longer delete the team and bring the temporary passwords back. A record deleted and another added between the dry run and the real run is caught too.
+  - The dry run names every account that goes (`willDeleteAccounts`: id, username, email, name, active, owner; the real run answers `deletedAccounts`) and `warnings`: `shared_password` (new accounts sharing one temporary password, compared as scrypt sees them; `owner: true` when an owner's account is one of them) and `replaces_account` (a new account taking the username or email of one that goes). Warnings don't stop the run.
+  - `'contact'` also empties the casting call's texts (they are not on the list above; the demo's copy would go public when the call is switched on).
+  - `POST /api/admin/restore` asks the runtime first, so local `wrangler dev` answers 501 whatever the body, as Node does.
 - **Restore points:** the runtime hands them to the app (`createApp({ restore })`, `lib/restorePoint.ts`). Cloudflare: `src/worker/pointInTimeRecovery.ts` — `GET /api/admin/restore-point` → `{ bookmark, at }`, `POST /api/admin/restore { bookmark } | { minutesAgo: 1–43200 }` → 202 `{ restoringTo, undoBookmark }`, then `ctx.abort()` half a second later. Local `wrangler dev` has no recovery (Cloudflare's docs say so; workerd answers a stand-in bookmark and throws for the rest): 501 `not_supported`, and a run's `restorePoint` is null. So **the restore path has only run against a fake**; its first real use is on the deployment. Node: the database is copied to `$DATA_DIR/app.before-clear-demo.<time>.db` (the database only, not `uploads/`).
 
 ### The real team (from the school's confirmed positions)
@@ -853,6 +865,8 @@ They also said to keep "the website information we pulled from Instagram".
 | Moaty | `moaty` | Acting coach + Finance | `moaty123` |
 
 Each person is asked to choose their own password the first time they sign in.
+
+**Note (review, 2026-11-23):** `ceo` (an owner) and `ahmed` share the first password `ahmed123` in this table. A temporary password works for whoever types it first, and choosing a password asks for nothing more — so whichever Ahmed signs in as `ceo` first holds the owner account. The dry run says so (`shared_password`, `owner: true`). Unless the school decides otherwise, give `ceo` a first password of its own, handed over in person.
 
 ### Tests
 - **Usernames:** rules, uniqueness, backfill, sign-in by username and by email, brakes per account.

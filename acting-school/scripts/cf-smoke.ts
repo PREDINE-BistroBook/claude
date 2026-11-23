@@ -422,7 +422,11 @@ export async function runApiSmoke(base: string, opts: { adminToken: string; pass
   step('usernames can be changed: your own in My profile, a member’s by a manager; the automatic address follows');
   const renamed = expectStatus(await staffClient.patch('/api/auth/profile', { username: 'Smoke.Tester' }), 200, 'change my own username').body.user;
   check(renamed.username === 'smoke.tester' && renamed.email === 'smoke.tester@turquoisestudio.app', `my username and address (${renamed.username}, ${renamed.email})`);
-  expectStatus(await staffClient.patch('/api/auth/profile', { username: 'director' }), 409, 'a taken username');
+  expectStatus(await staffClient.patch('/api/auth/profile', { username: 'coach' }), 409, 'a taken username');
+  check(
+    expectStatus(await staffClient.patch('/api/auth/profile', { username: 'director' }), 400, 'a position’s name for yourself').body.error.issues[0].message === 'errors.usernameForManagers',
+    'a position’s name (director) is a manager’s to give',
+  );
   const byManager = expectStatus(await owner.patch(`/api/staff/${member.id}`, { username: 'smoketest' }), 200, 'a manager changes it').body;
   check(byManager.username === 'smoketest' && byManager.email === 'smoketest@turquoisestudio.app' && byManager.mustChangePassword === false, 'renamed by the manager');
   check(expectStatus(await owner.get('/api/staff'), 200, 'staff list').body.items.some((s: { username: string }) => s.username === 'smoketest'), 'the staff list carries usernames');
@@ -915,6 +919,16 @@ async function clearDemoChecks(base: string, opts: { adminToken: string; passwor
   check(dry.accounts.filter((a: { owner: boolean }) => a.owner).map((a: { username: string }) => a.username).join() === 'ceo,cfo', 'the owners afterwards: ceo and cfo');
   check(dry.siteContent.mode === 'contact' && dry.siteContent.published === false && dry.siteContent.kept.includes('whatsappWorkshops'), 'the website keeps its contact lines and is not public');
   check(!REAL_TEAM.some((a) => JSON.stringify(dry).includes(a.password)), 'no password in the answer');
+  check(
+    dry.willDeleteAccounts.length === dry.willDelete.users && !dry.willDeleteAccounts.some((a: { username: string }) => a.username === 'director'),
+    `the plan names every account that goes (${dry.willDeleteAccounts.map((a: { username: string }) => a.username).join(', ')})`,
+  );
+  const shared = dry.warnings.find((w: { code: string }) => w.code === 'shared_password');
+  check(shared?.usernames.join() === 'ceo,ahmed' && shared.owner === true, 'a warning: ceo (an owner) and ahmed share one temporary password');
+  check(
+    dry.warnings.some((w: { code: string; username?: string }) => w.code === 'replaces_account' && w.username === 'cfo'),
+    'a warning: the new "cfo" replaces the demo account of that name',
+  );
   check(expectStatus(await director.get('/api/students'), 200, 'students after the dry run').body.items.length === studentsBefore, 'the dry run changed nothing');
 
   step('clear the demo: a real run needs the code of a dry run of the same request on the same data');
@@ -936,6 +950,7 @@ async function clearDemoChecks(base: string, opts: { adminToken: string; passwor
   check(real.dryRun === false && JSON.stringify(real.deleted) === JSON.stringify(fresh.willDelete), 'it deleted exactly what the dry run said');
   check(real.restorePoint === null, 'no restore point in local workerd (it keeps no history)');
   check(real.accounts.every((a: { id: number | null }) => typeof a.id === 'number'), 'every account has its id');
+  check(JSON.stringify(real.deletedAccounts) === JSON.stringify(fresh.willDeleteAccounts), 'it deleted exactly the accounts the dry run named');
   await refused({ ...request, dryRun: false, confirm: fresh.confirm }, 409, 'plan_changed', 'the same code a second time');
   expectStatus(await director.get('/api/students'), 401, 'the kept account was signed out');
   for (const name of ['owner', 'coach', 'owner@demo.school']) {
@@ -953,6 +968,7 @@ async function clearDemoChecks(base: string, opts: { adminToken: string; passwor
   const site = expectStatus(await kept.get('/api/site/content'), 200, 'site content').body;
   check(site.published === false && site.links.length === 0 && site.heroFileId === null && site.castingCall.open === false, 'the website: not public, no links, no main photo, casting call closed');
   check(site.whatsappWorkshops === '01094635959' && site.tagline.en.length > 0, 'the studio’s own lines are still there');
+  check(site.castingCall.intro.en === '' && site.castingCall.lookingFor.en === '', 'the demo’s casting-call texts are gone');
   const preview = expectStatus(await new Client(base).get('/site/en'), 200, 'the website preview');
   check(String(preview.body).includes('class="preview"'), 'the preview renders, with its "not public yet" banner');
 
@@ -968,6 +984,10 @@ async function clearDemoChecks(base: string, opts: { adminToken: string; passwor
   expectStatus(await ali.post('/api/auth/choose-password', { newPassword: 'ali123' }), 400, 'the temporary password again');
   expectStatus(await ali.post('/api/auth/choose-password', { newPassword: `ali-${opts.password}` }), 200, 'ali chooses a password');
   expectStatus(await ali.get('/api/students'), 200, 'ali is in');
+  for (const name of ['admin', 'postmaster', 'info']) {
+    check(expectStatus(await ali.patch('/api/auth/profile', { username: name }), 400, `ali can't take "${name}"`).body.error.issues[0].message === 'errors.usernameReserved', `"${name}" is kept for the studio`);
+  }
+  check(expectStatus(await ali.patch('/api/auth/profile', { username: 'owner' }), 400, 'ali can’t take "owner"').body.error.issues[0].message === 'errors.usernameForManagers', '"owner" is a manager’s to give');
   expectStatus(await new Client(base).post('/api/auth/login', { username: 'ali', password: 'ali123' }), 401, 'the temporary password is over');
 
   const ceo = new Client(base);
@@ -992,6 +1012,9 @@ async function clearDemoChecks(base: string, opts: { adminToken: string; passwor
   check(expectStatus(await anon.get('/api/admin/restore-point', bearer), 501, 'restore-point').body.error.code === 'not_supported', 'restore-point: not_supported');
   check(expectStatus(await anon.post('/api/admin/restore', { minutesAgo: 5 }, bearer), 501, 'restore by time').body.error.code === 'not_supported', 'restore by time: not_supported');
   check(expectStatus(await anon.post('/api/admin/restore', { bookmark: '0000007b-0000b26e-00001538-0c3e87bb37b3db5cc52eedb93cd3b96b' }, bearer), 501, 'restore to a bookmark').body.error.code === 'not_supported', 'restore to a bookmark: not_supported');
+  for (const body of [{}, { minutesAgo: 0 }, { minutesAgo: 5, bookmark: 'abcdefgh' }]) {
+    check(expectStatus(await anon.post('/api/admin/restore', body, bearer), 501, `restore ${JSON.stringify(body)}`).body.error.code === 'not_supported', `restore ${JSON.stringify(body)}: not_supported before the body is read`);
+  }
   expectStatus(await ceo.get(`/api/students/${student.id}`), 200, 'the object is still up, the data still there');
 }
 

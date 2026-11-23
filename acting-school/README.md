@@ -69,7 +69,8 @@ curl -X POST https://<worker-url>/api/admin/seed-demo -H "Authorization: Bearer 
 curl -X POST https://<worker-url>/api/admin/seed-demo-website -H "Authorization: Bearer $ADMIN_TOKEN"
 
 # Locked out: same as npm run owner -- ceo (also lifts the sign-in brakes on that account).
-# Name the account by its username, or by its email address: -d '{"email":"someone@example.com"}'
+# Name the account by its username, or by its email address: -d '{"email":"someone@example.com"}'.
+# Check "name" in the answer: a username names whoever holds it now (people can change theirs).
 curl -X POST https://<worker-url>/api/admin/grant-owner -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H 'Content-Type: application/json' -d '{"username":"ceo"}'
 
@@ -77,7 +78,7 @@ curl -X POST https://<worker-url>/api/admin/grant-owner -H "Authorization: Beare
 curl -X POST https://<worker-url>/api/admin/reset -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
-Sign-in brakes (both runtimes, kept in the database): 10 failed sign-ins per account from one address in 15 minutes, 100 per account from anywhere, 30 per address whatever the account, and 30 a minute across the whole school. An account's username and its email address count together, so typing one and then the other gives no extra guesses. They're checked before the password is hashed, so a flood of bad sign-ins can't stall the one Durable Object (scrypt runs on its only thread); while the school-wide brake holds nobody can sign in, but everyone already signed in carries on. Request bodies over 1 MB are refused (413) before they're read (uploads: 8 MB).
+Sign-in brakes (both runtimes, kept in the database): 10 failed sign-ins per account from one address in 15 minutes, 100 per account from anywhere, 30 per address whatever the account, and 30 a minute across the whole school. An account's username and its email address count together, so typing one and then the other gives no extra guesses — and the other name is stopped the same way whether or not the account exists, so the brakes don't tell which usernames there are. They're checked before the password is hashed, so a flood of bad sign-ins can't stall the one Durable Object (scrypt runs on its only thread); while the school-wide brake holds nobody can sign in, but everyone already signed in carries on. Request bodies over 1 MB are refused (413) before they're read (uploads: 8 MB).
 
 The Durable Object speaks Workers RPC (`extends DurableObject`), so wrangler's local explorer can run SQL against the local database (`npm run cf:dev` prints its address).
 
@@ -121,9 +122,10 @@ Write the request in a file, `team.json`. It holds passwords: keep it out of the
 ```
 
 - `positions` are the built-in positions' keys: `ceo`, `cfo`, `executive_director`, `head_of_casting`, `casting_team`, `video_editor`, `acting_coach`, `finance`.
-- `password` may be short (it is temporary); `locale` (`"en"` / `"ar"`) and `email` are optional — without `email` the account gets `<username>@<email domain>`.
+- `password` may be short (it is temporary); `locale` (`"en"` / `"ar"`) and `email` are optional — without `email` the account gets `<username>@<email domain>`. Give every account **a password of its own**: a temporary password works for whoever types it first, and the person who signs in with it chooses the account's password — two accounts with one password (an owner's above all) can be taken by the wrong person. The dry run warns about it.
+- Usernames follow the app's rules (3–20 of `a–z 0–9 . _ -`, a letter first, a letter or digit last); the studio's own mail names (`admin`, `postmaster`, `info`, …) are refused.
 - `keep` (optional): usernames or email addresses of accounts that stay as they are — name, positions, password, language, photo. They are signed out like everyone else.
-- `keepSiteContent`: `"contact"` keeps the tagline, about text, address, map link, WhatsApp lines, phone, email, Instagram and the casting call's texts, removes the custom links and the main photo, closes the casting call and leaves the website **not public**; `"all"` leaves the content exactly as it is (links, main photo, casting call and the "Website is public" switch included); `"none"` empties it.
+- `keepSiteContent`: `"contact"` keeps the tagline, about text, address, map link, WhatsApp lines, phone, email and Instagram, removes the custom links, the main photo and the casting call's texts, closes the casting call and leaves the website **not public**; `"all"` leaves the content exactly as it is (links, main photo, casting call and the "Website is public" switch included); `"none"` empties it.
 - Unknown fields are refused, so a misspelt `dryRun` can never become a real run.
 
 **1. See that a restore point is there** (Cloudflare; see the limits below):
@@ -133,13 +135,21 @@ curl https://<worker-url>/api/admin/restore-point -H "Authorization: Bearer $ADM
 # → {"bookmark":"0000007b-0000b26e-00001538-0c3e87bb…","at":1795455945998}
 ```
 
-**2. Dry run** — the default. It changes nothing and answers the plan: every account as it will be, a count of what goes for every table, what happens to the website, and a `confirm` code.
+**2. Dry run** — the default. It changes nothing and answers the plan: every account as it will be (`accounts`), every account that goes (`willDeleteAccounts`: id, username, email, name), a count of what goes for every table, what happens to the website, `warnings`, and a `confirm` code.
 
 ```
 curl -X POST https://<worker-url>/api/admin/clear-demo -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H 'Content-Type: application/json' -d @team.json
-# → {"dryRun":true,"confirm":"3ea9c9c0-c033903d","accounts":[…],"willDelete":{"students":25,…,"users":9,"files":44},"siteContent":{…}}
+# → {"dryRun":true,"confirm":"3ea9c9c0-c033903d","accounts":[…],"willDeleteAccounts":[…],"warnings":[…],
+#    "willDelete":{"students":25,…,"users":9,"files":44},"siteContent":{…}}
 ```
+
+Read `willDeleteAccounts` (is anyone there who should be under `keep`?) and every warning before going on:
+
+- `shared_password` — these new accounts would share one temporary password (`owner: true` when an owner's account is one of them). Whoever signs in first with it takes the account. Give each its own password and run the dry run again.
+- `replaces_account` — a new account takes the username or email of an account that is deleted: that person's password, photo and records go, and they start again from a temporary password. If they should keep their account, move them to `keep`.
+
+Warnings don't stop the run: the request is yours.
 
 **3. Real run** — the same request with `"dryRun": false` and the code. Do it right after reading the plan.
 
@@ -150,7 +160,7 @@ jq '. + {dryRun: false, confirm: "3ea9c9c0-c033903d"}' team.json | \
 # → {"dryRun":false,…,"deleted":{…},"restorePoint":{"kind":"bookmark","bookmark":"0000007b-…","at":…}}
 ```
 
-The code is for **this request on this data**. A different request (another account, password, owner, website choice) answers 409 `confirm_mismatch`; the same request after a record was added or deleted, or the website's texts were edited, answers 409 `plan_changed` — run the dry run again and read the new plan. (Sign-in sessions, sign-in brakes, form counters and phone-alert subscriptions are counted but are not part of the code: someone signing in between the two calls is no reason to start over.) Everything happens in one transaction: a run that fails for any reason changes nothing. Keep the `restorePoint` from the answer; it is also in the Worker's log.
+The code is for **this request on this data, once**. A different request (another account, password, owner, website choice) answers 409 `confirm_mismatch`; the same request after a record was added or deleted (even one deleted and another added), or the website's texts were edited, answers 409 `plan_changed` — run the dry run again and read the new plan. After a run the code is spent: the accounts it created have new ids, so the same command sent again (from the shell history, or a retry after a timeout) answers `plan_changed` and can't delete them and bring their temporary passwords back. The real run's answer has `deletedAccounts` and `warnings` as the dry run showed them. (Sign-in sessions, sign-in brakes, form counters and phone-alert subscriptions are counted but are not part of the code: someone signing in between the two calls is no reason to start over.) Everything happens in one transaction: a run that fails for any reason changes nothing. Keep the `restorePoint` from the answer; it is also in the Worker's log.
 
 Other refusals, all before anything changes: 400 `validation` (a malformed body; a username that breaks the rules is named in `issues`), `unknown_position`, `unknown_account` (a `keep` name nobody has), `duplicate_username`, `duplicate_email`, `owner_not_listed`, `no_accounts`, `confirm_required`; 409 `no_owner_position` (run `grant-owner` first); 503 `restore_point_failed`.
 
@@ -172,7 +182,7 @@ Its limits — read them before relying on it:
 - **Only the database.** Uploaded files come back with it because they are stored in the database today; once an R2 bucket is bound, a file the run deleted from R2 stays deleted.
 - **Sign-ins go back too:** whoever was signed in at that moment is signed in again, everyone since is signed out.
 - **A second of errors** for requests in flight while the app restarts.
-- **Cloudflare only, and not in local `wrangler dev`** (workerd keeps no history there): locally both endpoints answer 501 `not_supported` and a real run has `"restorePoint": null`. So the restore itself has never run outside Cloudflare — that is what step 1 is for: a bookmark in its answer shows recovery is there on the deployment.
+- **Cloudflare only, and not in local `wrangler dev`** (workerd keeps no history there): locally both endpoints answer 501 `not_supported` whatever the body, and a real run has `"restorePoint": null`. So the restore itself has never run outside Cloudflare — that is what step 1 is for: a bookmark in its answer shows recovery is there on the deployment.
 - **On Node** there is no recovery over HTTP (both endpoints answer 501). Instead a real run first copies the database to `$DATA_DIR/app.before-clear-demo.<UTC time>.db` and answers `{"kind":"file","file":"…"}`. To go back: stop the server, put that file in place of `app.db` (delete `app.db-wal` and `app.db-shm`), start it. The copy holds the database only — not the files in `uploads/` that the run deleted; copy that folder yourself first if they matter.
 
 ### Phone alerts (VAPID keys)

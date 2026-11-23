@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { DATETIME_RE, TIME_RE, isValidDate } from '../dates';
 import { normalizePhone, plainNumberText } from '../phone';
-import { USERNAME_RE } from '../usernames';
+import { USERNAME_RE, isReservedUsername } from '../usernames';
 
 /**
  * Building blocks for request validation. Forms send '' for an empty field;
@@ -63,14 +63,22 @@ export const optEmail = z.preprocess(
 
 /**
  * A username (shared/usernames.ts): trimmed and lower-cased as typed, then
- * 3–20 characters from a–z 0–9 . _ - starting with a letter. An empty field
- * reads "Required"; anything else that breaks the rules gets the rules in words.
+ * 3–20 characters from a–z 0–9 . _ - starting with a letter, ending with a
+ * letter or digit. An empty field reads "Required"; anything else that breaks
+ * the rules gets the rules in words; a reserved name (admin, postmaster, info…)
+ * says it is kept for the studio.
  */
 export const username = z
   .string()
   .trim()
   .toLowerCase()
-  .pipe(z.string().min(1).regex(USERNAME_RE, { message: 'errors.usernameInvalid' }));
+  .pipe(
+    z
+      .string()
+      .min(1)
+      .regex(USERNAME_RE, { message: 'errors.usernameInvalid' })
+      .refine((v) => !isReservedUsername(v), { message: 'errors.usernameReserved' }),
+  );
 
 export const optUrl = z.preprocess(blankToNull, z.url({ protocol: /^https?$/ }).max(500).nullable().optional());
 

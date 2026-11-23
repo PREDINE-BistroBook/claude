@@ -37,11 +37,15 @@ export interface SeedDemoWebsiteResult {
   enquiries: number;
 }
 
+/** How an existing account is named (`keep`, `owner`, grant-owner's `username`): its username or its email address, as at sign-in — looked up, not checked against the rules. */
+const accountName = z.string().trim().toLowerCase().pipe(z.string().min(1).max(254));
+
 /**
  * POST /api/admin/grant-owner: lockout recovery, the same as `npm run owner -- <username or email>`.
- * Name the account by `email` or by `username` (one of the two; `username` wins).
+ * Name the account by `email` or by `username` (one of the two; `username` wins). Check the
+ * `name` in the answer: a username names whoever holds it now.
  */
-export const grantOwnerInput = z.object({ email: email.optional(), username: username.optional() });
+export const grantOwnerInput = z.object({ email: email.optional(), username: accountName.optional() });
 export type GrantOwnerInput = z.infer<typeof grantOwnerInput>;
 
 export interface GrantOwnerResponse {
@@ -73,8 +77,6 @@ export type KeepSiteContent = (typeof KEEP_SITE_CONTENT)[number];
 /** At most this many accounts created, and this many kept, in one run. */
 export const CLEAR_DEMO_MAX_ACCOUNTS = 50;
 
-/** How an existing account is named (`keep`, `owner`): its username or its email address, as at sign-in. */
-const accountName = z.string().trim().toLowerCase().pipe(z.string().min(1).max(254));
 
 /**
  * One account to create. `password` is temporary — the person must choose their
@@ -153,6 +155,34 @@ export const CLEAR_DEMO_ERROR_CODES = {
   restoreRefused: 'restore_refused',
 } as const;
 
+/**
+ * Warnings in a dry run's (and the real run's) answer: things to look at twice
+ * before sending the real run. They don't stop it — the request is the
+ * operator's — and the confirm code covers the request, so a run goes ahead
+ * only as it was looked at.
+ */
+export const CLEAR_DEMO_WARNING_CODES = {
+  /** Created accounts share one temporary password: whoever signs in first with it can take any of them (`owner: true` when an owner's account is one). */
+  sharedPassword: 'shared_password',
+  /** A created account takes the username or email of an account that is deleted (it belongs under `keep` if that person should keep it). */
+  replacesAccount: 'replaces_account',
+} as const;
+
+export type ClearDemoWarning =
+  | { code: typeof CLEAR_DEMO_WARNING_CODES.sharedPassword; usernames: string[]; owner: boolean; message: string }
+  | { code: typeof CLEAR_DEMO_WARNING_CODES.replacesAccount; username: string; replaces: { id: number; username: string; name: string }; message: string };
+
+/** An account a run deletes, as it is before the run. */
+export interface ClearDemoDeletedAccount {
+  id: number;
+  username: string;
+  email: string;
+  name: string;
+  active: boolean;
+  /** Holds an owner position now. */
+  owner: boolean;
+}
+
 /** An account as it is after the run. */
 export interface ClearDemoAccount {
   /** null for an account a dry run would create. */
@@ -171,9 +201,9 @@ export interface ClearDemoAccount {
 /**
  * What happens to the website's content object (settings key 'site'):
  * - 'contact': the tagline, about text, address, map link, WhatsApp lines,
- *   phone, email and Instagram stay, and so do the casting call's texts; the
- *   custom links and the main photo go, the casting call is closed and the
- *   website is not public.
+ *   phone, email and Instagram stay; the custom links, the main photo and the
+ *   casting call's texts go, the casting call is closed and the website is
+ *   not public.
  * - 'all': the object stays exactly as it is (links, main photo, casting call
  *   and the "Website is public" switch included).
  * - 'none': the object is removed: empty texts, nothing public.
@@ -207,19 +237,31 @@ export type RestorePoint = { kind: 'bookmark'; bookmark: string; at: number } | 
 interface ClearDemoPlan {
   /**
    * The code a real run of this same request must send as `confirm`. It
-   * covers the request and the plan (the accounts, the counts, the website
-   * content) — not the sign-in sessions, sign-in brakes, rate-limit counters
-   * and phone-alert subscriptions, which change whenever someone signs in.
+   * covers the request and the plan (the accounts afterwards, the ids of the
+   * accounts that go, the counts, the website content) — not the sign-in
+   * sessions, sign-in brakes, rate-limit counters and phone-alert
+   * subscriptions, which change whenever someone signs in. It works once:
+   * after a run, the same request plans to delete the accounts that run
+   * created, which have new ids (409 `plan_changed`).
    */
   confirm: string;
   /** Every account that exists after the run: the kept ones, then the created ones. */
   accounts: ClearDemoAccount[];
+  /** Look at these twice before the real run (CLEAR_DEMO_WARNING_CODES); [] when there is nothing to say. */
+  warnings: ClearDemoWarning[];
   siteContent: ClearDemoSiteContent;
 }
 
 export type ClearDemoResult =
-  | (ClearDemoPlan & { dryRun: true; willDelete: ClearDemoCounts })
-  | (ClearDemoPlan & { dryRun: false; deleted: ClearDemoCounts; /** null where the runtime has none to offer (local wrangler dev). */ restorePoint: RestorePoint | null });
+  | (ClearDemoPlan & { dryRun: true; /** Every account the run would delete, by id. */ willDeleteAccounts: ClearDemoDeletedAccount[]; willDelete: ClearDemoCounts })
+  | (ClearDemoPlan & {
+      dryRun: false;
+      /** Every account the run deleted, as it was. */
+      deletedAccounts: ClearDemoDeletedAccount[];
+      deleted: ClearDemoCounts;
+      /** null where the runtime has none to offer (local wrangler dev). */
+      restorePoint: RestorePoint | null;
+    });
 
 // ── Restore points (Cloudflare) ─────────────────────────────────────────────
 

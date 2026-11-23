@@ -11,7 +11,9 @@
  *   what a real run would do and a `confirm` code — an HMAC (keyed with the
  *   ADMIN_TOKEN, so the code says nothing about the passwords in the request)
  *   over the request and over the plan: the accounts afterwards, the kept
- *   accounts' ids, the row counts, the website content afterwards.
+ *   accounts' ids, the ids of the accounts that go, the row counts and the
+ *   last rowid of every emptied table, the website content afterwards. So a
+ *   code works once: after a run the accounts it created have new ids.
  * - **A real run needs that code, and the same plan.** It plans again inside
  *   its transaction, on the data as it is then, and stops unless the code
  *   still matches: a different request is `confirm_mismatch`, the same request
@@ -28,21 +30,24 @@
  * Durable Object rules (CLAUDE.md): table by table, a plain DELETE each —
  * never a long IN list; account ids go in slices of IN_LIST_CHUNK.
  */
-import { and, count, eq, inArray, isNotNull, type SQL } from 'drizzle-orm';
+import { and, count, eq, inArray, isNotNull, sql, type SQL } from 'drizzle-orm';
 import { getTableConfig, type SQLiteTable } from 'drizzle-orm/sqlite-core';
 import { createHmac } from 'node:crypto';
 import type { Locale } from '../../shared/enums';
 import {
   CLEAR_DEMO_ERROR_CODES as CODES,
+  CLEAR_DEMO_WARNING_CODES as WARNINGS,
   type ClearDemoAccount,
   type ClearDemoCounts,
+  type ClearDemoDeletedAccount,
   type ClearDemoInput,
   type ClearDemoResult,
   type ClearDemoSiteContent,
+  type ClearDemoWarning,
   type RestorePoint,
 } from '../../shared/schemas/admin';
 import type { ApiIssue } from '../../shared/schemas/common';
-import type { SiteContent } from '../../shared/schemas/site';
+import { DEFAULT_SITE_CONTENT, type SiteContent } from '../../shared/schemas/site';
 import { automaticEmail } from '../../shared/usernames';
 import { loadPositionRows } from '../lib/access';
 import { ApiError } from '../lib/errors';
@@ -174,7 +179,17 @@ export interface ClearDemoPlan {
   owner: PlannedOwner;
   /** The kept accounts (by id), then the created ones (in the request's order; id null until they exist). */
   accounts: ClearDemoAccount[];
+  /** The accounts that go, by id: what the operator is shown of `deleteUserIds`. */
+  deletedAccounts: ClearDemoDeletedAccount[];
+  /** Things in the request the operator should look at twice (a temporary password two accounts share, a created account taking the name of one that goes). */
+  warnings: ClearDemoWarning[];
   willDelete: ClearDemoCounts;
+  /**
+   * The highest rowid of every table that is emptied (null when it is empty) —
+   * part of the confirm code, not shown: a record deleted and another added
+   * between the dry run and the real run leaves the counts equal, not these.
+   */
+  lastRowIds: Record<string, number | null>;
   /** Rows each table that is not emptied must hold when the run is over (checked before the transaction commits). */
   after: Record<string, number>;
   site: { write: 'leave' | 'save' | 'remove'; after: SiteContent | null; summary: ClearDemoSiteContent };
@@ -190,8 +205,9 @@ function planSiteContent(db: Reader, mode: ClearDemoInput['keepSiteContent']): C
   if (mode === 'all') after = stored;
   else if (mode === 'none') write = stored ? 'remove' : 'leave';
   else if (stored) {
-    // 'contact': the studio's own words and contact lines stay; what was made up for the demo, or pointed at it, goes.
-    after = { ...stored, published: false, heroFileId: null, links: [], castingCall: { ...stored.castingCall, open: false } };
+    // 'contact': the studio's own words and contact lines stay; what was made up for the demo, or pointed at it,
+    // goes — the casting call's texts too (they are not on the spec's list, and switching the call on would publish them).
+    after = { ...stored, published: false, heroFileId: null, links: [], castingCall: structuredClone(DEFAULT_SITE_CONTENT.castingCall) };
     write = 'save';
   }
   const texts: [string, unknown][] = after
@@ -246,6 +262,62 @@ function filesStaying(db: Reader, keptIds: readonly number[], heroAfter: string 
     for (const r of found) ids.add(r.id);
   }
   return inChunks([...ids], (part) => db.select({ id: t.files.id }).from(t.files).where(inArray(t.files.id, part)).all()).length;
+}
+
+/** The highest rowid of a table, or null when it has no rows (one indexed read: rowid is the table's own order). */
+const lastRowId = (db: Reader, table: SQLiteTable): number | null => db.select({ n: sql<number | null>`max(rowid)` }).from(table).get()?.n ?? null;
+
+/** The accounts a run deletes, as the operator is shown them (by id). */
+function accountsGoing(db: Reader, ids: readonly number[]): ClearDemoDeletedAccount[] {
+  const rows = inChunks(ids, (part) =>
+    db.select({ id: t.users.id, username: t.users.username, email: t.users.email, name: t.users.name, active: t.users.active }).from(t.users).where(inArray(t.users.id, part)).all(),
+  ).sort((a, b) => a.id - b.id);
+  const held = loadPositionRows(db, ids);
+  return rows.map((u) => ({ id: u.id, username: usernameOf(u), email: u.email, name: u.name, active: u.active, owner: held.get(u.id)!.some((p) => p.isOwner) }));
+}
+
+/**
+ * What the operator should look at twice before the real run (it goes ahead
+ * all the same — the request is theirs):
+ * - `shared_password`: created accounts with the same temporary password.
+ *   Whoever signs in first with it can take any of those accounts and choose
+ *   its password — an owner's too (`owner: true`). Compared as scrypt sees
+ *   them (NFKC, lib/password.ts). Never says what the password is.
+ * - `replaces_account`: a created account takes the username or the email
+ *   address of an account that is deleted — a new account with a temporary
+ *   password replaces one someone may be using (it belongs under `keep` if
+ *   that person should keep their password, photo and records of their own).
+ */
+function planWarnings(input: ClearDemoInput, accounts: readonly ClearDemoAccount[], going: readonly ClearDemoDeletedAccount[]): ClearDemoWarning[] {
+  const warnings: ClearDemoWarning[] = [];
+  const created = accounts.filter((a) => a.status === 'created');
+  const byPassword = new Map<string, ClearDemoAccount[]>();
+  input.create.forEach((a, i) => {
+    const key = a.password.normalize('NFKC');
+    byPassword.set(key, [...(byPassword.get(key) ?? []), created[i]!]);
+  });
+  for (const group of byPassword.values()) {
+    if (group.length < 2) continue;
+    const owner = group.some((a) => a.owner);
+    const usernames = group.map((a) => a.username);
+    warnings.push({
+      code: WARNINGS.sharedPassword,
+      usernames,
+      owner,
+      message: `${usernames.join(', ')} would share one temporary password: whoever signs in first with it can take ${owner ? 'any of these accounts — an owner’s included —' : 'any of these accounts'} and choose its password. Give each account a password of its own.`,
+    });
+  }
+  for (const a of created) {
+    const old = going.find((g) => g.username === a.username || g.email === a.email);
+    if (!old) continue;
+    warnings.push({
+      code: WARNINGS.replacesAccount,
+      username: a.username,
+      replaces: { id: old.id, username: old.username, name: old.name },
+      message: `"${a.username}" is created new, with a temporary password, in place of the existing account ${old.id} ("${old.username}", ${old.name}), which is deleted with its password, photo and records. If that person should keep their account, list it under keep instead.`,
+    });
+  }
+  return warnings;
 }
 
 /**
@@ -350,12 +422,17 @@ export function planClearDemo(db: DB, input: ClearDemoInput): ClearDemoPlan {
     .all()
     .map((r) => r.id);
   const deleteUserIds = allUserIds.filter((id) => !kept.has(id));
+  const deletedAccounts = accountsGoing(db, deleteUserIds);
+  const warnings = planWarnings(input, accounts, deletedAccounts);
   const keptLinks = keptIds.reduce((n, id) => n + keptPositions.get(id)!.length, 0);
   const filesBefore = rowCount(db, t.files);
   const filesAfter = filesStaying(db, keptIds, site.after?.heroFileId ?? null);
   const willDelete: ClearDemoCounts = {};
-  for (const { table, rows } of CLEAR_DEMO_TABLES) {
-    if (rows === 'all') willDelete[tableName(table)] = rowCount(db, table);
+  const lastRowIds: Record<string, number | null> = {};
+  for (const { table, rows, volatile } of CLEAR_DEMO_TABLES) {
+    if (rows !== 'all') continue;
+    willDelete[tableName(table)] = rowCount(db, table);
+    if (!volatile) lastRowIds[tableName(table)] = lastRowId(db, table);
   }
   willDelete[NAME.userPositions] = rowCount(db, t.userPositions) - keptLinks;
   willDelete[NAME.users] = deleteUserIds.length;
@@ -367,7 +444,10 @@ export function planClearDemo(db: DB, input: ClearDemoInput): ClearDemoPlan {
     create,
     owner,
     accounts,
+    deletedAccounts,
+    warnings,
     willDelete,
+    lastRowIds,
     after: {
       [NAME.users]: accounts.length,
       [NAME.userPositions]: accounts.reduce((n, a) => n + a.positions.length, 0),
@@ -398,7 +478,11 @@ export function clearDemoConfirmCode(token: string, input: ClearDemoInput, plan:
   });
   const planned = JSON.stringify({
     accounts: plan.accounts.map((a) => [a.id, a.username, a.email, a.name, a.positions.map((p) => [p.key, p.name]), a.owner, a.active, a.status]),
+    // Which accounts go, by id: after a run the accounts it created have new ids, so the same request
+    // sent again — from shell history, or a retry — no longer matches and can't delete them again.
+    deleted: plan.deletedAccounts.map((a) => [a.id, a.username, a.email]),
     willDelete: Object.entries(plan.willDelete).filter(([name]) => !VOLATILE.has(name)),
+    lastRowIds: Object.entries(plan.lastRowIds),
     after: Object.entries(plan.after),
     site: [plan.site.write, plan.site.after],
   });
@@ -489,7 +573,17 @@ export async function clearDemo(deps: { db: DB; files: FileStore; token: string;
   const { db, token } = deps;
   const plan = planClearDemo(db, input);
   const confirm = clearDemoConfirmCode(token, input, plan);
-  if (input.dryRun !== false) return { dryRun: true, confirm, accounts: plan.accounts, willDelete: plan.willDelete, siteContent: plan.site.summary };
+  if (input.dryRun !== false) {
+    return {
+      dryRun: true,
+      confirm,
+      accounts: plan.accounts,
+      willDeleteAccounts: plan.deletedAccounts,
+      warnings: plan.warnings,
+      willDelete: plan.willDelete,
+      siteContent: plan.site.summary,
+    };
+  }
 
   // Refused here, a run costs nothing: no hashing, no restore point.
   assertConfirmed(input.confirm, confirm);
@@ -523,6 +617,8 @@ export async function clearDemo(deps: { db: DB; files: FileStore; token: string;
     dryRun: false,
     confirm,
     accounts: done.plan.accounts.map((a) => (a.status === 'created' ? { ...a, id: done.createdIds[next++]! } : a)),
+    deletedAccounts: done.plan.deletedAccounts,
+    warnings: done.plan.warnings,
     deleted: done.plan.willDelete,
     siteContent: done.plan.site.summary,
     restorePoint,

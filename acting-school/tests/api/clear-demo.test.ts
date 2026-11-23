@@ -361,10 +361,25 @@ describe('on the demo school (run in order)', () => {
       mode: 'contact',
       published: false,
       castingCallOpen: false,
-      kept: ['tagline', 'about', 'address', 'mapUrl', 'whatsappWorkshops', 'whatsappCasting', 'phone', 'instagram', 'castingCall.intro', 'castingCall.lookingFor'],
+      kept: ['tagline', 'about', 'address', 'mapUrl', 'whatsappWorkshops', 'whatsappCasting', 'phone', 'instagram'],
       links: { kept: 0, removed: 3 },
       mainPhoto: 'removed',
     });
+    // Every account that goes, by name — the operator sees whose accounts these are, not just a count.
+    const demo = t.db.select().from(users).all();
+    expect(dry.willDeleteAccounts.map((a) => [a.id, a.username, a.email, a.name, a.active])).toEqual(demo.sort((a, b) => a.id - b.id).map((u) => [u.id, u.username, u.email, u.name, u.active]));
+    expect(dry.willDeleteAccounts.filter((a) => a.owner).map((a) => a.username)).toEqual(['owner', 'cfo']);
+    // What to look at twice: the documented plan gives the CEO (an owner) and the Head of Casting one first password.
+    expect(dry.warnings).toEqual([
+      {
+        code: 'shared_password',
+        usernames: ['ceo', 'ahmed'],
+        owner: true,
+        message: expect.stringContaining('ceo, ahmed would share one temporary password'),
+      },
+      // The demo's CFO account goes and the real CFO takes its username: said, so it can't happen unnoticed.
+      { code: 'replaces_account', username: 'cfo', replaces: { id: expect.any(Number), username: 'cfo', name: expect.any(String) }, message: expect.stringContaining('"cfo" is created new') },
+    ]);
     // The passwords are in the request, never in the answer.
     for (const a of REAL_TEAM) expect(JSON.stringify(dry)).not.toContain(a.password);
   });
@@ -523,7 +538,9 @@ describe('on the demo school (run in order)', () => {
     expect(settingsNow.builtInGrantsVersion).toBeGreaterThan(0);
     // …and of the website, the studio's own words and contact lines.
     const site = getSiteContent(t.db);
-    expect(site).toEqual({ ...siteBefore, published: false, heroFileId: null, links: [], castingCall: { ...siteBefore.castingCall, open: false } });
+    expect(site).toEqual({ ...siteBefore, published: false, heroFileId: null, links: [], castingCall: { open: false, intro: { en: '', ar: '' }, lookingFor: { en: '', ar: '' } } });
+    // The demo's made-up casting-call copy is gone, so switching the call on can't publish it.
+    expect(siteBefore.castingCall.intro.en).not.toBe('');
     expect(site.tagline.en.length + site.about.en.length).toBeGreaterThan(20);
     expect(site.whatsappWorkshops).toBe('01094635959');
     expect(siteBefore.castingCall.open && siteBefore.published && siteBefore.links.length > 0).toBe(true);
@@ -628,6 +645,120 @@ describe('on the demo school (run in order)', () => {
 });
 
 // ── Accounts that are kept, and the owner ───────────────────────────────────
+
+describe('a confirm code works once', () => {
+  const team = [
+    { name: 'Ahmed Tamam', username: 'ceo', password: 'first-ceo', positions: ['ceo'] },
+    { name: 'Abdelrahman Tamam', username: 'cfo', password: 'first-cfo', positions: ['cfo'] },
+    { name: 'Salma', username: 'salmaa', password: 'first-salma', positions: ['executive_director'] },
+  ];
+
+  it('a second clear, sent again (shell history, a retry), is refused: it would delete the accounts it created and bring their temporary passwords back', async () => {
+    const t = await makeTestContext({ config: { adminToken: TOKEN } });
+    await t.as('owner');
+    await silently(() => clear(t, { create: team, owner: 'ceo', keepSiteContent: 'contact' }));
+    // A second clear from the cleared school, to fix a username in the list.
+    const fixed = { create: team.map((a) => (a.username === 'salmaa' ? { ...a, username: 'salma' } : a)), owner: 'ceo', keepSiteContent: 'contact' };
+    const second = await silently(() => clear(t, fixed));
+    // The team signs in and chooses their own passwords; the CEO sets Arabic and a phone.
+    for (const a of fixed.create) {
+      const c = await t.login(a.username, a.password);
+      expect((await c.post('/api/auth/choose-password', { newPassword: `own-${a.username}-pass` })).status).toBe(200);
+      if (a.username === 'ceo') expect((await c.patch('/api/auth/profile', { locale: 'ar', phone: '0100 123 4567' })).status).toBe(200);
+    }
+    const before = snapshot(t);
+    // The second run's request and code, sent again: the data looks the same (counts, website), but the accounts are new.
+    const replay = await silently(() => admin(t, 'clear-demo', { ...fixed, dryRun: false, confirm: second.real.confirm }));
+    expect([replay.status, replay.body.error.code]).toEqual([409, 'plan_changed']);
+    expect(snapshot(t)).toBe(before);
+    expect((await t.anon.post('/api/auth/login', { username: 'salma', password: 'first-salma' })).status).toBe(401);
+    expect((await t.anon.post('/api/auth/login', { username: 'salma', password: 'own-salma-pass' })).status).toBe(200);
+    // A fresh dry run names the accounts that would go — the ones the second run created.
+    const fresh = (await admin<DryRun>(t, 'clear-demo', fixed)).body;
+    expect(fresh.willDeleteAccounts.map((a) => a.id)).toEqual(second.real.accounts.map((a) => a.id));
+    expect(fresh.confirm).not.toBe(second.real.confirm);
+  });
+
+  it('a record deleted and another added between the dry run and the real run is a change, though every count is the same', async () => {
+    const t = await makeTestContext({ config: { adminToken: TOKEN } });
+    const owner = await t.as('owner');
+    const first = await owner.post('/api/students', { firstName: 'First', lastName: 'Student' });
+    const request = { create: team, owner: 'ceo', keepSiteContent: 'contact' };
+    const dry = (await admin<DryRun>(t, 'clear-demo', request)).body;
+    expect((await owner.delete(`/api/students/${first.body.id}`)).status).toBe(204);
+    expect((await owner.post('/api/students', { firstName: 'Second', lastName: 'Student' })).status).toBe(201);
+    expect((await admin<DryRun>(t, 'clear-demo', request)).body.willDelete).toEqual(dry.willDelete);
+    const run = await admin(t, 'clear-demo', { ...request, dryRun: false, confirm: dry.confirm });
+    expect([run.status, run.body.error.code]).toEqual([409, 'plan_changed']);
+  });
+});
+
+describe('what the dry run says about the accounts that go', () => {
+  it('names each one; a created account that takes the name of one that goes is a warning (it may belong under keep)', async () => {
+    const t = await makeTestContext({ config: { adminToken: TOKEN } });
+    const owner = await t.as('owner', { username: 'boss', email: 'boss@old.example', name: 'Old Owner' });
+    // A real coach who signed in and chose a password: "moaty".
+    const added = await owner.post('/api/staff', { name: 'معطي', username: 'moaty', email: 'moaty@example.com', positionIds: [t.positionId('acting_coach'), t.positionId('finance')], password: 'temporary1' });
+    expect(added.status).toBe(201);
+    const moaty = await t.login('moaty', 'temporary1');
+    expect((await moaty.post('/api/auth/choose-password', { newPassword: 'moaty-chose-this' })).status).toBe(200);
+    const request = {
+      create: [
+        { name: 'Ahmed Tamam', username: 'ceo', password: 'first-ceo', positions: ['ceo'] },
+        { name: 'Moaty', username: 'moaty', password: 'first-moaty', positions: ['acting_coach', 'finance'] },
+        { name: 'Someone', username: 'someone', password: 'first-x', positions: ['casting_team'], email: 'BOSS@old.example' },
+      ],
+      owner: 'ceo',
+      keepSiteContent: 'contact',
+    };
+    const before = snapshot(t);
+    const dry = (await admin<DryRun>(t, 'clear-demo', request)).body;
+    expect(snapshot(t)).toBe(before);
+    expect(dry.willDeleteAccounts).toEqual([
+      { id: owner.user.id, username: 'boss', email: 'boss@old.example', name: 'Old Owner', active: true, owner: true },
+      { id: added.body.id, username: 'moaty', email: 'moaty@example.com', name: 'معطي', active: true, owner: false },
+    ]);
+    expect(dry.warnings.map((w) => [w.code, 'username' in w ? w.username : null, 'replaces' in w ? w.replaces : null])).toEqual([
+      ['replaces_account', 'moaty', { id: added.body.id, username: 'moaty', name: 'معطي' }],
+      // Matched by the email address too.
+      ['replaces_account', 'someone', { id: owner.user.id, username: 'boss', name: 'Old Owner' }],
+    ]);
+    // Kept instead, it is no warning and no deletion — and its own password stays.
+    const keeping = (await admin<DryRun>(t, 'clear-demo', { ...request, create: request.create.filter((a) => a.username !== 'moaty'), keep: ['moaty'] })).body;
+    expect(keeping.willDeleteAccounts.map((a) => a.username)).toEqual(['boss']);
+    expect(keeping.warnings.map((w) => w.code)).toEqual(['replaces_account']);
+    // The real run answers the same list, as it was.
+    const { real } = await silently(() => clear(t, request));
+    expect(real.deletedAccounts).toEqual(dry.willDeleteAccounts);
+    expect(real.warnings).toEqual(dry.warnings);
+    expect((await t.anon.post('/api/auth/login', { username: 'moaty', password: 'moaty-chose-this' })).status).toBe(401);
+  });
+
+  it('shared temporary passwords are a warning, compared as scrypt sees them; an owner among them is said', async () => {
+    const t = await makeTestContext({ config: { adminToken: TOKEN } });
+    await t.as('owner');
+    const create = [
+      { name: 'Ahmed Tamam', username: 'ceo', password: 'ahmed-first', positions: ['ceo'] },
+      { name: 'Ahmed Abdellah', username: 'ahmed', password: 'ahmed-first', positions: ['head_of_casting'] },
+      { name: 'Taha', username: 'taha', password: 'taha-first', positions: ['casting_team'] },
+      { name: 'Ali', username: 'ali', password: 'ｔａｈａ-first', positions: ['video_editor'] },
+      { name: 'Salma', username: 'salma', password: 'salma-first', positions: ['executive_director'] },
+    ];
+    const dry = (await admin<DryRun>(t, 'clear-demo', { create, owner: 'ceo', keepSiteContent: 'none' })).body;
+    expect(dry.warnings.filter((w) => w.code === 'shared_password').map((w) => ('usernames' in w ? [w.usernames, w.owner] : null))).toEqual([
+      [['ceo', 'ahmed'], true],
+      [['taha', 'ali'], false],
+    ]);
+    for (const a of create) expect(JSON.stringify(dry.warnings)).not.toContain(a.password);
+    // Each with a password of its own: nothing to say.
+    const own = (await admin<DryRun>(t, 'clear-demo', { create: create.map((a) => ({ ...a, password: `${a.username}-own` })), owner: 'ceo', keepSiteContent: 'none' })).body;
+    expect(own.warnings.filter((w) => w.code === 'shared_password')).toEqual([]);
+    // A warning doesn't stop the run: the request is the operator's, and the code covers it as it was looked at.
+    const real = await silently(() => admin<RealRun>(t, 'clear-demo', { create, owner: 'ceo', keepSiteContent: 'none', dryRun: false, confirm: dry.confirm }));
+    expect(real.status).toBe(200);
+    expect(real.body.warnings).toEqual(dry.warnings);
+  });
+});
 
 describe('kept accounts and the owner', () => {
   /** An owner who goes, a director who stays (photo, a position of the school's own, Arabic), a deactivated coach, and records around them. */
@@ -813,7 +944,7 @@ describe('keepSiteContent', () => {
       mode: 'contact',
       published: false,
       castingCallOpen: false,
-      kept: ['tagline', 'about', 'address', 'mapUrl', 'whatsappWorkshops', 'whatsappCasting', 'phone', 'email', 'instagram', 'castingCall.intro', 'castingCall.lookingFor'],
+      kept: ['tagline', 'about', 'address', 'mapUrl', 'whatsappWorkshops', 'whatsappCasting', 'phone', 'email', 'instagram'],
       links: { kept: 0, removed: 2 },
       mainPhoto: 'removed',
     };
@@ -822,7 +953,8 @@ describe('keepSiteContent', () => {
     expect(real.deleted).toMatchObject({ site_coaches: 1, site_workshops: 1, courses: 1, files: 3 });
 
     const after = getSiteContent(w.t.db);
-    expect(after).toEqual({ ...w.before, published: false, heroFileId: null, links: [], castingCall: { open: false, intro: FULL.castingCall.intro, lookingFor: FULL.castingCall.lookingFor } });
+    // The casting call's texts go too: they are not on the 'contact' list, and switching the call on would publish them.
+    expect(after).toEqual({ ...w.before, published: false, heroFileId: null, links: [], castingCall: { open: false, intro: { en: '', ar: '' }, lookingFor: { en: '', ar: '' } } });
     for (const key of ['tagline', 'about', 'address', 'mapUrl', 'instagram', 'whatsappWorkshops', 'whatsappCasting', 'phone', 'email'] as const) expect(after[key]).toEqual(FULL[key]);
     expect(w.t.db.select().from(files).all()).toEqual([]);
     expect(w.t.db.select().from(fileChunks).all()).toEqual([]);
@@ -1023,10 +1155,26 @@ describe('restore points', () => {
   });
 
   it('a runtime whose recovery turns out not to be there (local workerd) answers null: 501, and the run goes on without a restore point', async () => {
-    const t = await makeTestContext({ config: { adminToken: TOKEN }, restore: { record: async () => null, current: async () => null, restoreTo: async () => null } });
+    const asked: string[] = [];
+    const t = await makeTestContext({
+      config: { adminToken: TOKEN },
+      restore: {
+        record: async () => null,
+        current: async () => null,
+        restoreTo: async () => {
+          asked.push('restoreTo');
+          return null;
+        },
+      },
+    });
     await t.as('owner');
     expect((await admin(t, 'restore-point')).status).toBe(501);
-    expect((await admin(t, 'restore', { minutesAgo: 5 })).status).toBe(501);
+    // 501 whatever the body — well-formed or not — as on Node: the runtime is asked first, the body isn't read.
+    for (const body of [{ minutesAgo: 5 }, { bookmark: BOOKMARK }, {}, { minutesAgo: 0 }, { minutesAgo: 5, bookmark: 'abcdefgh' }, { nonsense: true }]) {
+      const res = await admin(t, 'restore', body);
+      expect([res.status, res.body.error.code], JSON.stringify(body)).toEqual([501, 'not_supported']);
+    }
+    expect(asked).toEqual([]);
     expect((await silently(() => clear(t, request))).real.restorePoint).toBeNull();
   });
 

@@ -12,6 +12,7 @@ import {
   type MeResponse,
 } from '../../shared/schemas/auth';
 import { FRESH_UPLOAD_MS } from '../../shared/schemas/chat';
+import { isRoleUsername } from '../../shared/usernames';
 import { photoInput, TEAM_ERROR_KEYS } from '../../shared/schemas/team';
 import { positions, userPositions, users } from '../db/schema';
 import type { AppEnv } from '../env';
@@ -21,7 +22,7 @@ import { claimUploads, releaseFile } from '../lib/fileRefs';
 import { getDummyHash, hashPassword, sameSecret, verifyPassword } from '../lib/password';
 import { getSettings, saveSettings } from '../lib/settings';
 import { clearSignInFailures, recordSignInFailure, signInBlocked } from '../lib/signInBrake';
-import { emailDomainOf, findSignInAccount, newAccountNames, signInBrakeName, usernameChange } from '../lib/usernames';
+import { emailDomainOf, findSignInAccount, newAccountNames, signInBrakeNames, usernameChange } from '../lib/usernames';
 import { body } from '../lib/validate';
 import { currentUser, endSession, requireAuth, signOutUser, startSession } from '../middleware/auth';
 
@@ -58,17 +59,18 @@ router.post('/login', async (c) => {
   const db = c.get('db');
   const address = c.get('clientIp');
   // Whose name is it? One indexed read. The brakes are per account: an account's username and
-  // its email address count together (signInBrakeName).
+  // its email address count together, and the other name that would lead to it is braked alike
+  // whether or not the account exists (signInBrakeNames).
   const user = findSignInAccount(db, typed);
-  const account = signInBrakeName(user, typed, emailDomainOf(db));
+  const accounts = signInBrakeNames(user, typed, emailDomainOf(db));
   // Before hashing: a tripped brake costs a few small queries, a hash ~90 ms (lib/signInBrake.ts).
-  if (signInBlocked(db, account, address)) throw new ApiError(429, 'too_many_attempts', 'Too many attempts. Try again in a few minutes.');
+  if (signInBlocked(db, accounts, address)) throw new ApiError(429, 'too_many_attempts', 'Too many attempts. Try again in a few minutes.');
   const ok = await verifyPassword(input.password, user?.passwordHash ?? (await getDummyHash()));
   if (!user || !ok || !user.active) {
-    recordSignInFailure(db, account, address);
+    recordSignInFailure(db, accounts, address);
     throw new ApiError(401, 'invalid_credentials', 'Username or password is incorrect');
   }
-  clearSignInFailures(db, account, address);
+  clearSignInFailures(db, accounts, address);
   db.update(users).set({ lastLoginAt: Date.now() }).where(eq(users.id, user.id)).run();
   startSession(c, user.id);
   // With a temporary password the answer says so (user.mustChangePassword): the session opens only /api/auth.
@@ -135,6 +137,8 @@ router.post('/setup', async (c) => {
  * Your own name, phone, language — and your own username: the same rules and
  * uniqueness check as when a manager sets it (409 `username_taken`, never
  * saying whose it is), and an email address that was the automatic one follows it.
+ * A name that reads as a position (ceo, cfo, owner… — ROLE_USERNAMES) is a
+ * manager's to give, not yours to take: 400 `errors.usernameForManagers`.
  */
 router.patch('/profile', requireAuth, async (c) => {
   const { username, ...details } = await body(c, profileInput);
@@ -142,6 +146,7 @@ router.patch('/profile', requireAuth, async (c) => {
   const db = c.get('db');
   const updated = db.transaction((tx) => {
     const row = tx.select().from(users).where(eq(users.id, me.id)).get()!;
+    if (username !== undefined && username !== row.username && isRoleUsername(username)) throw fieldError(['username'], 'errors.usernameForManagers');
     const patch = { ...details, ...(username === undefined ? {} : usernameChange(tx, row, username, emailDomainOf(tx))) };
     return Object.keys(patch).length ? tx.update(users).set(patch).where(eq(users.id, me.id)).returning().get()! : row;
   });
@@ -184,7 +189,9 @@ router.post('/password', requireAuth, async (c) => {
     ]);
   }
   // Someone still on a temporary password may change it this way too — to their own, not to the same one again.
-  if (row.mustChangePassword && input.newPassword === input.currentPassword) throw sameAsTemporaryError();
+  // Checked against the stored hash, as choose-password does: a look-alike spelling ("ｓalma123") is the same
+  // password to scrypt (lib/password.ts normalises every password), so comparing the strings is not enough.
+  if (row.mustChangePassword && (await verifyPassword(input.newPassword, row.passwordHash))) throw sameAsTemporaryError();
   const passwordHash = await hashPassword(input.newPassword);
   const sid = c.get('sessionId');
   db.transaction((tx) => {

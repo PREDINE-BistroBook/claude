@@ -4,6 +4,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { MIGRATIONS_DIR } from '../../scripts/bundle-migrations';
 import { createApp } from '../../src/server/app';
 import { testConfig } from '../../src/server/config';
@@ -14,17 +15,21 @@ import * as schema from '../../src/server/db/schema';
 import { memoryFileStore } from '../../src/server/lib/fileStore';
 import { hashPassword } from '../../src/server/lib/password';
 import { durableObjectLimits } from '../../src/server/lib/sqlLimits';
-import { backfillUsernames, signInBrakeName } from '../../src/server/lib/usernames';
+import { backfillUsernames, signInBrakeNames } from '../../src/server/lib/usernames';
 import { choosePasswordForm, loginInput, signInNameOf } from '../../src/shared/schemas/auth';
 import { username as usernameSchema } from '../../src/shared/schemas/common';
 import { settingsInput } from '../../src/shared/schemas/settings';
 import { staffCreateInput } from '../../src/shared/schemas/staff';
 import {
   EMAIL_DOMAIN_RE,
+  RESERVED_USERNAMES,
+  ROLE_USERNAMES,
   USERNAME_MAX,
   USERNAME_RE,
   automaticEmail,
   firstFreeUsername,
+  isReservedUsername,
+  isRoleUsername,
   isValidUsername,
   normalizeUsername,
   numberedUsername,
@@ -44,6 +49,41 @@ describe('username rules (shared/usernames.ts)', () => {
     }
     expect(USERNAME_RE.test('abc')).toBe(true);
     expect(USERNAME_MAX).toBe(20);
+  });
+
+  it('ends with a letter or digit and never has two of . _ - in a row — so <username>@<domain> passes the app’s own email check', () => {
+    for (const bad of ['abc.', 'abc_', 'abc-', 'a..b', 'a._b', 'a-_b', 'ab.-', `${'x'.repeat(19)}.`]) {
+      expect(isValidUsername(bad), bad).toBe(false);
+      expect(usernameSchema.safeParse(bad).success, bad).toBe(false);
+    }
+    for (const ok of ['a.b', 'a_b', 'a-b', 'a.b.c', 'a1.2', 'ab.c2', `${'x'.repeat(18)}.y`]) expect(isValidUsername(ok), ok).toBe(true);
+    // Every valid username makes an address zod accepts — the edit form sends the stored address back.
+    for (const u of ['a.b', 'a_b', 'a-b', 'abc', 'x1.y-z_9', `${'x'.repeat(18)}.y`]) {
+      expect(z.email().safeParse(automaticEmail(u, 'turquoisestudio.app')).success, u).toBe(true);
+    }
+  });
+
+  it('reserved names (the studio’s mail and web names) are nobody’s username; position names are a manager’s to give', () => {
+    for (const name of ['admin', 'administrator', 'postmaster', 'hostmaster', 'webmaster', 'info', 'abuse', 'root', 'support', 'no-reply', 'mailer-daemon', 'null', 'api']) {
+      expect(isReservedUsername(name), name).toBe(true);
+      expect(isValidUsername(name), name).toBe(false);
+      const r = usernameSchema.safeParse(name);
+      expect(r.success ? null : r.error.issues[0]!.message, name).toBe('errors.usernameReserved');
+    }
+    // A number makes it an ordinary name again — that is how the backfill and the suggestions step around them.
+    expect(isValidUsername('admin2')).toBe(true);
+    expect(firstFreeUsername(['admin'], () => false)).toBe('admin2');
+    expect(firstFreeUsername(['info', 'info.desk'], () => false)).toBe('info.desk');
+    // Every reserved name would otherwise be a valid username (the list holds nothing the rules refuse anyway).
+    for (const name of RESERVED_USERNAMES) expect(USERNAME_RE.test(name), name).toBe(true);
+    // Position names stay valid usernames (the real team's ceo and cfo) — only taking one yourself is refused, by the profile route.
+    for (const name of ['ceo', 'cfo', 'owner', 'director']) {
+      expect(isRoleUsername(name), name).toBe(true);
+      expect(isValidUsername(name), name).toBe(true);
+    }
+    for (const name of ROLE_USERNAMES) expect(isReservedUsername(name), name).toBe(false);
+    // None of the demo's usernames is reserved.
+    for (const name of ['owner', 'cfo', 'director', 'head', 'casting', 'editor', 'coach', 'coach2', 'tom']) expect(isValidUsername(name), name).toBe(true);
   });
 
   it('is stored and compared lower-case, without the spaces around it', () => {
@@ -91,6 +131,15 @@ describe('username rules (shared/usernames.ts)', () => {
     expect(usernameFromEmail('سلمى@example.com')).toBeNull();
     expect(usernameFromEmail('a@x.com')).toBeNull();
     expect(usernameFromEmail('99@x.com')).toBeNull();
+    // Separators tidied to the rules: one where several were in a row, none at the end (also after the cut to 20).
+    expect(usernameFromEmail('abc.@x.com')).toBe('abc');
+    expect(usernameFromEmail('a..b@x.com')).toBe('a.b');
+    expect(usernameFromEmail('mo._.aty@x.com')).toBe('mo.aty');
+    expect(usernameFromEmail(`${'a'.repeat(19)}.b@x.com`)).toBe('a'.repeat(19));
+    // A reserved first part is a starting point (numbered by firstFreeUsername), not a username of its own.
+    expect(usernameFromEmail('admin@x.com')).toBe('admin');
+    expect(usernameCandidates('Info Desk')).toEqual(['info.desk']);
+    expect(usernameCandidates(`${'a'.repeat(19)} Bee`)).toEqual(['a'.repeat(19)]);
   });
 
   it('numbers a taken name within the length rule, always the same way', () => {
@@ -138,12 +187,19 @@ describe('the sign-in request (loginInput)', () => {
   });
 
   it('the brakes count an account’s username and email together, and a name that is nobody’s in its email form', () => {
-    const account = { email: 'salma@gmail.com' };
-    expect(signInBrakeName(account, 'salma', 'turquoisestudio.app')).toBe('salma@gmail.com');
-    expect(signInBrakeName(account, 'salma@gmail.com', 'turquoisestudio.app')).toBe('salma@gmail.com');
-    expect(signInBrakeName(undefined, 'ghost', 'turquoisestudio.app')).toBe('ghost@turquoisestudio.app');
-    expect(signInBrakeName(undefined, 'ghost@turquoisestudio.app', 'turquoisestudio.app')).toBe('ghost@turquoisestudio.app');
-    expect(signInBrakeName(undefined, 'ghost@elsewhere.example', 'turquoisestudio.app')).toBe('ghost@elsewhere.example');
+    const D = 'turquoisestudio.app';
+    // An account with an address of its own: that address, and the automatic one of its username (which leads nowhere, but must be braked like a name nobody has).
+    const custom = { email: 'salma@gmail.com', username: 'salma' };
+    expect(signInBrakeNames(custom, 'salma', D)).toEqual(['salma@gmail.com', 'salma@turquoisestudio.app']);
+    expect(signInBrakeNames(custom, 'salma@gmail.com', D)).toEqual(['salma@gmail.com', 'salma@turquoisestudio.app']);
+    // With the automatic address: one name.
+    expect(signInBrakeNames({ email: 'ali@turquoisestudio.app', username: 'ali' }, 'ali', D)).toEqual(['ali@turquoisestudio.app']);
+    // Nobody: the email form of a bare name; a typed address and the automatic address of its first part.
+    expect(signInBrakeNames(undefined, 'ghost', D)).toEqual(['ghost@turquoisestudio.app']);
+    expect(signInBrakeNames(undefined, 'ghost@turquoisestudio.app', D)).toEqual(['ghost@turquoisestudio.app']);
+    expect(signInBrakeNames(undefined, 'ghost@elsewhere.example', D)).toEqual(['ghost@elsewhere.example', 'ghost@turquoisestudio.app']);
+    // A first part that can't be a username adds nothing.
+    expect(signInBrakeNames(undefined, 'a@elsewhere.example', D)).toEqual(['a@elsewhere.example']);
   });
 });
 
@@ -252,6 +308,16 @@ describe('migration 0007 and the username backfill (initDb), on a database that 
     expect(backfillUsernames(db)).toBe(1);
     expect(db.select({ u: users.username }).from(users).where(eq(users.id, 7)).get()!.u).toBe('coach7');
     expect(db.select({ u: users.username }).from(users).where(eq(users.id, 8)).get()!.u).toBe('chosen');
+  });
+
+  it('keeps to the rules as they are now: a reserved first part is numbered, separators are tidied', () => {
+    const { sqlite, db } = databaseBeforeUsernames();
+    const insert = sqlite.prepare(`insert into users (email, name, password_hash, locale, active, created_at, updated_at) values (?, ?, 'x', 'en', 1, 0, 0)`);
+    for (const e of ['admin@school.example', 'info@school.example', 'abc.@school.example', 'a..b@school.example', 'postmaster@x.example']) insert.run(e, e);
+    initDb(db);
+    const names = db.select({ u: users.username }).from(users).orderBy(asc(users.id)).all().map((r) => r.u!);
+    expect(names).toEqual(['admin2', 'info2', 'abc', 'a.b', 'postmaster2']);
+    for (const n of names) expect(isValidUsername(n), n).toBe(true);
   });
 
   it('a new, empty database has the columns from the start and nothing to fill in', () => {

@@ -285,6 +285,24 @@ describe('choosing your own password lifts the gate', () => {
     expect((await ahmed.post('/api/auth/password', { currentPassword: 'chosen-by-ahmed', newPassword: 'chosen-by-ahmed' })).status).toBe(200);
   });
 
+  it('"Change password" can’t keep the temporary password by spelling it another way (scrypt reads "ｓalma123" as "salma123")', async () => {
+    const t = await makeTestContext();
+    const director = await t.as('executive_director');
+    const member = await addMember(t, director, 'salmat', { password: 'salma123' });
+    const salma = await t.login('salmat', 'salma123');
+    for (const lookAlike of ['ｓalma123', 'salma１２３', 'ｓａｌｍａ１２３']) {
+      expect(lookAlike).not.toBe('salma123');
+      const res = await salma.post('/api/auth/password', { currentPassword: 'salma123', newPassword: lookAlike });
+      expect([res.status, res.body.error?.issues], lookAlike).toEqual([400, [{ path: ['newPassword'], code: 'custom', message: 'errors.passwordSameAsTemporary' }]]);
+      // choose-password refuses it the same way.
+      expect((await salma.post('/api/auth/choose-password', { newPassword: lookAlike })).status, lookAlike).toBe(400);
+    }
+    expect(flag(t, member.id)).toBe(true);
+    expect(isGateRefusal(await salma.get('/api/team'))).toBe(true);
+    // The temporary password still signs in, and still opens nothing else.
+    expect((await t.anon.post('/api/auth/login', { username: 'salmat', password: 'salma123' })).body.user.mustChangePassword).toBe(true);
+  });
+
   it('a reset while the person is choosing: the choice made against the old temporary password is refused', async () => {
     const t = await makeTestContext();
     const director = await t.as('executive_director');

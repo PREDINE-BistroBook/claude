@@ -21,14 +21,17 @@
  * "Account" is a name, not what was typed: sign-in takes a username or an
  * email address, and both of an account's names count on the same brakes —
  * the caller resolves the typed name first (one indexed read, still no
- * hashing) and passes signInBrakeName(...) from lib/usernames.ts: the
- * account's email address, or the typed name in its email form when it is
- * nobody's. The functions below call that name `account`.
+ * hashing) and passes signInBrakeNames(...) from lib/usernames.ts: the
+ * account's email address (plus its username's automatic address when the
+ * email is another one), or the typed name in its email form when it is
+ * nobody's. The functions below call those names `accounts`: a sign-in is
+ * stopped when the brakes of any of them have tripped, and a failure counts
+ * on all of them.
  *
  * The address is the request's client IP when the runtime knows it
  * (CF-Connecting-IP on Cloudflare, the socket on Node: AppEnv clientIp).
  */
-import { eq, inArray, lt, sql } from 'drizzle-orm';
+import { inArray, lt, sql } from 'drizzle-orm';
 import type { DB } from '../db/database';
 import { loginFailures } from '../db/schema';
 
@@ -50,20 +53,24 @@ interface Brake {
   windowMs: number;
 }
 
-/** The brakes a sign-in for `account` (signInBrakeName) from `address` counts towards. */
-function brakesFor(account: string, address: string | null): Brake[] {
-  const brakes: Brake[] = [
+/** One name or several (signInBrakeNames), never none. */
+type AccountNames = string | readonly string[];
+const namesOf = (accounts: AccountNames): readonly string[] => (typeof accounts === 'string' ? [accounts] : accounts);
+
+/** The brakes a sign-in for `accounts` (signInBrakeNames) from `address` counts towards. */
+function brakesFor(accounts: AccountNames, address: string | null): Brake[] {
+  const brakes: Brake[] = namesOf(accounts).flatMap((account) => [
     { key: `account:${account}|${address ?? ''}`, email: account, ...SIGN_IN_BRAKES.accountFromAddress },
     { key: `account:${account}`, email: account, ...SIGN_IN_BRAKES.account },
-    { key: 'school', email: null, ...SIGN_IN_BRAKES.school },
-  ];
+  ]);
+  brakes.push({ key: 'school', email: null, ...SIGN_IN_BRAKES.school });
   if (address) brakes.push({ key: `address:${address}`, email: null, ...SIGN_IN_BRAKES.address });
   return brakes;
 }
 
 /** True when any brake for this sign-in has tripped (answer 429 without hashing anything). */
-export function signInBlocked(db: DB, account: string, address: string | null, now = Date.now()): boolean {
-  const brakes = brakesFor(account, address);
+export function signInBlocked(db: DB, accounts: AccountNames, address: string | null, now = Date.now()): boolean {
+  const brakes = brakesFor(accounts, address);
   const rows = db
     .select()
     .from(loginFailures)
@@ -76,11 +83,11 @@ export function signInBlocked(db: DB, account: string, address: string | null, n
 }
 
 /** One more failure on every brake this sign-in counts towards (a brake whose window is over starts again at 1). */
-export function recordSignInFailure(db: DB, account: string, address: string | null, now = Date.now()) {
+export function recordSignInFailure(db: DB, accounts: AccountNames, address: string | null, now = Date.now()) {
   db.transaction((tx) => {
     // Windows that are over, of anyone: keeps the table small.
     tx.delete(loginFailures).where(lt(loginFailures.firstAt, now - LONGEST_WINDOW)).run();
-    for (const b of brakesFor(account, address)) {
+    for (const b of brakesFor(accounts, address)) {
       const over = sql`${loginFailures.firstAt} < ${now - b.windowMs}`;
       tx.insert(loginFailures)
         .values({ key: b.key, email: b.email, count: 1, firstAt: now })
@@ -96,12 +103,13 @@ export function recordSignInFailure(db: DB, account: string, address: string | n
   });
 }
 
-/** A successful sign-in clears that person's count from this address (not the wider brakes). */
-export function clearSignInFailures(db: DB, account: string, address: string | null) {
-  db.delete(loginFailures).where(eq(loginFailures.key, brakesFor(account, address)[0]!.key)).run();
+/** A successful sign-in clears that person's counts from this address (not the wider brakes). */
+export function clearSignInFailures(db: DB, accounts: AccountNames, address: string | null) {
+  const keys = namesOf(accounts).map((account) => `account:${account}|${address ?? ''}`);
+  db.delete(loginFailures).where(inArray(loginFailures.key, keys)).run();
 }
 
-/** Lift every brake on the account with this email address (lockout recovery: POST /api/admin/grant-owner, npm run owner). */
-export function clearAccountBrakes(db: DB, email: string) {
-  db.delete(loginFailures).where(eq(loginFailures.email, email)).run();
+/** Lift every brake on the account with these names (signInBrakeNames — lockout recovery: POST /api/admin/grant-owner, npm run owner). */
+export function clearAccountBrakes(db: DB, accounts: AccountNames) {
+  db.delete(loginFailures).where(inArray(loginFailures.email, [...namesOf(accounts)])).run();
 }

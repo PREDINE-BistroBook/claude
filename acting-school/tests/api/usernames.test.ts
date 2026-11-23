@@ -112,8 +112,16 @@ describe('the sign-in brakes stay per account', () => {
     }
     const brake = t.db.select().from(loginFailures).where(eq(loginFailures.key, 'account:salma@example.com|')).get();
     expect(brake).toMatchObject({ email: 'salma@example.com', count: 10 });
-    // No second count under the username.
-    expect(t.db.select().from(loginFailures).all().map((r) => r.key).sort()).toEqual(['account:salma@example.com', 'account:salma@example.com|', 'school']);
+    // No second count under the username itself — only, alongside, under the automatic address its username
+    // would have (that name leads nowhere, and must be braked like any name nobody has: see the next tests).
+    expect(t.db.select().from(loginFailures).all().map((r) => r.key).sort()).toEqual([
+      'account:salma@example.com',
+      'account:salma@example.com|',
+      'account:salma@turquoisestudio.app',
+      'account:salma@turquoisestudio.app|',
+      'school',
+    ]);
+    expect(t.db.select().from(loginFailures).where(eq(loginFailures.key, 'account:salma@turquoisestudio.app|')).get()).toMatchObject({ count: 10 });
 
     const started = performance.now();
     for (const body of [{ username: 'salma' }, { username: 'salma@example.com' }, { email: 'salma@example.com' }, { username: 'SALMA' }, { username: 'salma' }]) {
@@ -150,6 +158,28 @@ describe('the sign-in brakes stay per account', () => {
     // Someone else is not caught up in it (the school-wide brake is 30 a minute; 20 were counted).
     const other = await t.createUser('agent', { email: 'ali@turquoisestudio.app', username: 'ali' });
     expect((await signIn(t, { username: 'ali', password: t.password })).body.user.id).toBe(other.id);
+  });
+
+  it('an account with an address of its own tells nothing apart either: its username’s automatic address is braked with it', async () => {
+    // The probe: ten wrong passwords under a username, then once under <username>@<emailDomain>. Before, an account
+    // whose email is another address answered 401 there (after a hash), a name nobody has 429 — so a username could be
+    // found out. Now every case is a 429, and in the other order too (the address first, then the bare name).
+    const probe = async (first: string, then: string) => {
+      const t = await makeTestContext();
+      await t.createUser('acting_coach', { username: 'coach', email: 'coach@demo.school' });
+      await t.createUser('acting_coach', { username: 'auto', email: 'auto@turquoisestudio.app' });
+      for (let i = 0; i < 10; i++) expect((await signIn(t, { username: first, password: 'wrong-wrong' })).status).toBe(401);
+      return (await signIn(t, { username: then, password: 'wrong-wrong' })).status;
+    };
+    for (const name of ['coach', 'auto', 'ghosty']) {
+      expect(await probe(name, `${name}@turquoisestudio.app`), name).toBe(429);
+      expect(await probe(`${name}@turquoisestudio.app`, name), name).toBe(429);
+    }
+    // The account's own address and a made-up one at the same domain: the bare name after it is stopped alike.
+    expect(await probe('coach@demo.school', 'coach')).toBe(429);
+    expect(await probe('ghosty@demo.school', 'ghosty')).toBe(429);
+    expect(await probe('coach', 'coach@demo.school')).toBe(429);
+    expect(await probe('ghosty', 'ghosty@demo.school')).toBe(429);
   });
 
   it('the email-domain setting decides that email form', async () => {
@@ -371,11 +401,42 @@ describe('owner accounts stay hidden behind "taken"', () => {
     const renameOther = await director.patch(`/api/staff/${coach.id}`, { username: 'salma' });
     expect(rename.status).toBe(409);
     expect(rename.body).toEqual(renameOther.body);
-    const mine = await director.patch('/api/auth/profile', { username: 'ceo' });
+    const second = await t.createUser('cfo', { username: 'tamam', email: 'tamam@turquoisestudio.app' });
+    const mine = await director.patch('/api/auth/profile', { username: 'tamam' });
     expect(mine.body).toEqual(rename.body);
+    expect(row(t, second.id).username).toBe('tamam');
+    // Yourself into a position's name (ceo): refused before anyone's names are looked at — the same answer taken or not.
+    const mineTaken = await director.patch('/api/auth/profile', { username: 'ceo' });
+    const mineFree = await director.patch('/api/auth/profile', { username: 'coo' });
+    expect(mineTaken.status).toBe(400);
+    expect(mineTaken.body).toEqual(mineFree.body);
     // And a PATCH aimed at the owner's account is still a 404, before any username is looked at.
     expect((await director.patch(`/api/staff/${owner.id}`, { username: 'anything' })).status).toBe(404);
     expect(row(t, owner.id).username).toBe('ceo');
+  });
+
+  it('exceptId of an owner answers exactly like a missing id — it never confirms an owner’s username', async () => {
+    const t = await makeTestContext();
+    const ceo = await t.createUser('ceo', { username: 'ceo', email: 'ceo@turquoisestudio.app' });
+    const cfo = await t.createUser('cfo', { username: 'cfo', email: 'cfo@gmail.com' });
+    const director = await t.as('executive_director', { username: 'salma', email: 'salma@turquoisestudio.app' });
+    const check = async (who: typeof director, q: string) => (await who.get(`/api/staff/username-check?${q}`)).body;
+    for (const owner of [ceo, cfo]) {
+      for (const guess of ['ceo', 'cfo', 'zzzwrong', 'salma']) {
+        const withOwner = await check(director, `username=${guess}&exceptId=${owner.id}`);
+        const withMissing = await check(director, `username=${guess}&exceptId=99999`);
+        const without = await check(director, `username=${guess}`);
+        expect(withOwner, `${guess} / ${owner.username}`).toEqual(withMissing);
+        expect(withOwner).toEqual(without);
+      }
+    }
+    expect((await check(director, `username=ceo&exceptId=${ceo.id}`)).status).toBe('taken');
+    // An owner editing an owner's account still gets the account's own name back as free.
+    const owner = await t.as('ceo');
+    expect((await check(owner, `username=ceo&exceptId=${ceo.id}`)).status).toBe('ok');
+    // An account the director may open (a coach) works as before.
+    const coach = await t.createUser('acting_coach', { username: 'moaty', email: 'moaty@turquoisestudio.app' });
+    expect((await check(director, `username=moaty&exceptId=${coach.id}`)).status).toBe('ok');
   });
 });
 
@@ -457,6 +518,62 @@ describe('changing a username', () => {
     expect((await t.anon.patch('/api/auth/profile', { username: 'nobody' })).status).toBe(401);
     // Nobody changes someone else's this way: the profile is always your own.
     expect(row(t, director.user.id).username).toBe(director.user.username);
+  });
+});
+
+describe('names the studio keeps, and names that break the email rules', () => {
+  it('reserved names (admin, postmaster, info…) are refused everywhere — to a manager, in My profile, in setup — and the live check says so', async () => {
+    const t = await makeTestContext();
+    const owner = await t.as('owner');
+    const director = await t.as('executive_director');
+    for (const name of ['admin', 'postmaster', 'hostmaster', 'webmaster', 'administrator', 'info', 'abuse', 'root', 'null', 'api']) {
+      const created = await owner.post('/api/staff', newMember(t, { username: name }));
+      expect([created.status, created.body.error?.issues?.[0]?.message], name).toEqual([400, 'errors.usernameReserved']);
+      const renamed = await director.patch('/api/auth/profile', { username: name });
+      expect([renamed.status, renamed.body.error?.issues?.[0]?.message], name).toEqual([400, 'errors.usernameReserved']);
+      expect((await owner.get(`/api/staff/username-check?username=${name}`)).body).toEqual({ username: name, status: 'reserved', suggestion: null, automaticEmail: null });
+    }
+    expect(row(t, director.user.id).email).toBe(director.user.email);
+    // Setup can't make the first owner one either.
+    const fresh = await makeTestContext();
+    const setup = await fresh.anon.post('/api/auth/setup', { schoolName: 'S', name: 'A', username: 'admin', email: 'a@example.com', password: 'password123' });
+    expect([setup.status, setup.body.error.issues[0].message]).toEqual([400, 'errors.usernameReserved']);
+    // An older copy of the app sending only an email that starts with one: the username steps around it.
+    const old = await owner.post('/api/staff', { name: 'عمر', email: 'admin@gmail.com', positionIds: [t.positionId('casting_team')], password: 'temporary1' });
+    expect([old.status, old.body.username, old.body.email]).toEqual([201, 'admin2', 'admin@gmail.com']);
+  });
+
+  it('a name that reads as a position (ceo, cfo, owner…) is a manager’s to give, never yours to take', async () => {
+    const t = await makeTestContext();
+    const director = await t.as('executive_director');
+    const coach = await t.as('acting_coach', { username: 'moaty', email: 'moaty@turquoisestudio.app' });
+    for (const name of ['ceo', 'cfo', 'owner', 'director', 'manager']) {
+      const res = await coach.patch('/api/auth/profile', { username: name });
+      expect([res.status, res.body.error?.issues?.[0]], name).toEqual([400, { path: ['username'], code: 'custom', message: 'errors.usernameForManagers' }]);
+    }
+    expect(row(t, coach.user.id)).toMatchObject({ username: 'moaty', email: 'moaty@turquoisestudio.app' });
+    // Someone who manages the team gives it — to someone else, or to a new account.
+    expect((await director.patch(`/api/staff/${coach.user.id}`, { username: 'director' })).body).toMatchObject({ username: 'director', email: 'director@turquoisestudio.app' });
+    expect((await director.post('/api/staff', newMember(t, { username: 'manager' }))).status).toBe(201);
+    // Having it already, you keep it when you save your profile (the same name is no change).
+    expect((await coach.patch('/api/auth/profile', { username: 'director', name: 'Moaty' })).status).toBe(200);
+  });
+
+  it('a username ending in . _ - or with two in a row is refused, so every automatic address is one the member page can save', async () => {
+    const t = await makeTestContext();
+    const owner = await t.as('owner');
+    const coach = await t.as('acting_coach');
+    for (const name of ['abc.', 'a..b', 'abc-', 'ab_', 'a.-b']) {
+      const res = await coach.patch('/api/auth/profile', { username: name });
+      expect([res.status, res.body.error?.issues?.[0]?.message], name).toEqual([400, 'errors.usernameInvalid']);
+      expect((await owner.post('/api/staff', newMember(t, { username: name }))).status, name).toBe(400);
+      expect((await owner.get(`/api/staff/username-check?username=${encodeURIComponent(name)}`)).body.status, name).toBe('invalid');
+    }
+    // The member page sends the stored address back with every save: with a valid username that always works.
+    const created = await owner.post('/api/staff', newMember(t, { username: 'a.b-c_d' }));
+    expect(created.body.email).toBe('a.b-c_d@turquoisestudio.app');
+    const saved = await owner.patch(`/api/staff/${created.body.id}`, { name: 'Ahmed A', email: created.body.email });
+    expect(saved.status).toBe(200);
   });
 });
 

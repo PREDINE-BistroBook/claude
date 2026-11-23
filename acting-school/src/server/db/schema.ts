@@ -175,9 +175,10 @@ export const loginFailures = sqliteTable(
     key: text('key').primaryKey(),
     /**
      * The account the failed sign-ins were for: its email address, whichever of
-     * username or email was typed (signInBrakeName, lib/usernames.ts); for a
-     * name that is nobody's, what was typed in its email form. null for the
-     * address and school brakes.
+     * username or email was typed — or its username's automatic address, which
+     * counts too (signInBrakeNames, lib/usernames.ts); for a name that is
+     * nobody's, what was typed in its email form. null for the address and
+     * school brakes.
      */
     email: text('email'),
     count: integer('count').notNull(),

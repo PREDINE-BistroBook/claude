@@ -17,7 +17,7 @@ import type { DB } from '../db/database';
 import { positions, userPositions, users } from '../db/schema';
 import { loadUserAccess, positionOrder } from './access';
 import { clearAccountBrakes } from './signInBrake';
-import { findSignInAccount } from './usernames';
+import { emailDomainOf, findSignInAccount, signInBrakeNames } from './usernames';
 
 export type GrantOwnerResult =
   | { found: false }
@@ -60,8 +60,8 @@ export function grantOwner(db: DB, usernameOrEmail: string): GrantOwnerResult {
     }
     tx.insert(userPositions).values({ userId: user.id, positionId: given.id }).onConflictDoNothing().run();
     if (!user.active) tx.update(users).set({ active: true }).where(eq(users.id, user.id)).run();
-    // The brakes count under the account's email address, whichever name was typed at sign-in.
-    clearAccountBrakes(tx, user.email);
+    // The brakes count under the account's email address (and its username's automatic address), whichever name was typed at sign-in.
+    clearAccountBrakes(tx, signInBrakeNames(user, user.email, emailDomainOf(tx)));
     return {
       found: true,
       user: { id: user.id, username: user.username ?? '', email: user.email, name: user.name },

@@ -91,11 +91,12 @@ export interface UsernameCheck {
   username: string | null;
   /**
    * `ok`: valid and free. `invalid`: breaks the rules (shared/usernames.ts).
-   * `taken`: another account has it, or the address that would go with it —
-   * never says whose (it may be an owner's, whom the caller can't see).
-   * null when no username was sent.
+   * `reserved`: kept for the studio (RESERVED_USERNAMES: admin, postmaster,
+   * info…). `taken`: another account has it, or the address that would go
+   * with it — never says whose (it may be an owner's, whom the caller can't
+   * see). null when no username was sent.
    */
-  status: 'ok' | 'invalid' | 'taken' | null;
+  status: 'ok' | 'invalid' | 'reserved' | 'taken' | null;
   /**
    * For `name`: the first name in Latin letters ("ahmed"); when that is taken,
    * first.last ("ahmed.abdellah"), then a number. null when no name was sent

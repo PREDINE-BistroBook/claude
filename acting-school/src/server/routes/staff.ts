@@ -183,7 +183,18 @@ router.get('/', canManage, (c) => {
 router.get('/username-check', canManage, (c) => {
   const q = query(c, usernameCheckQuery);
   const db = c.get('db');
-  return c.json<UsernameCheck>(checkUsername(db, q, getSettings(db).emailDomain));
+  const me = currentUser(c);
+  // `exceptId` (the account being edited) only counts for an account the caller may open — the
+  // reach of GET /:id: an owner's id, for a non-owner, is ignored exactly like a missing one.
+  // Otherwise "ok for exceptId=<owner>" would confirm that owner's username.
+  const visible =
+    q.exceptId !== undefined &&
+    !!db
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.id, q.exceptId), me.isOwner ? undefined : notAnOwner))
+      .get();
+  return c.json<UsernameCheck>(checkUsername(db, { ...q, exceptId: visible ? q.exceptId : undefined }, getSettings(db).emailDomain));
 });
 
 /** One account. Owner accounts are a 404 for non-owners. */

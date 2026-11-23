@@ -90,7 +90,7 @@ describe('the sign-in page', () => {
 
 describe('the messages the API’s answers turn into', () => {
   it('field issues about usernames and the first password have words in both languages', () => {
-    const keys = ['usernameInvalid', 'usernameTaken', 'passwordSameAsTemporary', 'passwordsDontMatch', 'passwordChangeRequired', 'passwordTooShort', 'required'] as const;
+    const keys = ['usernameInvalid', 'usernameTaken', 'usernameReserved', 'usernameForManagers', 'passwordSameAsTemporary', 'passwordsDontMatch', 'passwordChangeRequired', 'passwordTooShort', 'required'] as const;
     for (const k of keys) {
       expect(common.en.errors[k], k).toBeTruthy();
       expect(common.ar.errors[k], k).toBeTruthy();
@@ -172,6 +172,7 @@ describe('the add and edit forms: username and email', () => {
     expect(usernameCheckError({ username: 'ahmed', status: 'taken' }, 'ahmed')).toBe('common:errors.usernameTaken');
     expect(usernameCheckError({ username: 'ahmed', status: 'taken' }, ' Ahmed ')).toBe('common:errors.usernameTaken');
     expect(usernameCheckError({ username: 'ab', status: 'invalid' }, 'ab')).toBe('common:errors.usernameInvalid');
+    expect(usernameCheckError({ username: 'admin', status: 'reserved' }, 'Admin')).toBe('common:errors.usernameReserved');
     expect(usernameCheckError({ username: 'ahmed', status: 'ok' }, 'ahmed')).toBeNull();
     // An answer for what was typed a moment ago says nothing about the new text.
     expect(usernameCheckError({ username: 'ahmed', status: 'taken' }, 'ahmed.a')).toBeNull();

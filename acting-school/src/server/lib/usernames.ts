@@ -14,9 +14,10 @@ import { DEFAULT_SETTINGS } from '../../shared/schemas/settings';
 import type { UsernameCheck } from '../../shared/schemas/staff';
 import {
   EMAIL_DOMAIN_RE,
+  USERNAME_RE,
   automaticEmail,
   firstFreeUsername,
-  isValidUsername,
+  isReservedUsername,
   normalizeUsername,
   usernameCandidates,
   usernameFromEmail,
@@ -53,16 +54,37 @@ export function findSignInAccount(db: Reader, name: string): UserRow | undefined
 }
 
 /**
- * The name the sign-in brakes count a failed sign-in under (lib/signInBrake.ts),
- * so the brakes stay per account: an account's email address, whichever of its
- * two names was typed — guessing at "salma" and at "salma@…" is one count, not
- * two. A name that is nobody's counts in its email form (a bare username gets
- * the automatic address it would have), so trying "ghost" and then
- * "ghost@<emailDomain>" behaves the same whether or not the account exists.
+ * The names the sign-in brakes count a failed sign-in under (lib/signInBrake.ts),
+ * so the brakes stay per account and say nothing about which names exist:
+ *
+ * - an account: its email address, whichever of its two names was typed —
+ *   guessing at "salma" and at "salma@…" is one count, not two — and also the
+ *   automatic address of its username (<username>@<emailDomain>) when its
+ *   email is another one;
+ * - a name that is nobody's: in its email form (a bare username gets the
+ *   automatic address it would have), and a typed address also under the
+ *   automatic address of its first part.
+ *
+ * So after ten failures under one name, the other name that would lead to the
+ * same account — "coach" then "coach@<emailDomain>", or "x@gmail.com" then
+ * "x" — meets the same tripped brake whether or not the account exists, and
+ * whatever its email is. One or two names, deduplicated; the first is the
+ * account's own (the one lockout recovery and clearSignInFailures key on).
  */
-export function signInBrakeName(account: { email: string } | undefined, typed: string, emailDomain: string): string {
-  if (account) return account.email;
-  return typed.includes('@') ? typed : automaticEmail(typed, emailDomain);
+export function signInBrakeNames(account: { email: string; username: string | null } | undefined, typed: string, emailDomain: string): string[] {
+  const names: string[] = [];
+  const add = (name: string | null | undefined) => void (name && !names.includes(name) && names.push(name));
+  if (account) {
+    add(account.email);
+    if (account.username) add(automaticEmail(account.username, emailDomain));
+  } else if (typed.includes('@')) {
+    add(typed);
+    const local = typed.slice(0, typed.lastIndexOf('@'));
+    if (USERNAME_RE.test(local)) add(automaticEmail(local, emailDomain));
+  } else {
+    add(automaticEmail(typed, emailDomain));
+  }
+  return names;
 }
 
 export function usernameInUse(db: Reader, username: string, exceptId?: number): boolean {
@@ -171,7 +193,8 @@ export function checkUsername(db: Reader, q: { username?: string; name?: string;
   const typed = q.username ? normalizeUsername(q.username) : '';
   let status: UsernameCheck['status'] = null;
   if (typed) {
-    if (!isValidUsername(typed)) status = 'invalid';
+    if (!USERNAME_RE.test(typed)) status = 'invalid';
+    else if (isReservedUsername(typed)) status = 'reserved';
     else if (usernameInUse(db, typed, q.exceptId)) status = 'taken';
     else {
       // The address that would go with it. For an account being edited that only matters when its address follows the username.
@@ -184,7 +207,7 @@ export function checkUsername(db: Reader, q: { username?: string; name?: string;
     username: typed || null,
     status,
     suggestion: q.name ? suggestUsername(db, q.name, emailDomain) : null,
-    automaticEmail: typed && status !== 'invalid' ? automaticEmail(typed, emailDomain) : null,
+    automaticEmail: typed && status !== 'invalid' && status !== 'reserved' ? automaticEmail(typed, emailDomain) : null,
   };
 }
 
