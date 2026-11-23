@@ -31,7 +31,10 @@
     // (routes with custom_domain) when switching them on.
     "PUBLIC_SITE_HOSTS": "turquoisestudio.app,www.turquoisestudio.app",
     // The staff app's old address forwards to the new one (src/worker/hostRedirect.ts).
-    "HOST_REDIRECTS": "staff.turquoisestudio.app=team.turquoisestudio.app"
+    "HOST_REDIRECTS": "staff.turquoisestudio.app=team.turquoisestudio.app",
+    // Phone alerts (Web Push): the public half of the VAPID key pair. The private half is the
+    // secret VAPID_PRIVATE_KEY. Keep this pair: changing it makes every phone turn alerts on again.
+    "VAPID_PUBLIC_KEY": "BNIzwXHO6znxs9h-ViM2xE8-GdGnpNYg4AwRTNvVHzzTrgAFdF_GRKOFrhyoS3ePCPFX2d8FFrv0wPzFLqWThtA"
   },
   // Secrets (dashboard → Worker → Settings → Variables and Secrets, or `wrangler secret put`):
   //   ADMIN_TOKEN  bearer token for /api/admin/* (24+ characters), and the setup code first-run setup asks
