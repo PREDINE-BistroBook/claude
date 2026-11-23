@@ -2,7 +2,7 @@
  * Recovery: give an existing staff account an owner position — the CEO
  * position — and reactivate it.
  *
- *   npm run owner -- someone@example.com
+ *   npm run owner -- someone@example.com      (or the account's username: npm run owner -- ceo)
  *
  * Use it when nobody who can manage staff can sign in any more. (Upgrading a
  * phase-1 database needs nothing: opening it carries the fixed roles over to
@@ -21,7 +21,7 @@ import { createDb } from './client';
 
 const email = process.argv[2]?.trim().toLowerCase();
 if (!email) {
-  console.error('Usage: npm run owner -- someone@example.com');
+  console.error('Usage: npm run owner -- someone@example.com   (or the username: npm run owner -- ceo)');
   process.exit(1);
 }
 

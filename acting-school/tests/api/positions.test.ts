@@ -8,7 +8,8 @@ import { makeTestContext } from '../helpers';
 
 type Ctx = Awaited<ReturnType<typeof makeTestContext>>;
 const byKey = (items: Position[], key: string) => items.find((p) => p.key === key)!;
-const ALL_BUT_MONEY = PERMISSIONS.filter((p) => p !== 'payments.manage');
+/** The Executive Director's built-in list: everything but money amounts and the owners' monthly cafeteria page (she serves the cafeteria since grant v4). */
+const ALL_BUT_MONEY = PERMISSIONS.filter((p) => p !== 'payments.manage' && p !== 'cafeteria.report');
 const POSITION_KEYS = ['id', 'key', 'name', 'nameAr', 'isOwner', 'permissions', 'sortOrder', 'holderCount', 'editable', 'assignable', 'createdAt', 'updatedAt'].sort();
 const holders = (t: Ctx, positionId: number) =>
   t.db.select().from(userPositions).where(eq(userPositions.positionId, positionId)).all().length;
@@ -31,7 +32,7 @@ describe('permissions (unit)', () => {
   });
 
   it('defines the confirmed built-ins', () => {
-    expect(BUILT_IN_POSITIONS.map((p) => p.key)).toEqual(['ceo', 'cfo', 'executive_director', 'head_of_casting', 'casting_team', 'video_editor', 'acting_coach', 'finance']);
+    expect(BUILT_IN_POSITIONS.map((p) => p.key)).toEqual(['ceo', 'cfo', 'executive_director', 'head_of_casting', 'casting_team', 'video_editor', 'acting_coach', 'finance', 'reception', 'office_helper']);
     expect(byKeyStatic('executive_director').permissions).toEqual(ALL_BUT_MONEY);
     expect(byKeyStatic('casting_team').permissions).not.toContain('castings.send');
     expect(byKeyStatic('head_of_casting').permissions).toContain('castings.send');
@@ -83,7 +84,7 @@ describe('GET /api/positions', () => {
     await t.createUser('acting_coach');
     const res = await director.get<{ items: Position[] }>('/api/positions');
     expect(res.status).toBe(200);
-    expect(res.body.items.map((p) => p.key)).toEqual(['executive_director', 'head_of_casting', 'casting_team', 'video_editor', 'acting_coach', 'finance']);
+    expect(res.body.items.map((p) => p.key)).toEqual(['executive_director', 'head_of_casting', 'casting_team', 'video_editor', 'acting_coach', 'finance', 'reception', 'office_helper']);
     expect(res.body.items.every((p) => !p.isOwner)).toBe(true);
     expect(byKey(res.body.items, 'acting_coach')).toMatchObject({ holderCount: 2, editable: true, assignable: true });
     expect(byKey(res.body.items, 'executive_director')).toMatchObject({ holderCount: 1, editable: true, assignable: true });

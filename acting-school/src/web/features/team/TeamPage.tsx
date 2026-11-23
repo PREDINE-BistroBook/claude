@@ -204,7 +204,7 @@ function RowHead({
   name,
   photoFileId,
   badge,
-  email,
+  username,
   positions,
   link,
   dimmed = false,
@@ -212,7 +212,8 @@ function RowHead({
   name: string;
   photoFileId: string | null;
   badge?: ReactNode;
-  email?: string;
+  /** With staff.manage: what the member signs in with (from their account in GET /api/staff). */
+  username?: string;
   positions: TeamMember['positions'] | null;
   link: ReturnType<typeof accountLink>;
   dimmed?: boolean;
@@ -226,10 +227,12 @@ function RowHead({
           <bdi className={clsx('truncate text-[17px] font-semibold', dimmed ? 'text-muted' : 'text-ink')}>{name}</bdi>
           {badge}
         </span>
-        {email && (
-          // LTR so a long address keeps its start visible; still aligned to the row's start in Arabic.
-          <span dir="ltr" className="mt-0.5 block truncate text-sm text-muted rtl:text-end">
-            {email}
+        {username && (
+          <span className="mt-0.5 block truncate text-sm text-muted" data-testid="row-username">
+            {t('usernameLabel')}{' '}
+            <bdi dir="ltr" className="font-medium text-ink">
+              {username}
+            </bdi>
           </span>
         )}
         {positions && positions.length > 0 && <PositionChips positions={positions} className="mt-1.5" />}
@@ -282,7 +285,7 @@ function TeamRow({
         name={m.name}
         photoFileId={m.photoFileId}
         badge={m.isMe ? <Badge tone="neutral">{t('you')}</Badge> : undefined}
-        email={account?.email}
+        username={account?.username}
         positions={m.positions}
         link={accountLink(canManage, account)}
       />
@@ -301,7 +304,7 @@ function InactiveRow({ account: a }: { account: StaffMember }) {
         name={a.name}
         photoFileId={a.photoFileId}
         badge={<Badge tone="danger">{t('inactive')}</Badge>}
-        email={a.email}
+        username={a.username}
         positions={a.positions}
         link={accountLink(true, a)}
         dimmed

@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { LOCALES, type Locale } from '@shared/enums';
 import { changePasswordInput, profileInput } from '@shared/schemas/auth';
+import { normalizeUsername } from '@shared/usernames';
 import { Crown } from 'lucide-react';
 import type { MeResponse } from '@shared/schemas/auth';
 import { Avatar, Button, Card, Field, FormError, FormGrid, PageHeader, PhotoInput, Select, TextField, useToast } from '../components/ui';
@@ -9,6 +10,7 @@ import { PermissionSummary } from '../features/positions/components/PermissionLi
 import { PositionChips } from '../features/staff/components/bits';
 import { teamErrorKey, teamKeys } from '../features/team/api';
 import { PushCard } from '../features/team/components/PushCard';
+import { useCafeStatus } from '../features/cafe/api';
 import { setLanguage } from '../i18n';
 import { api } from '../lib/api';
 import { discardUpload } from '../lib/files';
@@ -21,8 +23,10 @@ export default function ProfilePage() {
   const { user, refresh } = useAuth();
   const toast = useToast();
   const qc = useQueryClient();
+  const cafeOn = !!useCafeStatus()?.enabled;
   const details = useForm({ name: user?.name ?? '', phone: user?.phone ?? '', locale: (user?.locale ?? 'en') as Locale });
   const pw = useForm({ currentPassword: '', newPassword: '' });
+  const uname = useForm({ username: user?.username ?? '' });
 
   const saveDetails = useMutation({
     mutationFn: (data: unknown) => api.patch('/auth/profile', data),
@@ -32,6 +36,20 @@ export default function ProfilePage() {
       toast.success(t('states.saved'));
     },
     onError: details.setServerError,
+  });
+
+  // Your own username: the same rules and uniqueness check as when a manager sets it (PATCH /api/auth/profile).
+  const saveUsername = useMutation({
+    mutationFn: (data: { username?: string }) => api.patch<MeResponse>('/auth/profile', data),
+    onSuccess: async (res) => {
+      // As it was saved (lower-case), not as it was typed.
+      const saved = res.user?.username ?? '';
+      uname.set('username', saved);
+      // Managers see usernames on the Team list and the member pages.
+      await Promise.all([refresh(), qc.invalidateQueries({ queryKey: ['staff'] })]);
+      toast.success(t('profile.username.saved', { username: saved }));
+    },
+    onError: uname.setServerError,
   });
 
   const changePw = useMutation({
@@ -69,6 +87,40 @@ export default function ProfilePage() {
           <PhotoInput value={user.photoFileId} name={user.name} onChange={(id) => savePhoto.mutate(id)} busy={savePhoto.isPending} />
         </Card>
 
+        <Card title={t('profile.username.title')} description={t('profile.username.description')}>
+          <form
+            data-testid="username-card"
+            noValidate
+            className="grid gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const data = uname.validate(profileInput.pick({ username: true }));
+              if (data?.username && data.username !== user.username) saveUsername.mutate(data);
+            }}
+          >
+            <FormError messageKey={uname.formError} />
+            <TextField
+              label={t('fields.username')}
+              type="text"
+              autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              dir="ltr"
+              maxLength={60}
+              className="sm:max-w-sm"
+              {...uname.bind('username')}
+              error={uname.error('username')}
+              hint={t('profile.username.hint')}
+            />
+            <div className="flex justify-end">
+              <Button type="submit" size="lg" loading={saveUsername.isPending} disabled={normalizeUsername(uname.values.username) === user.username}>
+                {t('profile.username.save')}
+              </Button>
+            </div>
+          </form>
+        </Card>
+
         <PushCard />
 
         <Card title={t('profile.whatYouCanDo')} description={user.isOwner ? undefined : t('profile.whatYouCanDoHint')}>
@@ -84,7 +136,7 @@ export default function ProfilePage() {
           ) : user.permissions.length ? (
             <PermissionSummary permissions={user.permissions} />
           ) : (
-            <p className="text-sm text-muted">{t('profile.nothingYet')}</p>
+            <p className="text-sm text-muted">{t(cafeOn ? 'profile.nothingYetCafe' : 'profile.nothingYet')}</p>
           )}
         </Card>
 
@@ -114,7 +166,7 @@ export default function ProfilePage() {
               </Field>
             </FormGrid>
             <div className="flex justify-end">
-              <Button type="submit" variant="primary" loading={saveDetails.isPending}>
+              <Button type="submit" variant="primary" size="lg" loading={saveDetails.isPending}>
                 {t('actions.saveChanges')}
               </Button>
             </div>
@@ -141,7 +193,7 @@ export default function ProfilePage() {
               </Field>
             </FormGrid>
             <div className="flex justify-end">
-              <Button type="submit" loading={changePw.isPending}>
+              <Button type="submit" size="lg" loading={changePw.isPending}>
                 {t('profile.changePassword')}
               </Button>
             </div>

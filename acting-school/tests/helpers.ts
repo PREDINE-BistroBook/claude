@@ -5,6 +5,8 @@ import { eq, inArray } from 'drizzle-orm';
 import { positions, userPositions, users } from '../src/server/db/schema';
 import { sqliteFileStore, type FileStore } from '../src/server/lib/fileStore';
 import { hashPassword } from '../src/server/lib/password';
+import { usernameInUse } from '../src/server/lib/usernames';
+import { firstFreeUsername, usernameFromEmail } from '../src/shared/usernames';
 import { durableObjectLimits } from '../src/server/lib/sqlLimits';
 import { DEFAULT_TIME_ZONE, epochAt, nowTimeIn, todayIn } from '../src/server/lib/clock';
 import type { BuiltInPositionKey, Permission } from '../src/shared/permissions';
@@ -112,7 +114,7 @@ let hashed: Promise<string> | null = null;
  *   const res = await admin.post('/api/students', { firstName: 'A', lastName: 'B' });
  */
 export async function makeTestContext(
-  opts: { config?: Partial<AppConfig>; files?: FileStore; clientIp?: AppDeps['clientIp']; outboundFetch?: typeof fetch } = {},
+  opts: { config?: Partial<AppConfig>; files?: FileStore; clientIp?: AppDeps['clientIp']; outboundFetch?: typeof fetch; restore?: AppDeps['restore'] } = {},
 ) {
   const config: AppConfig = testConfig(opts.config);
   const db: DB = testDb();
@@ -122,7 +124,7 @@ export async function makeTestContext(
   const background: Promise<unknown>[] = [];
   // Outbound calls never leave the test: a fake unless the test passes its own.
   const outboundFetch: typeof fetch = opts.outboundFetch ?? (async () => new Response(null, { status: 201 }));
-  const app = createApp({ db, config, files, clientIp: opts.clientIp, waitUntil: (task) => void background.push(task), outboundFetch });
+  const app = createApp({ db, config, files, clientIp: opts.clientIp, waitUntil: (task) => void background.push(task), outboundFetch, restore: opts.restore });
   hashed ??= hashPassword(PASSWORD);
   let n = 0;
 
@@ -149,13 +151,19 @@ export async function makeTestContext(
     return db.select({ id: positions.id }).from(positions).where(eq(positions.key, k)).get()!.id;
   }
 
-  /** Create a staff account directly in the database, holding the given position(s). */
+  /**
+   * Create a staff account directly in the database, holding the given position(s).
+   * Its username (unless given) is the first part of its email address, numbered if taken —
+   * 'teach@example.com' → 'teach'; either one signs in. The password is its own (not temporary).
+   */
   async function createUser(spec: PositionSpec, overrides: Partial<typeof users.$inferInsert> = {}) {
     n++;
     const label = specLabel(spec);
+    const email = overrides.email ?? `${label.replace(/[^a-z0-9_]/gi, '_')}${n}@test.local`;
+    const username = overrides.username ?? firstFreeUsername([usernameFromEmail(email) ?? `user${n}`], (c) => usernameInUse(db, c))!;
     const user = db
       .insert(users)
-      .values({ email: `${label.replace(/[^a-z0-9_]/gi, '_')}${n}@test.local`, name: `${label} ${n}`, passwordHash: await hashed!, ...overrides })
+      .values({ email, username, name: `${label} ${n}`, passwordHash: await hashed!, ...overrides })
       .returning()
       .get()!;
     const ids = positionIdsFor(spec);
@@ -174,9 +182,9 @@ export async function makeTestContext(
       .run();
   }
 
-  /** Sign in as an existing user and return a client carrying their cookie. */
-  async function login(emailAddr: string, password = PASSWORD): Promise<Client> {
-    const res = await makeClient(app).post('/api/auth/login', { email: emailAddr, password });
+  /** Sign in as an existing user — by username or by email address, as on the sign-in page — and return a client carrying their cookie. */
+  async function login(usernameOrEmail: string, password = PASSWORD): Promise<Client> {
+    const res = await makeClient(app).post('/api/auth/login', { username: usernameOrEmail, password });
     if (res.status !== 200) throw new Error(`login failed: ${res.status} ${JSON.stringify(res.body)}`);
     const setCookie = res.headers.get('set-cookie') ?? '';
     return makeClient(app, setCookie.split(';')[0]);

@@ -136,6 +136,40 @@ export type SummonsViewStatus = (typeof SUMMONS_VIEW_STATUSES)[number];
 /** A pending summons older than this (2 hours) counts as expired. */
 export const SUMMONS_EXPIRY_MS = 2 * 60 * 60 * 1000;
 
-/** In-app notifications (the bell): a new message (one per conversation, updated), a summons, a summons answered. */
-export const NOTIFICATION_KINDS = ['message', 'summon', 'summon_answer'] as const;
+/**
+ * In-app notifications (the bell): a new message (one per conversation,
+ * updated), a summons, a summons answered; from the cafeteria, a new order
+ * (to whoever serves) and what became of an order (to whoever ordered: on the
+ * way, delivered, or turned down with a reason — one per order, updated).
+ */
+export const NOTIFICATION_KINDS = ['message', 'summon', 'summon_answer', 'cafe_order', 'cafe_status'] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
+
+// ── Cafeteria ───────────────────────────────────────────────────────────────
+
+/** How the cafeteria menu is grouped on the order screen, in this order. */
+export const CAFE_CATEGORIES = ['hot', 'cold', 'food', 'other'] as const;
+export type CafeCategory = (typeof CAFE_CATEGORIES)[number];
+
+/**
+ * A cafeteria order: new → on_the_way → delivered, one step at a time, moved by
+ * whoever serves (cafeteria.serve). `cancelled`: by the person who ordered
+ * while it is still new, or by whoever serves, with a reason, while it is new
+ * or on the way. Nothing changes after delivered or cancelled.
+ */
+export const CAFE_ORDER_STATUSES = ['new', 'on_the_way', 'delivered', 'cancelled'] as const;
+export type CafeOrderStatus = (typeof CAFE_ORDER_STATUSES)[number];
+/** Orders somebody still has to do something about. */
+export const OPEN_CAFE_ORDER_STATUSES = ['new', 'on_the_way'] as const satisfies readonly CafeOrderStatus[];
+/** What whoever serves can set through POST /api/cafe/orders/:id/status. */
+export const CAFE_SERVE_STATUSES = ['on_the_way', 'delivered', 'cancelled'] as const satisfies readonly CafeOrderStatus[];
+export type CafeServeStatus = (typeof CAFE_SERVE_STATUSES)[number];
+
+export function isOpenCafeOrder(status: CafeOrderStatus): boolean {
+  return (OPEN_CAFE_ORDER_STATUSES as readonly CafeOrderStatus[]).includes(status);
+}
+
+/** The step after `status` on the way to delivered, or null when there is none. */
+export function nextCafeStep(status: CafeOrderStatus): 'on_the_way' | 'delivered' | null {
+  return status === 'new' ? 'on_the_way' : status === 'on_the_way' ? 'delivered' : null;
+}

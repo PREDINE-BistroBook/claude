@@ -45,7 +45,7 @@ describe('Durable Object limits in the test database', () => {
   });
 
   it('multi-row inserts are split by the table width', () => {
-    expect(rowsPerInsert(users)).toBe(Math.floor(100 / 11));
+    expect(rowsPerInsert(users)).toBe(Math.floor(100 / 13));
     const batches = insertBatches(fileChunks, Array.from({ length: 70 }, (_, i) => i));
     expect(batches.map((b) => b.length)).toEqual([33, 33, 4]);
   });
@@ -570,7 +570,7 @@ describe('/api/admin (operator endpoints)', () => {
     expect(t.db.select().from(students).all()).toEqual([]);
     expect(t.db.select().from(users).all()).toEqual([]);
     expect(t.db.select().from(fileChunks).all()).toEqual([]);
-    expect(t.db.select().from(positions).all().length).toBe(8);
+    expect(t.db.select().from(positions).all().length).toBe(10);
     expect((await t.anon.get('/api/auth/me')).body.needsSetup).toBe(true);
     expect((await owner.get('/api/students')).status).toBe(401);
   });
@@ -586,6 +586,7 @@ describe('/api/admin (operator endpoints)', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       ok: true,
+      username: 'locked',
       email: 'locked@example.com',
       name: coach.name,
       position: 'CEO',

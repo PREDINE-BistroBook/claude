@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { Bell, BellRing, CheckCheck, CircleCheck, MessageCircle, type LucideIcon } from 'lucide-react';
+import { Bell, BellRing, CheckCheck, CircleCheck, Coffee, MessageCircle, type LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation, useNavigate } from 'react-router';
@@ -99,7 +99,27 @@ export function NotificationsButton({ variant }: { variant: Variant }) {
   );
 }
 
-const KIND_ICON: Record<NotificationItem['kind'], LucideIcon> = { message: MessageCircle, summon: BellRing, summon_answer: CircleCheck };
+const KIND_ICON: Record<NotificationItem['kind'], LucideIcon> = { message: MessageCircle, summon: BellRing, summon_answer: CircleCheck, cafe_order: Coffee, cafe_status: Coffee };
+/** The tile behind each kind's icon: calls stand out, answers and cafeteria news are good news, messages plain. */
+const KIND_TONE: Record<NotificationItem['kind'], string> = {
+  message: 'bg-accent-soft text-accent',
+  summon: 'bg-warning-soft text-warning',
+  summon_answer: 'bg-success-soft text-success',
+  cafe_order: 'bg-warning-soft text-warning',
+  cafe_status: 'bg-success-soft text-success',
+};
+
+/**
+ * An alert's icon and tile. A kind this page doesn't know (an alert written by
+ * a newer server while an older page is still open) gets the plain bell —
+ * never an undefined component that breaks the sheet.
+ */
+export function notificationLook(kind: string): { icon: LucideIcon; tone: string } {
+  return {
+    icon: (KIND_ICON as Partial<Record<string, LucideIcon>>)[kind] ?? Bell,
+    tone: (KIND_TONE as Partial<Record<string, string>>)[kind] ?? 'bg-surface-2 text-muted',
+  };
+}
 
 /** The bell's sheet: newest first; tapping one marks it read and opens its page. */
 export function NotificationsSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -148,7 +168,7 @@ export function NotificationsSheet({ open, onClose }: { open: boolean; onClose: 
       ) : (
         <ul className="-mx-5 -my-4 divide-y divide-line">
           {items.map((n) => {
-            const Icon = KIND_ICON[n.kind];
+            const { icon: Icon, tone } = notificationLook(n.kind);
             return (
               <li key={n.id}>
                 <button
@@ -157,10 +177,7 @@ export function NotificationsSheet({ open, onClose }: { open: boolean; onClose: 
                   className={clsx('flex min-h-16 w-full items-start gap-3 px-5 py-3 text-start transition-colors hover:bg-surface-2', !n.readAt && 'bg-accent-soft/50')}
                 >
                   <span
-                    className={clsx(
-                      'mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-full',
-                      n.kind === 'summon' ? 'bg-warning-soft text-warning' : n.kind === 'summon_answer' ? 'bg-success-soft text-success' : 'bg-accent-soft text-accent',
-                    )}
+                    className={clsx('mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-full', tone)}
                   >
                     <Icon className="size-5" aria-hidden />
                   </span>

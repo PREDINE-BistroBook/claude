@@ -2,7 +2,7 @@
 
 Internal app for the team of an acting school that is also a talent agency (the "staff app" in this repository; on screen it always says **Team**, never Staff). Works in the browser on desktop and phone (installable to the home screen), in English and Arabic. Its address is `team.turquoisestudio.app`.
 
-**Status:** phase 1 built — sign-in and first-run setup, team accounts and settings, students, workshops (weekly schedule, sessions, attendance), talent roster with headshots, castings with roles and submissions, the combined schedule and the home dashboard, in English and Arabic (right-to-left). Phase 2, step 1 built — editable positions and permissions. Phase 2, step 2 built — admissions: enquiries from every source with follow-up reminders, pre-written WhatsApp messages (wa.me links, English or Arabic), interviews scored on the criteria in Settings, decisions and enrolment into a workshop, with interviews on the schedule and follow-ups on the home screen. Phase 2, step 3 built — the app is split into three sections, **School**, **Casting** and **Website**, switched with tabs at the top, and the studio has a **public website** run from the Website section: workshops with an apply form, a casting call with photos, about & coaches, and a link-in-bio page. Its forms feed Admissions (enquiries with source "website") and Casting › Applications. The team pack built (2026-11-23) — one **Team** page for everyone (with *Manage the team* it is also where team members are added and edited), profile photos, pictures and files on workshops, castings and in chat, one-to-one messages between everyone on the team, "call to the office", and alerts (in the app, and pushed to phones once the VAPID keys are set). The rest of phase 2 is in `ROADMAP.md`.
+**Status:** phase 1 built — sign-in and first-run setup, team accounts and settings, students, workshops (weekly schedule, sessions, attendance), talent roster with headshots, castings with roles and submissions, the combined schedule and the home dashboard, in English and Arabic (right-to-left). Phase 2, step 1 built — editable positions and permissions. Phase 2, step 2 built — admissions: enquiries from every source with follow-up reminders, pre-written WhatsApp messages (wa.me links, English or Arabic), interviews scored on the criteria in Settings, decisions and enrolment into a workshop, with interviews on the schedule and follow-ups on the home screen. Phase 2, step 3 built — the app is split into three sections, **School**, **Casting** and **Website**, switched with tabs at the top, and the studio has a **public website** run from the Website section: workshops with an apply form, a casting call with photos, about & coaches, and a link-in-bio page. Its forms feed Admissions (enquiries with source "website") and Casting › Applications. The team pack built (2026-11-23) — one **Team** page for everyone (with *Manage the team* it is also where team members are added and edited), profile photos, pictures and files on workshops, castings and in chat, one-to-one messages between everyone on the team, "call to the office", and alerts (in the app, and pushed to phones once the VAPID keys are set). Usernames and temporary first passwords built (2026-11-23) — people sign in with a **username** (their email address works in the same field), and a password someone else set for them works once: the first sign-in asks them to choose their own (see "Signing in" below). Reception and Office helper positions and **cafeteria orders** built (2026-11-23) — everyone orders tea, coffee or food from the app and the Office helper brings it (see "The cafeteria" below). The rest of phase 2 is in `ROADMAP.md`.
 
 ## Run it
 
@@ -14,22 +14,31 @@ npm install
 npm run dev        # open http://localhost:5173
 ```
 
-The first visit asks you to set up the school (school name + the first account, which gets the CEO position). To start with demo data instead: `npm run seed` (or `npm run seed -- --reset` to wipe an existing `$DATA_DIR` first), then sign in with one of the demo logins below, all with the password `demo1234`. The demo data is dated relative to today, so it always looks current.
+The first visit asks you to set up the school (school name + the first account, which gets the CEO position). To start with demo data instead: `npm run seed` (or `npm run seed -- --reset` to wipe an existing `$DATA_DIR` first), then sign in with one of the demo usernames below, all with the password `demo1234`. (Each account also has the address `<username>@demo.school`, which signs in just the same.) The demo accounts are not asked to choose their own password — a demo is one shared password. The demo data is dated relative to today, so it always looks current.
 
-| Login | Position(s) | Fictional person |
+| Username | Position(s) | Fictional person |
 |---|---|---|
-| `owner@demo.school` | CEO | Karim Mansour |
-| `cfo@demo.school` | CFO | Hisham Mansour |
-| `director@demo.school` | Executive Director | Dalia Fathy |
-| `head@demo.school` | Head of Casting | Sherif Adel |
-| `casting@demo.school` | Casting team | Tarek Samir |
-| `editor@demo.school` | Video editor | Hany Nabil |
-| `coach@demo.school` | Acting coach (teaches workshops) | Layla Haddad |
-| `coach2@demo.school` | Acting coach + Finance (teaches workshops) | Daniel Price |
+| `owner` | CEO | Karim Mansour |
+| `cfo` | CFO | Hisham Mansour |
+| `director` | Executive Director | Dalia Fathy |
+| `head` | Head of Casting | Sherif Adel |
+| `casting` | Casting team | Tarek Samir |
+| `editor` | Video editor | Hany Nabil |
+| `coach` | Acting coach (teaches workshops) | Layla Haddad |
+| `coach2` | Acting coach + Finance (teaches workshops) | Daniel Price |
+| `reception` | Reception (no section yet: Team, Messages, the cafeteria) | Nour Hassan |
+| `helper` | Office helper (the cafeteria's orders board; his account is in Arabic) | Sayed Ramadan |
 
-(`tom.wilkins@demo.school`, a former coach, is deactivated.) The demo also has 16 enquiries in every admissions stage — follow-ups overdue, due today and later, interviews coming up, recorded (with scores) and one no-show, one enquiry enrolled into Screen Acting I and two lost — taken by the director — plus a filled-in website: studio texts and contact lines, three coach profiles, four workshops shown (no prices: the school's decision), an open casting call, three custom links, four casting applications with photos (one a minor with guardian consent) and two enquiries sent through the website.
+(`tom`, a former coach — `tom.wilkins@demo.school` — is deactivated.) The cafeteria has the usual menu, a few orders delivered on the days before (so the owners' monthly page has something to show) and one turned down, one order delivered this morning and one waiting on the Office helper's board. The demo also has 16 enquiries in every admissions stage — follow-ups overdue, due today and later, interviews coming up, recorded (with scores) and one no-show, one enquiry enrolled into Screen Acting I and two lost — taken by the director — plus a filled-in website: studio texts and contact lines, three coach profiles, four workshops shown (no prices: the school's decision), an open casting call, three custom links, four casting applications with photos (one a minor with guardian consent) and two enquiries sent through the website.
 
-Locked out? `npm run owner -- someone@example.com` gives that existing account an owner position — CEO, or another owner position if CEO has been made an ordinary one — reactivates it and lifts the sign-in brakes on its email. (Upgrading a database from phase 1 needs nothing: each fixed role becomes the matching position — owner → CEO, admin → Executive Director, teacher → Acting coach, agent → Head of Casting. The server warns at startup if no active account holds an owner position.)
+Locked out? `npm run owner -- ceo` (the account's username, or its email address: `npm run owner -- someone@example.com`) gives that existing account an owner position — CEO, or another owner position if CEO has been made an ordinary one — reactivates it and lifts the sign-in brakes on it. (Upgrading a database from phase 1 needs nothing: each fixed role becomes the matching position — owner → CEO, admin → Executive Director, teacher → Acting coach, agent → Head of Casting. The server warns at startup if no active account holds an owner position.)
+
+### Signing in: usernames and first passwords
+
+- **Username.** Everyone signs in with a username: 3–20 characters from `a–z 0–9 . _ -`, starting with a letter, lower-case, unique. The sign-in field also takes the account's email address, in any letter case. Accounts made before usernames existed get one at the first start after the upgrade, from the first part of their email address (`owner@…` → `owner`; a clash gets a number; an address with nothing usable gets `user<id>`) — nobody is locked out, and the email keeps working.
+- **Adding a team member** (Team › Add team member, *Manage the team*): name, username (offered from the first name; `first.last` when that is taken), position(s) and a first password. The email isn't asked for: the account gets `<username>@<email domain>` — the domain is in **Settings › Team email addresses**, `turquoisestudio.app` by default — unless the manager types another address.
+- **Changing a username:** your own in **My profile**, a member's on their page (managers). An address that was the automatic one follows the new username; one the person typed themself stays.
+- **A first password is temporary.** Whenever someone else sets a person's password — a manager adding them, a manager's reset, the operator's tool — the person's next sign-in shows one screen and nothing else: **Choose your own password** (at least 8 characters, not the temporary one again). Until they do, the app refuses everything else for that sign-in; once they have, their other devices are signed out. That is what makes a simple first password safe to hand over: it stops working the first time it is used.
 
 Production on a server of your own: `npm run build && npm start` — one Node process serves the API and the app on `$PORT` (default 3000). Data lives in `$DATA_DIR` (default `./data`): `app.db` (SQLite) and `uploads/` (photos). Back up that folder. Put it behind HTTPS (the session cookie is `Secure` in production; set `COOKIE_SECURE=false` only to try it over plain http on a private network). The school's time zone (the server's "today") is `SCHOOL_TIME_ZONE`, default `Africa/Cairo`.
 
@@ -49,7 +58,7 @@ The app also runs on Cloudflare as **one Worker named `claude`**: the built web 
 
 **Set `ADMIN_TOKEN` before (or right after) the first deploy.** The Worker is public on its workers.dev address as soon as a push lands, and an empty school offers first-run setup — so on Cloudflare the setup screen asks for a **setup code**: the `ADMIN_TOKEN`. Without it nobody (an attacker polling for a fresh deployment included) can create the first owner account. The same holds after a demo reset. Either open the app and enter the code on the setup screen, or load the demo with `seed-demo` below (it creates the owner itself). On Node, setup stays open (the server isn't public until you put it somewhere); `REQUIRE_SETUP_CODE=true` turns the code on there too.
 
-There's no shell next to the database on Cloudflare, so these replace `npm run seed` and `npm run owner` (all need `Authorization: Bearer $ADMIN_TOKEN`; the token is never logged):
+There's no shell next to the database on Cloudflare, so these replace `npm run seed` and `npm run owner` (all need `Authorization: Bearer $ADMIN_TOKEN`; the token is never logged). Replacing the demo with the real team is its own section, "Clearing the demo and creating the real team", below:
 
 ```
 # Demo data into an empty deployment (409 once anyone has an account). Choose the password; it's never demo1234 there.
@@ -61,19 +70,21 @@ curl -X POST https://<worker-url>/api/admin/seed-demo -H "Authorization: Bearer 
 # The demo website is never public by itself: see "Publishing the website" below.
 curl -X POST https://<worker-url>/api/admin/seed-demo-website -H "Authorization: Bearer $ADMIN_TOKEN"
 
-# Locked out: same as npm run owner -- someone@example.com (also lifts the sign-in brakes on that email)
+# Locked out: same as npm run owner -- ceo (also lifts the sign-in brakes on that account).
+# Name the account by its username, or by its email address: -d '{"email":"someone@example.com"}'.
+# Check "name" in the answer: a username names whoever holds it now (people can change theirs).
 curl -X POST https://<worker-url>/api/admin/grant-owner -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H 'Content-Type: application/json' -d '{"email":"someone@example.com"}'
+  -H 'Content-Type: application/json' -d '{"username":"ceo"}'
 
 # Demo deployments only (ALLOW_DEMO_RESET=true): delete every row and file; the next visit asks for setup again (with the setup code).
 curl -X POST https://<worker-url>/api/admin/reset -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
-Sign-in brakes (both runtimes, kept in the database): 10 failed sign-ins per email from one address in 15 minutes, 100 per email from anywhere, 30 per address whatever the email, and 30 a minute across the whole school. They're checked before the password is hashed, so a flood of bad sign-ins can't stall the one Durable Object (scrypt runs on its only thread); while the school-wide brake holds nobody can sign in, but everyone already signed in carries on. Request bodies over 1 MB are refused (413) before they're read (uploads: 8 MB).
+Sign-in brakes (both runtimes, kept in the database): 10 failed sign-ins per account from one address in 15 minutes, 100 per account from anywhere, 30 per address whatever the account, and 30 a minute across the whole school. An account's username and its email address count together, so typing one and then the other gives no extra guesses — and the other name is stopped the same way whether or not the account exists, so the brakes don't tell which usernames there are. They're checked before the password is hashed, so a flood of bad sign-ins can't stall the one Durable Object (scrypt runs on its only thread); while the school-wide brake holds nobody can sign in, but everyone already signed in carries on. Request bodies over 1 MB are refused (413) before they're read (uploads: 8 MB).
 
 The Durable Object speaks Workers RPC (`extends DurableObject`), so wrangler's local explorer can run SQL against the local database (`npm run cf:dev` prints its address).
 
-Uploaded photos are stored in the Durable Object's SQLite (R2 isn't enabled on the account yet). Once it is: create a private bucket, uncomment the `r2_buckets` line in `wrangler.jsonc`, and new uploads go there (older ones are still read from SQLite). Durable Objects keep 30 days of point-in-time recovery for the database.
+Uploaded photos are stored in the Durable Object's SQLite (R2 isn't enabled on the account yet). Once it is: create a private bucket, uncomment the `r2_buckets` line in `wrangler.jsonc`, and new uploads go there (older ones are still read from SQLite). Durable Objects keep 30 days of point-in-time recovery for the database. (`GET /api/admin/restore-point` and `POST /api/admin/restore`: see "Clearing the demo and creating the real team" below.)
 
 **Deploying without Workers Builds.** Until the Workers Builds settings above are filled in, the app is deployed by hand with `npm run cf:deploy-embedded` (needs Cloudflare credentials). It's the same Worker and the same Durable Object, but the web app is bundled into the Worker's code (`wrangler.embedded.jsonc`, entry written by `scripts/embed-assets.ts`) instead of uploaded as static assets, because the cloud container's network proxy breaks Cloudflare's asset upload. It answers the same way: the headers from `_headers`, ETags, the SPA fallback, a 404 for a missing hashed file. The embed script stops with an error rather than serve something differently from the real asset server: a `_redirects` file in `dist/web`, or `_headers` rules other than exact paths and a trailing `*`. A later Workers Builds deploy simply replaces it, data kept.
 
@@ -81,11 +92,100 @@ Locally, in the same runtime (workerd), with nothing sent to Cloudflare:
 
 ```
 npm run cf:dev                  # the Worker on http://localhost:8787 (-- --port 8790 for another port); data in .wrangler/state
-npm run cf:smoke                # builds, starts it on :8790 with throwaway data, seeds and checks every module end to end (public website, the studio-domain routing and the team pack included); -- --port N, -- --state-dir <folder>
+npm run cf:smoke                # builds, starts it on :8790 with throwaway data, seeds and checks every module end to end (public website, the studio-domain routing, the team pack and clearing the demo included); -- --port N, -- --state-dir <folder>
 npm run cf:smoke -- --embedded  # the same against the bundled variant (wrangler.embedded.jsonc)
 ```
 
 `cf:dev` creates a gitignored `.dev.vars` with a throwaway `ADMIN_TOKEN` and `ALLOW_DEMO_RESET=true` (see `.dev.vars.example`), so the seed command above works against `http://localhost:8787` (and that token is the local setup code). Both commands start wrangler so that the Worker sees the address you really use (`localhost:8787`) rather than the first custom domain in `routes`; to see what a domain serves, send its name as the Host header: `curl -H 'Host: turquoisestudio.app' localhost:8787/en/workshops` (the public website), `curl -i -H 'Host: staff.turquoisestudio.app' localhost:8787/students` (301 to `team.turquoisestudio.app`).
+
+### Clearing the demo and creating the real team
+
+One operator call replaces the demo with the real school: `POST /api/admin/clear-demo` (same `Authorization: Bearer $ADMIN_TOKEN` as the endpoints above). It
+
+- **deletes every record** — students, workshops, sessions, attendance, talent, castings, enquiries, interviews, casting applications, chats, calls to the office, alerts, cafeteria orders, stored files, sign-in sessions and counters;
+- **deletes every account** that is not named under `keep` (normally all of them);
+- **creates the accounts** under `create`, each with a **temporary** first password: the person's first sign-in shows only "Choose your own password";
+- makes `owner` an **active owner** (given the CEO position unless it already holds an owner position);
+- treats the **website's content** as `keepSiteContent` says, and deletes the coaches and the workshops shown in every case (the records they were about are gone);
+- **keeps** the settings, the positions (the school's own included), the email domain, the public forms' secret, and the cafeteria's menu, places and on/off switch.
+
+Write the request in a file, `team.json`. It holds passwords: keep it out of the repository and delete it afterwards.
+
+```
+{
+  "create": [
+    { "name": "Ahmed Tamam", "username": "ceo",   "password": "…", "positions": ["ceo"] },
+    { "name": "Salma",       "username": "salma", "password": "…", "positions": ["executive_director"] },
+    { "name": "Moaty",       "username": "moaty", "password": "…", "positions": ["acting_coach", "finance"] }
+  ],
+  "owner": "ceo",
+  "keepSiteContent": "contact"
+}
+```
+
+- `positions` are the built-in positions' keys: `ceo`, `cfo`, `executive_director`, `head_of_casting`, `casting_team`, `video_editor`, `acting_coach`, `finance`, `reception`, `office_helper`.
+- `password` may be short (it is temporary); `locale` (`"en"` / `"ar"`: the app and the "Choose your own password" screen are in that language from the first sign-in; default: the school's language) and `email` are optional — without `email` the account gets `<username>@<email domain>`. Give every account **a password of its own**: a temporary password works for whoever types it first, and the person who signs in with it chooses the account's password — two accounts with one password (an owner's above all) can be taken by the wrong person. The dry run warns about it.
+- Usernames follow the app's rules (3–20 of `a–z 0–9 . _ -`, a letter first, a letter or digit last); the studio's own mail names (`admin`, `postmaster`, `info`, …) are refused.
+- `keep` (optional): usernames or email addresses of accounts that stay as they are — name, positions, password, language, photo. They are signed out like everyone else.
+- `keepSiteContent`: `"contact"` keeps the tagline, about text, address, map link, WhatsApp lines, phone, email and Instagram, removes the custom links, the main photo and the casting call's texts, closes the casting call and leaves the website **not public**; `"all"` leaves the content exactly as it is (links, main photo, casting call and the "Website is public" switch included); `"none"` empties it.
+- Unknown fields are refused, so a misspelt `dryRun` can never become a real run.
+
+**1. See that a restore point is there** (Cloudflare; see the limits below):
+
+```
+curl https://<worker-url>/api/admin/restore-point -H "Authorization: Bearer $ADMIN_TOKEN"
+# → {"bookmark":"0000007b-0000b26e-00001538-0c3e87bb…","at":1795455945998}
+```
+
+**2. Dry run** — the default. It changes nothing and answers the plan: every account as it will be (`accounts`), every account that goes (`willDeleteAccounts`: id, username, email, name), a count of what goes for every table, what happens to the website, `warnings`, and a `confirm` code.
+
+```
+curl -X POST https://<worker-url>/api/admin/clear-demo -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' -d @team.json
+# → {"dryRun":true,"confirm":"3ea9c9c0-c033903d","accounts":[…],"willDeleteAccounts":[…],"warnings":[…],
+#    "willDelete":{"students":25,…,"users":9,"files":44},"siteContent":{…}}
+```
+
+Read `willDeleteAccounts` (is anyone there who should be under `keep`?) and every warning before going on:
+
+- `shared_password` — these new accounts would share one temporary password (`owner: true` when an owner's account is one of them). Whoever signs in first with it takes the account. Give each its own password and run the dry run again.
+- `replaces_account` — a new account takes the username or email of an account that is deleted: that person's password, photo and records go, and they start again from a temporary password. If they should keep their account, move them to `keep`.
+
+Warnings don't stop the run: the request is yours.
+
+**3. Real run** — the same request with `"dryRun": false` and the code. Do it right after reading the plan.
+
+```
+jq '. + {dryRun: false, confirm: "3ea9c9c0-c033903d"}' team.json | \
+  curl -X POST https://<worker-url>/api/admin/clear-demo -H "Authorization: Bearer $ADMIN_TOKEN" \
+    -H 'Content-Type: application/json' -d @-
+# → {"dryRun":false,…,"deleted":{…},"restorePoint":{"kind":"bookmark","bookmark":"0000007b-…","at":…}}
+```
+
+The code is for **this request on this data, once**. A different request (another account, password, owner, website choice) answers 409 `confirm_mismatch`; the same request after a record was added or deleted (even one deleted and another added), or the website's texts were edited, answers 409 `plan_changed` — run the dry run again and read the new plan. After a run the code is spent: the accounts it created have new ids, so the same command sent again (from the shell history, or a retry after a timeout) answers `plan_changed` and can't delete them and bring their temporary passwords back. The real run's answer has `deletedAccounts` and `warnings` as the dry run showed them. (Sign-in sessions, sign-in brakes, form counters and phone-alert subscriptions are counted but are not part of the code: someone signing in between the two calls is no reason to start over.) Everything happens in one transaction: a run that fails for any reason changes nothing. Keep the `restorePoint` from the answer; it is also in the Worker's log.
+
+Other refusals, all before anything changes: 400 `validation` (a malformed body; a username that breaks the rules is named in `issues`), `unknown_position`, `unknown_account` (a `keep` name nobody has), `duplicate_username`, `duplicate_email`, `owner_not_listed`, `no_accounts`, `confirm_required`; 409 `no_owner_position` (run `grant-owner` first); 503 `restore_point_failed`.
+
+**Taking it back (Cloudflare).** The Durable Object keeps 30 days of point-in-time recovery for its database:
+
+```
+# To the restore point of the run…
+curl -X POST https://<worker-url>/api/admin/restore -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' -d '{"bookmark":"0000007b-0000b26e-00001538-0c3e87bb…"}'
+# …or to how the database was some minutes ago (1 to 43200 = 30 days; approximate)
+curl -X POST https://<worker-url>/api/admin/restore -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' -d '{"minutesAgo":30}'
+# → 202 {"restoringTo":"…","undoBookmark":"…"}   then the app restarts on the restored database, within a second
+```
+
+Its limits — read them before relying on it:
+
+- **It takes the whole database back**, not just what the run deleted: every account created, password chosen and record entered after that moment is gone again. `undoBookmark` in the answer (and in the log) restores to just before the restore, should that have been a mistake. There is no dry run for a restore.
+- **Only the database.** Uploaded files come back with it because they are stored in the database today; once an R2 bucket is bound, a file the run deleted from R2 stays deleted.
+- **Sign-ins go back too:** whoever was signed in at that moment is signed in again, everyone since is signed out.
+- **A second of errors** for requests in flight while the app restarts.
+- **Cloudflare only, and not in local `wrangler dev`** (workerd keeps no history there): locally both endpoints answer 501 `not_supported` whatever the body, and a real run has `"restorePoint": null`. So the restore itself has never run outside Cloudflare — that is what step 1 is for: a bookmark in its answer shows recovery is there on the deployment.
+- **On Node** there is no recovery over HTTP (both endpoints answer 501). Instead a real run first copies the database to `$DATA_DIR/app.before-clear-demo.<UTC time>.db` and answers `{"kind":"file","file":"…"}`. To go back: stop the server, put that file in place of `app.db` (delete `app.db-wal` and `app.db-shm`), start it. The copy holds the database only — not the files in `uploads/` that the run deleted; copy that folder yourself first if they matter.
 
 ### Phone alerts (VAPID keys)
 
@@ -147,6 +247,19 @@ Everyone on the team can **put pictures and files** in the app and **message** e
 - **Where it is in the app.** **Messages** (with its unread count) and the **Alerts** bell sit at the top of every screen (in the sidebar on a computer); **Team** is in the account menu (“More” on a phone). Message / Call to the office buttons also sit on a team member's page, beside a workshop's coach and an enquiry's assignee (and Call to the office at the top of a conversation). A call to the office shows as a big banner at the top of every screen within about 20 seconds; **Profile › Alerts on this phone** turns on push for that phone (the service worker's push handlers are in `src/web/public/push-sw.js`).
 - **There is no COO position.** The school asked for the button for "the CFO, COO and Executive Directors"; the studio has no COO, so out of the box the CEO, the CFO and the Executive Director can call people to the office. To give it to someone else, give one of their positions *Call someone to the office* on the Positions screen.
 
+## The cafeteria
+
+Everyone on the team can **order tea, coffee or something to eat** from the app, and the **Office helper** brings it. There are no prices and no tabs (the school's choice).
+
+- **Ordering** (everyone, no permission needed): **Cafeteria** (البوفيه) in the account menu ("More" on a phone) of every section, and an **Order a drink** button on each section's home. The menu is grouped (hot drinks, cold drinks, food) with big − / + buttons; once something is chosen you can say how you want it — on a hot drink, **Sugar and extras** has one-tap choices (سادة / على الريحة / مضبوط / سكر زيادة / باللبن — No sugar, A little sugar, Medium sugar, Sweet, With milk), which each reader sees in their own language — and "Another …, made differently" adds a second one with its own words. Then **where to bring it** — big buttons for the places, or "Somewhere else" with a short text; your last place is remembered and always shown above **Send order** ("Bring it to: Studio 1 · Change") — an optional note, and **Send order**.
+- **What became of it** shows in large words at the top: **Sent — waiting**, **On the way**, **Delivered ✓**, or **Cancelled** with the reason. You can cancel your own order while it is still waiting. You get an alert (and a phone alert, when those are on) when it is on the way and when it is delivered. Recent orders have **Order again**. At most 10 orders an hour each, 10 lines an order.
+- **The orders board** (permission *Serve cafeteria orders and manage the menu*, `cafeteria.serve`: the Office helper, the Executive Director and owners) is the Office helper's home screen. New orders are at the top as big cards — a coloured strip saying **New order** or **On the way**, who, where, what, how long ago — with one big button for what he does next: **I'm taking it now**, then (in green) **I've delivered it**. After any tap the buttons rest for two seconds, so a double tap can't mark an order delivered by mistake. **Can't do this one** cancels with a short reason the person reads (three ready-made reasons, read by each person in their own language, or his own words). Today's delivered and cancelled orders are listed below. The board refreshes every 10 seconds and keeps the screen on where the phone allows it; after the page has been tapped once, the phone rings and buzzes for a new order (browsers allow sound only after a tap), and rings again once a minute while an order waits and nobody has touched the screen. On any other screen a banner tells him orders are waiting. The board also offers to turn on **alerts on this phone**, so a new order rings even with the screen off.
+- **The Menu tab** (the Office helper, or anyone with *School settings* such as the Executive Director): add an item, rename it in English and Arabic (one language is enough), move it up or down, switch **Available** off for today (it stays on the menu, greyed out, "Not available now"), remove it; and the list of **places**. On an empty menu, **Add the usual items** puts tea, coffee, Turkish coffee, Nescafé, green tea, water, juice, soft drink, sandwich and biscuits there in one tap. **A new school starts with an empty menu:** until someone taps that button, the Cafeteria page says the menu is not ready yet.
+- **Monthly consumption** (permission *See monthly cafeteria consumption*, `cafeteria.report`: the owners — CEO, CFO — and nobody else out of the box): the **Monthly** tab of the Cafeteria pages (`/cafeteria/report`). Pick a month (it opens on this month); it lists everyone who had something delivered that month — photo, name, how many orders — with each item and how many, then the total of each item. Only delivered orders count (not cancelled ones); someone no longer on the team is still listed for the months they ordered in. No prices.
+- **Switching it off:** *Settings › Cafeteria* ("Ordering from the cafeteria"). It is saved the moment it is turned; switching off asks first, because orders still waiting or on the way are cancelled ("The cafeteria is closed now") and the people who ordered are told. Off, nothing about the cafeteria shows anywhere and nobody can order; the menu and the places are kept for when it is switched on again.
+- **Who is told about a new order** (the school's decision, 2026-11-23): only the **Office helper** — everyone active who holds *Serve cafeteria orders* and has no School, Casting or Website section. The owners and the Executive Director hold the permission too, but get no order alerts; they can open the board from **Cafeteria** when they want to. Once someone takes the order (or it is cancelled) it leaves the helpers' bells, and the phone notification is replaced quietly. The person who ordered is told when it is on the way, delivered, or can't be made.
+- **When someone leaves:** switching an account off cancels that person's open orders ("No longer on the team").
+
 ## Positions
 
 Access comes from **positions**. A person can hold several; their permissions add up (e.g. Acting coach + Finance). Owners (CEO, CFO) can change everything on the Positions screen; the Executive Director can manage the team and positions too, but only within her own access. The built-in positions as confirmed by the school:
@@ -154,12 +267,16 @@ Access comes from **positions**. A person can hold several; their permissions ad
 | Position | Can see / do |
 |---|---|
 | **CEO**, **CFO** (owner positions) | Everything, including team accounts, positions, all money, and permissions added later. Owner accounts and owner positions are invisible to everyone else. |
-| **Executive Director** | Everything except money totals (payment status only): team accounts and positions (never beyond her own access, never owners), settings, students with contacts, all workshops, attendance, actors, castings, sending actors to clients, admissions (enquiries, interviews, decisions, enrolling), the public website, and calling people to the office. |
+| **Executive Director** | Everything except money totals (payment status only) and the monthly cafeteria page: team accounts and positions (never beyond her own access, never owners), settings, students with contacts, all workshops, attendance, actors, castings, sending actors to clients, admissions (enquiries, interviews, decisions, enrolling), the public website, calling people to the office, and the cafeteria's orders board and menu (without the order alerts, which go to the Office helper). |
 | **Head of Casting** | Actor database with contacts, castings, sending actors to clients; sees students and all workshops (names, no student contacts). |
 | **Casting team** | Adds and updates actors (with contacts), builds shortlists. Can't send to clients. Sees students (no contacts). |
 | **Video editor** | Students, workshops and actors — names and photos only: no contact details, no money. |
 | **Acting coach** | Only their own students and workshops (as the workshop's teacher or a session's substitute): attendance for the sessions they teach. No contact details. |
 | **Finance** | Payment status and money; students with guardian/emergency contacts; all workshops. |
+| **Reception** | Nothing in the three sections yet — the school will say what Reception does. Like everyone: Team, Messages, Alerts, My profile, cafeteria ordering; can be called to the office. |
+| **Office helper** | The cafeteria: the orders board (On the way, Delivered, Can't do this one) and the menu and places. Nothing in the three sections. |
+
+Reception and Office helper were added on 2026-11-23: an existing database gets them once, the next time the app starts, and nothing else about its positions or people changes. The Executive Director serves the cafeteria too (given once to existing databases at the next start), so she can create the office helper's account, give him the **Office helper** position, reset his password and switch his account off when he leaves; she gets no order alerts from it.
 
 Rules that always hold: nobody can give anyone (or themselves) access they don't have; nobody changes their own positions or deactivates themselves; someone who can do more than you is out of your reach (no editing, password reset or deactivation — and no changing a position they hold); there is always at least one active account in an owner position. Built-in positions can be renamed and changed, not deleted.
 

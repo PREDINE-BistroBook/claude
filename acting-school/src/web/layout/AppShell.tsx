@@ -6,6 +6,9 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router';
 import { Avatar } from '../components/ui/Avatar';
 import { BrandMark } from '../components/ui/BrandMark';
 import { PageLoader } from '../components/ui/States';
+import { useCafeStatus } from '../features/cafe/api';
+import { CafeOrdersBanner } from '../features/cafe/components/CafeOrdersBanner';
+import { boardIsHome, cafeBadge } from '../features/cafe/utils';
 import { MessagesButton, NotificationsButton } from '../features/team/components/HeaderButtons';
 import { SummonsAnswerWatcher } from '../features/team/components/SummonsAnswerWatcher';
 import { SummonsBanner } from '../features/team/components/SummonsBanner';
@@ -17,7 +20,20 @@ import { useApplicationCounts } from '../features/applications/api';
 import { legacyScheduleRedirect } from '../features/schedule/utils';
 import { usePositionNames } from '../lib/positions';
 import { useFormat } from '../lib/format';
-import { TEAM_PATH, adminNavItems, mobileTabs, navItemActive, sectionNavItems, teamMenuActive, teamMenuHint, type NavItem } from './nav';
+import {
+  CAFE_HOME_ITEMS,
+  CAFE_ITEM,
+  TEAM_PATH,
+  adminNavItems,
+  cafeMenuActive,
+  cafeMenuHint,
+  mobileTabs,
+  navItemActive,
+  sectionNavItems,
+  teamMenuActive,
+  teamMenuHint,
+  type NavItem,
+} from './nav';
 import { SectionTabs } from './SectionTabs';
 import { currentSection, rememberRoute, rememberSection, rememberedSection, sectionByKey, sectionForPath, visibleSections } from './sections';
 
@@ -71,8 +87,11 @@ const TEAM_ITEM: MenuItem = { to: TEAM_PATH, label: 'team', icon: Contact };
  * layout/sections.ts): the tabs at the top switch between them (only for
  * people who see two or more), and the menus — sidebar on desktop, bottom bar
  * + "More" on phones — show the current section's pages plus Administration
- * (Positions, Settings); Team and the profile are in the account menu of every
- * section, Messages and the bell at the top.
+ * (Positions, Settings); Team, the Cafeteria (while it is switched on) and the
+ * profile are in the account menu of every section, Messages and the bell at
+ * the top. Someone whose home is the cafeteria's orders board (the Office
+ * helper: cafeteria.serve and no section) has the board and the menu editor as
+ * their own menu, and a banner on every other screen while orders wait.
  * The current section's colour marks the line at the top, the active tab and
  * the active menu entry (data-section → bg-section / text-section).
  */
@@ -121,23 +140,41 @@ export function AppShell() {
     return () => window.removeEventListener('keydown', onKey);
   }, [moreOpen]);
 
-  // Count badges (new casting applications): fetched only while the person is in the section that lists them.
+  // The cafeteria, from the 20-second poll: nothing of it is shown while it is off (or not known yet).
+  const cafe = useCafeStatus();
+  const cafeOn = !!cafe?.enabled;
+  // The Office helper (serves, no section): the board and the menu editor are their own menu.
+  const cafeHome = !!user && boardIsHome(can, visible.length, cafe?.enabled);
+
+  // Count badges. New casting applications: fetched only while the person is in the section that lists
+  // them. Cafeteria orders nobody has taken yet: with the poll, for whoever serves.
   const applicationBadge = section === 'casting' && can('talent.read');
   const applicationCounts = useApplicationCounts(applicationBadge);
-  const badgeOf = (item: MenuItem): number => (item.badge === 'newCastingApplications' && applicationBadge ? (applicationCounts.data?.new ?? 0) : 0);
+  const badgeOf = (item: MenuItem): number => {
+    if (item.badge === 'newCastingApplications') return applicationBadge ? (applicationCounts.data?.new ?? 0) : 0;
+    if (item.badge === 'cafeNewOrders') return cafeBadge(cafe);
+    return 0;
+  };
 
   const sectionItems = section ? sectionNavItems(section, can) : [];
   const adminItems = adminNavItems(can);
   const tabPaths = user ? mobileTabs(section, can) : [];
-  const tabs = tabPaths.map((to) => (to === '/' ? START_ITEM : sectionItems.find((i) => i.to === to))).filter(Boolean) as MenuItem[];
+  // No section: the plain Home — or, for someone whose home is the orders board, the board and the menu editor.
+  const ownItems: MenuItem[] = section ? [] : cafeHome ? CAFE_HOME_ITEMS : [START_ITEM];
+  const tabs = section ? (tabPaths.map((to) => sectionItems.find((i) => i.to === to)).filter(Boolean) as MenuItem[]) : user ? ownItems : [];
   const moreSection = sectionItems.filter((i) => !tabPaths.includes(i.to));
   const teamActive = teamMenuActive(pathname);
-  const moreActive = teamActive || [...moreSection, ...adminItems, PROFILE_ITEM].some((i) => navItemActive(i, pathname));
+  // The Cafeteria entry in the account / "More" menu: for everyone while it is on — except the Office helper, whose own menu has it.
+  const cafeEntry = cafeOn && !cafeHome;
+  const cafeActive = cafeEntry && cafeMenuActive(pathname, cafeHome);
+  // The Cafeteria entry carries the count of waiting orders unless the person's own menu already shows it on "Orders".
+  const cafeEntryBadge = cafeHome ? 0 : cafeBadge(cafe);
+  const moreActive = teamActive || cafeActive || [...moreSection, ...adminItems, PROFILE_ITEM].some((i) => navItemActive(i, pathname));
   const myPositions = user ? positionNames(user.positions) : '';
   const showTabs = visible.length > 1;
 
   const sidebarGroups: { id: string; label: string | null; items: MenuItem[] }[] = [
-    { id: 'section', label: sectionLabel, items: sectionItems.length ? sectionItems : section ? [] : [START_ITEM] },
+    { id: 'section', label: sectionLabel, items: section ? sectionItems : ownItems },
     { id: 'admin', label: t('nav.admin'), items: adminItems },
   ];
 
@@ -198,6 +235,20 @@ export function AppShell() {
             <Languages className="size-5" aria-hidden />
             <span lang={currentLanguage() === 'ar' ? 'en' : 'ar'}>{t('language.switchTo')}</span>
           </button>
+          {cafeEntry && (
+            <Link
+              to={CAFE_ITEM.to}
+              aria-current={cafeActive ? 'page' : undefined}
+              className={clsx(
+                'mt-1 flex min-h-11 items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium',
+                cafeActive ? 'bg-section-soft font-semibold text-section' : 'text-ink/80 hover:bg-surface-2',
+              )}
+            >
+              <CAFE_ITEM.icon className="size-5" aria-hidden />
+              {t('nav.cafeteria')}
+              <CountBadge count={cafeEntryBadge} className="ms-auto" />
+            </Link>
+          )}
           <Link
             to={TEAM_ITEM.to}
             aria-current={teamActive ? 'page' : undefined}
@@ -265,6 +316,7 @@ export function AppShell() {
         <div className="lg:ms-64">
           <SummonsBanner />
           {user && can('staff.summon') && <SummonsAnswerWatcher />}
+          {cafeHome && <CafeOrdersBanner />}
         </div>
       </div>
 
@@ -343,7 +395,7 @@ export function AppShell() {
         </ul>
       </nav>
 
-      {/* ── Phone "More" sheet: the rest of the section, Administration, Team, profile ── */}
+      {/* ── Phone "More" sheet: the rest of the section, Administration, Cafeteria, Team, profile ── */}
       {moreOpen && (
         <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label={t('nav.more')}>
           <button type="button" className="absolute inset-0 bg-black/40" aria-label={t('actions.close')} onClick={() => setMoreOpen(false)} />
@@ -370,6 +422,25 @@ export function AppShell() {
             )}
             {adminItems.length > 0 && <MoreGroup label={t('nav.admin')} items={adminItems} pathname={pathname} />}
             <div className="mt-2 grid grid-cols-2 gap-2 border-t border-line px-4 py-3">
+              {cafeEntry && (
+                <Link
+                  to={CAFE_ITEM.to}
+                  aria-current={cafeActive ? 'page' : undefined}
+                  className={clsx(
+                    'col-span-2 flex min-h-14 items-center justify-center gap-3 rounded-xl px-3 py-2 text-sm font-medium',
+                    cafeActive ? 'bg-section-soft text-section' : 'bg-surface-2 text-ink',
+                  )}
+                >
+                  <span className="relative shrink-0">
+                    <CAFE_ITEM.icon className="size-5" aria-hidden />
+                    <CountBadge count={cafeEntryBadge} className="absolute -top-2.5 -end-3" />
+                  </span>
+                  <span className="min-w-0 text-start leading-tight">
+                    <span className="block font-semibold">{t('nav.cafeteria')}</span>
+                    <span className="block text-xs text-muted">{t(`nav.${cafeMenuHint(can)}`)}</span>
+                  </span>
+                </Link>
+              )}
               <Link
                 to={TEAM_ITEM.to}
                 aria-current={teamActive ? 'page' : undefined}

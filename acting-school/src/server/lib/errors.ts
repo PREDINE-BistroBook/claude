@@ -8,7 +8,7 @@ import type { ApiIssue } from '../../shared/schemas/common';
  */
 export class ApiError extends Error {
   constructor(
-    public status: 400 | 401 | 403 | 404 | 409 | 413 | 415 | 429,
+    public status: 400 | 401 | 403 | 404 | 409 | 413 | 415 | 429 | 501 | 503,
     public code: string,
     message?: string,
     public issues?: ApiIssue[],

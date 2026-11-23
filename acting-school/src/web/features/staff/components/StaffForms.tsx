@@ -1,10 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { KeyRound } from 'lucide-react';
-import { useEffect, useRef, type SelectHTMLAttributes } from 'react';
+import { useEffect, useRef, useState, type InputHTMLAttributes, type SelectHTMLAttributes } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router';
 import { LOCALES, type Locale } from '@shared/enums';
 import { staffCreateInput, staffUpdateInput, type StaffMember, type StaffUpdateInput } from '@shared/schemas/staff';
+import { normalizeUsername } from '@shared/usernames';
 import {
   Avatar,
   Button,
@@ -25,9 +26,11 @@ import { api } from '@web/lib/api';
 import { discardUpload } from '@web/lib/files';
 import { ME_KEY } from '@web/lib/auth';
 import { useForm } from '@web/lib/forms';
+import { useDebounced } from '@web/lib/hooks';
 import { usePositions } from '../../positions/api';
 import { teamErrorKey, teamKeys } from '../../team/api';
-import { staffErrorKey, staffKeys, useCreateStaff, useSchoolSettings, useUpdateStaff } from '../api';
+import { staffErrorKey, staffKeys, useCreateStaff, useSchoolSettings, useUpdateStaff, useUsernameCheck } from '../api';
+import { accountNamesPatch, automaticEmailFor, shownEmail, typedEmail, usernameCheckedFree, usernameCheckError } from '../utils';
 import { PositionChips, PositionPicker, TempPasswordInput } from './bits';
 
 /**
@@ -62,6 +65,44 @@ function handleError(form: { setFormError: (k: string | null) => void; setServer
   };
 }
 
+/**
+ * The Username field of both forms: Latin, left-to-right, never capitalised or
+ * "corrected" by the phone, and checked against the team as the manager types
+ * (GET /api/staff/username-check) — a taken or invalid one says so under the
+ * field before anything is saved; a free one gets a quiet "free".
+ */
+function UsernameField({
+  value,
+  exceptId,
+  error,
+  disabled,
+  ...input
+}: { value: string; exceptId?: number; error?: string | null; disabled?: boolean } & Omit<InputHTMLAttributes<HTMLInputElement>, 'value'>) {
+  const { t } = useTranslation(['staff', 'common']);
+  const typed = normalizeUsername(value);
+  const asked = useDebounced(typed, 300);
+  const check = useUsernameCheck({ username: asked, exceptId }, !disabled);
+  const live = usernameCheckError(check.data, value);
+  return (
+    <TextField
+      label={t('common:fields.username')}
+      type="text"
+      autoComplete="off"
+      autoCapitalize="none"
+      autoCorrect="off"
+      spellCheck={false}
+      dir="ltr"
+      maxLength={60}
+      required
+      value={value}
+      {...input}
+      aria-invalid={error || live ? true : undefined}
+      error={error ?? live}
+      hint={usernameCheckedFree(check.data, value) ? t('form.usernameFree') : t('form.usernameHint')}
+    />
+  );
+}
+
 // ── Add (/staff/new) ──────────────────────────────────────────────────────
 
 export function AddStaffForm() {
@@ -73,6 +114,7 @@ export function AddStaffForm() {
   const positions = usePositions();
   const form = useForm({
     name: '',
+    username: '',
     email: '',
     positionIds: [] as number[],
     password: '',
@@ -88,8 +130,21 @@ export function AddStaffForm() {
     if (defaultLocale && !localeTouched.current) set('locale', defaultLocale);
   }, [defaultLocale, set]);
 
+  // The username is offered from the name as it is typed — the first name, or first.last when
+  // that is taken — until the manager types one themself. A name only in Arabic offers nothing.
+  const [usernameTouched, setUsernameTouched] = useState(false);
+  const askedName = useDebounced(form.values.name.trim(), 350);
+  const offer = useUsernameCheck({ name: askedName }, !usernameTouched);
+  const offered = offer.data?.suggestion;
+  useEffect(() => {
+    if (!usernameTouched && offered) set('username', offered);
+  }, [usernameTouched, offered, set]);
+
+  // No email typed: the account gets <username>@<the school's email domain> (shown as the field's placeholder).
+  const automatic = automaticEmailFor(form.values.username, settings.data?.emailDomain);
+
   const submit = () => {
-    const data = form.validate(staffCreateInput);
+    const data = form.validate(staffCreateInput, { ...form.values, email: typedEmail(form.values.email) });
     if (!data) return;
     mutation.mutate(data, {
       onSuccess: (created) => {
@@ -106,15 +161,14 @@ export function AddStaffForm() {
       <FormSection>
         <FormGrid>
           <TextField label={t('common:fields.name')} autoComplete="off" required {...form.bind('name')} error={form.error('name')} />
-          <TextField
-            label={t('common:fields.email')}
-            type="email"
-            inputMode="email"
-            autoComplete="off"
-            dir="ltr"
-            required
-            {...form.bind('email')}
-            error={form.error('email')}
+          <UsernameField
+            {...form.bind('username')}
+            value={form.values.username}
+            onChange={(e) => {
+              setUsernameTouched(true);
+              form.set('username', e.target.value);
+            }}
+            error={form.error('username')}
           />
         </FormGrid>
         <Field label={t('positions.label')} error={form.error('positionIds')} hint={t('positions.hint')} required>
@@ -138,6 +192,19 @@ export function AddStaffForm() {
           </Field>
           <TextField label={t('common:fields.phone')} type="tel" autoComplete="off" dir="ltr" optional {...form.bind('phone')} error={form.error('phone')} />
         </FormGrid>
+        <TextField
+          label={t('common:fields.email')}
+          type="email"
+          inputMode="email"
+          autoComplete="off"
+          autoCapitalize="none"
+          dir="ltr"
+          optional
+          placeholder={automatic}
+          {...form.bind('email')}
+          error={form.error('email')}
+          hint={automatic ? t('form.emailAutoHint', { email: automatic }) : t('form.emailAutoHintNoName')}
+        />
         <Field label={t('form.tempPassword')} htmlFor="f-password" error={form.error('password')} hint={t('form.tempPasswordHint')} required>
           <TempPasswordInput {...form.bind('password')} onGenerate={(v) => form.set('password', v)} />
         </Field>
@@ -196,23 +263,28 @@ export function EditDetailsForm({ member, isSelf, readOnly }: { member: StaffMem
   const onDone = () => navigate(TEAM);
   const positions = usePositions(!readOnly);
   const heldIds = member.positions.map((p) => p.id);
+  const settings = useSchoolSettings();
+  const emailDomain = settings.data?.emailDomain;
   const form = useForm({
     name: member.name,
+    username: member.username,
     email: member.email,
     positionIds: heldIds,
     phone: member.phone ?? '',
     locale: member.locale,
     active: member.active,
   });
+  // An address that is the automatic one for the username follows a new username, until the manager types another.
+  const [emailTouched, setEmailTouched] = useState(false);
+  const email = shownEmail(member, form.values, emailTouched, emailDomain);
 
   const submit = () => {
     if (readOnly) return;
-    const data = form.validate(staffUpdateInput);
+    const data = form.validate(staffUpdateInput, { ...form.values, email });
     if (!data) return;
     // Send only what changed: fewer surprises with the owner/self rules.
-    const patch: StaffUpdateInput = {};
+    const patch: StaffUpdateInput = accountNamesPatch(member, data, emailTouched);
     if (data.name !== member.name) patch.name = data.name;
-    if (data.email !== member.email) patch.email = data.email;
     if (data.positionIds && !sameIds(data.positionIds, heldIds)) patch.positionIds = data.positionIds;
     if ((data.phone ?? null) !== member.phone) patch.phone = data.phone ?? null;
     if (data.locale !== member.locale) patch.locale = data.locale;
@@ -237,17 +309,25 @@ export function EditDetailsForm({ member, isSelf, readOnly }: { member: StaffMem
         <fieldset disabled={readOnly} className="grid min-w-0 gap-4">
           <FormGrid>
             <TextField label={t('common:fields.name')} autoComplete="off" required {...form.bind('name')} error={form.error('name')} />
-            <TextField
-              label={t('common:fields.email')}
-              type="email"
-              inputMode="email"
-              autoComplete="off"
-              dir="ltr"
-              required
-              {...form.bind('email')}
-              error={form.error('email')}
-            />
+            <UsernameField {...form.bind('username')} value={form.values.username} exceptId={member.id} disabled={readOnly} error={form.error('username')} />
           </FormGrid>
+          <TextField
+            label={t('common:fields.email')}
+            type="email"
+            inputMode="email"
+            autoComplete="off"
+            autoCapitalize="none"
+            dir="ltr"
+            required
+            {...form.bind('email')}
+            value={email}
+            onChange={(e) => {
+              setEmailTouched(true);
+              form.set('email', e.target.value);
+            }}
+            error={form.error('email')}
+            hint={!readOnly && !emailTouched && email !== member.email ? t('form.emailFollowsHint') : undefined}
+          />
           <Field label={t('positions.label')} error={form.error('positionIds')} hint={isSelf ? t('positions.selfHint') : t('positions.hint')}>
             {readOnly ? (
               <PositionChips positions={member.positions} />
@@ -339,6 +419,7 @@ export function ResetPasswordForm({ member }: { member: StaffMember }) {
           {t('form.resetTitle')}
         </h2>
         <p className="mt-0.5 text-sm text-muted">{t('form.resetDescription')}</p>
+        {member.mustChangePassword && <p className="mt-2 rounded-xl bg-surface-2 px-3.5 py-2.5 text-sm text-ink">{t('form.temporaryNote')}</p>}
       </div>
       <FormError messageKey={form.formError} />
       <Field label={t('form.newPassword')} htmlFor="f-reset-password" error={form.error('password')} hint={t('form.tempPasswordHint')}>

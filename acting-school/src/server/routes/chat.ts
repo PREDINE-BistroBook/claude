@@ -23,6 +23,7 @@ import { TEAM_ERROR_KEYS } from '../../shared/schemas/team';
 import type { DB } from '../db/database';
 import { conversationMembers, conversations, files, messageAttachments, messages, notifications, users } from '../db/schema';
 import type { AppEnv } from '../env';
+import { cafeUnread, hiddenNotificationKinds } from '../lib/cafe';
 import { ApiError, fieldError, forbidden, notFound } from '../lib/errors';
 import { claimUploads, deleteStoredFiles, takeUnusedFiles } from '../lib/fileRefs';
 import { conversationLink, localeOf, markNotificationsRead, messagePreview, notificationText, notify, preview, unreadNotificationCount } from '../lib/notifications';
@@ -375,15 +376,17 @@ router.delete('/messages/:id', async (c) => {
 
 // ── The badge poll ──────────────────────────────────────────────────────────
 
-/** The Messages badge, the bell's count and the summonses waiting for me — one poll every 20 s. */
+/** The Messages badge, the bell's count, the summonses waiting for me and the cafeteria (on or off, orders waiting) — one poll every 20 s. */
 router.get('/unread', (c) => {
   const db = c.get('db');
-  const me = currentUser(c).id;
+  const user = currentUser(c);
+  const me = user.id;
   const total = [...unreadCounts(db, me).values()].reduce((a, b) => a + b, 0);
   const res: ChatUnreadResponse = {
     total,
-    notifications: unreadNotificationCount(db, me),
+    notifications: unreadNotificationCount(db, me, Date.now(), hiddenNotificationKinds(db, user)),
     summons: incomingSummons(db, me, Date.now()),
+    cafe: cafeUnread(db, user),
   };
   return c.json(res);
 });

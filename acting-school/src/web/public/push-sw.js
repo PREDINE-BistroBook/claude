@@ -5,9 +5,14 @@
  * clientsClaim) stay in the generated part.
  *
  * The server sends JSON (PushPayload in src/shared/schemas/notifications.ts):
- *   { title, body, link, kind: 'message' | 'summon' | 'summon_answer' | 'test', tag }
+ *   { title, body, link, kind: 'message' | 'summon' | 'summon_answer' | 'cafe_order' | 'cafe_status' | 'test', tag, quiet? }
  * A call to the office stays on screen until it's touched and vibrates;
  * message notifications share a tag per conversation, so a new one replaces the last.
+ * A new cafeteria order (to whoever serves) vibrates and stays too; what became of
+ * an order (to whoever ordered) shares a tag per order: "Delivered" replaces "On the way".
+ * `quiet: true` replaces the notification with the same tag silently and lets it go
+ * (a new order that was taken or cancelled meanwhile: the phone mustn't keep
+ * "New order from …" on screen for an order that no longer waits).
  */
 /* global self, clients */
 
@@ -36,14 +41,20 @@ self.addEventListener('push', (event) => {
     dir: 'auto',
     data: { link: safeLink(data.link) },
   };
+  const quiet = data.quiet === true;
   if (tag) {
     options.tag = tag;
-    // A replaced notification (same conversation) still alerts.
-    options.renotify = true;
+    // A replaced notification (same conversation) still alerts — unless it is only an update.
+    options.renotify = !quiet;
   }
-  if (data.kind === 'summon') {
+  if (quiet) {
+    options.silent = true;
+  } else if (data.kind === 'summon') {
     options.requireInteraction = true;
     options.vibrate = [300, 150, 300, 150, 300];
+  } else if (data.kind === 'cafe_order') {
+    options.requireInteraction = true;
+    options.vibrate = [200, 100, 200];
   }
   event.waitUntil(self.registration.showNotification(title, options));
 });

@@ -15,7 +15,7 @@ export function TempPasswordInput({ onGenerate, ...input }: { onGenerate: (value
   return (
     <div className="flex gap-2">
       <Input {...input} type="text" dir="ltr" autoComplete="new-password" autoCapitalize="none" autoCorrect="off" spellCheck={false} className="font-mono" />
-      <IconButton icon={Dices} label={t('form.generate')} variant="secondary" className="shrink-0 max-sm:size-11" onClick={() => onGenerate(generatePassword())} />
+      <IconButton icon={Dices} label={t('form.generate')} variant="secondary" className="shrink-0 max-sm:size-12" onClick={() => onGenerate(generatePassword())} />
     </div>
   );
 }

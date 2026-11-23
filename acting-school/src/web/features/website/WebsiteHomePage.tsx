@@ -10,6 +10,7 @@ import { Card, ConfirmDialog, ErrorState, PageLoader, Segmented, buttonClasses, 
 import { SectionHomeHeader } from '@web/layout/SectionHomeHeader';
 import { errorMessageKey } from '@web/lib/forms';
 import { useFormat } from '@web/lib/format';
+import { OrderDrinkButton } from '../cafe/components/CafeParts';
 import { useGreetingLine } from '../dashboard/components/HomeParts';
 import { useSiteSummary, useUpdateSiteContent } from './api';
 import { BigSwitch } from './components/BigSwitch';
@@ -102,11 +103,15 @@ export default function WebsiteHomePage() {
           </p>
         </section>
 
-        <a href={siteHome} target="_blank" rel="noopener" className={buttonClasses('primary', 'lg', 'h-14 w-full text-lg sm:w-auto sm:px-8')}>
-          <ExternalLink className="size-5 shrink-0 rtl:-scale-x-100" aria-hidden />
-          {t(data.published ? 'home.open' : 'home.preview')}
-          <span className="sr-only"> {t('links.opensNewTab')}</span>
-        </a>
+        {/* The site's big button; beside it, the quick action every section home has: "Order a drink" (the cafeteria). */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          <a href={siteHome} target="_blank" rel="noopener" className={buttonClasses('primary', 'lg', 'h-14 w-full text-lg sm:w-auto sm:px-8')}>
+            <ExternalLink className="size-5 shrink-0 rtl:-scale-x-100" aria-hidden />
+            {t(data.published ? 'home.open' : 'home.preview')}
+            <span className="sr-only"> {t('links.opensNewTab')}</span>
+          </a>
+          <OrderDrinkButton className="w-full sm:w-auto" />
+        </div>
 
         <section aria-label={t('home.status')} className="grid gap-3 sm:grid-cols-2">
           {data.newWebsiteLeads !== null && (

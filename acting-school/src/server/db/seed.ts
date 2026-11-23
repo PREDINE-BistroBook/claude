@@ -4,7 +4,8 @@
  * API — the demo itself (people, classes, castings, enquiries, and the few
  * timestamps it backdates) is db/demoSeed.ts, shared with POST
  * /api/admin/seed-demo on Cloudflare. Every account's password here is
- * demo1234; the deployed demo uses the password its operator chose.
+ * demo1234; the deployed demo uses the password its operator chose. People
+ * sign in with the usernames printed at the end (owner, director, coach, …).
  */
 import { count } from 'drizzle-orm';
 import fs from 'node:fs';
@@ -50,13 +51,13 @@ const result = await seedDemo({
 db.$client.close();
 
 const { counts } = result;
-const width = Math.max(...DEMO_LOGINS.map((l) => l.email.length));
+const width = Math.max(...DEMO_LOGINS.map((l) => l.username.length));
 const posWidth = Math.max(...DEMO_LOGINS.map((l) => l.position.length));
 console.log(`
 Turquoise Studio demo data is ready (${result.seconds.toFixed(1)}s) in ${config.dataDir}
 
   ${counts.students} students · ${counts.classes} classes · ${counts.talent} talent · ${counts.castings} castings · ${counts.enquiries} enquiries
 
-Sign in with any of these (password: ${PASSWORD}):
-${DEMO_LOGINS.map((l) => `  ${l.email.padEnd(width)}  ${l.position.padEnd(posWidth)}  — ${l.name}`).join('\n')}
+Sign in with any of these usernames (password: ${PASSWORD}); each one's email address, <username>@demo.school, works too:
+${DEMO_LOGINS.map((l) => `  ${l.username.padEnd(width)}  ${l.position.padEnd(posWidth)}  — ${l.name}`).join('\n')}
 `);

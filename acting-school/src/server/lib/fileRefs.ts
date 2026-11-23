@@ -95,6 +95,27 @@ export function takeUnusedFiles(tx: Conn & Reader, fileIds: readonly string[]): 
   return rows.map((r) => r.storageKey);
 }
 
+/** WHERE (over files), one condition per FILE_REFERENCES column: nothing there points at the file. The site's hero photo is checked beside them (it lives in settings). */
+const nothingRefersToIt = (): SQL[] => FILE_REFERENCES.map(({ table, column }) => sql`not exists (select 1 from ${table} where ${column} = ${files.id})`);
+
+/**
+ * Inside a transaction: delete the row of **every** file nothing uses (the
+ * same FILE_REFERENCES check, and the site's hero photo as stored right now)
+ * and return their storage keys for deleteStoredFiles — for a clean-out that
+ * has just deleted the records themselves (db/clearDemo.ts). One statement,
+ * whatever the number of files. Unlike sweepUnusedUploads it has no age
+ * limit: an upload that is still waiting to be attached goes too.
+ */
+export function takeEveryUnusedFile(tx: Conn & Reader): string[] {
+  const hero = getSiteContent(tx).heroFileId;
+  return tx
+    .delete(files)
+    .where(and(hero ? ne(files.id, hero) : undefined, ...nothingRefersToIt()))
+    .returning({ storageKey: files.storageKey })
+    .all()
+    .map((r) => r.storageKey);
+}
+
 /** After the transaction: remove the bytes. A failure only leaves an orphan (logged), never a dangling row. */
 export async function deleteStoredFiles(store: FileStore, keys: readonly string[]): Promise<void> {
   for (const key of keys) {
@@ -114,7 +135,7 @@ export const SWEEP_BATCH = 20;
  * own clean-up. Returns how many were deleted.
  */
 export async function sweepUnusedUploads(db: DB, store: FileStore, now: number): Promise<number> {
-  const unreferenced = FILE_REFERENCES.map(({ table, column }) => sql`not exists (select 1 from ${table} where ${column} = ${files.id})`);
+  const unreferenced = nothingRefersToIt();
   const hero = getSiteContent(db).heroFileId;
   const keys = db.transaction((tx) => {
     const candidates = tx

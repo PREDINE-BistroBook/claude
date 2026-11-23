@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ListResponse } from '@shared/schemas/common';
 import type { AppSettings } from '@shared/schemas/settings';
-import type { StaffCreateInput, StaffMember, StaffUpdateInput } from '@shared/schemas/staff';
-import { ApiError, api } from '@web/lib/api';
+import type { StaffCreateInput, StaffMember, StaffUpdateInput, UsernameCheck } from '@shared/schemas/staff';
+import { ApiError, api, qs } from '@web/lib/api';
 import { ME_KEY } from '@web/lib/auth';
 
 /** Everything about staff starts with 'staff' (the directory other screens use is ['staff', 'directory']). */
@@ -33,6 +33,21 @@ export function useStaffMember(id: number, enabled = true) {
     queryKey: staffKeys.member(id),
     queryFn: () => api.get<StaffMember>(`/staff/${id}`),
     enabled,
+  });
+}
+
+/**
+ * GET /api/staff/username-check (staff.manage), as the manager types in the add
+ * or edit form: `username` → is it valid and free (`exceptId`: the account being
+ * edited); `name` → a free username to offer. Nothing is asked while both are empty.
+ */
+export function useUsernameCheck(params: { username?: string; name?: string; exceptId?: number }, enabled = true) {
+  return useQuery({
+    queryKey: [...staffKeys.all, 'username-check', params] as const,
+    queryFn: () => api.get<UsernameCheck>(`/staff/username-check${qs(params)}`),
+    enabled: enabled && !!(params.username || params.name),
+    staleTime: 0,
+    gcTime: 30_000,
   });
 }
 

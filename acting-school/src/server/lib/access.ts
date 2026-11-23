@@ -30,20 +30,45 @@ export type Actor = Pick<SessionUser, 'id' | 'isOwner' | 'permissions'>;
 /**
  * Create the built-in positions that don't exist yet (matched by key). Safe to
  * run on every start: existing positions — renamed or changed by an owner — are
- * left alone. Returns the keys it created (they already have today's full
- * permission lists).
+ * left alone, so a built-in added in a later release (Reception, Office
+ * helper) appears exactly once in a database that already has people in it,
+ * and is never created again or reset afterwards (its key stays, whatever its
+ * name and permissions become; built-ins can't be deleted).
+ *
+ * One more case, for that same promise of "once": the school may already have
+ * made the position by hand before the release that ships it (a position
+ * called "Reception" with no key). Then that position is taken over — it gets
+ * the key and whatever the built-in allows that it doesn't yet, and keeps its
+ * holders, names and order — rather than a second "Reception" appearing next
+ * to it. Only a position that isn't an owner position, has no key and has
+ * exactly the built-in's English name (any letter case) or Arabic name.
+ *
+ * Returns the keys it created or took over (they have today's full permission
+ * lists, so upgradeBuiltInPositions has no grant left to apply to them).
  */
 export function ensureBuiltInPositions(db: Conn): string[] {
-  const existing = new Set(
-    db
-      .select({ key: positions.key })
-      .from(positions)
-      .all()
-      .map((r) => r.key),
-  );
-  const missing = BUILT_IN_POSITIONS.map((p, i) => ({ ...p, sortOrder: i * 10 })).filter((p) => !existing.has(p.key));
+  const existing = db.select({ id: positions.id, key: positions.key, name: positions.name, nameAr: positions.nameAr, isOwner: positions.isOwner, permissions: positions.permissions }).from(positions).all();
+  const keys = new Set(existing.map((r) => r.key));
+  const missing = BUILT_IN_POSITIONS.map((p, i) => ({ ...p, sortOrder: i * 10 })).filter((p) => !keys.has(p.key));
   if (!missing.length) return [];
-  const rows = missing.map((p) => ({ key: p.key, name: p.name, nameAr: p.nameAr, isOwner: p.isOwner, permissions: [...p.permissions], sortOrder: p.sortOrder }));
+  const same = (a: string | null, b: string) => !!a && a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase();
+  const taken = new Set<number>();
+  const toCreate: typeof missing = [];
+  for (const p of missing) {
+    // An owner built-in is never matched to a hand-made position: owner access is only ever given on purpose.
+    const handMade = p.isOwner ? undefined : existing.find((r) => r.key === null && !r.isOwner && !taken.has(r.id) && (same(r.name, p.name) || same(r.nameAr, p.nameAr)));
+    if (!handMade) {
+      toCreate.push(p);
+      continue;
+    }
+    taken.add(handMade.id);
+    const add = (p.permissions as readonly Permission[]).filter((perm) => !handMade.permissions.includes(perm));
+    db.update(positions)
+      .set({ key: p.key, nameAr: handMade.nameAr ?? p.nameAr, permissions: [...handMade.permissions, ...add] })
+      .where(eq(positions.id, handMade.id))
+      .run();
+  }
+  const rows = toCreate.map((p) => ({ key: p.key, name: p.name, nameAr: p.nameAr, isOwner: p.isOwner, permissions: [...p.permissions], sortOrder: p.sortOrder }));
   for (const batch of insertBatches(positions, rows)) db.insert(positions).values(batch).onConflictDoNothing().run();
   return missing.map((p) => p.key);
 }
@@ -156,7 +181,17 @@ export function loadUserAccess(db: Pick<DB, 'select'>, userId: number): UserAcce
 
 /** The SessionUser shape for a user row (one extra query for the positions). */
 export function toSessionUser(db: Pick<DB, 'select'>, u: typeof users.$inferSelect): SessionUser {
-  return { id: u.id, email: u.email, name: u.name, phone: u.phone, locale: u.locale, photoFileId: u.photoFileId, ...loadUserAccess(db, u.id) };
+  return {
+    id: u.id,
+    username: u.username ?? '',
+    email: u.email,
+    name: u.name,
+    phone: u.phone,
+    locale: u.locale,
+    photoFileId: u.photoFileId,
+    ...loadUserAccess(db, u.id),
+    mustChangePassword: u.mustChangePassword,
+  };
 }
 
 /** Owners may do anything; everyone else may only touch what they could do themselves. */

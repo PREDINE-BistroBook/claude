@@ -13,6 +13,8 @@
 import { blob, index, integer, primaryKey, sqliteTable, text, uniqueIndex, type AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import {
   ATTENDANCE_STATUSES,
+  CAFE_CATEGORIES,
+  CAFE_ORDER_STATUSES,
   CASTING_APPLICATION_STATUSES,
   CASTING_STATUSES,
   CASTING_TYPES,
@@ -49,10 +51,24 @@ const timestamps = () => ({
 
 export const users = sqliteTable('users', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  /** Always stored lower-case. */
+  /**
+   * What the person signs in with (shared/usernames.ts: 3–20 of a–z 0–9 . _ -,
+   * starting with a letter; lower-case; unique). The column is nullable only
+   * because SQLite can't add a NOT NULL column to a table that has rows: every
+   * insert sets it, and initDb fills it for accounts older than the column
+   * (backfillUsernames, lib/usernames.ts). Read it through `usernameOf`.
+   */
+  username: text('username').unique(),
+  /** Always stored lower-case. Sign-in accepts it in place of the username. */
   email: text('email').notNull().unique(),
   name: text('name').notNull(),
   passwordHash: text('password_hash').notNull(),
+  /**
+   * The password was set by someone else (a manager adding the person or
+   * resetting it, the operator's tool): at the next sign-in the person must
+   * choose their own before anything else (requireOwnPassword, middleware/auth.ts).
+   */
+  mustChangePassword: integer('must_change_password', { mode: 'boolean' }).notNull().default(false),
   phone: text('phone'),
   locale: text('locale', { enum: LOCALES }).notNull().default('en'),
   active: integer('active', { mode: 'boolean' }).notNull().default(true),
@@ -157,9 +173,15 @@ export const fileChunks = sqliteTable(
 export const loginFailures = sqliteTable(
   'login_failures',
   {
-    /** "account:<email>|<address>", "account:<email>", "address:<address>" or "school". */
+    /** "account:<name>|<address>", "account:<name>", "address:<address>" or "school" — <name> as in `email` below. */
     key: text('key').primaryKey(),
-    /** Lower-cased email as typed at sign-in (the account may not exist); null for the address and school brakes. */
+    /**
+     * The account the failed sign-ins were for: its email address, whichever of
+     * username or email was typed — or its username's automatic address, which
+     * counts too (signInBrakeNames, lib/usernames.ts); for a name that is
+     * nobody's, what was typed in its email form. null for the address and
+     * school brakes.
+     */
     email: text('email'),
     count: integer('count').notNull(),
     /** Epoch ms of the first failure in the window. */
@@ -835,4 +857,70 @@ export const pushSubscriptions = sqliteTable(
     failures: integer('failures').notNull().default(0),
   },
   (t) => [index('push_subscriptions_user_idx').on(t.userId), index('push_subscriptions_session_idx').on(t.sessionId)],
+);
+
+// ── Cafeteria (Part J) ──────────────────────────────────────────────────────
+
+/** The cafeteria menu. No prices (the school's choice). Shown by category, then sort_order. */
+export const cafeItems = sqliteTable(
+  'cafe_items',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    nameEn: text('name_en').notNull(),
+    nameAr: text('name_ar').notNull(),
+    category: text('category', { enum: CAFE_CATEGORIES }).notNull(),
+    /** Off: still on the menu, greyed out, can't be ordered. */
+    available: integer('available', { mode: 'boolean' }).notNull().default(true),
+    sortOrder: integer('sort_order').notNull().default(0),
+    ...timestamps(),
+  },
+  (t) => [index('cafe_items_category_idx').on(t.category, t.sortOrder)],
+);
+
+/**
+ * A cafeteria order: new → on_the_way → delivered, or cancelled (by the person
+ * who ordered while it is new; by whoever serves, with a reason, while it is
+ * new or on the way). At most 10 an hour per person.
+ */
+export const cafeOrders = sqliteTable(
+  'cafe_orders',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    /** Who ordered. */
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Where it should come: a configured place's English name, or what the person typed (≤ 80). */
+    place: text('place').notNull(),
+    note: text('note'),
+    status: text('status', { enum: CAFE_ORDER_STATUSES }).notNull().default('new'),
+    /** Who last moved it (took it, delivered it or turned it down). */
+    handledById: integer('handled_by_id').references(() => users.id, { onDelete: 'set null' }),
+    /** Why it can't be done, when whoever serves cancelled it (the person who ordered reads it). */
+    cancelReason: text('cancel_reason'),
+    createdAt: integer('created_at').notNull().$defaultFn(now),
+    onTheWayAt: integer('on_the_way_at'),
+    deliveredAt: integer('delivered_at'),
+    cancelledAt: integer('cancelled_at'),
+  },
+  (t) => [index('cafe_orders_status_idx').on(t.status, t.createdAt), index('cafe_orders_user_idx').on(t.userId, t.createdAt)],
+);
+
+/** An order's lines. The item's names are copied when the order is sent, so renaming or deleting a menu item never changes an old order. */
+export const cafeOrderItems = sqliteTable(
+  'cafe_order_items',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    orderId: integer('order_id')
+      .notNull()
+      .references(() => cafeOrders.id, { onDelete: 'cascade' }),
+    itemId: integer('item_id').references(() => cafeItems.id, { onDelete: 'set null' }),
+    nameEn: text('name_en').notNull(),
+    nameAr: text('name_ar').notNull(),
+    /** 1–10. */
+    qty: integer('qty').notNull(),
+    /** How it is wanted ("no sugar"), ≤ 60. */
+    options: text('options'),
+  },
+  (t) => [index('cafe_order_items_order_idx').on(t.orderId)],
 );

@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 import { authSessions, userPositions, users } from '../../src/server/db/schema';
 import { verifyPassword } from '../../src/server/lib/password';
+import { DEFAULT_CAFE_PLACES } from '../../src/shared/schemas/cafe';
 import { DEFAULT_INTERVIEW_CRITERIA, DEFAULT_SETTINGS } from '../../src/shared/schemas/settings';
 import { makeTestContext, type LegacyRole } from '../helpers';
 
@@ -38,7 +39,7 @@ describe('GET /api/staff', () => {
     for (const s of res.body.items) {
       expect(s.passwordHash).toBeUndefined();
       expect(Object.keys(s).sort()).toEqual(
-        ['active', 'createdAt', 'email', 'id', 'isOwner', 'lastLoginAt', 'locale', 'manageable', 'name', 'phone', 'photoFileId', 'positions'].sort(),
+        ['active', 'createdAt', 'email', 'id', 'isOwner', 'lastLoginAt', 'locale', 'manageable', 'mustChangePassword', 'name', 'phone', 'photoFileId', 'positions', 'username'].sort(),
       );
     }
     const me = res.body.items.find((s: any) => s.id === owner.user.id);
@@ -429,6 +430,9 @@ describe('settings', () => {
       weekStartsOn: 1,
       interviewCriteria: DEFAULT_INTERVIEW_CRITERIA,
       defaultCountryCode: '20',
+      emailDomain: 'turquoisestudio.app',
+      cafeteriaEnabled: true,
+      cafePlaces: DEFAULT_CAFE_PLACES,
     });
   });
 

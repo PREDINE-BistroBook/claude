@@ -32,9 +32,11 @@ function detectSupport() {
  * Profile › "Turn on notifications on this phone". Explains plainly that an
  * iPhone needs the app on the Home Screen first, and asks the browser for
  * permission only when the button is tapped. Push is per phone/browser: the
- * subscription is sent to POST /api/push/subscribe.
+ * subscription is sent to POST /api/push/subscribe. With `prompt` (the orders
+ * board, for the Office helper) it has its own title and words and shows only
+ * while alerts could be turned on for this phone and aren't yet.
  */
-export function PushCard() {
+export function PushCard({ prompt }: { prompt?: { title: string; description: string } } = {}) {
   const { t } = useTranslation(['team', 'common']);
   const toast = useToast();
   const qc = useQueryClient();
@@ -166,6 +168,9 @@ export function PushCard() {
       </div>
     );
 
+  // As a prompt elsewhere (the orders board): only while there is something to turn on for this phone.
+  if (prompt && (config.isPending || browserSub === undefined || !publicKey || subscribed || support.status === 'unsupported')) return null;
+
   const iphoneReady = support.iphone && support.status !== 'iphoneNeedsHomeScreen';
   const steps = (
     <ol className="mt-1 list-decimal space-y-1.5 ps-5 text-[15px] leading-relaxed">
@@ -177,7 +182,7 @@ export function PushCard() {
   );
 
   return (
-    <Card title={t('push.title')} description={t('push.description')}>
+    <Card title={prompt?.title ?? t('push.title')} description={prompt?.description ?? t('push.description')}>
       <div className="grid gap-4">
         {body}
         {/* On an iPhone the steps are open; elsewhere they're one tap away (someone may be setting up a colleague's iPhone). */}

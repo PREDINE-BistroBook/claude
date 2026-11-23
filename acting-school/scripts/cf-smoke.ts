@@ -7,13 +7,15 @@
  *
  * Builds the web app, starts `wrangler dev --local` on a fresh, throwaway
  * state folder, seeds the demo through POST /api/admin/seed-demo, then drives
- * every module through the Worker → Durable Object: each demo role signs in,
- * students / classes (a long schedule regenerated: hundreds of sessions, well
+ * every module through the Worker → Durable Object: each demo role signs in
+ * (by email address, and by username), students / classes (a long schedule regenerated: hundreds of sessions, well
  * past the 100-parameter limit) / sessions and attendance / talent with photo
  * uploads (one bigger than a FileStore chunk) / castings, roles, submissions
  * (a duplicate is a 409) / admissions (Arabic digits, duplicates, interview,
- * enrolment) / positions / staff / settings / schedule / dashboard, long Arabic
- * searches, and every delete twice (204, then 404). It then restarts the
+ * enrolment) / positions / staff (a team member added by username with a
+ * temporary first password: the forced "choose your own password" round trip,
+ * every other route 403 until then; renaming) / settings / schedule /
+ * dashboard, long Arabic searches, and every delete twice (204, then 404). It then restarts the
  * Worker on the same state (sessions, the sign-in brake and files survive),
  * checks the static assets and headers, finishes with the demo reset and
  * checks first-run setup then needs the setup code. Bodies over 1 MB are
@@ -32,6 +34,17 @@
  * team.turquoisestudio.app with its old address staff. forwarding. The team
  * pack: the Team page, a chat round trip with a photo, a workshop document, a
  * call to the office answered, notifications, push off without VAPID keys.
+ * The cafeteria: an order from start to delivered on the Office helper's
+ * board (new → on the way → delivered, one step at a time, alerts both ways),
+ * a coach and Reception can order but can't see anyone else's order or move
+ * one, only the helper is alerted (not the director or the owners, who can
+ * open the board), the owners' monthly page, an unavailable item, and the
+ * Settings switch that turns it all off.
+ * The operator's clean-out (POST /api/admin/clear-demo): a dry run that
+ * changes nothing, the confirm code's rules, the real run (the demo gone, one
+ * account kept with its photo, the real team created), each new person
+ * signing in by username with a temporary password and choosing their own;
+ * the restore endpoints answer 501 here (local workerd keeps no history).
  * Exit code 1 on the first failure. Local only (scripts/cf-local.ts).
  */
 import { spawnSync } from 'node:child_process';
@@ -148,6 +161,8 @@ const DEMO_ROLES = [
   'editor@demo.school',
   'coach@demo.school',
   'coach2@demo.school',
+  'reception@demo.school',
+  'helper@demo.school',
 ];
 
 /** Everything that runs against a freshly seeded Worker. Returns what the restart phase re-checks. */
@@ -204,6 +219,17 @@ export async function runApiSmoke(base: string, opts: { adminToken: string; pass
     clients[email] = c;
   }
   expectStatus(await new Client(base).post('/api/auth/login', { email: 'tom.wilkins@demo.school', password: opts.password }), 401, 'deactivated account');
+
+  step('sign in by username: the one field takes a username or an email address');
+  for (const name of ['director', ' Director ', 'director@demo.school', 'DIRECTOR@demo.school']) {
+    const signedIn = expectStatus(await new Client(base).post('/api/auth/login', { username: name, password: opts.password }), 200, `sign in as "${name}"`).body.user;
+    check(signedIn.username === 'director' && signedIn.email === 'director@demo.school' && signedIn.mustChangePassword === false, `"${name}" is the director, no password to choose`);
+  }
+  const wrongName = expectStatus(await new Client(base).post('/api/auth/login', { username: 'nobody.here', password: opts.password }), 401, 'unknown username');
+  const wrongPass = expectStatus(await new Client(base).post('/api/auth/login', { username: 'director', password: 'not-the-password' }), 401, 'wrong password');
+  check(JSON.stringify(wrongName.body) === JSON.stringify(wrongPass.body), 'an unknown username and a wrong password answer alike');
+  expectStatus(await new Client(base).post('/api/auth/login', { username: 'tom', password: opts.password }), 401, 'deactivated account, by username');
+  expectStatus(await new Client(base).post('/api/auth/login', { password: opts.password }), 400, 'sign-in without a name');
   expectStatus(await clients['editor@demo.school']!.get('/api/students'), 200, 'video editor reads students');
   expectStatus(await clients['editor@demo.school']!.get('/api/leads'), 403, 'video editor has no admissions');
   const owner = clients['owner@demo.school']!;
@@ -363,17 +389,69 @@ export async function runApiSmoke(base: string, opts: { adminToken: string; pass
   step('positions, staff, settings, schedule, profile');
   const position = expectStatus(await owner.post('/api/positions', { name: 'Smoke reader', permissions: ['students.read'] }), 201, 'create position').body;
   expectStatus(await owner.patch(`/api/positions/${position.id}`, { nameAr: 'قارئ' }), 200, 'patch position');
-  const staffEmail = `smoke.${Date.now()}@example.com`;
+
+  step('a team member added by username: automatic address, temporary first password, the forced change');
+  const offered = expectStatus(await owner.get('/api/staff/username-check?name=Smoke%20Tester&username=coach'), 200, 'username check').body;
+  check(offered.status === 'taken' && offered.suggestion === 'smoke', `"coach" is taken, "smoke" is offered (${JSON.stringify(offered)})`);
   const member = expectStatus(
-    await owner.post('/api/staff', { name: 'Smoke Staff', email: staffEmail, positionIds: [position.id], password: opts.password }),
+    await owner.post('/api/staff', { name: 'Smoke Tester', username: 'Smoke', positionIds: [position.id], password: opts.password }),
     201,
-    'create staff',
+    'add a team member by username',
   ).body;
-  expectStatus(await owner.post('/api/staff', { name: 'Again', email: staffEmail, positionIds: [position.id], password: opts.password }), 409, 'duplicate staff email');
+  check(member.username === 'smoke' && member.email === 'smoke@turquoisestudio.app' && member.mustChangePassword === true, `username, automatic address, temporary password (${member.username}, ${member.email})`);
+  const taken = expectStatus(await owner.post('/api/staff', { name: 'Again', username: 'smoke', positionIds: [position.id], password: opts.password }), 409, 'the same username again');
+  check(taken.body.error.code === 'username_taken' && taken.body.error.issues[0].path[0] === 'username', 'username_taken, on the username field');
+  expectStatus(await owner.post('/api/staff', { name: 'Again', username: 'smoke2', email: 'SMOKE@turquoisestudio.app', positionIds: [position.id], password: opts.password }), 409, 'duplicate email');
+  expectStatus(await owner.post('/api/staff', { name: 'Again', username: 'no', positionIds: [position.id], password: opts.password }), 400, 'a username that breaks the rules');
+
   const staffClient = new Client(base);
-  expectStatus(await staffClient.post('/api/auth/login', { email: staffEmail, password: opts.password }), 200, 'new staff signs in');
+  const first = expectStatus(await staffClient.post('/api/auth/login', { username: 'smoke', password: opts.password }), 200, 'the new member signs in with the temporary password').body.user;
+  check(first.mustChangePassword === true, 'the sign-in answer says a password must be chosen');
+  check(expectStatus(await staffClient.get('/api/auth/me'), 200, 'me behind the gate').body.user?.mustChangePassword === true, '/auth/me says so too');
+  for (const [method, url] of [['GET', '/api/students'], ['GET', '/api/team'], ['GET', '/api/settings'], ['POST', '/api/chat/conversations'], ['GET', '/api/files/00000000-0000-4000-8000-000000000000'], ['GET', '/api/nope']] as const) {
+    const refused = expectStatus(await staffClient.req(method, url, method === 'POST' ? { userId: 1 } : undefined), 403, `${method} ${url} with a temporary password`);
+    check(refused.body.error.code === 'password_change_required', `${url}: password_change_required`);
+  }
+  const sameAgain = expectStatus(await staffClient.post('/api/auth/choose-password', { newPassword: opts.password }), 400, 'the temporary password again');
+  check(sameAgain.body.error.issues[0].message === 'errors.passwordSameAsTemporary', 'must differ from the temporary one');
+  expectStatus(await staffClient.post('/api/auth/choose-password', { newPassword: 'short' }), 400, 'a password under the policy');
+  const elsewhere = new Client(base);
+  expectStatus(await elsewhere.post('/api/auth/login', { username: 'smoke@turquoisestudio.app', password: opts.password }), 200, 'a second device, by the address');
+  const ownPassword = `own-${opts.password}`;
+  const chosen = expectStatus(await staffClient.post('/api/auth/choose-password', { newPassword: ownPassword }), 200, 'choose your own password').body.user;
+  check(chosen.mustChangePassword === false && chosen.username === 'smoke', 'the gate is lifted');
+  check(expectStatus(await elsewhere.get('/api/auth/me'), 200, 'the other device').body.user === null, 'the other session ended');
+  expectStatus(await staffClient.post('/api/auth/choose-password', { newPassword: `again-${ownPassword}` }), 409, 'nothing left to choose');
+  expectStatus(await new Client(base).post('/api/auth/login', { username: 'smoke', password: opts.password }), 401, 'the temporary password is dead');
+  check(expectStatus(await new Client(base).post('/api/auth/login', { username: 'smoke', password: ownPassword }), 200, 'the chosen password signs in').body.user.mustChangePassword === false, 'no gate at the next sign-in');
   expectStatus(await staffClient.get('/api/students'), 200, 'new staff reads students');
   expectStatus(await staffClient.get('/api/castings'), 403, 'new staff has no castings');
+
+  step('usernames can be changed: your own in My profile, a member’s by a manager; the automatic address follows');
+  const renamed = expectStatus(await staffClient.patch('/api/auth/profile', { username: 'Smoke.Tester' }), 200, 'change my own username').body.user;
+  check(renamed.username === 'smoke.tester' && renamed.email === 'smoke.tester@turquoisestudio.app', `my username and address (${renamed.username}, ${renamed.email})`);
+  expectStatus(await staffClient.patch('/api/auth/profile', { username: 'coach' }), 409, 'a taken username');
+  check(
+    expectStatus(await staffClient.patch('/api/auth/profile', { username: 'director' }), 400, 'a position’s name for yourself').body.error.issues[0].message === 'errors.usernameForManagers',
+    'a position’s name (director) is a manager’s to give',
+  );
+  const byManager = expectStatus(await owner.patch(`/api/staff/${member.id}`, { username: 'smoketest' }), 200, 'a manager changes it').body;
+  check(byManager.username === 'smoketest' && byManager.email === 'smoketest@turquoisestudio.app' && byManager.mustChangePassword === false, 'renamed by the manager');
+  check(expectStatus(await owner.get('/api/staff'), 200, 'staff list').body.items.some((s: { username: string }) => s.username === 'smoketest'), 'the staff list carries usernames');
+  // A manager's reset is temporary again.
+  const resetPassword = `reset-${opts.password}`;
+  check(expectStatus(await owner.patch(`/api/staff/${member.id}`, { password: resetPassword }), 200, 'a manager resets the password').body.mustChangePassword === true, 'a reset password is temporary');
+  expectStatus(await staffClient.get('/api/students'), 401, 'the reset signed them out');
+  expectStatus(await staffClient.post('/api/auth/login', { username: 'smoketest', password: resetPassword }), 200, 'sign in with the reset password');
+  expectStatus(await staffClient.get('/api/students'), 403, 'gated again after the reset');
+  expectStatus(await staffClient.post('/api/auth/choose-password', { newPassword: ownPassword }), 200, 'choose again');
+  expectStatus(await staffClient.get('/api/students'), 200, 'and the app opens');
+  const staffEmail: string = byManager.email;
+  const domain = expectStatus(await owner.patch('/api/settings', { emailDomain: 'Smoke.Example' }), 200, 'change the email domain').body.emailDomain;
+  check(domain === 'smoke.example', 'email domain saved lower-case');
+  expectStatus(await owner.patch('/api/settings', { emailDomain: 'turquoisestudio.app' }), 200, 'restore the email domain');
+
+  step('team accounts: list, directory, deactivating; settings, schedule, profile');
   expectStatus(await owner.get('/api/staff'), 200, 'staff list');
   expectStatus(await owner.get('/api/staff/directory'), 200, 'staff directory');
   expectStatus(await owner.patch(`/api/staff/${member.id}`, { active: false }), 200, 'deactivate staff');
@@ -455,6 +533,119 @@ export async function runApiSmoke(base: string, opts: { adminToken: string; pass
   expectStatus(await coach.post('/api/notifications/read', { all: true }), 200, 'mark notifications read');
   check(expectStatus(await coach.get('/api/push/config'), 200, 'push config').body.publicKey === null, 'push is off without VAPID keys');
 
+  step('cafeteria: an order from start to delivered on the helper’s board; nobody else sees it or moves it; an unavailable item; the switch');
+  const helper = clients['helper@demo.school']!;
+  const reception = clients['reception@demo.school']!;
+  const helperMe = expectStatus(await helper.get('/api/auth/me'), 200, 'helper me').body.user;
+  check(helperMe.permissions.join() === 'cafeteria.serve' && helperMe.positions[0]?.key === 'office_helper' && helperMe.locale === 'ar', `the Office helper serves the cafeteria, in Arabic (${helperMe.permissions})`);
+  const receptionMe = expectStatus(await reception.get('/api/auth/me'), 200, 'reception me').body.user;
+  check(receptionMe.permissions.length === 0 && receptionMe.positions[0]?.key === 'reception', 'Reception has no section permissions yet');
+  expectStatus(await reception.get('/api/students'), 403, 'Reception has no School');
+  expectStatus(await reception.get('/api/team'), 200, 'Reception has the Team page');
+  const cafeMenu = expectStatus(await coach.get('/api/cafe/menu'), 200, 'the menu, for everyone').body;
+  check(cafeMenu.items.length === 10 && cafeMenu.places.length === 4, `the usual menu and the default places (${cafeMenu.items.length}, ${cafeMenu.places.length})`);
+  const tea = cafeMenu.items.find((i: { nameEn: string }) => i.nameEn === 'Tea');
+  const juice = cafeMenu.items.find((i: { nameEn: string }) => i.nameEn === 'Juice');
+  check(tea?.nameAr === 'شاي' && !('price' in tea), 'items in both languages, no price');
+  const boardBefore = expectStatus(await helper.get('/api/cafe/orders'), 200, 'the helper’s board').body.items as { id: number; status: string; by: { name: string } }[];
+  check(boardBefore.some((o) => o.status === 'new' && o.by.name === 'Layla Haddad') && boardBefore.some((o) => o.status === 'delivered'), 'the seeded board: one waiting, one delivered today');
+  // Two teas, one with no sugar, picked in Arabic.
+  const cafeOrder = expectStatus(
+    await director.post('/api/cafe/orders', { place: 'استوديو 1', note: 'Smoke test', items: [{ itemId: tea.id, qty: 1 }, { itemId: tea.id, qty: 1, options: 'no sugar' }] }),
+    201,
+    'the director orders two teas',
+  ).body;
+  check(cafeOrder.status === 'new' && cafeOrder.place === 'Studio 1' && cafeOrder.items.length === 2 && cafeOrder.items[1].options === 'no sugar', 'the order as stored (the place by its English name)');
+  check(expectStatus(await helper.get('/api/chat/unread'), 200, 'helper poll').body.cafe.newOrders === 2, 'the poll counts two waiting orders for the helper');
+  check(expectStatus(await coach.get('/api/chat/unread'), 200, 'coach poll').body.cafe.newOrders === null, 'no count for someone who doesn’t serve');
+  const helperBell = expectStatus(await helper.get('/api/notifications'), 200, 'helper notifications').body.items as { kind: string; link: string; title: string; body: string }[];
+  const newOrderAlert = helperBell.find((n) => n.kind === 'cafe_order' && n.link === `/cafeteria/board?order=${cafeOrder.id}`);
+  check(newOrderAlert?.title === 'طلب جديد من Dalia Fathy' && newOrderAlert.body.includes('استوديو 1') && newOrderAlert.body.includes('شاي'), `the helper’s alert is in Arabic (${newOrderAlert?.title})`);
+  check((expectStatus(await helper.get('/api/cafe/orders?status=new'), 200, 'new orders').body.items as { id: number }[]).some((o) => o.id === cafeOrder.id), 'it is on the board');
+  // Nobody else sees it or moves it.
+  for (const [who, c] of [['a coach', coach], ['Reception', reception]] as const) {
+    expectStatus(await c.get('/api/cafe/orders'), 403, `${who} has no board`);
+    expectStatus(await c.post(`/api/cafe/orders/${cafeOrder.id}/status`, { status: 'on_the_way' }), 403, `${who} can’t move an order`);
+  }
+  // The director (cafeteria.serve since grant v4) and the owners can open the board, but only the Office helper is alerted.
+  const directorMe = expectStatus(await director.get('/api/auth/me'), 200, 'director me').body.user;
+  check(directorMe.permissions.includes('cafeteria.serve') && !directorMe.permissions.includes('cafeteria.report'), 'the director serves (grant v4) and has no monthly page');
+  expectStatus(await director.get('/api/cafe/orders'), 200, 'the director can open the board');
+  for (const [who, c] of [['the owner', owner], ['the director', director]] as const) {
+    const items = expectStatus(await c.get('/api/notifications'), 200, `${who} notifications`).body.items as { kind: string }[];
+    check(!items.some((n) => n.kind === 'cafe_order'), `${who} gets no new-order alert`);
+  }
+  expectStatus(await coach.post(`/api/cafe/orders/${cafeOrder.id}/cancel`), 404, 'a coach can’t cancel someone else’s order');
+  check(!(expectStatus(await coach.get('/api/cafe/orders/mine'), 200, 'the coach’s own orders').body.items as { id: number }[]).some((o) => o.id === cafeOrder.id), 'a coach doesn’t see the director’s order');
+  // Reception orders, and takes it back while it is new.
+  const water = cafeMenu.items.find((i: { nameEn: string }) => i.nameEn === 'Water');
+  const receptionOrder = expectStatus(await reception.post('/api/cafe/orders', { place: 'Reception', items: [{ itemId: water.id, qty: 1 }] }), 201, 'Reception orders').body;
+  check(expectStatus(await reception.post(`/api/cafe/orders/${receptionOrder.id}/cancel`), 200, 'Reception cancels her own new order').body.status === 'cancelled', 'cancelled by the person who ordered');
+  // One step at a time.
+  check(expectStatus(await helper.post(`/api/cafe/orders/${cafeOrder.id}/status`, { status: 'delivered' }), 409, 'delivered before on the way').body.error.code === 'not_next_step', 'no step skipped');
+  check(expectStatus(await helper.post(`/api/cafe/orders/${cafeOrder.id}/status`, { status: 'on_the_way' }), 200, 'on the way').body.handledBy.name === 'Sayed Ramadan', 'taken by the helper');
+  check((expectStatus(await director.get('/api/cafe/orders/mine'), 200, 'the director’s orders').body.items as { id: number; status: string }[]).find((o) => o.id === cafeOrder.id)?.status === 'on_the_way', 'the director sees "on the way"');
+  check(expectStatus(await director.post(`/api/cafe/orders/${cafeOrder.id}/cancel`), 409, 'too late to cancel').body.error.code === 'already_on_the_way', 'no cancelling once it is on the way');
+  check(expectStatus(await helper.post(`/api/cafe/orders/${cafeOrder.id}/status`, { status: 'delivered' }), 200, 'delivered').body.status === 'delivered', 'delivered');
+  check(expectStatus(await helper.post(`/api/cafe/orders/${cafeOrder.id}/status`, { status: 'cancelled', reason: 'Too late' }), 409, 'nothing after delivered').body.error.code === 'order_closed', 'nothing changes after delivered');
+  const directorBell = expectStatus(await director.get('/api/notifications'), 200, 'director notifications').body.items as { kind: string; link: string; title: string }[];
+  check(directorBell.find((n) => n.kind === 'cafe_status' && n.link === `/cafeteria?order=${cafeOrder.id}`)?.title === 'Your order was delivered', 'the director’s alert says delivered');
+  check(expectStatus(await helper.get('/api/chat/unread'), 200, 'helper poll').body.cafe.newOrders === 1, 'one order still waiting');
+  // "Can't do this one" needs a reason.
+  const juiceOrder = expectStatus(await coach.post('/api/cafe/orders', { place: 'The roof', items: [{ itemId: juice.id, qty: 2 }] }), 201, 'a coach orders juice').body;
+  expectStatus(await helper.post(`/api/cafe/orders/${juiceOrder.id}/status`, { status: 'cancelled' }), 400, 'cancelling needs a reason');
+  check(expectStatus(await helper.post(`/api/cafe/orders/${juiceOrder.id}/status`, { status: 'cancelled', reason: 'No juice today' }), 200, 'turned down').body.cancelReason === 'No juice today', 'the reason is kept for the person');
+  // The director edits the menu (settings.manage): Juice off, so it can't be ordered.
+  expectStatus(await coach.patch(`/api/cafe/menu/${juice.id}`, { available: false }), 403, 'a coach can’t edit the menu');
+  expectStatus(await director.patch(`/api/cafe/menu/${juice.id}`, { available: false }), 200, 'the director switches Juice off');
+  const refused = expectStatus(await coach.post('/api/cafe/orders', { place: 'Office', items: [{ itemId: juice.id, qty: 1 }] }), 409, 'ordering an unavailable item');
+  check(refused.body.error.code === 'item_unavailable' && refused.body.error.details.itemIds[0] === juice.id, 'item_unavailable says which');
+  expectStatus(await helper.patch(`/api/cafe/menu/${juice.id}`, { available: true }), 200, 'the helper switches it back on');
+  expectStatus(await helper.post('/api/cafe/menu/defaults'), 409, '"Add the usual items" only on an empty menu');
+  // A ready-made reason tapped in Arabic is kept by its English words, and read in English by the coach.
+  const teaOrder = expectStatus(await coach.post('/api/cafe/orders', { place: 'Office', items: [{ itemId: tea.id, qty: 1, options: 'سادة' }] }), 201, 'a coach orders a tea').body;
+  check(
+    expectStatus(await helper.post(`/api/cafe/orders/${teaOrder.id}/status`, { status: 'cancelled', reason: 'نعتذر، البوفيه مشغول الآن' }), 200, 'turned down with a ready-made reason').body.cancelReason ===
+      'Sorry, the cafeteria is busy right now',
+    'a ready-made reason is stored by its English words',
+  );
+
+  // The owners' monthly page: the delivered teas are counted for the director; cancelled orders are not; owners only.
+  const report = expectStatus(await owner.get('/api/cafe/report'), 200, 'the monthly page').body as {
+    month: string;
+    people: { person: { name: string }; items: { nameEn: string; qty: number }[] }[];
+    totals: { nameEn: string; qty: number }[];
+  };
+  const dalia = report.people.find((p) => p.person.name === 'Dalia Fathy');
+  check(/^\d{4}-\d{2}$/.test(report.month) && (dalia?.items.find((i) => i.nameEn === 'Tea')?.qty ?? 0) >= 2, `the director’s two teas are on this month’s page (${JSON.stringify(dalia?.items)})`);
+  check(!report.people.some((p) => p.items.some((i) => i.nameEn === 'Juice')), 'the turned-down juice is not counted');
+  check(!JSON.stringify(report).includes('price'), 'no prices on the monthly page');
+  for (const [who, c] of [['the director', director], ['the helper', helper], ['a coach', coach]] as const) expectStatus(await c.get('/api/cafe/report'), 403, `${who} has no monthly page`);
+  expectStatus(await owner.get('/api/cafe/report?month=2026-13'), 400, 'a month that is not one');
+
+  // Someone who leaves the team: their open order is cancelled ("No longer on the team") and leaves the board.
+  const leaverOrder = expectStatus(await reception.post('/api/cafe/orders', { place: 'Reception', items: [{ itemId: water.id, qty: 1 }] }), 201, 'Reception orders again').body;
+  expectStatus(await owner.patch(`/api/staff/${receptionMe.id}`, { active: false }), 200, 'the owner switches Reception’s account off');
+  const leaverRow = (expectStatus(await helper.get('/api/cafe/orders?status=cancelled'), 200, 'cancelled today').body.items as { id: number; cancelReason: string | null }[]).find((o) => o.id === leaverOrder.id);
+  check(leaverRow?.cancelReason === 'No longer on the team', 'the order of someone who left is cancelled');
+
+  // The switch: switching off closes what is still open (the demo's waiting order), tells the person, clears the bells.
+  expectStatus(await helper.patch('/api/settings', { cafeteriaEnabled: false }), 403, 'the helper can’t switch the cafeteria off');
+  check(expectStatus(await helper.get('/api/chat/unread'), 200, 'helper poll').body.cafe.newOrders === 1, 'the demo’s waiting order is still waiting');
+  check(expectStatus(await director.patch('/api/settings', { cafeteriaEnabled: false }), 200, 'the director switches the cafeteria off').body.cafeteriaEnabled === false, 'switched off');
+  check(expectStatus(await coach.get('/api/cafe/menu'), 409, 'the menu while off').body.error.code === 'cafeteria_off', 'cafeteria_off');
+  expectStatus(await helper.get('/api/cafe/orders'), 409, 'the board while off');
+  const offPoll = expectStatus(await helper.get('/api/chat/unread'), 200, 'poll while off').body;
+  check(offPoll.cafe.enabled === false && offPoll.notifications === 0, `the poll says it is off, and no new-order alert is left in the helper’s bell (${offPoll.notifications})`);
+  expectStatus(await director.patch('/api/settings', { cafeteriaEnabled: true }), 200, 'switched on again');
+  check((expectStatus(await helper.get('/api/cafe/orders?status=delivered'), 200, 'delivered today').body.items as { id: number }[]).some((o) => o.id === cafeOrder.id), 'the delivered order is where it was');
+  const onPoll = expectStatus(await helper.get('/api/chat/unread'), 200, 'poll after').body.cafe;
+  check(onPoll.newOrders === 0, `nothing comes back as waiting (${onPoll.newOrders})`);
+  check(
+    (expectStatus(await helper.get('/api/cafe/orders?status=cancelled'), 200, 'cancelled today').body.items as { cancelReason: string | null }[]).some((o) => o.cancelReason === 'The cafeteria is closed now'),
+    'the waiting order was closed with the switch',
+  );
+
   step('the last deletes: student, class');
   expectStatus(await owner.delete(`/api/students/${sara.id}`), 204, 'delete student');
   expectStatus(await owner.delete(`/api/students/${sara.id}`), 404, 'delete student again');
@@ -468,10 +659,11 @@ export async function runApiSmoke(base: string, opts: { adminToken: string; pass
 
   step('lockout recovery through the admin endpoint');
   const granted = expectStatus(await anon.post('/api/admin/grant-owner', { email: staffEmail }, bearer), 200, 'grant owner').body;
-  check(granted.reactivated === true && granted.position === 'CEO', 'grant-owner reactivated the account as CEO');
+  check(granted.reactivated === true && granted.position === 'CEO' && granted.username === 'smoketest', 'grant-owner reactivated the account as CEO');
+  expectStatus(await anon.post('/api/admin/grant-owner', { username: 'smoketest' }, bearer), 200, 'grant-owner by username');
   expectStatus(await anon.post('/api/admin/grant-owner', { email: 'nobody@example.com' }, bearer), 404, 'grant-owner unknown email');
 
-  return { ownerCookie: owner.cookie!, bigId, bigSha: sha(big), studentCount: studentsBefore };
+  return { ownerCookie: owner.cookie!, bigId, bigSha: sha(big), studentCount: studentsBefore, cafeOrderId: cafeOrder.id as number };
 }
 
 /** After a restart on the same state: data, sessions, the brake and files are all still there. */
@@ -485,6 +677,9 @@ async function afterRestart(base: string, before: Awaited<ReturnType<typeof runA
   const file = expectStatus(await owner.get(`/api/files/${before.bigId}`), 200, 'big file after restart');
   check(sha(file.bytes) === before.bigSha, 'big file intact');
   expectStatus(await new Client(base).post('/api/auth/login', { email: 'nobody@demo.school', password: 'wrong-password' }), 429, 'brake survived the restart');
+  // The cafeteria: the delivered order with its two lines (owners serve, so the CEO reads the board).
+  const delivered = (expectStatus(await owner.get('/api/cafe/orders?status=delivered'), 200, 'cafeteria after restart').body.items as { id: number; items: unknown[] }[]).find((o) => o.id === before.cafeOrderId);
+  check(delivered?.items.length === 2, 'the delivered cafeteria order survived');
 }
 
 /** Static assets: the SPA shell on deep links, the PWA files, and the _headers rules. */
@@ -805,6 +1000,155 @@ async function publicHostChecks(base: string, opts: { password: string }) {
   check(preview.body.includes('<link rel="canonical" href="https://turquoisestudio.app/en">'), 'a /site preview is canonical on the studio’s domain');
 }
 
+/** The school's real team, as the operator's request names it (docs/SECTIONS_AND_WEBSITE.md, Part I); Taha's account in Arabic. */
+const REAL_TEAM: { name: string; username: string; password: string; positions: string[]; locale?: 'en' | 'ar' }[] = [
+  { name: 'Ahmed Tamam', username: 'ceo', password: 'ahmed123', positions: ['ceo'] },
+  { name: 'Abdelrahman Tamam', username: 'cfo', password: 'abdelrahman123', positions: ['cfo'] },
+  { name: 'Salma', username: 'salma', password: 'salma123', positions: ['executive_director'] },
+  { name: 'Ahmed Abdellah', username: 'ahmed', password: 'ahmed123', positions: ['head_of_casting'] },
+  { name: 'Ayman Farouk', username: 'ayman', password: 'ayman123', positions: ['head_of_casting'] },
+  { name: 'Mohamed Hamzawy', username: 'hamzawy', password: 'mohamed123', positions: ['casting_team'] },
+  { name: 'Taha', username: 'taha', password: 'taha123', positions: ['casting_team'], locale: 'ar' },
+  { name: 'Ali El Gohary', username: 'ali', password: 'ali123', positions: ['video_editor'] },
+  { name: 'Moaty', username: 'moaty', password: 'moaty123', positions: ['acting_coach', 'finance'] },
+];
+
+/**
+ * POST /api/admin/clear-demo in real workerd: the dry run, the confirm code,
+ * the real run in the Durable Object's one transaction, the new team signing
+ * in. One demo account is kept, to see a kept account (and its photo) through
+ * it. Leaves a school with the real team, the kept director and one file.
+ */
+async function clearDemoChecks(base: string, opts: { adminToken: string; password: string }) {
+  const anon = new Client(base);
+  const bearer = { authorization: `Bearer ${opts.adminToken}` };
+  const clearDemo = (body: unknown, headers: Record<string, string> = bearer) => anon.post('/api/admin/clear-demo', body, headers);
+
+  step('clear the demo: a dry run changes nothing and answers the plan and its code');
+  const director = new Client(base);
+  expectStatus(await director.post('/api/auth/login', { username: 'director', password: opts.password }), 200, 'the demo director signs in');
+  const photoId = await upload(director, noisePng(48), 'director.png');
+  expectStatus(await director.put('/api/auth/photo', { fileId: photoId }), 200, 'the director sets a profile photo');
+  const photoSha = sha(expectStatus(await director.get(`/api/files/${photoId}`), 200, 'the photo').bytes);
+  const studentsBefore = expectStatus(await director.get('/api/students'), 200, 'students before').body.items.length;
+  check(studentsBefore > 20, `the demo's students are there (${studentsBefore})`);
+  const menuBefore = expectStatus(await director.get('/api/cafe/menu'), 200, 'the cafeteria menu before').body as { items: { id: number }[]; places: unknown[] };
+  check(menuBefore.items.length >= 10, `the cafeteria has its menu (${menuBefore.items.length} items)`);
+
+  const request = { create: REAL_TEAM, keep: ['director'], owner: 'ceo', keepSiteContent: 'contact' };
+  expectStatus(await clearDemo(request, {}), 401, 'clear-demo without the token');
+  expectStatus(await clearDemo(request, { authorization: 'Bearer wrong-token-wrong-token-wrong' }), 401, 'clear-demo with a wrong token');
+  const dry = expectStatus(await clearDemo(request), 200, 'dry run').body;
+  check(dry.dryRun === true && /^[0-9a-f]{8}-[0-9a-f]{8}$/.test(dry.confirm) && !('deleted' in dry), `a dry run by default, with a confirm code (${dry.confirm})`);
+  check(dry.willDelete.students === studentsBefore && dry.willDelete.users >= 8 && dry.willDelete.files > 10, `the plan counts what goes (${dry.willDelete.students} students, ${dry.willDelete.users} accounts, ${dry.willDelete.files} files)`);
+  check(dry.accounts.length === REAL_TEAM.length + 1 && dry.accounts[0].username === 'director' && dry.accounts[0].status === 'kept', 'the plan lists the kept account and the nine new ones');
+  check(dry.accounts.filter((a: { owner: boolean }) => a.owner).map((a: { username: string }) => a.username).join() === 'ceo,cfo', 'the owners afterwards: ceo and cfo');
+  check(dry.siteContent.mode === 'contact' && dry.siteContent.published === false && dry.siteContent.kept.includes('whatsappWorkshops'), 'the website keeps its contact lines and is not public');
+  check(!REAL_TEAM.some((a) => JSON.stringify(dry).includes(a.password)), 'no password in the answer');
+  check(dry.willDelete.cafe_orders > 0 && dry.willDelete.cafe_order_items > 0 && !('cafe_items' in dry.willDelete), `the cafeteria's orders go (${dry.willDelete.cafe_orders}), its menu stays`);
+  check(
+    dry.willDeleteAccounts.length === dry.willDelete.users && !dry.willDeleteAccounts.some((a: { username: string }) => a.username === 'director'),
+    `the plan names every account that goes (${dry.willDeleteAccounts.map((a: { username: string }) => a.username).join(', ')})`,
+  );
+  const shared = dry.warnings.find((w: { code: string }) => w.code === 'shared_password');
+  check(shared?.usernames.join() === 'ceo,ahmed' && shared.owner === true, 'a warning: ceo (an owner) and ahmed share one temporary password');
+  check(
+    dry.warnings.some((w: { code: string; username?: string }) => w.code === 'replaces_account' && w.username === 'cfo'),
+    'a warning: the new "cfo" replaces the demo account of that name',
+  );
+  check(expectStatus(await director.get('/api/students'), 200, 'students after the dry run').body.items.length === studentsBefore, 'the dry run changed nothing');
+
+  step('clear the demo: a real run needs the code of a dry run of the same request on the same data');
+  const refused = async (body: unknown, status: number, code: string, what: string) => check(expectStatus(await clearDemo(body), status, what).body.error.code === code, `${what}: ${code}`);
+  await refused({ ...request, dryRun: false }, 400, 'confirm_required', 'a real run without a code');
+  await refused({ ...request, dryRun: false, confirm: '00000000-00000000' }, 409, 'confirm_mismatch', 'a real run with a made-up code');
+  await refused({ ...request, owner: 'cfo', dryRun: false, confirm: dry.confirm }, 409, 'confirm_mismatch', 'the code of another request');
+  await refused({ ...request, dryrun: false, confirm: dry.confirm }, 400, 'validation', 'a misspelt dryRun');
+  await refused({ ...request, create: [{ ...REAL_TEAM[0], positions: ['janitor'] }] }, 400, 'unknown_position', 'an unknown position');
+  await refused({ ...request, owner: 'owner' }, 400, 'owner_not_listed', 'an owner who is not kept');
+  const late = expectStatus(await director.post('/api/students', { firstName: 'Late', lastName: 'Arrival' }), 201, 'a student added after the dry run').body;
+  await refused({ ...request, dryRun: false, confirm: dry.confirm }, 409, 'plan_changed', 'the data changed since the dry run');
+  check(expectStatus(await director.get(`/api/students/${late.id}`), 200, 'the late student').body.firstName === 'Late', 'refused runs changed nothing');
+  const fresh = expectStatus(await clearDemo(request), 200, 'a fresh dry run').body;
+  check(fresh.confirm !== dry.confirm && fresh.willDelete.students === studentsBefore + 1, 'the fresh dry run counts the new student and has a new code');
+
+  step('clear the demo: the real run — one transaction in the Durable Object');
+  const real = expectStatus(await clearDemo({ ...request, dryRun: false, confirm: fresh.confirm }), 200, 'the real run').body;
+  check(real.dryRun === false && JSON.stringify(real.deleted) === JSON.stringify(fresh.willDelete), 'it deleted exactly what the dry run said');
+  check(real.restorePoint === null, 'no restore point in local workerd (it keeps no history)');
+  check(real.accounts.every((a: { id: number | null }) => typeof a.id === 'number'), 'every account has its id');
+  check(JSON.stringify(real.deletedAccounts) === JSON.stringify(fresh.willDeleteAccounts), 'it deleted exactly the accounts the dry run named');
+  await refused({ ...request, dryRun: false, confirm: fresh.confirm }, 409, 'plan_changed', 'the same code a second time');
+  expectStatus(await director.get('/api/students'), 401, 'the kept account was signed out');
+  for (const name of ['owner', 'coach', 'owner@demo.school']) {
+    expectStatus(await new Client(base).post('/api/auth/login', { username: name, password: opts.password }), 401, `the demo account "${name}" is gone`);
+  }
+
+  step('clear the demo: the kept account keeps its password and photo; each new person signs in by username and chooses a password');
+  const kept = new Client(base);
+  const keptUser = expectStatus(await kept.post('/api/auth/login', { username: 'director', password: opts.password }), 200, 'the kept director signs in with the old password').body.user;
+  check(keptUser.mustChangePassword === false && keptUser.photoFileId === photoId, 'no password to choose, the photo still theirs');
+  check(sha(expectStatus(await kept.get(`/api/files/${photoId}`), 200, 'the kept photo').bytes) === photoSha, 'the photo is intact');
+  for (const url of ['/api/students', '/api/courses', '/api/talent', '/api/castings', '/api/leads', '/api/casting-applications', '/api/site/coaches', '/api/site/workshops']) {
+    check(expectStatus(await kept.get(url), 200, url).body.items.length === 0, `${url} is empty`);
+  }
+  const site = expectStatus(await kept.get('/api/site/content'), 200, 'site content').body;
+  check(site.published === false && site.links.length === 0 && site.heroFileId === null && site.castingCall.open === false, 'the website: not public, no links, no main photo, casting call closed');
+  check(site.whatsappWorkshops === '01094635959' && site.tagline.en.length > 0, 'the studio’s own lines are still there');
+  check(site.castingCall.intro.en === '' && site.castingCall.lookingFor.en === '', 'the demo’s casting-call texts are gone');
+  const menuAfter = expectStatus(await kept.get('/api/cafe/menu'), 200, 'the cafeteria menu after').body as { items: { id: number }[]; places: unknown[] };
+  check(JSON.stringify(menuAfter.items.map((i) => i.id)) === JSON.stringify(menuBefore.items.map((i) => i.id)) && JSON.stringify(menuAfter.places) === JSON.stringify(menuBefore.places), 'the cafeteria’s menu and places are kept');
+  check(expectStatus(await kept.get('/api/cafe/orders'), 200, 'the board after').body.items.length === 0, 'no cafeteria order is left on the board');
+  const preview = expectStatus(await new Client(base).get('/site/en'), 200, 'the website preview');
+  check(String(preview.body).includes('class="preview"'), 'the preview renders, with its "not public yet" banner');
+
+  for (const person of REAL_TEAM) {
+    const c = new Client(base);
+    const user = expectStatus(await c.post('/api/auth/login', { username: person.username, password: person.password }), 200, `${person.username} signs in`).body.user;
+    check(user.mustChangePassword === true && user.name === person.name && user.email === `${person.username}@turquoisestudio.app`, `${person.username}: temporary password, automatic address`);
+    check(user.locale === (person.locale ?? 'en'), `${person.username}: in ${user.locale} from the first sign-in`);
+    check(user.positions.map((p: { key: string }) => p.key).sort().join() === [...person.positions].sort().join(), `${person.username}: ${person.positions.join(' + ')}`);
+    check(expectStatus(await c.get('/api/team'), 403, `${person.username} before choosing a password`).body.error.code === 'password_change_required', 'the app is closed until they choose');
+  }
+  const ali = new Client(base);
+  expectStatus(await ali.post('/api/auth/login', { username: 'ali@turquoisestudio.app', password: 'ali123' }), 200, 'ali signs in with the address');
+  expectStatus(await ali.post('/api/auth/choose-password', { newPassword: 'ali123' }), 400, 'the temporary password again');
+  expectStatus(await ali.post('/api/auth/choose-password', { newPassword: `ali-${opts.password}` }), 200, 'ali chooses a password');
+  expectStatus(await ali.get('/api/students'), 200, 'ali is in');
+  for (const name of ['admin', 'postmaster', 'info']) {
+    check(expectStatus(await ali.patch('/api/auth/profile', { username: name }), 400, `ali can't take "${name}"`).body.error.issues[0].message === 'errors.usernameReserved', `"${name}" is kept for the studio`);
+  }
+  check(expectStatus(await ali.patch('/api/auth/profile', { username: 'owner' }), 400, 'ali can’t take "owner"').body.error.issues[0].message === 'errors.usernameForManagers', '"owner" is a manager’s to give');
+  expectStatus(await new Client(base).post('/api/auth/login', { username: 'ali', password: 'ali123' }), 401, 'the temporary password is over');
+
+  const ceo = new Client(base);
+  expectStatus(await ceo.post('/api/auth/login', { username: 'ceo', password: 'ahmed123' }), 200, 'the owner signs in');
+  check(expectStatus(await ceo.post('/api/auth/choose-password', { newPassword: opts.password }), 200, 'the owner chooses a password').body.user.isOwner === true, 'ceo is an owner');
+  const team = expectStatus(await ceo.get('/api/team'), 200, 'team').body.items;
+  check(team.length === REAL_TEAM.length + 1, `Team lists exactly the ten accounts (${team.length})`);
+  const staff = expectStatus(await ceo.get('/api/staff'), 200, 'staff').body.items;
+  check(staff.map((s: { username: string }) => s.username).sort().join() === [...REAL_TEAM.map((a) => a.username), 'director'].sort().join(), 'their usernames');
+  const student = expectStatus(await ceo.post('/api/students', { firstName: 'First', lastName: 'Real' }), 201, 'the first real student').body;
+  const course = expectStatus(
+    await ceo.post('/api/courses', { name: 'First real workshop', startDate: todayIn('Africa/Cairo'), endDate: addDays(todayIn('Africa/Cairo'), 30), schedule: [{ weekday: 2, startTime: '18:00', endTime: '20:00' }] }),
+    201,
+    'the first real workshop',
+  ).body;
+  expectStatus(await ceo.post(`/api/courses/${course.id}/enrollments`, { studentId: student.id }), 201, 'enrolled');
+  expectStatus(await ceo.post('/api/leads', { firstName: 'Mona', lastName: 'Asks', phone: '01001234567', source: 'whatsapp' }), 201, 'the first real enquiry');
+
+  step('restore points: not in local workerd — both endpoints say so (501), behind the same token');
+  expectStatus(await anon.get('/api/admin/restore-point'), 401, 'restore-point without the token');
+  expectStatus(await anon.post('/api/admin/restore', { minutesAgo: 5 }), 401, 'restore without the token');
+  check(expectStatus(await anon.get('/api/admin/restore-point', bearer), 501, 'restore-point').body.error.code === 'not_supported', 'restore-point: not_supported');
+  check(expectStatus(await anon.post('/api/admin/restore', { minutesAgo: 5 }, bearer), 501, 'restore by time').body.error.code === 'not_supported', 'restore by time: not_supported');
+  check(expectStatus(await anon.post('/api/admin/restore', { bookmark: '0000007b-0000b26e-00001538-0c3e87bb37b3db5cc52eedb93cd3b96b' }, bearer), 501, 'restore to a bookmark').body.error.code === 'not_supported', 'restore to a bookmark: not_supported');
+  for (const body of [{}, { minutesAgo: 0 }, { minutesAgo: 5, bookmark: 'abcdefgh' }]) {
+    check(expectStatus(await anon.post('/api/admin/restore', body, bearer), 501, `restore ${JSON.stringify(body)}`).body.error.code === 'not_supported', `restore ${JSON.stringify(body)}: not_supported before the body is read`);
+  }
+  expectStatus(await ceo.get(`/api/students/${student.id}`), 200, 'the object is still up, the data still there');
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   const portArg = argv.indexOf('--port');
@@ -840,6 +1184,7 @@ async function main() {
     await dev.stop();
     dev = await startWranglerDev({ port, persistTo, quiet: !argv.includes('--verbose'), config });
     await afterRestart(dev.url, state);
+    await clearDemoChecks(dev.url, { adminToken: vars.ADMIN_TOKEN, password });
 
     step('demo reset');
     const reset = expectStatus(await new Client(dev.url).post('/api/admin/reset', {}, { authorization: `Bearer ${vars.ADMIN_TOKEN}` }), 200, 'reset').body;
@@ -855,8 +1200,10 @@ async function main() {
     check(noCode.body.error.code === 'setup_code_required' && mallory.cookie === null, 'no session for an anonymous setup');
     expectStatus(await mallory.post('/api/auth/setup', { ...setup, email: 'mallory@x.co', setupCode: 'guess-guess-guess-guess-guess' }), 403, 'setup with a wrong code');
     const realOwner = new Client(dev.url);
-    const created = expectStatus(await realOwner.post('/api/auth/setup', { ...setup, setupCode: vars.ADMIN_TOKEN }), 201, 'setup with the code');
+    const created = expectStatus(await realOwner.post('/api/auth/setup', { ...setup, username: 'ceo', setupCode: vars.ADMIN_TOKEN }), 201, 'setup with the code');
     check(created.body.user.isOwner === true && realOwner.cookie, 'the operator owns the school');
+    check(created.body.user.username === 'ceo' && created.body.user.mustChangePassword === false, 'the owner has the username they chose, and their own password');
+    expectStatus(await new Client(dev.url).post('/api/auth/login', { username: 'ceo', password }), 200, 'the owner signs in by username');
     check(expectStatus(await new Client(dev.url).get('/api/auth/me'), 200, 'me after setup').body.needsSetup === false, 'set up');
     expectStatus(await realOwner.get('/api/students'), 200, 'the new owner works');
     console.log(`\nCloudflare smoke passed: ${checks} checks.`);
