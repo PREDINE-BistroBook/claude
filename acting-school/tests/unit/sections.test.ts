@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BUILT_IN_POSITIONS, PERMISSIONS, type Permission } from '../../src/shared/permissions';
 import type { ScheduleEvent } from '../../src/shared/schemas/schedule';
-import { NAV_ITEMS, adminNavItems, mobileTabs, navItemActive, navItemOpen, sectionNavItems } from '../../src/web/layout/nav';
+import { NAV_ITEMS, TEAM_PATH, adminNavItems, mobileTabs, navItemActive, navItemOpen, sectionNavItems, teamMenuActive, teamMenuHint } from '../../src/web/layout/nav';
 import {
   SECTIONS,
   currentSection,
@@ -37,7 +37,8 @@ describe('sectionForPath', () => {
   });
 
   it('pages outside every section answer null (they keep the last section)', () => {
-    for (const p of ['/', '/profile', '/staff', '/staff/4', '/positions', '/positions/new', '/settings', '/login', '/nope']) expect(sectionForPath(p), p).toBeNull();
+    for (const p of ['/', '/profile', '/team', '/staff', '/staff/4', '/staff/new', '/messages', '/messages/3', '/positions', '/positions/new', '/settings', '/login', '/nope'])
+      expect(sectionForPath(p), p).toBeNull();
   });
 
   it('matches whole path segments only', () => {
@@ -155,10 +156,30 @@ describe('mobileTabs(section, can)', () => {
 });
 
 describe('menus', () => {
-  it('admin items (Staff, Positions, Settings) appear in every section, only when permitted', () => {
-    expect(adminNavItems(canWith(PERMISSIONS)).map((i) => i.to)).toEqual(['/staff', '/positions', '/settings']);
-    expect(adminNavItems(canWith(builtIn('executive_director'))).map((i) => i.to)).toEqual(['/staff', '/positions', '/settings']);
+  it('admin items (Positions, Settings) appear in every section, only when permitted', () => {
+    expect(adminNavItems(canWith(PERMISSIONS)).map((i) => i.to)).toEqual(['/positions', '/settings']);
+    expect(adminNavItems(canWith(builtIn('executive_director'))).map((i) => i.to)).toEqual(['/positions', '/settings']);
     expect(adminNavItems(canWith(builtIn('acting_coach')))).toEqual([]);
+    // staff.manage alone opens no Administration entry: managing the team is on the Team page.
+    expect(adminNavItems(canWith(['staff.manage']))).toEqual([]);
+  });
+
+  it('there is one Team entry, outside the menus: no Staff entry anywhere, nothing pointing at /staff', () => {
+    expect(TEAM_PATH).toBe('/team');
+    expect(NAV_ITEMS.filter((i) => i.to === '/staff' || i.to === TEAM_PATH || i.label === 'staff')).toEqual([]);
+  });
+
+  it('the Team entry is current on /team and on the member pages it opens (/staff/new, /staff/:id)', () => {
+    for (const p of ['/team', '/team/', '/staff', '/staff/new', '/staff/12']) expect(teamMenuActive(p), p).toBe(true);
+    for (const p of ['/', '/teams', '/staffing', '/profile', '/positions', '/messages', '/school']) expect(teamMenuActive(p), p).toBe(false);
+  });
+
+  it('the hint under Team says what the person can do there', () => {
+    expect(teamMenuHint(canWith(builtIn('acting_coach')))).toBe('teamHint');
+    expect(teamMenuHint(canWith(['staff.summon']))).toBe('teamHintSummon');
+    expect(teamMenuHint(canWith(['staff.manage']))).toBe('teamHintManage');
+    expect(teamMenuHint(canWith(builtIn('executive_director')))).toBe('teamHintManageSummon');
+    expect(teamMenuHint(canWith(PERMISSIONS))).toBe('teamHintManageSummon');
   });
 
   it('a section home is active on itself only; other entries on their sub-pages', () => {

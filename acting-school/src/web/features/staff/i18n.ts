@@ -1,18 +1,30 @@
 import type { Namespace, TranslationOf } from '@web/i18n/types';
 
+/**
+ * Managing team members' accounts (staff.manage): what the one Team page
+ * (features/team) adds for managers — "Add team member", the link on each row,
+ * the Active / Inactive filter — and the two screens it opens, /staff/new and
+ * /staff/:id. On screen the word is always "team" / "team member"; "staff"
+ * stays in code names only.
+ */
 const en = {
-  title: 'Staff',
-  addStaff: 'Add staff',
-  you: 'You',
+  addStaff: 'Add team member',
   inactive: 'Inactive',
   neverSignedIn: 'Never signed in',
   lastSignIn: 'Last sign-in {{date}}',
-  summary_one: '{{count}} person on the team',
-  summary_other: '{{count}} people on the team',
-  inactiveSection: 'Inactive accounts',
   inactiveHint: 'They can’t sign in. Their workshops and history are kept.',
-  emptyTitle: 'No staff yet',
-  emptyHint: 'Add the people who teach, manage or represent talent.',
+  inactiveEmpty: 'No inactive team members',
+  inactiveEmptyHint: 'A team member whose account you switch off shows up here. You can switch it back on at any time.',
+  filter: {
+    active: 'Active',
+    inactive: 'Inactive',
+  },
+  manage: {
+    edit: 'Edit',
+    view: 'View',
+    editOf: 'Edit {{name}}’s account',
+    viewOf: 'View {{name}}’s account',
+  },
   positions: {
     label: 'Positions',
     hint: 'Someone with several positions can do everything each one allows.',
@@ -24,7 +36,7 @@ const en = {
     none: 'No position',
   },
   form: {
-    addTitle: 'Add a staff member',
+    addTitle: 'Add a team member',
     addDescription: 'They sign in with this email and the temporary password you set.',
     editTitle: 'Edit {{name}}',
     viewTitle: '{{name}}',
@@ -37,7 +49,7 @@ const en = {
     activeHint: 'Turning this off signs them out everywhere and stops them signing in.',
     selfActiveHint: 'You can’t deactivate your own account.',
     readOnlyNotice: 'This person can do things you can’t, so only an owner can change their account.',
-    create: 'Add staff member',
+    create: 'Add team member',
     resetTitle: 'Reset password',
     resetDescription: 'Set a new password if they’ve forgotten theirs. They’ll be signed out on every device.',
     newPassword: 'New password',
@@ -53,7 +65,7 @@ const en = {
     passwordReset: 'Password reset. {{name}} was signed out everywhere.',
   },
   errors: {
-    emailTaken: 'Another staff account already uses this email',
+    emailTaken: 'Another team account already uses this email',
     cannotChangeSelf: 'You can’t change your own positions or deactivate yourself.',
     lastOwner: 'Nobody else holds an owner position. Give someone else an owner position first.',
     ownerOnly: 'Only an owner can give or take owner positions.',
@@ -64,22 +76,23 @@ const en = {
 };
 
 const ar: TranslationOf<typeof en> = {
-  title: 'الفريق',
-  addStaff: 'إضافة عضو',
-  you: 'أنت',
+  addStaff: 'إضافة عضو إلى الفريق',
   inactive: 'غير نشط',
   neverSignedIn: 'لم يسجّل الدخول بعد',
   lastSignIn: 'آخر دخول {{date}}',
-  summary_zero: 'لا أحد في الفريق',
-  summary_one: 'عضو واحد في الفريق',
-  summary_two: 'عضوان في الفريق',
-  summary_few: '{{count}} أعضاء في الفريق',
-  summary_many: '{{count}} عضوًا في الفريق',
-  summary_other: '{{count}} عضو في الفريق',
-  inactiveSection: 'الحسابات غير النشطة',
   inactiveHint: 'لا يمكنهم تسجيل الدخول، مع الاحتفاظ بورشهم وسجلّهم.',
-  emptyTitle: 'لا يوجد أعضاء بعد',
-  emptyHint: 'أضف من يدرّسون أو يديرون أو يمثّلون المواهب.',
+  inactiveEmpty: 'لا يوجد أعضاء غير نشطين في الفريق',
+  inactiveEmptyHint: 'يظهر هنا عضو الفريق الذي يتم إيقاف حسابه، ويمكن إعادة تشغيل الحساب في أي وقت.',
+  filter: {
+    active: 'نشط',
+    inactive: 'غير نشط',
+  },
+  manage: {
+    edit: 'تعديل',
+    view: 'عرض',
+    editOf: 'تعديل حساب {{name}}',
+    viewOf: 'عرض حساب {{name}}',
+  },
   positions: {
     label: 'المناصب',
     hint: 'من يشغل أكثر من منصب يمكنه فعل كل ما يسمح به كلٌّ منها.',
@@ -104,7 +117,7 @@ const ar: TranslationOf<typeof en> = {
     activeHint: 'إيقاف هذا الخيار يسجّل خروجه من كل الأجهزة ويمنعه من تسجيل الدخول.',
     selfActiveHint: 'لا يمكنك إيقاف حسابك بنفسك.',
     readOnlyNotice: 'يستطيع هذا الشخص فعل أمور لا تستطيعها، لذا لا يعدّل حسابه إلا مالك.',
-    create: 'إضافة العضو',
+    create: 'إضافة عضو الفريق',
     resetTitle: 'إعادة تعيين كلمة المرور',
     resetDescription: 'عيّن كلمة مرور جديدة إذا نسي كلمته. سيُسجَّل خروجه من جميع الأجهزة.',
     newPassword: 'كلمة المرور الجديدة',
@@ -120,7 +133,7 @@ const ar: TranslationOf<typeof en> = {
     passwordReset: 'تمت إعادة تعيين كلمة المرور، وسُجّل خروج {{name}} من جميع الأجهزة.',
   },
   errors: {
-    emailTaken: 'هذا البريد الإلكتروني مستخدم في حساب آخر',
+    emailTaken: 'هذا البريد الإلكتروني مستخدم في حساب آخر في الفريق',
     cannotChangeSelf: 'لا يمكنك تغيير مناصبك أو إيقاف حسابك بنفسك.',
     lastOwner: 'لا أحد غيره يشغل منصب مالك. امنح شخصًا آخر منصب مالك أولًا.',
     ownerOnly: 'لا يمنح مناصب المالكين أو يسحبها إلا مالك.',

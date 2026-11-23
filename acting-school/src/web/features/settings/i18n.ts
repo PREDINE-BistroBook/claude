@@ -17,7 +17,7 @@ const en = {
     title: 'Preferences',
     description: 'How the app behaves for the whole team.',
     defaultLanguage: 'Default language',
-    defaultLanguageHint: 'New staff accounts start in this language. Each person can switch in My profile.',
+    defaultLanguageHint: 'New team accounts start in this language. Each person can switch in My profile.',
     weekStartsOn: 'Week starts on',
     weekStartsOnHint: 'The first day of the week in the schedule and workshop calendars.',
   },

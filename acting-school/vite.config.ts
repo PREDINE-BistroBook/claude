@@ -26,7 +26,7 @@ export default defineConfig({
       manifest: {
         name: 'Turquoise Studio',
         short_name: 'Turquoise',
-        description: 'Staff app for Turquoise Studio — acting school and casting agency',
+        description: 'Team app for Turquoise Studio — acting school and casting agency',
         // Keep in step with --accent and --canvas (light) in src/web/styles.css.
         theme_color: '#0c766c',
         background_color: '#f2f6f5',

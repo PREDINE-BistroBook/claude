@@ -66,7 +66,7 @@ const en = {
     builtIn: 'Built-in positions can’t be deleted.',
   },
   groups: {
-    staff: 'Staff & settings',
+    staff: 'Team & settings',
     school: 'School',
     agency: 'Agency',
     admissions: 'Admissions',
@@ -75,10 +75,10 @@ const en = {
   },
   perm: {
     staff: {
-      manage: { label: 'Manage staff', description: 'Add and edit staff accounts, give positions, reset passwords, deactivate accounts.' },
+      manage: { label: 'Manage the team', description: 'Add team members and edit their accounts, give positions, reset passwords, deactivate accounts.' },
       summon: {
         label: 'Call someone to the office',
-        description: 'A “Call to the office” button beside each colleague. They get a big notice on their screen and phone and answer “On my way” or “Can’t come now”.',
+        description: 'A “Call to the office” button beside each team member. They get a big notice on their screen and phone and answer “On my way” or “Can’t come now”.',
       },
     },
     positions: {
@@ -226,10 +226,10 @@ const ar: TranslationOf<typeof en> = {
   },
   perm: {
     staff: {
-      manage: { label: 'إدارة الفريق', description: 'إضافة حسابات الفريق وتعديلها، ومنح المناصب، وإعادة تعيين كلمات المرور، وإيقاف الحسابات.' },
+      manage: { label: 'إدارة الفريق', description: 'إضافة أعضاء الفريق وتعديل حساباتهم، ومنح المناصب، وإعادة تعيين كلمات المرور، وإيقاف الحسابات.' },
       summon: {
         label: 'طلب شخص إلى المكتب',
-        description: 'زر «استدعاء للمكتب» بجانب كل زميل. يظهر للشخص تنبيه كبير على الشاشة والهاتف، ويمكنه الرد بـ«في الطريق» أو «لا أستطيع الآن».',
+        description: 'زر «استدعاء للمكتب» بجانب كل عضو في الفريق. يظهر للشخص تنبيه كبير على الشاشة والهاتف، ويمكنه الرد بـ«في الطريق» أو «لا أستطيع الآن».',
       },
     },
     positions: {

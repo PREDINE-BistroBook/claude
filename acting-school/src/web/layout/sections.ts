@@ -5,8 +5,8 @@ import type { Permission } from '@shared/permissions';
  * The staff app's three sections, switched with the tabs at the top
  * (SectionTabs). Each section has its own home, its own colour (the
  * --color-section-<key> tokens in styles.css) and its own menu (nav.ts).
- * Pages outside every section (profile, staff, positions, settings) keep the
- * section the person was last in.
+ * Pages outside every section (profile, team and its member pages under
+ * /staff, messages, positions, settings) keep the section the person was last in.
  */
 export type SectionKey = 'school' | 'casting' | 'website';
 
@@ -68,7 +68,7 @@ export function visibleSections(can: (p: Permission) => boolean): Section[] {
 
 const underPrefix = (pathname: string, prefix: string) => pathname === prefix || pathname.startsWith(`${prefix}/`);
 
-/** Which section a path belongs to, by prefix; null for pages outside every section (profile, staff, positions, settings, "/"). */
+/** Which section a path belongs to, by prefix; null for pages outside every section (profile, team, /staff/…, messages, positions, settings, "/"). */
 export function sectionForPath(pathname: string): SectionKey | null {
   const path = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
   for (const s of SECTIONS) if (s.prefixes.some((p) => underPrefix(path, p))) return s.key;

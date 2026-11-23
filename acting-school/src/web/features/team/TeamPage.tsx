@@ -1,35 +1,51 @@
 import clsx from 'clsx';
-import { CircleCheck, CircleSlash, Clock, Contact, X } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronRight, CircleCheck, CircleSlash, Clock, Contact, UserPlus, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation } from 'react-router';
+import { Link, useLocation } from 'react-router';
+import type { StaffMember } from '@shared/schemas/staff';
 import type { SummonsView } from '@shared/schemas/summons';
 import type { TeamMember } from '@shared/schemas/team';
-import { Avatar, Badge, EmptyState, ErrorState, PageHeader, PageLoader, SearchInput } from '@web/components/ui';
+import { Avatar, Badge, ButtonLink, EmptyState, ErrorState, PageHeader, PageLoader, SearchInput, Tabs } from '@web/components/ui';
 import { useAuth } from '@web/lib/auth';
 import { useFormat } from '@web/lib/format';
-import { PositionChips } from '../staff/components/bits';
+import { useStaffList } from '../staff/api';
+import { PositionChips, PositionsGuideLink } from '../staff/components/bits';
 import { useSummonsById, useTeam } from './api';
 import { PersonActions } from './components/PersonActions';
-import { clockOf, filterTeam, isolate, summonsFromId, summonsIdFrom } from './utils';
+import { accountLink, clockOf, filterTeam, inactiveAccounts, isolate, summonsFromId, summonsIdFrom, teamFilter, type TeamFilter } from './utils';
 
 /**
- * /team — the Team directory, for every signed-in worker: active staff with
+ * /team — the one Team page, for every signed-in person: the active team with
  * photo, name and positions (owners appear to non-owners as name and photo
  * only), each with "Message" and, for people who may, "Call to the office".
+ *
+ * With staff.manage the same page carries the management controls: "Add team
+ * member" (→ /staff/new), a link on each row to that member's page
+ * (/staff/:id) and the Active / Inactive filter (inactive accounts come from
+ * GET /api/staff; the Team list only has active people).
+ *
  * A notification link "/team?summons=12" highlights the person that call went
  * to (the caller's answer notification); the person called's link
  * "/team?summons=12&from=3" shows what became of the call and points at the
  * caller's row.
  */
 export default function TeamPage() {
-  const { t } = useTranslation(['team', 'common']);
+  const { t } = useTranslation(['team', 'staff', 'common']);
   const { can, user } = useAuth();
+  const manage = can('staff.manage');
   const team = useTeam();
+  // staff.manage: the accounts behind the rows (which can be opened, and the inactive ones).
+  const staff = useStaffList(manage);
   const { search } = useLocation();
   const [q, setQ] = useState('');
+  const [wanted, setWanted] = useState<TeamFilter>('active');
+  const filter = teamFilter(wanted, manage);
   const items = useMemo(() => team.data?.items ?? [], [team.data]);
+  const accounts = useMemo(() => new Map((manage ? (staff.data?.items ?? []) : []).map((s) => [s.id, s])), [manage, staff.data]);
+  const inactive = useMemo(() => inactiveAccounts(manage ? (staff.data?.items ?? []) : []), [manage, staff.data]);
   const shown = useMemo(() => filterTeam(items, q), [items, q]);
+  const shownInactive = useMemo(() => filterTeam(inactive, q), [inactive, q]);
   const summonsId = summonsIdFrom(search);
   const fromId = summonsFromId(search);
   // The caller's own last call shows on that person's row; any other call (the person called
@@ -38,8 +54,32 @@ export default function TeamPage() {
   const call = useSummonsById(summonsId, team.isSuccess && !rowWithCall);
   const highlighted = rowWithCall?.id ?? fromId ?? (call.data ? (call.data.from.id === user?.id ? call.data.to.id : call.data.from.id) : undefined);
 
+  const listClass = 'divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface';
+  const noResults = <EmptyState title={t('noResults')} className="rounded-2xl border border-dashed border-line-strong" />;
+
   let body;
-  if (team.isPending) body = <PageLoader />;
+  if (filter === 'inactive') {
+    if (staff.isPending) body = <PageLoader />;
+    else if (staff.isError) body = <ErrorState error={staff.error} onRetry={() => void staff.refetch()} />;
+    else if (!inactive.length)
+      body = <EmptyState icon={Contact} title={t('staff:inactiveEmpty')} description={t('staff:inactiveEmptyHint')} className="rounded-2xl border border-dashed border-line-strong" />;
+    else
+      body = (
+        <>
+          <p className="mb-3 px-1 text-sm text-muted">{t('staff:inactiveHint')}</p>
+          {inactive.length > 6 && <SearchInput value={q} onChange={setQ} placeholder={t('search')} className="mb-4" />}
+          {shownInactive.length ? (
+            <ul className={listClass}>
+              {shownInactive.map((s) => (
+                <InactiveRow key={s.id} account={s} />
+              ))}
+            </ul>
+          ) : (
+            noResults
+          )}
+        </>
+      );
+  } else if (team.isPending) body = <PageLoader />;
   else if (team.isError) body = <ErrorState error={team.error} onRetry={() => void team.refetch()} />;
   else if (!items.length) body = <EmptyState icon={Contact} title={t('empty')} />;
   else
@@ -47,13 +87,13 @@ export default function TeamPage() {
       <>
         {items.length > 6 && <SearchInput value={q} onChange={setQ} placeholder={t('search')} className="mb-4" />}
         {shown.length ? (
-          <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface">
+          <ul className={listClass}>
             {shown.map((m) => (
-              <TeamRow key={m.id} member={m} highlighted={m.id === highlighted} scrollTo={m.id === rowWithCall?.id} />
+              <TeamRow key={m.id} member={m} account={accounts.get(m.id)} canManage={manage} highlighted={m.id === highlighted} scrollTo={m.id === rowWithCall?.id} />
             ))}
           </ul>
         ) : (
-          <EmptyState title={t('noResults')} className="rounded-2xl border border-dashed border-line-strong" />
+          noResults
         )}
       </>
     );
@@ -68,9 +108,31 @@ export default function TeamPage() {
             {team.isSuccess && items.length > 0 && <span className="block">{t('count', { count: items.length })}</span>}
           </>
         }
+        actions={
+          manage ? (
+            <ButtonLink to="/staff/new" variant="primary" size="lg" icon={UserPlus}>
+              {t('staff:addStaff')}
+            </ButtonLink>
+          ) : undefined
+        }
       />
       {!rowWithCall && call.data && <SummonsOutcome summons={call.data} me={user?.id ?? null} />}
+      {manage && (
+        <Tabs<TeamFilter>
+          className="mb-4"
+          value={filter}
+          onChange={(next) => {
+            setWanted(next);
+            setQ('');
+          }}
+          tabs={[
+            { id: 'active', label: t('staff:filter.active'), count: team.isSuccess ? items.length : undefined },
+            { id: 'inactive', label: t('staff:filter.inactive'), count: staff.isSuccess ? inactive.length : undefined },
+          ]}
+        />
+      )}
       {body}
+      {manage && can('positions.manage') && <PositionsGuideLink className="mt-5" />}
     </div>
   );
 }
@@ -133,8 +195,82 @@ const isoDay = (ms: number) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-/** A colleague's row. `scrollTo`: brought into view (the caller's call, whose answer shows on the row); otherwise the card above the list is what to read first. */
-function TeamRow({ member: m, highlighted, scrollTo }: { member: TeamMember; highlighted: boolean; scrollTo: boolean }) {
+/**
+ * The top of a row: photo, name, a line under it, positions. With staff.manage
+ * (and an account the caller may see) the whole block is the link to that
+ * member's page, ending in a visible word — "Edit" or "View" — and an arrow.
+ */
+function RowHead({
+  name,
+  photoFileId,
+  badge,
+  email,
+  positions,
+  link,
+  dimmed = false,
+}: {
+  name: string;
+  photoFileId: string | null;
+  badge?: ReactNode;
+  email?: string;
+  positions: TeamMember['positions'] | null;
+  link: ReturnType<typeof accountLink>;
+  dimmed?: boolean;
+}) {
+  const { t } = useTranslation(['staff', 'common']);
+  const inner = (
+    <>
+      <Avatar name={name} fileId={photoFileId} size="lg" className={clsx(dimmed && 'opacity-50 grayscale')} />
+      <span className="block min-w-0 flex-1">
+        <span className="flex min-w-0 flex-wrap items-center gap-2">
+          <bdi className={clsx('truncate text-[17px] font-semibold', dimmed ? 'text-muted' : 'text-ink')}>{name}</bdi>
+          {badge}
+        </span>
+        {email && (
+          // LTR so a long address keeps its start visible; still aligned to the row's start in Arabic.
+          <span dir="ltr" className="mt-0.5 block truncate text-sm text-muted rtl:text-end">
+            {email}
+          </span>
+        )}
+        {positions && positions.length > 0 && <PositionChips positions={positions} className="mt-1.5" />}
+      </span>
+    </>
+  );
+  if (!link) return <div className="flex items-start gap-3.5">{inner}</div>;
+  return (
+    <Link
+      to={link.to}
+      aria-label={t(link.mode === 'edit' ? 'manage.editOf' : 'manage.viewOf', { name: isolate(name) })}
+      className="-m-2 flex min-h-14 items-start gap-3.5 rounded-xl p-2 transition-colors hover:bg-surface-2"
+    >
+      {inner}
+      <span className="flex min-h-12 shrink-0 items-center gap-1 self-center text-sm font-semibold text-accent">
+        {t(link.mode === 'edit' ? 'manage.edit' : 'manage.view')}
+        <ChevronRight className="size-4 rtl:-scale-x-100" aria-hidden />
+      </span>
+    </Link>
+  );
+}
+
+/**
+ * A team member's row: "Message" and (with staff.summon) "Call to the office"
+ * under their name; with staff.manage the name block opens their page.
+ * `scrollTo`: brought into view (the caller's call, whose answer shows on the
+ * row); otherwise the card above the list is what to read first.
+ */
+function TeamRow({
+  member: m,
+  account,
+  canManage,
+  highlighted,
+  scrollTo,
+}: {
+  member: TeamMember;
+  account: StaffMember | undefined;
+  canManage: boolean;
+  highlighted: boolean;
+  scrollTo: boolean;
+}) {
   const { t } = useTranslation(['team', 'common']);
   const ref = useRef<HTMLLIElement>(null);
   useEffect(() => {
@@ -142,17 +278,34 @@ function TeamRow({ member: m, highlighted, scrollTo }: { member: TeamMember; hig
   }, [scrollTo]);
   return (
     <li ref={ref} className={clsx('px-4 py-4 sm:px-5', highlighted && 'bg-accent-soft/60')} data-testid={`team-row-${m.id}`}>
-      <div className="flex items-start gap-3.5">
-        <Avatar name={m.name} fileId={m.photoFileId} size="lg" />
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <bdi className="truncate text-[17px] font-semibold text-ink">{m.name}</bdi>
-            {m.isMe && <Badge tone="neutral">{t('you')}</Badge>}
-          </div>
-          {m.positions.length > 0 && <PositionChips positions={m.positions} className="mt-1.5" />}
-          <PersonActions member={m} className="mt-3" />
-        </div>
-      </div>
+      <RowHead
+        name={m.name}
+        photoFileId={m.photoFileId}
+        badge={m.isMe ? <Badge tone="neutral">{t('you')}</Badge> : undefined}
+        email={account?.email}
+        positions={m.positions}
+        link={accountLink(canManage, account)}
+      />
+      {/* Lined up under the name (photo 3.5rem + gap). Nothing for yourself. */}
+      <PersonActions member={m} className="mt-3 ps-[4.375rem]" />
+    </li>
+  );
+}
+
+/** An inactive account (staff.manage only): it can't be messaged or called, only opened — to reactivate it, say. */
+function InactiveRow({ account: a }: { account: StaffMember }) {
+  const { t } = useTranslation(['staff', 'common']);
+  return (
+    <li className="px-4 py-4 sm:px-5" data-testid={`team-inactive-${a.id}`}>
+      <RowHead
+        name={a.name}
+        photoFileId={a.photoFileId}
+        badge={<Badge tone="danger">{t('inactive')}</Badge>}
+        email={a.email}
+        positions={a.positions}
+        link={accountLink(true, a)}
+        dimmed
+      />
     </li>
   );
 }

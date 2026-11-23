@@ -11,7 +11,6 @@ import {
   Presentation,
   Settings,
   Star,
-  UserCog,
   UserRoundPlus,
   Users,
   type LucideIcon,
@@ -32,7 +31,7 @@ export interface NavItem {
   permission?: Permission;
   /** Shown when the person holds at least one of these (in addition to `permission`, if set). */
   anyPermission?: readonly Permission[];
-  /** The section whose menu shows it; admin items (Staff, Positions, Settings) show in every section, under "Administration". */
+  /** The section whose menu shows it; admin items (Positions, Settings) show in every section, under "Administration". */
   section: NavSection;
   /** Active only on this exact path (a section's home: /casting is not active on /casting/schedule). */
   end?: boolean;
@@ -69,8 +68,8 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/website/casting-call', label: 'castingCall', icon: Megaphone, permission: 'website.manage', section: 'website' },
   { to: '/website/coaches', label: 'coaches', icon: Presentation, permission: 'website.manage', section: 'website' },
   { to: '/website/links', label: 'links', icon: Link2, permission: 'website.manage', section: 'website' },
-  // ── Administration (every section) ──
-  { to: '/staff', label: 'staff', icon: UserCog, permission: 'staff.manage', section: 'admin' },
+  // ── Administration (every section). The team — adding and editing members included — is the
+  // Team page, in the account / "More" menu of every section (TEAM_PATH below), not an entry here. ──
   { to: '/positions', label: 'positions', icon: BadgeCheck, permission: 'positions.manage', section: 'admin' },
   { to: '/settings', label: 'settings', icon: Settings, permission: 'settings.manage', section: 'admin' },
 ];
@@ -85,9 +84,28 @@ export function sectionNavItems(section: SectionKey, can: (p: Permission) => boo
   return NAV_ITEMS.filter((i) => i.section === section && navItemOpen(i, can));
 }
 
-/** Staff, Positions, Settings — whichever the person may manage. */
+/** Positions, Settings — whichever the person may manage. */
 export function adminNavItems(can: (p: Permission) => boolean): NavItem[] {
   return NAV_ITEMS.filter((i) => i.section === 'admin' && navItemOpen(i, can));
+}
+
+/** The one Team page: everyone signed in, from the account / "More" menu of every section. */
+export const TEAM_PATH = '/team';
+
+/** The Team entry is the current page on /team and on the member pages it opens with staff.manage (/staff/new, /staff/:id). */
+export function teamMenuActive(pathname: string): boolean {
+  const path = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
+  return path === TEAM_PATH || path === '/staff' || path.startsWith('/staff/');
+}
+
+/**
+ * What the Team page is for, in plain words under its entry in the phone's
+ * "More" sheet (a key in common:nav): messaging for everyone, calling to the
+ * office with staff.summon, adding and editing members with staff.manage.
+ */
+export function teamMenuHint(can: (p: Permission) => boolean): 'teamHint' | 'teamHintSummon' | 'teamHintManage' | 'teamHintManageSummon' {
+  if (can('staff.manage')) return can('staff.summon') ? 'teamHintManageSummon' : 'teamHintManage';
+  return can('staff.summon') ? 'teamHintSummon' : 'teamHint';
 }
 
 /** Whether a menu entry is the page at `pathname` (or one under it). */

@@ -1,7 +1,7 @@
 import type { Namespace, TranslationOf } from '@web/i18n/types';
 
 /**
- * The Team pack: the Team directory, "Message" / "Call to the office"
+ * The Team pack: the Team page, "Message" / "Call to the office"
  * (PersonActions), the call-to-the-office banner, the notification bell,
  * phone notifications (Profile), profile photos and record files (workshop
  * "Photos & files", casting "Files"). The chat itself is the `chat` namespace.

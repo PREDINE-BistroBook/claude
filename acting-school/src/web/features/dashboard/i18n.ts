@@ -9,7 +9,7 @@ const en = {
   },
   start: {
     noSection: 'Nothing assigned to you yet',
-    noSectionHint: 'Your positions don’t include the School, Casting or Website sections. Ask whoever manages staff accounts if you need them.',
+    noSectionHint: 'Your positions don’t include the School, Casting or Website sections. Ask whoever manages team accounts if you need them.',
   },
   greeting: {
     morning: 'Good morning, {{name}}',

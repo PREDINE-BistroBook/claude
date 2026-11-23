@@ -20,9 +20,9 @@ const en = {
   nothingToShow: 'No schedule for your positions',
   /** By the kinds this schedule shows, sorted and joined with "_". */
   nothingToShowHint: {
-    class_interview: 'This schedule shows workshops and admissions interviews, and your positions include neither. Ask whoever manages staff accounts if you need them.',
-    audition: 'This schedule shows auditions, and your positions don’t include castings. Ask whoever manages staff accounts if you need them.',
-    any: 'Your positions don’t include anything this schedule shows. Ask whoever manages staff accounts if you need it.',
+    class_interview: 'This schedule shows workshops and admissions interviews, and your positions include neither. Ask whoever manages team accounts if you need them.',
+    audition: 'This schedule shows auditions, and your positions don’t include castings. Ask whoever manages team accounts if you need them.',
+    any: 'Your positions don’t include anything this schedule shows. Ask whoever manages team accounts if you need it.',
   },
   previousWeek: 'Previous week',
   nextWeek: 'Next week',

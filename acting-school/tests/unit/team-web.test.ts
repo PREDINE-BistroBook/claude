@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { BUILT_IN_POSITIONS, PERMISSIONS, type Permission } from '../../src/shared/permissions';
 import type { ChatMessage, ChatPreview } from '../../src/shared/schemas/chat';
 import type { SummonsView } from '../../src/shared/schemas/summons';
@@ -15,17 +15,34 @@ import {
   receipt,
 } from '../../src/web/features/chat/utils';
 import {
+  accountLink,
   bannerSummons,
   base64UrlToBytes,
   filterTeam,
   hasPersonActions,
+  inactiveAccounts,
   newlyAnswered,
   personActionButtons,
   pushSupport,
   safeAppLink,
   summonsIdFrom,
+  teamFilter,
 } from '../../src/web/features/team/utils';
 import { documentLabel, formatFileSize, isPhotoFile } from '../../src/web/lib/files';
+
+/**
+ * The web app's i18n set-up (src/web/i18n) and anything that imports it (the
+ * route tables, through Guard) touch `document` when loaded: give them a bare
+ * one, as these tests run in Node.
+ */
+function withBareDocument() {
+  beforeAll(() => {
+    vi.stubGlobal('document', { documentElement: {} });
+  });
+  afterAll(() => {
+    vi.unstubAllGlobals();
+  });
+}
 
 const builtIn = (key: string) => BUILT_IN_POSITIONS.find((p) => p.key === key)!.permissions as readonly Permission[];
 const viewer = (id: number, key: string) => ({ id, permissions: builtIn(key) });
@@ -188,6 +205,90 @@ describe('Team directory search', () => {
     expect(filterTeam(items, 'had').map((m) => m.name)).toEqual(['Layla Haddad']);
     expect(filterTeam(items, 'فتحي').map((m) => m.name)).toEqual(['داليا فتحي']);
     expect(filterTeam(items, '  ')).toHaveLength(3);
+  });
+});
+
+describe('the one Team page: what staff.manage adds', () => {
+  withBareDocument();
+
+  it('a row links to the member’s page only for people with staff.manage', () => {
+    expect(accountLink(true, { id: 7, manageable: true })).toEqual({ to: '/staff/7', mode: 'edit' });
+    expect(accountLink(false, { id: 7, manageable: true })).toBeNull();
+  });
+
+  it('someone who can do more than you opens read-only', () => {
+    expect(accountLink(true, { id: 3, manageable: false })).toEqual({ to: '/staff/3', mode: 'view' });
+  });
+
+  it('no link without the account: an owner seen by a non-owner manager (name and photo only), or the list still loading', () => {
+    expect(accountLink(true, undefined)).toBeNull();
+    expect(accountLink(true, null)).toBeNull();
+  });
+
+  it('the Active / Inactive filter is for staff.manage; everyone else always sees the active team', () => {
+    expect(teamFilter('inactive', true)).toBe('inactive');
+    expect(teamFilter('active', true)).toBe('active');
+    expect(teamFilter('inactive', false)).toBe('active');
+  });
+
+  it('inactive accounts are the ones switched off, in the order given', () => {
+    const accounts = [
+      { id: 1, active: true },
+      { id: 2, active: false },
+      { id: 3, active: true },
+      { id: 4, active: false },
+    ];
+    expect(inactiveAccounts(accounts).map((a) => a.id)).toEqual([2, 4]);
+    expect(inactiveAccounts([])).toEqual([]);
+  });
+
+  it('/staff forwards to /team; the member pages stay at /staff/new and /staff/:id behind staff.manage', async () => {
+    const { staffRoutes } = await import('../../src/web/features/staff/routes');
+    const { teamRoutes } = await import('../../src/web/features/team/routes');
+    expect(teamRoutes.map((r) => r.path)).toEqual(['team']);
+    expect(staffRoutes.map((r) => r.path)).toEqual(['staff', 'staff/new', 'staff/:id']);
+    const element = (path: string) => staffRoutes.find((r) => r.path === path)!.element as { props: Record<string, unknown> };
+    expect(element('staff').props).toMatchObject({ to: '/team', replace: true });
+    for (const path of ['staff/new', 'staff/:id']) expect(element(path).props.permission, path).toBe('staff.manage');
+  });
+});
+
+describe('on screen it says Team, never Staff', () => {
+  withBareDocument();
+
+  const strings = (obj: unknown, prefix = ''): [string, string][] =>
+    obj && typeof obj === 'object'
+      ? Object.entries(obj as Record<string, unknown>).flatMap(([k, v]) => strings(v, prefix ? `${prefix}.${k}` : k))
+      : typeof obj === 'string'
+        ? [[prefix, obj]]
+        : [];
+
+  it('no English text says "staff" and no Arabic text says «موظف», in any namespace', async () => {
+    const { namespaces } = await import('../../src/web/i18n');
+    const bad: string[] = [];
+    for (const [name, ns] of Object.entries(namespaces)) {
+      for (const [key, text] of strings(ns.en)) if (/staff/i.test(text)) bad.push(`${name}:${key} (en) ${text}`);
+      for (const [key, text] of strings(ns.ar)) if (/موظف|staff/i.test(text)) bad.push(`${name}:${key} (ar) ${text}`);
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it('the wording the school asked for', async () => {
+    const { namespaces } = await import('../../src/web/i18n');
+    const { common, staff, positions, team } = namespaces;
+    expect(common.en.nav.team).toBe('Team');
+    expect(common.ar.nav.team).toBe('الفريق');
+    expect(common.en.auth.signInSubtitle).toBe('Team accounts only.');
+    expect(common.ar.auth.signInSubtitle).toContain('الفريق');
+    expect('staff' in common.en.nav).toBe(false);
+    expect(team.en.title).toBe('Team');
+    expect(team.ar.title).toBe('الفريق');
+    expect(staff.en.addStaff).toBe('Add team member');
+    expect(staff.ar.addStaff).toContain('عضو');
+    expect(staff.en.form.addTitle).toBe('Add a team member');
+    expect(positions.en.perm.staff.manage.label).toBe('Manage the team');
+    expect(positions.en.groups.staff).toBe('Team & settings');
+    expect(positions.ar.perm.staff.manage.description).toContain('أعضاء الفريق');
   });
 });
 

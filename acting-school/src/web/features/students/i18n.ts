@@ -42,7 +42,7 @@ const en = {
     mediaConsentHint:
       'The student — or their parent or guardian, if under 18 — agrees to being photographed and filmed in workshops, and to the school using those photos and videos.',
     notes: 'Notes',
-    notesPlaceholder: 'Goals, availability, health notes, anything staff should know…',
+    notesPlaceholder: 'Goals, availability, health notes, anything the team should know…',
     created: 'Student added',
     saved: 'Changes saved',
   },

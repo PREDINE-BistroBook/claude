@@ -134,6 +134,33 @@ export function pushSupport(env: {
  */
 export const isolate = (s: string) => `\u2068${s}\u2069`;
 
+// ── The Team page's management side (staff.manage) ──────────────────────────
+
+/** What staff.manage adds to the one Team page: active members (everyone sees these) or the inactive accounts. */
+export type TeamFilter = 'active' | 'inactive';
+
+/** The filter a person may use: "inactive" only with staff.manage; everyone else always sees the active team. */
+export function teamFilter(wanted: TeamFilter, canManage: boolean): TeamFilter {
+  return canManage ? wanted : 'active';
+}
+
+/**
+ * The link from a row to that member's page (/staff/:id), for people with
+ * staff.manage. `account` is the member's row in GET /api/staff: missing while
+ * that list loads, and for an owner seen by a non-owner (the staff API hides
+ * owner accounts, the Team list shows them as name and photo) — then there is
+ * no link. Someone who can do more than you opens read-only ("view").
+ */
+export function accountLink(canManage: boolean, account: { id: number; manageable: boolean } | null | undefined): { to: string; mode: 'edit' | 'view' } | null {
+  if (!canManage || !account) return null;
+  return { to: `/staff/${account.id}`, mode: account.manageable ? 'edit' : 'view' };
+}
+
+/** The accounts that can't sign in any more (the "Inactive" side of the filter), in the order the API gave. */
+export function inactiveAccounts<T extends { active: boolean }>(accounts: readonly T[]): T[] {
+  return accounts.filter((a) => !a.active);
+}
+
 /** Filter the Team directory by a typed name (any part, any case; Arabic and Latin alike). */
 export function filterTeam<T extends { name: string }>(items: readonly T[], q: string): T[] {
   const needle = q.trim().toLocaleLowerCase();

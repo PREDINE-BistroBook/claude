@@ -14,7 +14,7 @@ import { SummonsStatusLine } from './SummonsStatusLine';
 
 /**
  * "Message" and "Call to the office" beside a colleague — the same component on
- * the Team page, the staff list and staff details, a workshop's coach and an
+ * the Team page, a team member's page (/staff/:id), a workshop's coach and an
  * enquiry's assignee. Pass `member` from GET /api/team, or just `userId` and
  * the person is looked up there (someone not in it — deactivated, unknown —
  * gets no buttons). "Call to the office" needs staff.summon; nobody gets

@@ -16,7 +16,7 @@ import { useOnline, useSchoolName } from '../lib/hooks';
 import { useApplicationCounts } from '../features/applications/api';
 import { usePositionNames } from '../lib/positions';
 import { useFormat } from '../lib/format';
-import { adminNavItems, mobileTabs, navItemActive, sectionNavItems, type NavItem } from './nav';
+import { TEAM_PATH, adminNavItems, mobileTabs, navItemActive, sectionNavItems, teamMenuActive, teamMenuHint, type NavItem } from './nav';
 import { SectionTabs } from './SectionTabs';
 import { currentSection, rememberRoute, rememberSection, rememberedSection, sectionByKey, sectionForPath, visibleSections } from './sections';
 
@@ -62,14 +62,16 @@ type MenuItem = Pick<NavItem, 'to' | 'label' | 'icon' | 'end' | 'badge'>;
 /** The plain home ("/") for someone who sees no section yet. */
 const START_ITEM: MenuItem = { to: '/', label: 'home', icon: House, end: true };
 const PROFILE_ITEM: MenuItem = { to: '/profile', label: 'profile', icon: UserRound };
-/** The Team directory: every signed-in worker, from the account menu in every section. */
-const TEAM_ITEM: MenuItem = { to: '/team', label: 'team', icon: Contact };
+/** The one Team page: every signed-in person, from the account menu in every section (it carries the management controls with staff.manage). */
+const TEAM_ITEM: MenuItem = { to: TEAM_PATH, label: 'team', icon: Contact };
 
 /**
  * The signed-in frame. The app has three sections (School, Casting, Website,
  * layout/sections.ts): the tabs at the top switch between them (only for
  * people who see two or more), and the menus — sidebar on desktop, bottom bar
- * + "More" on phones — show the current section's pages plus Administration.
+ * + "More" on phones — show the current section's pages plus Administration
+ * (Positions, Settings); Team and the profile are in the account menu of every
+ * section, Messages and the bell at the top.
  * The current section's colour marks the line at the top, the active tab and
  * the active menu entry (data-section → bg-section / text-section).
  */
@@ -126,7 +128,8 @@ export function AppShell() {
   const tabPaths = user ? mobileTabs(section, can) : [];
   const tabs = tabPaths.map((to) => (to === '/' ? START_ITEM : sectionItems.find((i) => i.to === to))).filter(Boolean) as MenuItem[];
   const moreSection = sectionItems.filter((i) => !tabPaths.includes(i.to));
-  const moreActive = [...moreSection, ...adminItems, PROFILE_ITEM, TEAM_ITEM].some((i) => navItemActive(i, pathname));
+  const teamActive = teamMenuActive(pathname);
+  const moreActive = teamActive || [...moreSection, ...adminItems, PROFILE_ITEM].some((i) => navItemActive(i, pathname));
   const myPositions = user ? positionNames(user.positions) : '';
   const showTabs = visible.length > 1;
 
@@ -192,18 +195,17 @@ export function AppShell() {
             <Languages className="size-5" aria-hidden />
             <span lang={currentLanguage() === 'ar' ? 'en' : 'ar'}>{t('language.switchTo')}</span>
           </button>
-          <NavLink
+          <Link
             to={TEAM_ITEM.to}
-            className={({ isActive: a }) =>
-              clsx(
-                'mt-1 flex min-h-11 items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium',
-                a ? 'bg-section-soft font-semibold text-section' : 'text-ink/80 hover:bg-surface-2',
-              )
-            }
+            aria-current={teamActive ? 'page' : undefined}
+            className={clsx(
+              'mt-1 flex min-h-11 items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium',
+              teamActive ? 'bg-section-soft font-semibold text-section' : 'text-ink/80 hover:bg-surface-2',
+            )}
           >
             <TEAM_ITEM.icon className="size-5" aria-hidden />
             {t('nav.team')}
-          </NavLink>
+          </Link>
           <NavLink
             to="/profile"
             className={({ isActive: a }) => clsx('mt-1 flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-surface-2', a && 'bg-surface-2')}
@@ -338,7 +340,7 @@ export function AppShell() {
         </ul>
       </nav>
 
-      {/* ── Phone "More" sheet: the rest of the section, Administration, profile ── */}
+      {/* ── Phone "More" sheet: the rest of the section, Administration, Team, profile ── */}
       {moreOpen && (
         <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label={t('nav.more')}>
           <button type="button" className="absolute inset-0 bg-black/40" aria-label={t('actions.close')} onClick={() => setMoreOpen(false)} />
@@ -367,17 +369,17 @@ export function AppShell() {
             <div className="mt-2 grid grid-cols-2 gap-2 border-t border-line px-4 py-3">
               <Link
                 to={TEAM_ITEM.to}
-                aria-current={pathname === TEAM_ITEM.to ? 'page' : undefined}
+                aria-current={teamActive ? 'page' : undefined}
                 className={clsx(
                   'col-span-2 flex min-h-14 items-center justify-center gap-3 rounded-xl px-3 py-2 text-sm font-medium',
-                  pathname === TEAM_ITEM.to ? 'bg-section-soft text-section' : 'bg-surface-2 text-ink',
+                  teamActive ? 'bg-section-soft text-section' : 'bg-surface-2 text-ink',
                 )}
               >
                 <Contact className="size-5 shrink-0" aria-hidden />
-                {/* What Team is for, in plain words: older owners won't guess "Team" means "message or call someone". */}
+                {/* What Team is for, in plain words: older owners won't guess "Team" means "message or call someone" (or "add someone"). */}
                 <span className="min-w-0 text-start leading-tight">
                   <span className="block font-semibold">{t('nav.team')}</span>
-                  <span className="block text-xs text-muted">{can('staff.summon') ? t('nav.teamHintSummon') : t('nav.teamHint')}</span>
+                  <span className="block text-xs text-muted">{t(`nav.${teamMenuHint(can)}`)}</span>
                 </span>
               </Link>
               <Link

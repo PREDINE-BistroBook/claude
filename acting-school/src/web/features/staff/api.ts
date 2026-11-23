@@ -9,12 +9,30 @@ import { ME_KEY } from '@web/lib/auth';
 export const staffKeys = {
   all: ['staff'] as const,
   list: ['staff', 'list'] as const,
+  member: (id: number) => ['staff', 'member', id] as const,
 };
 
-export function useStaffList() {
+/**
+ * The Team page (GET /api/team, everyone) is where people see the team; what
+ * staff.manage adds comes from here. Every change to an account refreshes both.
+ */
+const TEAM_KEY = ['team'] as const;
+
+/** GET /api/staff (staff.manage): every account the caller may see, inactive ones included — the Team page's management side. */
+export function useStaffList(enabled = true) {
   return useQuery({
     queryKey: staffKeys.list,
     queryFn: () => api.get<ListResponse<StaffMember>>('/staff'),
+    enabled,
+  });
+}
+
+/** GET /api/staff/:id (staff.manage): one team member's account, for their page (/staff/:id). */
+export function useStaffMember(id: number, enabled = true) {
+  return useQuery({
+    queryKey: staffKeys.member(id),
+    queryFn: () => api.get<StaffMember>(`/staff/${id}`),
+    enabled,
   });
 }
 
@@ -31,7 +49,12 @@ export function useCreateStaff() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: StaffCreateInput) => api.post<StaffMember>('/staff', data),
-    onSuccess: () => Promise.all([qc.invalidateQueries({ queryKey: staffKeys.all }), qc.invalidateQueries({ queryKey: ['positions'] })]),
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: staffKeys.all }),
+        qc.invalidateQueries({ queryKey: TEAM_KEY }),
+        qc.invalidateQueries({ queryKey: ['positions'] }),
+      ]),
   });
 }
 
@@ -43,6 +66,7 @@ export function useUpdateStaff(id: number, isSelf: boolean) {
     onSuccess: async () => {
       await Promise.all([
         qc.invalidateQueries({ queryKey: staffKeys.all }),
+        qc.invalidateQueries({ queryKey: TEAM_KEY }),
         qc.invalidateQueries({ queryKey: ['positions'] }),
         isSelf ? qc.invalidateQueries({ queryKey: ME_KEY }) : Promise.resolve(),
       ]);
