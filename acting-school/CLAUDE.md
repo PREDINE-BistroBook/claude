@@ -10,6 +10,8 @@ A standalone project. It shares nothing with the rest of this repository: not th
 - **Agency:** talent roster (profiles, headshots, skills, languages), castings with roles, submissions (talent put forward for a role → audition → callback → booked).
 - **Admissions:** enquiries ("leads") from WhatsApp, calls, forms… → follow-ups → interviews (scored on criteria from settings) → decision → enrol (creates the student + enrollment). WhatsApp = `wa.me` links (no API; $0).
 - **Everyone:** home dashboard, combined schedule (classes + auditions + admissions interviews).
+- **Three sections** in the staff app — **School** (students, workshops, schedule, admissions), **Casting** (talent, castings, casting applications, audition schedule), **Website** (the public site's content) — switched with tabs at the top; each has its own home, colour and menu (`layout/sections.ts`, `docs/SECTIONS_AND_WEBSITE.md`).
+- **Public website** (`/site/...`, or the root of `turquoisestudio.app`): server-rendered, no JavaScript, English + Arabic — workshops with an apply form (→ leads with source `website`), a casting call with photos (→ `casting_applications`, accepted into talent), about & coaches, link-in-bio. **No prices anywhere** (the school's decision): an "Ask about fees on WhatsApp" button instead.
 
 ## Stack
 
@@ -35,7 +37,7 @@ npm run db:generate  # after editing src/server/db/schema.ts: writes a new SQL m
 npm run db:bundle    # rewrites src/server/db/migrations/bundle.ts from the journal + .sql files
 npm run e2e          # Playwright
 npm run cf:dev       # the Cloudflare Worker locally in workerd (wrangler dev --local, :8787; -- --port N); .dev.vars made for you
-npm run cf:smoke     # build, start the Worker on :8790 with throwaway data, seed via /api/admin, API smoke of every module (+ setup code, 413, cookie)
+npm run cf:smoke     # build, start the Worker on :8790 with throwaway data, seed via /api/admin, API smoke of every module (+ setup code, 413, cookie, the public site, the studio-domain routing)
 ```
 
 Cloudflare deploys through Workers Builds (push to the repo) once its build settings are set in the dashboard. Until then, or when it fails, the operator's session deploys from the cloud container with `npm run cf:deploy-embedded` (`wrangler.embedded.jsonc`: the web app bundled into the Worker, because the container's proxy breaks the static-asset upload — see `src/worker/embeddedAssets.ts`); keep `wrangler.embedded.jsonc` identical to `wrangler.jsonc` except `main`/`assets` (the embed script refuses otherwise). Sub-agents and reviewers never run `wrangler deploy`, `wrangler secret`, `wrangler login`, `wrangler dev --remote` or anything else that talks to the Cloudflare account; `cf:dev`/`cf:smoke` strip Cloudflare credentials and run locally (`cf:smoke -- --embedded` checks the bundled variant).
@@ -43,36 +45,46 @@ Cloudflare deploys through Workers Builds (push to the repo) once its build sett
 ## Layout
 
 ```
-src/shared/          permissions.ts (permission catalogue, built-in positions, BUILT_IN_GRANTS upgrades), enums.ts, dates.ts, phone.ts (phone → wa.me), schemas/<module>.ts (zod + API types)
+src/shared/          permissions.ts (permission catalogue, built-in positions, BUILT_IN_GRANTS upgrades), enums.ts, dates.ts, phone.ts (phone → wa.me), brand.ts (the T mark's SVG paths: web BrandMark + the site),
+                     schemas/<module>.ts (zod + API types; site.ts = site content/coaches/workshops + the public forms, castingApplications.ts)
 src/server/
-  app.ts             createApp({ db, config, files, clientIp? }): mounts every router under /api/<module> (+ /api/admin operator endpoints); JSON bodies over 1 MB → 413
-  config.ts          AppConfig from string vars (configFromVars(vars, runtime defaults): Node env or Worker vars, CLOUDFLARE_DEFAULTS); nodeConfig.ts adds DATA_DIR for Node
-  index.ts           the Node server (createDb + folder FileStore + static files); nodeFileStore.ts
+  app.ts             createApp({ db, config, files, clientIp? }): mounts every router under /api/<module> (+ /api/admin operator endpoints) and the public site at /site; JSON bodies over 1 MB → 413
+  config.ts          AppConfig from string vars (configFromVars(vars, runtime defaults): Node env or Worker vars, CLOUDFLARE_DEFAULTS; publicSiteHosts from PUBLIC_SITE_HOSTS); nodeConfig.ts adds DATA_DIR for Node
+  index.ts           the Node server (createDb + folder FileStore + static files; never the SPA for /site, same public-host routing as the Worker); nodeFileStore.ts
   db/schema.ts       all tables; db/migrations/ generated SQL + bundle.ts (generated: the SQL inlined, what both runtimes apply)
   db/database.ts     DB type (sync drizzle SQLite, either driver) and initDb(db): migrations, built-in positions, phase-1 carry-over, backfills
   db/client.ts       Node only: createDb(file) = better-sqlite3 + initDb.  db/migrate.ts: applyMigrations (drizzle-compatible, sync)
-  db/demoSeed.ts     the demo school (seedDemo), used by `npm run seed` (db/seed.ts) and POST /api/admin/seed-demo; db/wipe.ts (demo reset)
+  db/demoSeed.ts     the demo school (seedDemo, website demo included: seedDemoWebsite), used by `npm run seed` (db/seed.ts), POST /api/admin/seed-demo and /seed-demo-website; db/wipe.ts (demo reset)
   middleware/auth.ts requireAuth, requirePermission/requireAnyPermission, currentUser, userCan, sessionCookieName (__Host-as_session over HTTPS)
   middleware/bodyLimit.ts  limitBody / MAX_JSON_BODY_BYTES (1 MB; the Worker refuses a bigger Content-Length before the DO)
   lib/               access.ts (positions → permissions, built-in upgrades, class scope, contact redaction), errors.ts (ApiError, fieldError, sqliteConstraint), validate.ts (body/query/paramId), password.ts (scrypt, sameSecret), settings.ts, signInBrake.ts (failed sign-in brakes, before hashing),
                      enrollments.ts (enrolment rules shared by classes + admissions), admissions.ts (lead/interview loaders, duplicates), classSessions.ts,
                      phone.ts (withPhoneDigits / backfillPhoneDigits for the stored phone_digits column, phone search), sqlLimits.ts (chunk, insertBatches, inChunks, contains, durableObjectLimits logger),
-                     clock.ts (schoolToday/schoolNowTime/epochAt: the school's time zone), fileStore.ts (FileStore: sqliteFileStore, fallbackFileStore, memoryFileStore), ownerRecovery.ts (grantOwner)
+                     clock.ts (schoolToday/schoolNowTime/epochAt: the school's time zone), fileStore.ts (FileStore: sqliteFileStore, fallbackFileStore, memoryFileStore), ownerRecovery.ts (grantOwner),
+                     siteContent.ts (settings key 'site' → SiteContent, public workshops/coaches, isPublicFile/findPublicFile, siteUrls, the form secret), rateLimit.ts (hitRateLimit(s): fixed windows in rate_limits),
+                     siteForms.ts (form tokens, SITE_RATE_LIMITS / siteFormRateLimited), castingApplications.ts (createCastingApplication: public form → application + photos), images.ts (sniffImage: JPEG/PNG/WebP magic bytes);
+                     admissions.ts also has createLead (the one way a lead is created: staff API + website) and createWebsiteLead
   db/grantOwner.ts   `npm run owner -- email`: lockout recovery — give an account an owner position (CEO), reactivate it, lift its sign-in brakes
-  routes/<module>.ts one Hono router per module (admissions: routes/leads.ts at /api/leads, interviews nested under their lead); routes/admin.ts: /api/admin (bearer ADMIN_TOKEN)
-src/worker/          the Cloudflare Worker: embedded.ts + embeddedAssets.ts (the bundled-assets variant, scripts/embed-assets.ts writes its entry), index.ts (fetch: /api/* → the Durable Object — 413 first for a too-large Content-Length —, missing /assets/* → 404), school.ts (SchoolDO extends DurableObject: drizzle durable-sqlite + initDb + createApp, clientIp = CF-Connecting-IP), env.ts, r2FileStore.ts
+  routes/<module>.ts one Hono router per module (admissions: routes/leads.ts at /api/leads, interviews nested under their lead; site.ts at /api/site: content, coaches, workshops, summary;
+                     castingApplications.ts at /api/casting-applications); routes/admin.ts: /api/admin (bearer ADMIN_TOKEN)
+  site/              the public website, mounted at /site (no session): index.ts (router + its error handler), pages.ts, components.ts, forms.ts, submit.ts (POST: guard → createWebsiteLead /
+                     createCastingApplication → 303), layout.ts (one inline stylesheet), i18n.ts (SITE_STRINGS, `ar` typed against `en`), render.ts (icons, paragraphs, dates), context.ts, headers.ts
+                     (SITE_CSP, security/cache headers), paths.ts (every site path: /site/... or bare on a public host), publicHost.ts (PUBLIC_SITE_HOSTS routing, shared by the Worker and Node)
+src/worker/          the Cloudflare Worker: embedded.ts + embeddedAssets.ts (the bundled-assets variant, scripts/embed-assets.ts writes its entry), index.ts (wires the bindings into routing.ts: routeRequest —
+                     public hosts → the site at the root, www → 301 apex; elsewhere /api/* and /site/* → the Durable Object, 413 first for a too-large Content-Length (maxBodyBytes per route), the rest → assets, missing /assets/* → 404), school.ts (SchoolDO extends DurableObject: drizzle durable-sqlite + initDb + createApp, clientIp = CF-Connecting-IP), env.ts, r2FileStore.ts
 src/web/
   router.tsx         spreads each feature's routes
-  features/<module>/ routes.tsx, pages, components, i18n.ts (en + ar)
+  features/<module>/ routes.tsx, pages, components, i18n.ts (en + ar); dashboard/ = the section homes (StartPage at /, SchoolHomePage, CastingHomePage); website/ = the Website section; applications/ = Casting › Applications
   components/ui/     the UI kit (import from '@web/components/ui')
   lib/               api.ts, auth.tsx (useAuth, Guard), forms.ts (useForm), format.ts (useFormat), positions.ts (usePositionName), query.ts, image.ts
   i18n/              index.ts (registers namespaces), common.ts (shared strings + enum labels)
-  layout/            AppShell (sidebar on desktop, bottom tabs on phones), nav.ts
+  layout/            sections.ts (SECTIONS, visibleSections, sectionForPath, remembered section + last page per section), SectionTabs, SectionHomeHeader, RequireSection,
+                     AppShell (section tabs; sidebar on desktop, bottom tabs on phones; per-section menus), nav.ts (NAV_ITEMS with `section`, mobileTabs(section, can))
   public/_headers    CSP / nosniff / Referrer-Policy / cache headers for the static assets on Cloudflare (keep in step with src/server/index.ts)
 tests/helpers.ts     makeTestContext({ config?, files?, clientIp? }): in-memory app, t.as('executive_director' | ['acting_coach','finance'] | { permissions }) → signed-in client;
                      todayISO()/nowTime() here are the school's clock. Every createDb under Vitest (ACTING_SCHOOL_DO_LIMITS=1 in vitest.config.ts,
                      inherited by the `npm run seed` subprocess) fails any query over the Durable Object limits
-scripts/             bundle-migrations.ts (db:bundle), cf-local.ts / cf-dev.ts / cf-smoke.ts (local workerd runs)
+scripts/             bundle-migrations.ts (db:bundle), cf-local.ts / cf-dev.ts / cf-smoke.ts (local workerd runs), embed-assets.ts
 ```
 
 ## Rules
@@ -85,7 +97,7 @@ scripts/             bundle-migrations.ts (db:bundle), cf-local.ts / cf-dev.ts /
 - Response shapes must match the interfaces in `src/shared/schemas/<module>.ts`. Lists answer `{ items: [...] }`. Create answers 201 with the created resource. Delete answers 204 (`c.body(null, 204)`).
 - Multi-step writes go in `db.transaction((tx) => { … })`. **Transactions are synchronous on both drivers (better-sqlite3; `transactionSync` on the Durable Object): no `await` inside** (do async work — hashing, file IO — before).
 - Dates are strings: `YYYY-MM-DD`, `HH:MM`, `YYYY-MM-DDTHH:MM`, school-local, no time zone. Use `src/shared/dates.ts`; never `new Date('2026-01-05')`. **On the server, "today" and "now" are `schoolToday(c)` / `schoolNowTime(c)` (`lib/clock.ts`, the school's time zone, `SCHOOL_TIME_ZONE`, default Africa/Cairo) — never `todayISO()`/`nowTime()`/`new Date().getHours()`: Workers run in UTC.** The browser keeps `todayISO()`/`nowTime()` (its own clock).
-- Files: through `c.get('files')` (a `FileStore`), never `node:fs` in shared code. Files are private: only `GET /api/files/:id` to signed-in staff.
+- Files: through `c.get('files')` (a `FileStore`), never `node:fs` in shared code. Files are private: only `GET /api/files/:id` to signed-in staff. The one exception is `GET /site/media/:id`, which serves only what `isPublicFile`/`findPublicFile` (`lib/siteContent.ts`) allow: the site's main photo, visible coaches' photos and covers of workshops that appear on the site — images only. Casting-application photos are never public.
 - Sign-in: failed sign-ins go through `lib/signInBrake.ts` (per email + address, per email, per address, school-wide; address = `c.get('clientIp')`), checked **before** any password hashing — on Cloudflare scrypt blocks the one DO. First-run setup needs the setup code (ADMIN_TOKEN) where `config.requireSetupCode` (always on Cloudflare: the Worker is public from the first deploy); compare secrets with `sameSecret`. The session cookie is `sessionCookieName(config)` (`__Host-as_session` over HTTPS) — never hard-code the name.
 
 ### Shared code must run in a Durable Object
@@ -113,8 +125,20 @@ scripts/             bundle-migrations.ts (db:bundle), cf-local.ts / cf-dev.ts /
 - Dates/times on screen: `useFormat()` (`f.date(iso)`, `f.time(hhmm)`, `f.weekday(n)`), never raw strings.
 - Gate UI with `useAuth().can('x.y')`; gate routes with `<Guard permission="x.y">`. Never branch on a position's name or key — always on a permission. Show position names with `usePositionName()` (Arabic name in Arabic when set).
 - Page titles via `PageHeader` (it also sets the browser tab title).
+- **Sections:** every page belongs to School, Casting or Website by its path prefix (`SECTIONS[].prefixes` in `layout/sections.ts`), or to none (profile, staff, positions, settings keep the last section). A new page goes under its section's prefix and gets a `NavItem` with that `section` in `nav.ts` (admin pages: `section: 'admin'`). Colours per section come from the `--color-section-*` tokens (`bg-section`, `text-section`… follow the nearest `data-section`). Made for older people: tap targets ≥ 48 px, a visible label next to every icon, plain words, confirm before anything destructive, up/down buttons rather than drag-and-drop.
+- **No prices** on any screen, in the data or in the demo (the school's decision, 2026-11-23).
+
+### Public website (`src/server/site/`, mounted at `/site`)
+- Same code on Node and in the Durable Object, no session, no `X-Requested-With`. **No client JavaScript**: plain HTML forms, POST → 303 → GET.
+- Render with `hono/html` (`html` escapes every interpolation). **Never `raw()` with stored or submitted text** — only fixed markup (icons, the brand mark). Multi-paragraph texts go through `paragraphs()`.
+- Every visible string in `site/i18n.ts`, both languages; `<html lang dir>` from `:lang`.
+- **Paths:** build every link with `pathsFor(c)` / `sitePathsFor(url, config.publicSiteHosts)` from `site/paths.ts` — never hard-code `/site`. On a public host (`PUBLIC_SITE_HOSTS`: turquoisestudio.app, www → 301 apex) the site is at the root and the Worker/Node map `/x` to the app's `/site/x`; everywhere else it is under `/site` (previews). Nothing of the staff app answers on a public host.
+- **Forms** go through `guard()` in `site/submit.ts`, in this order: Origin must be our host (else 403), body cap (64 KB enquiries, 20 MB casting form; the Worker's `maxBodyBytes` refuses a larger Content-Length first — a new `/site` POST route is capped at 64 KB unless added there), **rate limits before reading photos or writing** (`siteFormRateLimited`: enquiries 5/hour per address + 300/day school-wide; casting 3/hour per address + 100/day + 300 MB of photos/day), honeypot field `website` (fake success, nothing stored), signed form token (`formToken`: ≥ 3 s, ≤ 24 h, HMAC with the `siteFormSecret` setting, constant-time). Then validate with the zod factories in `shared/schemas/site.ts` / `castingApplications.ts` and save through `createWebsiteLead` / `createCastingApplication` (photos: real JPEG/PNG/WebP by magic bytes, ≤ 6 MB each, 1–3; stored photos are deleted again if a later step fails).
+- Headers on every `/site` response (`site/headers.ts`): the CSP (`default-src 'none'`…), nosniff, Referrer-Policy; pages `public, max-age=60`, form responses, error and thank-you pages `no-store`.
+- The public site shows only published content (`loadPublicWorkshops`: visible + active + not over; visible coaches); files only through `/site/media/:id` (see Files above).
 
 ### Tests
 - API tests per module in `tests/api/<module>.test.ts` using `makeTestContext()`. Cover: happy path, validation (400), auth (401 signed out, 403 for positions without the permission), not found (404), and the module's own business rules. `t.as()` also accepts the phase-1 names owner/admin/teacher/agent as aliases of ceo/executive_director/acting_coach/head_of_casting.
 - Vitest runs in UTC (like Workers). Expected dates/times come from `todayISO()` / `nowTime()` / `schoolTimeToday('12:00')` in `tests/helpers.ts` (the school's clock), not from `src/shared/dates.ts`.
+- The website: `tests/api/site.test.ts` (staff API, leads), `tests/api/site-public.test.ts` (pages, forms, guards, media), `tests/api/casting-applications.test.ts`, `tests/unit/workerRouting.test.ts` (public-host routing with a fake ASSETS/DO), `tests/unit/rateLimit.test.ts`; the sections model in `tests/unit/sections.test.ts`, the Website/Applications UI helpers in `tests/unit/website-ui.test.ts`.
 - `tests/api/cloudflare.test.ts` covers the Cloudflare-specific pieces (limits, phone_digits, FileStore, admin endpoints, sign-in brakes, setup code, body limit, session cookie); after changing the API, also run `npm run cf:smoke` (real workerd).

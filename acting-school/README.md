@@ -2,7 +2,7 @@
 
 Internal staff app for an acting school that is also a talent agency. Works in the browser on desktop and phone (installable to the home screen), in English and Arabic.
 
-**Status:** phase 1 built — sign-in and first-run setup, staff accounts and settings, students, workshops (weekly schedule, sessions, attendance), talent roster with headshots, castings with roles and submissions, the combined schedule and the home dashboard, in English and Arabic (right-to-left). Phase 2, step 1 built — editable positions and permissions. Phase 2, step 2 built — admissions: enquiries from every source with follow-up reminders, pre-written WhatsApp messages (wa.me links, English or Arabic), interviews scored on the criteria in Settings, decisions and enrolment into a workshop, with interviews on the schedule and follow-ups on the home screen. The rest of phase 2 is in `ROADMAP.md`.
+**Status:** phase 1 built — sign-in and first-run setup, staff accounts and settings, students, workshops (weekly schedule, sessions, attendance), talent roster with headshots, castings with roles and submissions, the combined schedule and the home dashboard, in English and Arabic (right-to-left). Phase 2, step 1 built — editable positions and permissions. Phase 2, step 2 built — admissions: enquiries from every source with follow-up reminders, pre-written WhatsApp messages (wa.me links, English or Arabic), interviews scored on the criteria in Settings, decisions and enrolment into a workshop, with interviews on the schedule and follow-ups on the home screen. Phase 2, step 3 (in progress) — the app is split into three sections, **School**, **Casting** and **Website**, switched with tabs at the top, and the studio has a **public website** run from the Website section: workshops with an apply form, a casting call with photos, about & coaches, and a link-in-bio page. Its forms feed Admissions (enquiries with source "website") and Casting › Applications. The rest of phase 2 is in `ROADMAP.md`.
 
 ## Run it
 
@@ -27,7 +27,7 @@ The first visit asks you to set up the school (school name + the first account, 
 | `coach@demo.school` | Acting coach (teaches workshops) | Layla Haddad |
 | `coach2@demo.school` | Acting coach + Finance (teaches workshops) | Daniel Price |
 
-(`tom.wilkins@demo.school`, a former coach, is deactivated.) The demo also has 16 enquiries in every admissions stage — follow-ups overdue, due today and later, interviews coming up, recorded (with scores) and one no-show, one enquiry enrolled into Screen Acting I and two lost — taken by the director.
+(`tom.wilkins@demo.school`, a former coach, is deactivated.) The demo also has 16 enquiries in every admissions stage — follow-ups overdue, due today and later, interviews coming up, recorded (with scores) and one no-show, one enquiry enrolled into Screen Acting I and two lost — taken by the director — plus a filled-in website: studio texts and contact lines, three coach profiles, four workshops shown (no prices: the school's decision), an open casting call, three custom links, four casting applications with photos (one a minor with guardian consent) and two enquiries sent through the website.
 
 Locked out? `npm run owner -- someone@example.com` gives that existing account an owner position — CEO, or another owner position if CEO has been made an ordinary one — reactivates it and lifts the sign-in brakes on its email. (Upgrading a database from phase 1 needs nothing: each fixed role becomes the matching position — owner → CEO, admin → Executive Director, teacher → Acting coach, agent → Head of Casting. The server warns at startup if no active account holds an owner position.)
 
@@ -42,6 +42,7 @@ The app also runs on Cloudflare as **one Worker named `claude`**: the built web 
 | `ADMIN_TOKEN` | Secret (dashboard → the Worker → Settings → Variables and Secrets) | Bearer token for the operator endpoints below, 24+ random characters, **and the setup code** first-run setup asks for. Leave it unset and those endpoints don't exist — and nobody can set the school up. |
 | `SCHOOL_TIME_ZONE` | `vars` in `wrangler.jsonc` | `Africa/Cairo`. Workers run in UTC; "today" on the server comes from this. |
 | `ALLOW_DEMO_RESET` | `vars` | `"false"`. `"true"` only on a demo deployment (enables the reset below). |
+| `PUBLIC_SITE_HOSTS` | `vars` (both wrangler configs) | `"turquoisestudio.app,www.turquoisestudio.app"`: the hosts that serve the public website at their root (the first is the one `www` redirects to). Everywhere else the website is under `/site`. Unset on Node unless you set it. |
 | `SESSION_DAYS`, `COOKIE_SECURE` | optional vars | as on Node (cookies are `Secure`, named `__Host-as_session`, by default on Cloudflare). |
 
 **Set `ADMIN_TOKEN` before (or right after) the first deploy.** The Worker is public on its workers.dev address as soon as a push lands, and an empty school offers first-run setup — so on Cloudflare the setup screen asks for a **setup code**: the `ADMIN_TOKEN`. Without it nobody (an attacker polling for a fresh deployment included) can create the first owner account. The same holds after a demo reset. Either open the app and enter the code on the setup screen, or load the demo with `seed-demo` below (it creates the owner itself). On Node, setup stays open (the server isn't public until you put it somewhere); `REQUIRE_SETUP_CODE=true` turns the code on there too.
@@ -52,6 +53,10 @@ There's no shell next to the database on Cloudflare, so these replace `npm run s
 # Demo data into an empty deployment (409 once anyone has an account). Choose the password; it's never demo1234 there.
 curl -X POST https://<worker-url>/api/admin/seed-demo -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H 'Content-Type: application/json' -d '{"password":"a-long-demo-password"}'
+
+# The website demo alone (texts, coaches, workshops shown, casting call, links, applications), for a school seeded before
+# the website existed. Only while the website is empty (nothing saved, no coaches); else 409. seed-demo includes it already.
+curl -X POST https://<worker-url>/api/admin/seed-demo-website -H "Authorization: Bearer $ADMIN_TOKEN"
 
 # Locked out: same as npm run owner -- someone@example.com (also lifts the sign-in brakes on that email)
 curl -X POST https://<worker-url>/api/admin/grant-owner -H "Authorization: Bearer $ADMIN_TOKEN" \
@@ -73,11 +78,39 @@ Locally, in the same runtime (workerd), with nothing sent to Cloudflare:
 
 ```
 npm run cf:dev                  # the Worker on http://localhost:8787 (-- --port 8790 for another port); data in .wrangler/state
-npm run cf:smoke                # builds, starts it on :8790 with throwaway data, seeds and checks every module end to end
+npm run cf:smoke                # builds, starts it on :8790 with throwaway data, seeds and checks every module end to end (public website and the studio-domain routing included)
 npm run cf:smoke -- --embedded  # the same against the bundled variant (wrangler.embedded.jsonc)
 ```
 
 `cf:dev` creates a gitignored `.dev.vars` with a throwaway `ADMIN_TOKEN` and `ALLOW_DEMO_RESET=true` (see `.dev.vars.example`), so the seed command above works against `http://localhost:8787` (and that token is the local setup code).
+
+## Sections
+
+The staff app has three sections, switched with the tabs under the header (on phones) or at the top of the page (desktop). Each has its own colour, home page and menu; Staff, Positions and Settings sit under "Administration" in every section, and the profile is always in the menu.
+
+| Section | Home | What's in it | Who sees it |
+|---|---|---|---|
+| **School** (turquoise) | `/school` | today's sessions, follow-ups, new website enquiries; Schedule (workshops + interviews), Admissions, Students, Workshops | anyone with *See workshops*, *See students* or *See admissions* |
+| **Casting** (gold) | `/casting` | upcoming auditions, castings closing soon, new casting applications; Talent, Castings, Applications, Audition schedule | anyone with *See actors* or *See castings* |
+| **Website** (indigo) | `/website` | "Open the website", the casting call switch, every public page with Open / Copy link; Studio & contact, Workshops on the website, Casting call, Coaches, Link-in-bio | *Edit the website* (`website.manage`): owners and the Executive Director |
+
+People who see only one section get no tabs (a coach sees School only). `/` opens the section you were last in; each tab goes back to the last page you had open in that section. Old links (`/students/12`, `/classes/3`, …) still work.
+
+## The public website
+
+Server-rendered pages in English and Arabic (no JavaScript, no prices — workshop cards and pages have an **"Ask about fees on WhatsApp"** button instead):
+
+| Page | On the studio's domain | Preview on any other address |
+|---|---|---|
+| Home (picks Arabic or English from the browser) | `https://turquoisestudio.app/` → `/ar` or `/en` | `/site` → `/site/ar` or `/site/en` |
+| Workshops, one workshop + its apply form | `/en/workshops`, `/en/workshops/12` | `/site/en/workshops`, `/site/en/workshops/12` |
+| "Not sure which workshop? Ask us" | `/en/apply` | `/site/en/apply` |
+| Casting call (form with 1–3 photos when open) | `/en/casting-call` | `/site/en/casting-call` |
+| Link-in-bio (for the Instagram bio) | `/en/links` | `/site/en/links` |
+
+**The studio's domain:** the staff app lives on `staff.turquoisestudio.app`; the website at the root of `turquoisestudio.app`, and `www.turquoisestudio.app` redirects there. The hosts that serve the website at their root are listed in the `PUBLIC_SITE_HOSTS` var (both wrangler configs); nothing of the staff app answers on them (`/api`, `/login`, the service worker: the site's 404 page). Attaching the domains to the Worker (`routes` with `custom_domain: true`) is a deploy step. Until then the website is at `/site/en` on the staff address, and the Website section's Open / Copy link buttons give those addresses.
+
+Enquiries become ordinary leads (source "website": Admissions › filter by source); an enquiry from a phone that already has an open lead adds a note to that lead instead of a duplicate. Casting applications wait in Casting › Applications until someone adds them to the roster (that creates the talent profile with their photos) or declines them. The forms are protected without anything for the visitor to solve: an Origin check, a hidden trap field, a signed form token (at least 3 seconds, at most 24 hours old), body limits (64 KB for enquiries; 20 MB for the casting form, each photo at most 6 MB and a real JPEG/PNG/WebP) and rate limits — enquiries 5 an hour per address and 300 a day in total, casting applications 3 an hour per address, 100 a day and 300 MB of photos a day in total. Only the website's own pictures (main photo, shown coaches, shown workshops' covers) are public at `/site/media/:id`; applicants' photos never are.
 
 ## Positions
 
@@ -86,7 +119,7 @@ Access comes from **positions**. A person can hold several; their permissions ad
 | Position | Can see / do |
 |---|---|
 | **CEO**, **CFO** (owner positions) | Everything, including staff accounts, positions, all money, and permissions added later. Owner accounts and owner positions are invisible to everyone else. |
-| **Executive Director** | Everything except money totals (payment status only): staff accounts and positions (never beyond her own access, never owners), settings, students with contacts, all workshops, attendance, actors, castings, sending actors to clients, and admissions (enquiries, interviews, decisions, enrolling). |
+| **Executive Director** | Everything except money totals (payment status only): staff accounts and positions (never beyond her own access, never owners), settings, students with contacts, all workshops, attendance, actors, castings, sending actors to clients, admissions (enquiries, interviews, decisions, enrolling) and the public website. |
 | **Head of Casting** | Actor database with contacts, castings, sending actors to clients; sees students and all workshops (names, no student contacts). |
 | **Casting team** | Adds and updates actors (with contacts), builds shortlists. Can't send to clients. Sees students (no contacts). |
 | **Video editor** | Students, workshops and actors — names and photos only: no contact details, no money. |

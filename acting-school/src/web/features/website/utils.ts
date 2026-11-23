@@ -2,7 +2,7 @@ import type { Locale } from '@shared/enums';
 import type { Bilingual, SiteCoach, SiteContent, SiteLink, SiteWorkshop } from '@shared/schemas/site';
 
 /**
- * Small pure helpers for the Website section (tested in tests/unit/website.test.ts).
+ * Small pure helpers for the Website section (tested in tests/unit/website-ui.test.ts).
  */
 
 /** The list with the item at `index` moved one place up (-1) or down (+1); the same list when it can't move. */
@@ -31,9 +31,9 @@ export function coachTitle(c: Pick<SiteCoach, 'titleEn' | 'titleAr'>, lang: stri
   return pickBilingual({ en: c.titleEn, ar: c.titleAr }, lang);
 }
 
-/** The title visitors see in that language: its public title, else the other language's, else the course name (fillBilingual on the public site). */
+/** The title visitors see in that language: its public title, else the course name (as loadPublicWorkshops does on the public site). */
 export function workshopTitle(w: Pick<SiteWorkshop, 'titleEn' | 'titleAr' | 'courseName'>, lang: string): string {
-  return pickBilingual({ en: w.titleEn, ar: w.titleAr }, lang) || w.courseName;
+  return (lang === 'ar' ? w.titleAr : w.titleEn).trim() || w.courseName;
 }
 
 /** A link's button text in the screen's language (or the other one). */

@@ -58,5 +58,13 @@
   "workers_dev": true,
   "preview_urls": false,
 
+  // The studio's own domain (Cloudflare adds the DNS records and certificates).
+  // staff. = this staff app; the apex and www = the public website (PUBLIC_SITE_HOSTS).
+  "routes": [
+    { "pattern": "staff.turquoisestudio.app", "custom_domain": true },
+    { "pattern": "turquoisestudio.app", "custom_domain": true },
+    { "pattern": "www.turquoisestudio.app", "custom_domain": true }
+  ],
+
   "observability": { "enabled": true }
 }
