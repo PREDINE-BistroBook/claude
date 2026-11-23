@@ -903,3 +903,68 @@ The school asked for two more jobs: **Reception** and **Office helper**. "Office
 - **Tools:** the clear-demo tool and `wipe.ts` must handle the new tables (their coverage tests enforce it); orders are cleared, and the menu and places are kept.
 - **`cf:smoke`:** an order from start to delivered.
 - **Phone walkthrough** in English and Arabic at 375 px.
+
+---
+
+## Part K — "Add" everywhere, and a casting Opportunities list the team fills in (asked 2026-11-23)
+
+The school asked for two things:
+- "anything like casting opportunities or workshops etc. needs some sort of add button, so if they want to add new opportunities they can";
+- "see whatever you think needs an add button and add it".
+
+Built **after Parts I and J are merged**, because it touches the same screens. One new add-only migration.
+
+### K1. Opportunities (Casting section) — added by hand, no AI
+The radar (Part E) is on hold until the school confirms the AI pack. The **list** it would have filled is useful by itself, so the team adds opportunities when they see them on Instagram, Facebook, WhatsApp groups or a website. If the radar is built later, it writes into this same list.
+
+- **Data:**
+  - `casting_opportunities`:
+    - id, `title`, `details`;
+    - `project_type` (`film` | `series` | `ad` | `theatre` | `music_video` | `online` | `other`);
+    - `roles` (free text ≤ 1000), `location`, `deadline` (YYYY-MM-DD or null), `contact` (text);
+    - `link` (http/https only), `source` (free text ≤ 120, e.g. "Instagram — Frame Casting");
+    - `asks_for_payment` (bool), `involves_minors` (bool);
+    - `status` (`new` | `interested` | `applied` | `dismissed`);
+    - `casting_id` (FK castings, set null);
+    - `created_by_id`, `reviewed_by_id`, timestamps.
+  - `casting_opportunity_files` (id, `opportunity_id` cascade, `file_id`, `sort_order`): up to 3 screenshots or photos per opportunity. Add them to `FILE_REFERENCES`.
+- **Permissions:**
+  - `castings.read` sees the list;
+  - `castings.write` adds, edits, changes status, deletes and turns one into a casting. Screenshots follow the same permission.
+- **API `/api/opportunities`:**
+  - list (`?status=&q=`), get, create, patch, delete;
+  - `POST /:id/to-casting`: creates a casting prefilled with title, details, deadline, and link and contact in the notes; links it; answers `{ castingId }`.
+  - The dashboard gains `newOpportunities`.
+- **Screens:**
+  - **`/casting/opportunities`:**
+    - tabs New / Interested / Applied / Dismissed, with counts;
+    - cards showing title, project type, deadline (red when within 3 days, "Closed" when past), roles, source, and the first screenshot as a thumbnail;
+    - a red **"Asks for money — be careful"** flag when `asks_for_payment` is set;
+    - buttons **Open the post**, **Interested**, **Applied**, **Not for us**, **Turn into a casting**.
+  - **"Add opportunity":** a short form made for a phone. Title, where you saw it, the link (optional), screenshots from the gallery or camera, deadline, roles, contact, the two checkboxes, and notes. Only the title is required.
+  - **Navigation:** an entry in the Casting section's menu with a count badge of new ones, a Casting home card "N new opportunities", and "Add opportunity" among the Casting home's quick actions.
+- **Demo seed:** five realistic opportunities in Arabic and English, one of them flagged as asking for money.
+
+### K2. A clear "Add" on every screen that has something to add
+One consistent pattern, so nobody has to hunt for it:
+- **List screens:** a labelled primary button, "+ Add …" ("+ Add student", "+ Add workshop", …). On phones it is a **fixed button at the bottom-end, above the tab bar**: at least 48 px, icon plus words, never covering the last row, the chat composer, form action bars or the call-to-the-office banner. On desktop it sits in the page header.
+- **Empty lists** show the same action inside the empty state ("No students yet — Add the first one").
+- **Inside a record:** each sub-list has its own "+ Add …" at the top of that block. For example: a workshop's sessions, students, and photos & files; a casting's roles, submissions and files; an enquiry's contact log and interviews; a talent's photos; a student's workshops; the website's coaches and links.
+- **Section homes:** quick-action tiles for the most common additions, each shown only with the permission:
+  - School: New enquiry, New student, New workshop;
+  - Casting: New talent, New casting, Add opportunity;
+  - Website: Add coach, Add link.
+- **The work:** audit every list and every record page in the app. Where a create action exists but is hidden, far away or icon-only, bring it into this pattern. Where a create flow is missing but the data model supports it, add it. Report anything that needs a product decision instead of guessing. Candidates to check:
+  - adding an extra session to a workshop from the schedule;
+  - enrolling a student from the student's own page;
+  - adding a student straight from a workshop;
+  - adding a follow-up from the enquiries list;
+  - adding a custom position;
+  - adding a place for the cafeteria.
+- **Permissions:** an Add button never appears for someone who would be refused by the API.
+
+### Tests and checks
+- **API tests** for opportunities: permissions, link validation, to-casting, files freed on delete, dashboard count.
+- **A unit test over the route table** that fails when a list route has no registered "add" action or an explicit "nothing to add here" mark.
+- **`cf:smoke`:** an opportunity from add to casting.
+- **Phone walkthrough** at 375 px in English and Arabic, checking that the fixed Add button never covers content or other fixed bars.
