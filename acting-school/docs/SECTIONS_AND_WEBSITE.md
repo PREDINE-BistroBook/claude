@@ -855,19 +855,19 @@ They also said to keep "the website information we pulled from Instagram".
 
 | Name | Username | Position | First password |
 |---|---|---|---|
-| Ahmed Tamam | `ceo` | CEO (owner) | `ahmed123` |
+| Ahmed Tamam | `ceo` | CEO (owner) | `tamam123` |
 | Abdelrahman Tamam | `cfo` | CFO (owner) | `abdelrahman123` |
 | Salma | `salma` | Executive Director | `salma123` |
-| Ahmed Abdellah | `ahmed` | Head of Casting | `ahmed123` |
+| Ahmed Abdellah | `ahmed` | Head of Casting | `abdellah123` |
 | Ayman Farouk | `ayman` | Head of Casting | `ayman123` |
 | Mohamed Hamzawy | `hamzawy` | Casting team | `mohamed123` |
 | Taha | `taha` | Casting team | `taha123` |
 | Ali El Gohary | `ali` | Video editor | `ali123` |
 | Moaty | `moaty` | Acting coach + Finance | `moaty123` |
 
-Each person is asked to choose their own password the first time they sign in.
+Each person is asked to choose their own password the first time they sign in. All nine accounts are created in Arabic (`"locale": "ar"` on each), with `"keep": []`, `"owner": "ceo"` and `"keepSiteContent": "contact"`.
 
-**Note (review, 2026-11-23):** `ceo` (an owner) and `ahmed` share the first password `ahmed123` in this table. A temporary password works for whoever types it first, and choosing a password asks for nothing more — so whichever Ahmed signs in as `ceo` first holds the owner account. The dry run says so (`shared_password`, `owner: true`). Unless the school decides otherwise, give `ceo` a first password of its own, handed over in person.
+**Note (review, 2026-11-23):** the first version of this table gave `ceo` (an owner) and `ahmed` the same first password, `ahmed123`. A temporary password works for whoever types it first, and choosing a password asks for nothing more — so whichever Ahmed signed in as `ceo` first would have held the owner account; the dry run says so (`shared_password`, `owner: true`). **Resolved:** the two Ahmeds now have first passwords of their own (`tamam123`, `abdellah123`), and the dry run of this request answers no `shared_password` warning (rehearsed in local workerd on a database shaped like the live one: its only warning is `replaces_account` for `cfo`: the existing account named `cfo`, the CFO's current one, goes with the others). Hand the owner's first password over in person.
 
 ### Tests
 - **Usernames:** rules, uniqueness, backfill, sign-in by username and by email, brakes per account.
