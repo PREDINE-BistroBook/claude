@@ -8,6 +8,7 @@ import { users } from '../server/db/schema';
 import { activeOwnerCount } from '../server/lib/access';
 import { fallbackFileStore, sqliteFileStore } from '../server/lib/fileStore';
 import type { Env } from './env';
+import { pointInTimeRecovery } from './pointInTimeRecovery';
 import { r2FileStore } from './r2FileStore';
 
 /**
@@ -24,6 +25,10 @@ import { r2FileStore } from './r2FileStore';
  * Workers RPC — what wrangler's local explorer and Cloudflare's tools use to
  * run SQL against its storage. The API itself is served by fetch() only, and
  * the class has no other public methods.
+ *
+ * This is the only place that reaches ctx.storage: besides the database, it
+ * hands the app the object's point-in-time recovery (pointInTimeRecovery.ts)
+ * for the operator's restore endpoints.
  */
 export class SchoolDO extends DurableObject<Env> {
   private app: ReturnType<typeof createApp> | null = null;
@@ -47,6 +52,8 @@ export class SchoolDO extends DurableObject<Env> {
         clientIp: (c) => c.req.header('cf-connecting-ip'),
         // Push notifications are sent after the response (lib/push); keep the object at it until they're out.
         waitUntil: (task) => ctx.waitUntil(task),
+        // The operator's restore points (/api/admin/restore-point, /restore, and before a real clear-demo).
+        restore: pointInTimeRecovery(ctx.storage, ctx),
       });
       if (db.select({ id: users.id }).from(users).limit(1).get() && activeOwnerCount(db) === 0) {
         console.warn('No active account holds an owner position. Give one back with POST /api/admin/grant-owner (README).');

@@ -5,6 +5,7 @@ import type { DB } from './db/database';
 import type { AppEnv } from './env';
 import { ApiError, sqliteConstraint } from './lib/errors';
 import type { FileStore } from './lib/fileStore';
+import type { RestoreDeps } from './lib/restorePoint';
 import { loadSession, requireAjaxHeader, requireOwnPassword } from './middleware/auth';
 import { limitBody, MAX_JSON_BODY_BYTES } from './middleware/bodyLimit';
 import { adminRoutes } from './routes/admin';
@@ -51,6 +52,12 @@ export interface AppDeps {
   waitUntil?: (task: Promise<unknown>) => void;
   /** fetch for calls to other servers (the browsers' push services). Default: the runtime's fetch. Tests pass a fake. */
   outboundFetch?: typeof fetch;
+  /**
+   * Taking the database back in time, for the operator endpoints (lib/restorePoint.ts): the Durable
+   * Object's point-in-time recovery on Cloudflare, a copy of the database file on Node. Omitted
+   * (tests): a real clear-demo run records nothing, and the restore endpoints answer 501.
+   */
+  restore?: RestoreDeps;
 }
 
 /** Fire and forget: the promise runs on; a failure is logged, never unhandled. */
@@ -88,7 +95,7 @@ export function createApp(deps: AppDeps) {
   app.use('/api/*', (c, next) => (c.req.path === '/api/files' ? next() : jsonBodyLimit(c, next)));
   // Operator endpoints (bearer token, no cookie): before the browser-session guards. Without
   // ADMIN_TOKEN they pass the request on, so it ends like any unknown route.
-  app.use('/api/admin/*', adminRoutes({ request: (path, init) => app.request(path, init) }));
+  app.use('/api/admin/*', adminRoutes({ request: (path, init) => app.request(path, init), restore: deps.restore }));
   app.use('/api/*', requireAjaxHeader);
   app.use('/api/*', loadSession);
 

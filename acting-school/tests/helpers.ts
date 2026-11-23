@@ -114,7 +114,7 @@ let hashed: Promise<string> | null = null;
  *   const res = await admin.post('/api/students', { firstName: 'A', lastName: 'B' });
  */
 export async function makeTestContext(
-  opts: { config?: Partial<AppConfig>; files?: FileStore; clientIp?: AppDeps['clientIp']; outboundFetch?: typeof fetch } = {},
+  opts: { config?: Partial<AppConfig>; files?: FileStore; clientIp?: AppDeps['clientIp']; outboundFetch?: typeof fetch; restore?: AppDeps['restore'] } = {},
 ) {
   const config: AppConfig = testConfig(opts.config);
   const db: DB = testDb();
@@ -124,7 +124,7 @@ export async function makeTestContext(
   const background: Promise<unknown>[] = [];
   // Outbound calls never leave the test: a fake unless the test passes its own.
   const outboundFetch: typeof fetch = opts.outboundFetch ?? (async () => new Response(null, { status: 201 }));
-  const app = createApp({ db, config, files, clientIp: opts.clientIp, waitUntil: (task) => void background.push(task), outboundFetch });
+  const app = createApp({ db, config, files, clientIp: opts.clientIp, waitUntil: (task) => void background.push(task), outboundFetch, restore: opts.restore });
   hashed ??= hashPassword(PASSWORD);
   let n = 0;
 

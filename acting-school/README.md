@@ -56,7 +56,7 @@ The app also runs on Cloudflare as **one Worker named `claude`**: the built web 
 
 **Set `ADMIN_TOKEN` before (or right after) the first deploy.** The Worker is public on its workers.dev address as soon as a push lands, and an empty school offers first-run setup — so on Cloudflare the setup screen asks for a **setup code**: the `ADMIN_TOKEN`. Without it nobody (an attacker polling for a fresh deployment included) can create the first owner account. The same holds after a demo reset. Either open the app and enter the code on the setup screen, or load the demo with `seed-demo` below (it creates the owner itself). On Node, setup stays open (the server isn't public until you put it somewhere); `REQUIRE_SETUP_CODE=true` turns the code on there too.
 
-There's no shell next to the database on Cloudflare, so these replace `npm run seed` and `npm run owner` (all need `Authorization: Bearer $ADMIN_TOKEN`; the token is never logged):
+There's no shell next to the database on Cloudflare, so these replace `npm run seed` and `npm run owner` (all need `Authorization: Bearer $ADMIN_TOKEN`; the token is never logged). Replacing the demo with the real team is its own section, "Clearing the demo and creating the real team", below:
 
 ```
 # Demo data into an empty deployment (409 once anyone has an account). Choose the password; it's never demo1234 there.
@@ -81,7 +81,7 @@ Sign-in brakes (both runtimes, kept in the database): 10 failed sign-ins per acc
 
 The Durable Object speaks Workers RPC (`extends DurableObject`), so wrangler's local explorer can run SQL against the local database (`npm run cf:dev` prints its address).
 
-Uploaded photos are stored in the Durable Object's SQLite (R2 isn't enabled on the account yet). Once it is: create a private bucket, uncomment the `r2_buckets` line in `wrangler.jsonc`, and new uploads go there (older ones are still read from SQLite). Durable Objects keep 30 days of point-in-time recovery for the database.
+Uploaded photos are stored in the Durable Object's SQLite (R2 isn't enabled on the account yet). Once it is: create a private bucket, uncomment the `r2_buckets` line in `wrangler.jsonc`, and new uploads go there (older ones are still read from SQLite). Durable Objects keep 30 days of point-in-time recovery for the database. (`GET /api/admin/restore-point` and `POST /api/admin/restore`: see "Clearing the demo and creating the real team" below.)
 
 **Deploying without Workers Builds.** Until the Workers Builds settings above are filled in, the app is deployed by hand with `npm run cf:deploy-embedded` (needs Cloudflare credentials). It's the same Worker and the same Durable Object, but the web app is bundled into the Worker's code (`wrangler.embedded.jsonc`, entry written by `scripts/embed-assets.ts`) instead of uploaded as static assets, because the cloud container's network proxy breaks Cloudflare's asset upload. It answers the same way: the headers from `_headers`, ETags, the SPA fallback, a 404 for a missing hashed file. The embed script stops with an error rather than serve something differently from the real asset server: a `_redirects` file in `dist/web`, or `_headers` rules other than exact paths and a trailing `*`. A later Workers Builds deploy simply replaces it, data kept.
 
@@ -89,11 +89,91 @@ Locally, in the same runtime (workerd), with nothing sent to Cloudflare:
 
 ```
 npm run cf:dev                  # the Worker on http://localhost:8787 (-- --port 8790 for another port); data in .wrangler/state
-npm run cf:smoke                # builds, starts it on :8790 with throwaway data, seeds and checks every module end to end (public website, the studio-domain routing and the team pack included); -- --port N, -- --state-dir <folder>
+npm run cf:smoke                # builds, starts it on :8790 with throwaway data, seeds and checks every module end to end (public website, the studio-domain routing, the team pack and clearing the demo included); -- --port N, -- --state-dir <folder>
 npm run cf:smoke -- --embedded  # the same against the bundled variant (wrangler.embedded.jsonc)
 ```
 
 `cf:dev` creates a gitignored `.dev.vars` with a throwaway `ADMIN_TOKEN` and `ALLOW_DEMO_RESET=true` (see `.dev.vars.example`), so the seed command above works against `http://localhost:8787` (and that token is the local setup code). Both commands start wrangler so that the Worker sees the address you really use (`localhost:8787`) rather than the first custom domain in `routes`; to see what a domain serves, send its name as the Host header: `curl -H 'Host: turquoisestudio.app' localhost:8787/en/workshops` (the public website), `curl -i -H 'Host: staff.turquoisestudio.app' localhost:8787/students` (301 to `team.turquoisestudio.app`).
+
+### Clearing the demo and creating the real team
+
+One operator call replaces the demo with the real school: `POST /api/admin/clear-demo` (same `Authorization: Bearer $ADMIN_TOKEN` as the endpoints above). It
+
+- **deletes every record** — students, workshops, sessions, attendance, talent, castings, enquiries, interviews, casting applications, chats, calls to the office, alerts, stored files, sign-in sessions and counters;
+- **deletes every account** that is not named under `keep` (normally all of them);
+- **creates the accounts** under `create`, each with a **temporary** first password: the person's first sign-in shows only "Choose your own password";
+- makes `owner` an **active owner** (given the CEO position unless it already holds an owner position);
+- treats the **website's content** as `keepSiteContent` says, and deletes the coaches and the workshops shown in every case (the records they were about are gone);
+- **keeps** the settings, the positions (the school's own included), the email domain and the public forms' secret.
+
+Write the request in a file, `team.json`. It holds passwords: keep it out of the repository and delete it afterwards.
+
+```
+{
+  "create": [
+    { "name": "Ahmed Tamam", "username": "ceo",   "password": "…", "positions": ["ceo"] },
+    { "name": "Salma",       "username": "salma", "password": "…", "positions": ["executive_director"] },
+    { "name": "Moaty",       "username": "moaty", "password": "…", "positions": ["acting_coach", "finance"] }
+  ],
+  "owner": "ceo",
+  "keepSiteContent": "contact"
+}
+```
+
+- `positions` are the built-in positions' keys: `ceo`, `cfo`, `executive_director`, `head_of_casting`, `casting_team`, `video_editor`, `acting_coach`, `finance`.
+- `password` may be short (it is temporary); `locale` (`"en"` / `"ar"`) and `email` are optional — without `email` the account gets `<username>@<email domain>`.
+- `keep` (optional): usernames or email addresses of accounts that stay as they are — name, positions, password, language, photo. They are signed out like everyone else.
+- `keepSiteContent`: `"contact"` keeps the tagline, about text, address, map link, WhatsApp lines, phone, email, Instagram and the casting call's texts, removes the custom links and the main photo, closes the casting call and leaves the website **not public**; `"all"` leaves the content exactly as it is (links, main photo, casting call and the "Website is public" switch included); `"none"` empties it.
+- Unknown fields are refused, so a misspelt `dryRun` can never become a real run.
+
+**1. See that a restore point is there** (Cloudflare; see the limits below):
+
+```
+curl https://<worker-url>/api/admin/restore-point -H "Authorization: Bearer $ADMIN_TOKEN"
+# → {"bookmark":"0000007b-0000b26e-00001538-0c3e87bb…","at":1795455945998}
+```
+
+**2. Dry run** — the default. It changes nothing and answers the plan: every account as it will be, a count of what goes for every table, what happens to the website, and a `confirm` code.
+
+```
+curl -X POST https://<worker-url>/api/admin/clear-demo -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' -d @team.json
+# → {"dryRun":true,"confirm":"3ea9c9c0-c033903d","accounts":[…],"willDelete":{"students":25,…,"users":9,"files":44},"siteContent":{…}}
+```
+
+**3. Real run** — the same request with `"dryRun": false` and the code. Do it right after reading the plan.
+
+```
+jq '. + {dryRun: false, confirm: "3ea9c9c0-c033903d"}' team.json | \
+  curl -X POST https://<worker-url>/api/admin/clear-demo -H "Authorization: Bearer $ADMIN_TOKEN" \
+    -H 'Content-Type: application/json' -d @-
+# → {"dryRun":false,…,"deleted":{…},"restorePoint":{"kind":"bookmark","bookmark":"0000007b-…","at":…}}
+```
+
+The code is for **this request on this data**. A different request (another account, password, owner, website choice) answers 409 `confirm_mismatch`; the same request after a record was added or deleted, or the website's texts were edited, answers 409 `plan_changed` — run the dry run again and read the new plan. (Sign-in sessions, sign-in brakes, form counters and phone-alert subscriptions are counted but are not part of the code: someone signing in between the two calls is no reason to start over.) Everything happens in one transaction: a run that fails for any reason changes nothing. Keep the `restorePoint` from the answer; it is also in the Worker's log.
+
+Other refusals, all before anything changes: 400 `validation` (a malformed body; a username that breaks the rules is named in `issues`), `unknown_position`, `unknown_account` (a `keep` name nobody has), `duplicate_username`, `duplicate_email`, `owner_not_listed`, `no_accounts`, `confirm_required`; 409 `no_owner_position` (run `grant-owner` first); 503 `restore_point_failed`.
+
+**Taking it back (Cloudflare).** The Durable Object keeps 30 days of point-in-time recovery for its database:
+
+```
+# To the restore point of the run…
+curl -X POST https://<worker-url>/api/admin/restore -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' -d '{"bookmark":"0000007b-0000b26e-00001538-0c3e87bb…"}'
+# …or to how the database was some minutes ago (1 to 43200 = 30 days; approximate)
+curl -X POST https://<worker-url>/api/admin/restore -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' -d '{"minutesAgo":30}'
+# → 202 {"restoringTo":"…","undoBookmark":"…"}   then the app restarts on the restored database, within a second
+```
+
+Its limits — read them before relying on it:
+
+- **It takes the whole database back**, not just what the run deleted: every account created, password chosen and record entered after that moment is gone again. `undoBookmark` in the answer (and in the log) restores to just before the restore, should that have been a mistake. There is no dry run for a restore.
+- **Only the database.** Uploaded files come back with it because they are stored in the database today; once an R2 bucket is bound, a file the run deleted from R2 stays deleted.
+- **Sign-ins go back too:** whoever was signed in at that moment is signed in again, everyone since is signed out.
+- **A second of errors** for requests in flight while the app restarts.
+- **Cloudflare only, and not in local `wrangler dev`** (workerd keeps no history there): locally both endpoints answer 501 `not_supported` and a real run has `"restorePoint": null`. So the restore itself has never run outside Cloudflare — that is what step 1 is for: a bookmark in its answer shows recovery is there on the deployment.
+- **On Node** there is no recovery over HTTP (both endpoints answer 501). Instead a real run first copies the database to `$DATA_DIR/app.before-clear-demo.<UTC time>.db` and answers `{"kind":"file","file":"…"}`. To go back: stop the server, put that file in place of `app.db` (delete `app.db-wal` and `app.db-shm`), start it. The copy holds the database only — not the files in `uploads/` that the run deleted; copy that folder yourself first if they matter.
 
 ### Phone alerts (VAPID keys)
 

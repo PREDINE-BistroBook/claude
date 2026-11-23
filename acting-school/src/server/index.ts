@@ -9,6 +9,7 @@ import { users } from './db/schema';
 import { activeOwnerCount } from './lib/access';
 import { loadConfig } from './nodeConfig';
 import { folderFileStore } from './nodeFileStore';
+import { nodeRestorePoints } from './nodeRestore';
 import { SITE_BASE } from './site/paths';
 import { apexRedirect, routePublicHost, withUrl } from './site/publicHost';
 
@@ -32,6 +33,8 @@ const app = createApp({
       return null;
     }
   },
+  // Before a real POST /api/admin/clear-demo the database is copied aside (there is no point-in-time recovery here).
+  restore: nodeRestorePoints(db, config.dataDir),
 });
 
 // Staff exist but nobody active holds an owner position (e.g. every former owner deactivated):

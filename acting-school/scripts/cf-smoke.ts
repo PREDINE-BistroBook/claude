@@ -34,6 +34,11 @@
  * team.turquoisestudio.app with its old address staff. forwarding. The team
  * pack: the Team page, a chat round trip with a photo, a workshop document, a
  * call to the office answered, notifications, push off without VAPID keys.
+ * The operator's clean-out (POST /api/admin/clear-demo): a dry run that
+ * changes nothing, the confirm code's rules, the real run (the demo gone, one
+ * account kept with its photo, the real team created), each new person
+ * signing in by username with a temporary password and choosing their own;
+ * the restore endpoints answer 501 here (local workerd keeps no history).
  * Exit code 1 on the first failure. Local only (scripts/cf-local.ts).
  */
 import { spawnSync } from 'node:child_process';
@@ -867,6 +872,129 @@ async function publicHostChecks(base: string, opts: { password: string }) {
   check(preview.body.includes('<link rel="canonical" href="https://turquoisestudio.app/en">'), 'a /site preview is canonical on the studio’s domain');
 }
 
+/** The school's real team, as the operator's request names it (docs/SECTIONS_AND_WEBSITE.md, Part I). */
+const REAL_TEAM = [
+  { name: 'Ahmed Tamam', username: 'ceo', password: 'ahmed123', positions: ['ceo'] },
+  { name: 'Abdelrahman Tamam', username: 'cfo', password: 'abdelrahman123', positions: ['cfo'] },
+  { name: 'Salma', username: 'salma', password: 'salma123', positions: ['executive_director'] },
+  { name: 'Ahmed Abdellah', username: 'ahmed', password: 'ahmed123', positions: ['head_of_casting'] },
+  { name: 'Ayman Farouk', username: 'ayman', password: 'ayman123', positions: ['head_of_casting'] },
+  { name: 'Mohamed Hamzawy', username: 'hamzawy', password: 'mohamed123', positions: ['casting_team'] },
+  { name: 'Taha', username: 'taha', password: 'taha123', positions: ['casting_team'] },
+  { name: 'Ali El Gohary', username: 'ali', password: 'ali123', positions: ['video_editor'] },
+  { name: 'Moaty', username: 'moaty', password: 'moaty123', positions: ['acting_coach', 'finance'] },
+];
+
+/**
+ * POST /api/admin/clear-demo in real workerd: the dry run, the confirm code,
+ * the real run in the Durable Object's one transaction, the new team signing
+ * in. One demo account is kept, to see a kept account (and its photo) through
+ * it. Leaves a school with the real team, the kept director and one file.
+ */
+async function clearDemoChecks(base: string, opts: { adminToken: string; password: string }) {
+  const anon = new Client(base);
+  const bearer = { authorization: `Bearer ${opts.adminToken}` };
+  const clearDemo = (body: unknown, headers: Record<string, string> = bearer) => anon.post('/api/admin/clear-demo', body, headers);
+
+  step('clear the demo: a dry run changes nothing and answers the plan and its code');
+  const director = new Client(base);
+  expectStatus(await director.post('/api/auth/login', { username: 'director', password: opts.password }), 200, 'the demo director signs in');
+  const photoId = await upload(director, noisePng(48), 'director.png');
+  expectStatus(await director.put('/api/auth/photo', { fileId: photoId }), 200, 'the director sets a profile photo');
+  const photoSha = sha(expectStatus(await director.get(`/api/files/${photoId}`), 200, 'the photo').bytes);
+  const studentsBefore = expectStatus(await director.get('/api/students'), 200, 'students before').body.items.length;
+  check(studentsBefore > 20, `the demo's students are there (${studentsBefore})`);
+
+  const request = { create: REAL_TEAM, keep: ['director'], owner: 'ceo', keepSiteContent: 'contact' };
+  expectStatus(await clearDemo(request, {}), 401, 'clear-demo without the token');
+  expectStatus(await clearDemo(request, { authorization: 'Bearer wrong-token-wrong-token-wrong' }), 401, 'clear-demo with a wrong token');
+  const dry = expectStatus(await clearDemo(request), 200, 'dry run').body;
+  check(dry.dryRun === true && /^[0-9a-f]{8}-[0-9a-f]{8}$/.test(dry.confirm) && !('deleted' in dry), `a dry run by default, with a confirm code (${dry.confirm})`);
+  check(dry.willDelete.students === studentsBefore && dry.willDelete.users >= 8 && dry.willDelete.files > 10, `the plan counts what goes (${dry.willDelete.students} students, ${dry.willDelete.users} accounts, ${dry.willDelete.files} files)`);
+  check(dry.accounts.length === REAL_TEAM.length + 1 && dry.accounts[0].username === 'director' && dry.accounts[0].status === 'kept', 'the plan lists the kept account and the nine new ones');
+  check(dry.accounts.filter((a: { owner: boolean }) => a.owner).map((a: { username: string }) => a.username).join() === 'ceo,cfo', 'the owners afterwards: ceo and cfo');
+  check(dry.siteContent.mode === 'contact' && dry.siteContent.published === false && dry.siteContent.kept.includes('whatsappWorkshops'), 'the website keeps its contact lines and is not public');
+  check(!REAL_TEAM.some((a) => JSON.stringify(dry).includes(a.password)), 'no password in the answer');
+  check(expectStatus(await director.get('/api/students'), 200, 'students after the dry run').body.items.length === studentsBefore, 'the dry run changed nothing');
+
+  step('clear the demo: a real run needs the code of a dry run of the same request on the same data');
+  const refused = async (body: unknown, status: number, code: string, what: string) => check(expectStatus(await clearDemo(body), status, what).body.error.code === code, `${what}: ${code}`);
+  await refused({ ...request, dryRun: false }, 400, 'confirm_required', 'a real run without a code');
+  await refused({ ...request, dryRun: false, confirm: '00000000-00000000' }, 409, 'confirm_mismatch', 'a real run with a made-up code');
+  await refused({ ...request, owner: 'cfo', dryRun: false, confirm: dry.confirm }, 409, 'confirm_mismatch', 'the code of another request');
+  await refused({ ...request, dryrun: false, confirm: dry.confirm }, 400, 'validation', 'a misspelt dryRun');
+  await refused({ ...request, create: [{ ...REAL_TEAM[0], positions: ['janitor'] }] }, 400, 'unknown_position', 'an unknown position');
+  await refused({ ...request, owner: 'owner' }, 400, 'owner_not_listed', 'an owner who is not kept');
+  const late = expectStatus(await director.post('/api/students', { firstName: 'Late', lastName: 'Arrival' }), 201, 'a student added after the dry run').body;
+  await refused({ ...request, dryRun: false, confirm: dry.confirm }, 409, 'plan_changed', 'the data changed since the dry run');
+  check(expectStatus(await director.get(`/api/students/${late.id}`), 200, 'the late student').body.firstName === 'Late', 'refused runs changed nothing');
+  const fresh = expectStatus(await clearDemo(request), 200, 'a fresh dry run').body;
+  check(fresh.confirm !== dry.confirm && fresh.willDelete.students === studentsBefore + 1, 'the fresh dry run counts the new student and has a new code');
+
+  step('clear the demo: the real run — one transaction in the Durable Object');
+  const real = expectStatus(await clearDemo({ ...request, dryRun: false, confirm: fresh.confirm }), 200, 'the real run').body;
+  check(real.dryRun === false && JSON.stringify(real.deleted) === JSON.stringify(fresh.willDelete), 'it deleted exactly what the dry run said');
+  check(real.restorePoint === null, 'no restore point in local workerd (it keeps no history)');
+  check(real.accounts.every((a: { id: number | null }) => typeof a.id === 'number'), 'every account has its id');
+  await refused({ ...request, dryRun: false, confirm: fresh.confirm }, 409, 'plan_changed', 'the same code a second time');
+  expectStatus(await director.get('/api/students'), 401, 'the kept account was signed out');
+  for (const name of ['owner', 'coach', 'owner@demo.school']) {
+    expectStatus(await new Client(base).post('/api/auth/login', { username: name, password: opts.password }), 401, `the demo account "${name}" is gone`);
+  }
+
+  step('clear the demo: the kept account keeps its password and photo; each new person signs in by username and chooses a password');
+  const kept = new Client(base);
+  const keptUser = expectStatus(await kept.post('/api/auth/login', { username: 'director', password: opts.password }), 200, 'the kept director signs in with the old password').body.user;
+  check(keptUser.mustChangePassword === false && keptUser.photoFileId === photoId, 'no password to choose, the photo still theirs');
+  check(sha(expectStatus(await kept.get(`/api/files/${photoId}`), 200, 'the kept photo').bytes) === photoSha, 'the photo is intact');
+  for (const url of ['/api/students', '/api/courses', '/api/talent', '/api/castings', '/api/leads', '/api/casting-applications', '/api/site/coaches', '/api/site/workshops']) {
+    check(expectStatus(await kept.get(url), 200, url).body.items.length === 0, `${url} is empty`);
+  }
+  const site = expectStatus(await kept.get('/api/site/content'), 200, 'site content').body;
+  check(site.published === false && site.links.length === 0 && site.heroFileId === null && site.castingCall.open === false, 'the website: not public, no links, no main photo, casting call closed');
+  check(site.whatsappWorkshops === '01094635959' && site.tagline.en.length > 0, 'the studio’s own lines are still there');
+  const preview = expectStatus(await new Client(base).get('/site/en'), 200, 'the website preview');
+  check(String(preview.body).includes('class="preview"'), 'the preview renders, with its "not public yet" banner');
+
+  for (const person of REAL_TEAM) {
+    const c = new Client(base);
+    const user = expectStatus(await c.post('/api/auth/login', { username: person.username, password: person.password }), 200, `${person.username} signs in`).body.user;
+    check(user.mustChangePassword === true && user.name === person.name && user.email === `${person.username}@turquoisestudio.app`, `${person.username}: temporary password, automatic address`);
+    check(user.positions.map((p: { key: string }) => p.key).sort().join() === [...person.positions].sort().join(), `${person.username}: ${person.positions.join(' + ')}`);
+    check(expectStatus(await c.get('/api/team'), 403, `${person.username} before choosing a password`).body.error.code === 'password_change_required', 'the app is closed until they choose');
+  }
+  const ali = new Client(base);
+  expectStatus(await ali.post('/api/auth/login', { username: 'ali@turquoisestudio.app', password: 'ali123' }), 200, 'ali signs in with the address');
+  expectStatus(await ali.post('/api/auth/choose-password', { newPassword: 'ali123' }), 400, 'the temporary password again');
+  expectStatus(await ali.post('/api/auth/choose-password', { newPassword: `ali-${opts.password}` }), 200, 'ali chooses a password');
+  expectStatus(await ali.get('/api/students'), 200, 'ali is in');
+  expectStatus(await new Client(base).post('/api/auth/login', { username: 'ali', password: 'ali123' }), 401, 'the temporary password is over');
+
+  const ceo = new Client(base);
+  expectStatus(await ceo.post('/api/auth/login', { username: 'ceo', password: 'ahmed123' }), 200, 'the owner signs in');
+  check(expectStatus(await ceo.post('/api/auth/choose-password', { newPassword: opts.password }), 200, 'the owner chooses a password').body.user.isOwner === true, 'ceo is an owner');
+  const team = expectStatus(await ceo.get('/api/team'), 200, 'team').body.items;
+  check(team.length === REAL_TEAM.length + 1, `Team lists exactly the ten accounts (${team.length})`);
+  const staff = expectStatus(await ceo.get('/api/staff'), 200, 'staff').body.items;
+  check(staff.map((s: { username: string }) => s.username).sort().join() === [...REAL_TEAM.map((a) => a.username), 'director'].sort().join(), 'their usernames');
+  const student = expectStatus(await ceo.post('/api/students', { firstName: 'First', lastName: 'Real' }), 201, 'the first real student').body;
+  const course = expectStatus(
+    await ceo.post('/api/courses', { name: 'First real workshop', startDate: todayIn('Africa/Cairo'), endDate: addDays(todayIn('Africa/Cairo'), 30), schedule: [{ weekday: 2, startTime: '18:00', endTime: '20:00' }] }),
+    201,
+    'the first real workshop',
+  ).body;
+  expectStatus(await ceo.post(`/api/courses/${course.id}/enrollments`, { studentId: student.id }), 201, 'enrolled');
+  expectStatus(await ceo.post('/api/leads', { firstName: 'Mona', lastName: 'Asks', phone: '01001234567', source: 'whatsapp' }), 201, 'the first real enquiry');
+
+  step('restore points: not in local workerd — both endpoints say so (501), behind the same token');
+  expectStatus(await anon.get('/api/admin/restore-point'), 401, 'restore-point without the token');
+  expectStatus(await anon.post('/api/admin/restore', { minutesAgo: 5 }), 401, 'restore without the token');
+  check(expectStatus(await anon.get('/api/admin/restore-point', bearer), 501, 'restore-point').body.error.code === 'not_supported', 'restore-point: not_supported');
+  check(expectStatus(await anon.post('/api/admin/restore', { minutesAgo: 5 }, bearer), 501, 'restore by time').body.error.code === 'not_supported', 'restore by time: not_supported');
+  check(expectStatus(await anon.post('/api/admin/restore', { bookmark: '0000007b-0000b26e-00001538-0c3e87bb37b3db5cc52eedb93cd3b96b' }, bearer), 501, 'restore to a bookmark').body.error.code === 'not_supported', 'restore to a bookmark: not_supported');
+  expectStatus(await ceo.get(`/api/students/${student.id}`), 200, 'the object is still up, the data still there');
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   const portArg = argv.indexOf('--port');
@@ -902,6 +1030,7 @@ async function main() {
     await dev.stop();
     dev = await startWranglerDev({ port, persistTo, quiet: !argv.includes('--verbose'), config });
     await afterRestart(dev.url, state);
+    await clearDemoChecks(dev.url, { adminToken: vars.ADMIN_TOKEN, password });
 
     step('demo reset');
     const reset = expectStatus(await new Client(dev.url).post('/api/admin/reset', {}, { authorization: `Bearer ${vars.ADMIN_TOKEN}` }), 200, 'reset').body;

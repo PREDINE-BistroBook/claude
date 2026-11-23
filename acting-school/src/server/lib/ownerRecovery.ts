@@ -32,17 +32,29 @@ export type GrantOwnerResult =
       isOwner: boolean;
     };
 
+/**
+ * The owner position to give an account that must be an owner: the CEO
+ * position while it is still an owner position, else another owner position
+ * (first in the positions' order). undefined when no owner position is left
+ * at all. Reads only.
+ */
+export function ownerPositionToGive(db: Pick<DB, 'select'>): typeof positions.$inferSelect | undefined {
+  const ceo = db.select().from(positions).where(eq(positions.key, FIRST_OWNER_POSITION)).get();
+  if (ceo?.isOwner) return ceo;
+  return db.select().from(positions).where(eq(positions.isOwner, true)).orderBy(...positionOrder).get();
+}
+
 export function grantOwner(db: DB, usernameOrEmail: string): GrantOwnerResult {
   const name = usernameOrEmail.trim().toLowerCase();
   return db.transaction((tx): GrantOwnerResult => {
     const user = findSignInAccount(tx, name);
     if (!user) return { found: false };
-    const ceo = tx.select().from(positions).where(eq(positions.key, FIRST_OWNER_POSITION)).get()!;
     // The CEO position if it's still an owner position, else any other owner position.
-    let given = ceo.isOwner ? ceo : tx.select().from(positions).where(eq(positions.isOwner, true)).orderBy(...positionOrder).get();
+    let given = ownerPositionToGive(tx);
     let restored = false;
     if (!given) {
       // No owner position left at all: make CEO one again (it then allows everything).
+      const ceo = tx.select().from(positions).where(eq(positions.key, FIRST_OWNER_POSITION)).get()!;
       given = tx.update(positions).set({ isOwner: true, permissions: [...PERMISSIONS] }).where(eq(positions.id, ceo.id)).returning().get()!;
       restored = true;
     }
