@@ -33,6 +33,7 @@ import submissionRoutes from './routes/submissions';
 import summonsRoutes from './routes/summons';
 import talentRoutes from './routes/talent';
 import teamRoutes from './routes/team';
+import videoRoutes from './routes/videos';
 
 export interface AppDeps {
   db: DB;
@@ -132,6 +133,8 @@ export function createApp(deps: AppDeps) {
   app.route('/api/push', pushRoutes);
   // The cafeteria: the menu, ordering, the orders board (Part J).
   app.route('/api/cafe', cafeRoutes);
+  // The video pipeline: coach → editor → reviewer (Part L).
+  app.route('/api/videos', videoRoutes);
 
   app.all('/api/*', (c) => c.json({ error: { code: 'not_found', message: 'No such API route' } }, 404));
 

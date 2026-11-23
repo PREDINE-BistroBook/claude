@@ -366,6 +366,10 @@ describe('on the demo school (run in order)', () => {
     // The cafeteria: its orders go (with their lines and alerts), its menu stays — so the menu is no count here.
     expect(dry.willDelete).toMatchObject({ cafe_orders: 7, cafe_order_items: 11 });
     expect(dry.willDelete).not.toHaveProperty('cafe_items');
+    // The video pipeline: every video goes, with who is in it and its history (Part L).
+    expect(dry.willDelete).toMatchObject({ videos: 10 });
+    expect(dry.willDelete.video_events).toBeGreaterThan(10);
+    expect(dry.willDelete.video_students).toBeGreaterThan(10);
     expect(Object.keys(dry.willDelete).sort()).toEqual(CLEAR_DEMO_TABLES.filter((x) => x.rows !== 'stay' && x.rows !== 'bytes').map((x) => nameOf(x.table)).sort());
     // …and what happens to the website's content.
     expect(dry.siteContent).toEqual({

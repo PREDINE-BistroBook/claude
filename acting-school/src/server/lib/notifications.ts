@@ -37,6 +37,17 @@ const en = {
   // To whoever serves, replacing "New order from …" once it no longer waits (quietly, on the phone).
   cafeOrderTakenTitle: 'Order from {{name}}: on the way',
   cafeOrderCancelledTitle: 'Order from {{name}}: cancelled',
+  // The video pipeline (Part L): a new video (to the editors), an edit to check (to the reviewers),
+  // changes needed (to the editor), approved (to the coach who added it). {{title}} is the video's.
+  videoNewTitle: 'New video to edit: {{title}}',
+  videoNewBody: '{{course}} · from {{name}}',
+  videoReviewTitle: 'Edit ready to check: {{title}}',
+  videoReviewBody: '{{course}} · edited by {{name}}',
+  videoChangesTitle: 'Changes needed: {{title}}',
+  videoReopenedTitle: 'Reopened, changes needed: {{title}}',
+  videoChangesBody: '{{name}}: {{note}}',
+  videoApprovedTitle: 'Video approved: {{title}}',
+  videoApprovedBody: '{{course}} · checked by {{name}}',
 };
 const ar: Record<keyof typeof en, string> = {
   messageTitle: 'رسالة جديدة من {{name}}',
@@ -58,6 +69,15 @@ const ar: Record<keyof typeof en, string> = {
   cafeCancelledBody: 'السبب: {{reason}}',
   cafeOrderTakenTitle: 'طلب {{name}}: في الطريق',
   cafeOrderCancelledTitle: 'طلب {{name}}: أُلغي',
+  videoNewTitle: 'فيديو جديد للمونتاج: {{title}}',
+  videoNewBody: '{{course}} · من {{name}}',
+  videoReviewTitle: 'مونتاج جاهز للمراجعة: {{title}}',
+  videoReviewBody: '{{course}} · المونتاج: {{name}}',
+  videoChangesTitle: 'مطلوب تعديلات: {{title}}',
+  videoReopenedTitle: 'أُعيد فتحه، مطلوب تعديلات: {{title}}',
+  videoChangesBody: '{{name}}: {{note}}',
+  videoApprovedTitle: 'تمت الموافقة على الفيديو: {{title}}',
+  videoApprovedBody: '{{course}} · المراجعة: {{name}}',
 };
 
 export const NOTIFICATION_TEXT: Record<Locale, typeof en> = { en, ar };
@@ -182,7 +202,7 @@ export function toNotificationItem(r: typeof notifications.$inferSelect, now = D
 }
 
 // ── Links ───────────────────────────────────────────────────────────────────
-// (The cafeteria's links are in lib/cafe.ts: cafeBoardLink, cafeOrderLink.)
+// (The cafeteria's links are in lib/cafe.ts: cafeBoardLink, cafeOrderLink; the videos' in lib/videos.ts: videoPath.)
 
 export const conversationLink = (conversationId: number) => `/messages/${conversationId}`;
 /** The caller's link to one call (its answer's notification): the Team page with that person's row and answer. */

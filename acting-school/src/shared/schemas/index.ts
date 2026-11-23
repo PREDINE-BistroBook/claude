@@ -18,3 +18,4 @@ export * from './chat';
 export * from './summons';
 export * from './notifications';
 export * from './cafe';
+export * from './videos';

@@ -90,10 +90,11 @@ describe('Reception and Office helper: two more built-in positions', () => {
       expect(held.includes('cafeteria.serve'), p.key).toBe(p.isOwner || p.key === 'office_helper' || p.key === 'executive_director');
       expect(held.includes('cafeteria.report'), p.key).toBe(p.isOwner);
     }
-    // The released grants are untouched; the director's cafeteria.serve comes as the next one, for databases that exist.
-    expect(LATEST_BUILT_IN_GRANTS_VERSION).toBe(4);
-    expect(BUILT_IN_GRANTS.map((g) => g.version)).toEqual([1, 2, 3, 4]);
-    expect(BUILT_IN_GRANTS.at(-1)).toEqual({ version: 4, grants: { executive_director: ['cafeteria.serve'] } });
+    // The released grants are untouched; the director's cafeteria.serve came as the next one (v4), for databases that exist —
+    // and stays as it was released now that the video pipeline's grant (v5, Part L) follows it.
+    expect(LATEST_BUILT_IN_GRANTS_VERSION).toBeGreaterThanOrEqual(4);
+    expect(BUILT_IN_GRANTS.map((g) => g.version).slice(0, 4)).toEqual([1, 2, 3, 4]);
+    expect(BUILT_IN_GRANTS[3]).toEqual({ version: 4, grants: { executive_director: ['cafeteria.serve'] } });
     expect(BUILT_IN_GRANTS.slice(0, 3).flatMap((g) => Object.values(g.grants).flat())).not.toContain('cafeteria.serve');
     expect(BUILT_IN_GRANTS.flatMap((g) => Object.values(g.grants).flat())).not.toContain('cafeteria.report');
   });
@@ -132,11 +133,12 @@ describe('Reception and Office helper: two more built-in positions', () => {
     const upTo = bundle.journal.entries.findIndex((e) => e.tag.endsWith('_cafeteria'));
     expect(upTo).toBeGreaterThan(0);
     applyMigrations(db, { ...bundle, journal: { ...bundle.journal, entries: bundle.journal.entries.slice(0, upTo) } });
-    const old = BUILT_IN_POSITIONS.filter((p) => p.key !== 'reception' && p.key !== 'office_helper');
+    // (The Video reviewer and the videos.* permissions came after it too: Part L.)
+    const old = BUILT_IN_POSITIONS.filter((p) => p.key !== 'reception' && p.key !== 'office_helper' && p.key !== 'video_reviewer');
     for (const [i, p] of old.entries()) {
       sqlite
         .prepare('insert into positions (key, name, name_ar, is_owner, permissions, sort_order, created_at, updated_at) values (?, ?, ?, ?, ?, ?, 1, 1)')
-        .run(p.key, p.name, p.nameAr, p.isOwner ? 1 : 0, JSON.stringify(p.permissions.filter((x) => !x.startsWith('cafeteria.'))), i * 10);
+        .run(p.key, p.name, p.nameAr, p.isOwner ? 1 : 0, JSON.stringify(p.permissions.filter((x) => !x.startsWith('cafeteria.') && !x.startsWith('videos.'))), i * 10);
     }
     sqlite.prepare(`insert into settings (key, value) values (?, '3')`).run(BUILT_IN_GRANTS_SETTING);
     const insertUser = sqlite.prepare(`insert into users (email, name, password_hash, created_at, updated_at) values (?, ?, 'x', 1, 1)`);
@@ -162,23 +164,28 @@ describe('Reception and Office helper: two more built-in positions', () => {
 
     initDb(db);
     expect(sqlite.prepare(`select count(*) as n from sqlite_master where name like 'cafe_%' and type = 'table'`).get()).toEqual({ n: 3 });
-    expect(allPositions(db).map((p) => p.key)).toEqual([...before.map((p) => p.key), 'reception', 'office_helper']);
+    // (…and the Video reviewer after them, from the release that followed: Part L.)
+    expect(allPositions(db).map((p) => p.key)).toEqual([...before.map((p) => p.key), 'reception', 'office_helper', 'video_reviewer']);
     expect(byKey(db, 'reception')).toMatchObject({ name: 'Reception', nameAr: 'الاستقبال', isOwner: false, permissions: [], sortOrder: 80 });
     expect(byKey(db, 'office_helper')).toMatchObject({ name: 'Office helper', nameAr: 'عامل المكتب', isOwner: false, permissions: ['cafeteria.serve'], sortOrder: 90 });
     // The eight it had are exactly as they were — except that the director gained cafeteria.serve (grant v4, D2) and
-    // nothing else (not the monthly page) — and so is who holds what.
+    // nothing else of the cafeteria (not the monthly page); the later grant (v5, the video pipeline) adds the videos
+    // permissions of the director, the coaches and the editor — and so is who holds what.
     const director = before.find((p) => p.key === 'executive_director')!;
-    expect(allPositions(db).slice(0, 8)).toEqual(before.map((p) => (p.key === 'executive_director' ? { ...p, permissions: [...p.permissions, 'cafeteria.serve'], updatedAt: expect.any(Number) } : p)));
-    expect(byKey(db, 'executive_director')!.permissions).toEqual([...director.permissions, 'cafeteria.serve']);
+    const gained: Record<string, string[]> = { executive_director: ['cafeteria.serve', 'videos.add', 'videos.read'], acting_coach: ['videos.add'], video_editor: ['videos.edit'] };
+    expect(allPositions(db).slice(0, 8)).toEqual(
+      before.map((p) => (p.key && gained[p.key] ? { ...p, permissions: [...p.permissions, ...gained[p.key]!], updatedAt: expect.any(Number) } : p)),
+    );
+    expect(byKey(db, 'executive_director')!.permissions).toEqual([...director.permissions, 'cafeteria.serve', 'videos.add', 'videos.read']);
     expect(byKey(db, 'executive_director')!.permissions).not.toContain('cafeteria.report');
     expect(db.select().from(userPositions).all()).toEqual(holdersBefore);
-    expect(builtInGrantsVersion(db)).toBe(4);
+    expect(builtInGrantsVersion(db)).toBe(LATEST_BUILT_IN_GRANTS_VERSION);
 
-    // Every later start: still ten, and the grant ran once — an owner who takes cafeteria.serve from the director again keeps it that way.
+    // Every later start: still eleven, and the grant ran once — an owner who takes cafeteria.serve from the director again keeps it that way.
     db.update(positions).set({ permissions: director.permissions }).where(eq(positions.key, 'executive_director')).run();
     initDb(db);
     initDb(db);
-    expect(allPositions(db)).toHaveLength(10);
+    expect(allPositions(db)).toHaveLength(11);
     expect(byKey(db, 'executive_director')!.permissions).toEqual(director.permissions);
   });
 
@@ -193,7 +200,7 @@ describe('Reception and Office helper: two more built-in positions', () => {
     initDb(db);
     initDb(db);
     expect(allPositions(db)).toEqual(edited);
-    expect(allPositions(db)).toHaveLength(10);
+    expect(allPositions(db)).toHaveLength(11);
     expect(byKey(db, 'reception')).toMatchObject({ name: 'Front desk', permissions: ['admissions.read', 'students.read'] });
     expect(byKey(db, 'office_helper')).toMatchObject({ name: 'Buffet', permissions: ['students.read'], sortOrder: 5 });
     expect(allPositions(db).filter((p) => /reception|office helper/i.test(p.name))).toEqual([]);
@@ -209,7 +216,7 @@ describe('Reception and Office helper: two more built-in positions', () => {
 
     initDb(db);
     initDb(db);
-    expect(allPositions(db)).toHaveLength(10);
+    expect(allPositions(db)).toHaveLength(11);
     // Matched by its English name (any letter case) …
     expect(byKey(db, 'reception')).toMatchObject({ id: receptionId, name: 'reception', nameAr: 'الاستقبال', permissions: ['admissions.read'], sortOrder: 200 });
     // … or by its Arabic name: its own names and order stay, the cafeteria permission is added, its holder keeps it.
@@ -230,7 +237,7 @@ describe('Reception and Office helper: two more built-in positions', () => {
     const t = await makeTestContext();
     const owner = await t.as('owner');
     const list = (await owner.get<{ items: Position[] }>('/api/positions')).body.items;
-    expect(list.map((p) => p.key).slice(-2)).toEqual(['reception', 'office_helper']);
+    expect(list.map((p) => p.key).slice(-3)).toEqual(['reception', 'office_helper', 'video_reviewer']);
     const helper = list.find((p) => p.key === 'office_helper')!;
     expect(helper).toMatchObject({ name: 'Office helper', nameAr: 'عامل المكتب', permissions: ['cafeteria.serve'], editable: true, assignable: true });
     expect((await owner.patch(`/api/positions/${helper.id}`, { name: 'Office assistant' })).body).toMatchObject({ key: 'office_helper', name: 'Office assistant' });
@@ -996,7 +1003,7 @@ describe('alerts', () => {
     expect(await poll(helper)).toEqual({ enabled: true, newOrders: 0, myOpenOrders: 0 });
     // The rest of the poll is as it was.
     const whole = (await helper.get<ChatUnreadResponse>('/api/chat/unread')).body;
-    expect(Object.keys(whole).sort()).toEqual(['cafe', 'notifications', 'summons', 'total']);
+    expect(Object.keys(whole).sort()).toEqual(['cafe', 'notifications', 'summons', 'total', 'videos']);
   });
 });
 

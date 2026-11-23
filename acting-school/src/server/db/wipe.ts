@@ -7,6 +7,9 @@ import * as t from './schema';
 
 /** Every table, children before parents (so no cascade has work left to do). */
 export const WIPE_ORDER: SQLiteTable[] = [
+  t.videoEvents,
+  t.videoStudents,
+  t.videos,
   t.cafeOrderItems,
   t.cafeOrders,
   t.cafeItems,

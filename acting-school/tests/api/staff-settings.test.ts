@@ -118,7 +118,7 @@ describe('POST /api/staff', () => {
     expect(await verifyPassword('temporary1', row.passwordHash)).toBe(true);
 
     const nadia = await t.login('nadia@example.com', 'temporary1');
-    expect((await nadia.get('/api/auth/me')).body.user).toMatchObject({ id: res.body.id, permissions: ['students.read', 'courses.read', 'attendance.write'] });
+    expect((await nadia.get('/api/auth/me')).body.user).toMatchObject({ id: res.body.id, permissions: ['students.read', 'courses.read', 'attendance.write', 'videos.add'] });
   });
 
   it('gives several positions at once (duplicates ignored)', async () => {

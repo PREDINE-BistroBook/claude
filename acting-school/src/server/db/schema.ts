@@ -37,6 +37,9 @@ import {
   SUBMISSION_STATUSES,
   SUMMONS_STATUSES,
   TALENT_STATUSES,
+  VIDEO_EVENT_TYPES,
+  VIDEO_KINDS,
+  VIDEO_STATUSES,
 } from '../../shared/enums';
 import type { Permission } from '../../shared/permissions';
 import type { LeadActivityMeta } from '../../shared/schemas/admissions';
@@ -923,4 +926,81 @@ export const cafeOrderItems = sqliteTable(
     options: text('options'),
   },
   (t) => [index('cafe_order_items_order_idx').on(t.orderId)],
+);
+
+// ── Videos (Part L): coach → editor → reviewer ─────────────────────────────
+
+/**
+ * A class video on its way through the pipeline: the coach adds the raw
+ * footage as a link (the app stores no video), the editor takes it and hands
+ * in the edited link, the reviewer approves it or asks for changes. Status
+ * moves only through `UPDATE … WHERE status = <the status read>` (routes/videos.ts).
+ */
+export const videos = sqliteTable(
+  'videos',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    courseId: integer('course_id')
+      .notNull()
+      .references(() => courses.id, { onDelete: 'cascade' }),
+    /** The session it was filmed in; NULL when added from the workshop, or once that session is deleted. */
+    sessionId: integer('session_id').references(() => classSessions.id, { onDelete: 'set null' }),
+    title: text('title').notNull(),
+    kind: text('kind', { enum: VIDEO_KINDS }).notNull().default('other'),
+    /** The raw footage: an http(s) link (Google Drive, WeTransfer, YouTube unlisted…). */
+    rawLink: text('raw_link').notNull(),
+    notesForEditor: text('notes_for_editor'),
+    /** When the editor should have it done: the day after it was added unless the coach chose another day. */
+    dueOn: text('due_on').notNull(),
+    status: text('status', { enum: VIDEO_STATUSES }).notNull().default('new'),
+    addedById: integer('added_by_id').references(() => users.id, { onDelete: 'set null' }),
+    /** The editor who took it last. */
+    editorId: integer('editor_id').references(() => users.id, { onDelete: 'set null' }),
+    /** The reviewer who decided last. */
+    reviewerId: integer('reviewer_id').references(() => users.id, { onDelete: 'set null' }),
+    editedLink: text('edited_link'),
+    editorNotes: text('editor_notes'),
+    takenAt: integer('taken_at'),
+    submittedAt: integer('submitted_at'),
+    decidedAt: integer('decided_at'),
+    ...timestamps(),
+  },
+  (t) => [
+    index('videos_status_idx').on(t.status, t.dueOn),
+    index('videos_course_idx').on(t.courseId),
+    index('videos_session_idx').on(t.sessionId),
+    index('videos_added_by_idx').on(t.addedById),
+    index('videos_editor_idx').on(t.editorId),
+  ],
+);
+
+/** Who appears in a video (students of its workshop). */
+export const videoStudents = sqliteTable(
+  'video_students',
+  {
+    videoId: integer('video_id')
+      .notNull()
+      .references(() => videos.id, { onDelete: 'cascade' }),
+    studentId: integer('student_id')
+      .notNull()
+      .references(() => students.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.videoId, t.studentId] }), index('video_students_student_idx').on(t.studentId)],
+);
+
+/** A video's history, shown on its page like an enquiry's timeline: every move, with its note or link, and comments. */
+export const videoEvents = sqliteTable(
+  'video_events',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    videoId: integer('video_id')
+      .notNull()
+      .references(() => videos.id, { onDelete: 'cascade' }),
+    userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }),
+    type: text('type', { enum: VIDEO_EVENT_TYPES }).notNull(),
+    note: text('note'),
+    link: text('link'),
+    createdAt: integer('created_at').notNull().$defaultFn(now),
+  },
+  (t) => [index('video_events_video_idx').on(t.videoId, t.createdAt)],
 );

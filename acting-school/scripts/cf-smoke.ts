@@ -40,6 +40,11 @@
  * one, only the helper is alerted (not the director or the owners, who can
  * open the board), the owners' monthly page, an unavailable item, and the
  * Settings switch that turns it all off.
+ * The video pipeline: a coach adds a video to one of her sessions, the editor
+ * takes it and hands in the edit, the reviewer (coach2, the demo's Video
+ * reviewer) sends it back with a note, the editor fixes it, the reviewer
+ * approves it — and at each step exactly the right person is alerted (the
+ * editor, the reviewer, the editor, the coach), never the owners.
  * The operator's clean-out (POST /api/admin/clear-demo): a dry run that
  * changes nothing, the confirm code's rules, the real run (the demo gone, one
  * account kept with its photo, the real team created), each new person
@@ -645,6 +650,74 @@ export async function runApiSmoke(base: string, opts: { adminToken: string; pass
     (expectStatus(await helper.get('/api/cafe/orders?status=cancelled'), 200, 'cancelled today').body.items as { cancelReason: string | null }[]).some((o) => o.cancelReason === 'The cafeteria is closed now'),
     'the waiting order was closed with the switch',
   );
+
+  step('videos: add → take → submit → changes requested → submit → approved; who was alerted at each step (never the owners)');
+  {
+    const editor = clients['editor@demo.school']!;
+    const reviewer = clients['coach2@demo.school']!;
+    const cfo = clients['cfo@demo.school']!;
+    const alertsFor = async (c: Client, videoId: number) =>
+      (expectStatus(await c.get('/api/notifications'), 200, 'bell').body.items as { kind: string; link: string; title: string; readAt: number | null }[]).filter((n) => n.link === `/videos/${videoId}`);
+    const nobodyElse = async (videoId: number, kind: string, except: Client[]) => {
+      const everyone: [string, Client][] = [['the CEO', owner], ['the CFO', cfo], ['the director', director], ['the coach', coach], ['the editor', editor], ['the reviewer', reviewer]];
+      for (const [who, c] of everyone) if (!except.includes(c)) check(!(await alertsFor(c, videoId)).some((n) => n.kind === kind), `${who} gets no ${kind} alert`);
+    };
+    const reviewerMe = expectStatus(await reviewer.get('/api/auth/me'), 200, 'reviewer me').body.user;
+    check(reviewerMe.positions.some((p: { key: string }) => p.key === 'video_reviewer') && reviewerMe.permissions.includes('videos.review'), 'coach2 holds the Video reviewer position (like Moaty)');
+    const editorMe = expectStatus(await editor.get('/api/auth/me'), 200, 'editor me').body.user;
+    check(editorMe.permissions.includes('videos.edit') && !editorMe.permissions.includes('videos.review'), 'the editor edits, and does not review');
+    const directorPerms = expectStatus(await director.get('/api/auth/me'), 200, 'director me').body.user.permissions as string[];
+    check(directorPerms.includes('videos.add') && directorPerms.includes('videos.read') && !directorPerms.includes('videos.edit') && !directorPerms.includes('videos.review'), 'the director adds and sees videos (grant v5)');
+    const demoQueue = expectStatus(await editor.get('/api/videos'), 200, 'the editor’s queue').body.items as { status: string }[];
+    check(['new', 'editing', 'in_review', 'changes_requested', 'approved'].every((st) => demoQueue.some((v) => v.status === st)), 'the demo has videos in every state');
+
+    // The coach picks one of her own sessions (class scope) with students in it.
+    const laylaCourses = expectStatus(await coach.get('/api/courses'), 200, 'the coach’s workshops').body.items as { id: number; name: string }[];
+    const laylaCourse = expectStatus(await coach.get(`/api/courses/${laylaCourses[0]!.id}`), 200, 'her workshop').body;
+    const laylaSession = (laylaCourse.sessions as { id: number; date: string }[]).filter((x) => x.date <= today).at(-1)!;
+    const roster = (expectStatus(await coach.get(`/api/sessions/${laylaSession.id}`), 200, 'the session').body.roster as { studentId: number }[]).slice(0, 2).map((r) => r.studentId);
+    expectStatus(await coach.post('/api/videos', { sessionId: laylaSession.id, title: 'x', rawLink: 'javascript:alert(1)' }), 400, 'a link that is not http(s)');
+    expectStatus(await coach.post('/api/videos', { sessionId: 99999999, title: 'x', rawLink: 'https://drive.google.com/x' }), 404, 'a session nobody can see');
+    const toEditBefore = expectStatus(await editor.get('/api/chat/unread'), 200, 'editor poll').body.videos.toEdit as number;
+    const added = expectStatus(
+      await coach.post('/api/videos', { sessionId: laylaSession.id, title: `${laylaCourse.name} — smoke`, kind: 'scene', rawLink: 'https://drive.google.com/file/d/smoke/view', studentIds: roster, notesForEditor: 'Smoke test' }),
+      201,
+      'the coach adds a video',
+    ).body;
+    check(added.status === 'new' && added.dueOn === addDays(today, 1) && added.students.length === roster.length, `new, due tomorrow at the school (${added.dueOn}), ${added.students.length} students`);
+    check(expectStatus(await editor.get('/api/chat/unread'), 200, 'editor poll').body.videos.toEdit === toEditBefore + 1, 'the editor’s count went up');
+    check((await alertsFor(editor, added.id)).some((n) => n.kind === 'video_new' && n.readAt === null), 'the editor is alerted about the new video');
+    await nobodyElse(added.id, 'video_new', [editor]);
+    expectStatus(await coach.post(`/api/videos/${added.id}/take`), 403, 'a coach doesn’t edit');
+
+    check(expectStatus(await editor.post(`/api/videos/${added.id}/take`), 200, 'start editing').body.status === 'editing', 'editing');
+    check(expectStatus(await editor.post(`/api/videos/${added.id}/take`), 409, 'taken twice').body.error.code === 'video_moved', 'two taps: the second is refused');
+    expectStatus(await coach.patch(`/api/videos/${added.id}`, { title: 'Too late' }), 409, 'the coach can’t change it once taken');
+    check((await alertsFor(editor, added.id)).every((n) => n.readAt !== null), 'taken: the alert leaves the editor’s bell');
+    check(expectStatus(await editor.post(`/api/videos/${added.id}/submit`, { editedLink: 'https://youtu.be/smoke-1', notes: 'First cut' }), 200, 'done').body.status === 'in_review', 'waiting for the check');
+    check((await alertsFor(reviewer, added.id)).some((n) => n.kind === 'video_review' && n.readAt === null), 'the reviewer (coach2) is alerted about the finished edit');
+    await nobodyElse(added.id, 'video_review', [reviewer]);
+    check((expectStatus(await reviewer.get('/api/chat/unread'), 200, 'reviewer poll').body.videos.toCheck as number) >= 1, 'the reviewer’s count');
+    check(expectStatus(await owner.get('/api/chat/unread'), 200, 'owner poll').body.videos.toCheck === null, 'owners get no reviewer’s count');
+
+    expectStatus(await reviewer.post(`/api/videos/${added.id}/request-changes`, {}), 400, 'changes need a note');
+    check(expectStatus(await reviewer.post(`/api/videos/${added.id}/request-changes`, { note: 'Music too loud' }), 200, 'needs changes').body.status === 'changes_requested', 'sent back');
+    check((await alertsFor(editor, added.id)).some((n) => n.kind === 'video_changes' && n.readAt === null), 'the editor who did it is alerted');
+    await nobodyElse(added.id, 'video_changes', [editor]);
+    check(expectStatus(await editor.post(`/api/videos/${added.id}/take`), 200, 'start fixing').body.changesNote === 'Music too loud', 'the reviewer’s note is on the video');
+    expectStatus(await editor.post(`/api/videos/${added.id}/submit`, { editedLink: 'https://youtu.be/smoke-2' }), 200, 'done again');
+    check((await alertsFor(reviewer, added.id)).filter((n) => n.kind === 'video_review').length === 1, 'one alert per video for the reviewer, back at the top');
+    const approved = expectStatus(await reviewer.post(`/api/videos/${added.id}/approve`), 200, 'approved').body;
+    check(approved.status === 'approved' && approved.editedLink === 'https://youtu.be/smoke-2', 'approved, with the second edit');
+    check((await alertsFor(coach, added.id)).some((n) => n.kind === 'video_approved' && n.readAt === null), 'the coach who added it is alerted');
+    await nobodyElse(added.id, 'video_approved', [coach]);
+    check(expectStatus(await coach.get('/api/chat/unread'), 200, 'coach poll').body.videos.approvedThisWeek >= 1, 'the coach’s "approved this week"');
+    const history = expectStatus(await director.get(`/api/videos/${added.id}`), 200, 'the director reads the video').body.events.map((e: { type: string }) => e.type);
+    check(history.join() === 'added,taken,submitted,changes_requested,taken,submitted,approved', `the history (${history.join()})`);
+    check(expectStatus(await coach.post(`/api/videos/${added.id}/comments`, { note: 'Thank you!' }), 201, 'the coach comments').body.type === 'comment', 'a comment');
+    expectStatus(await director.post(`/api/videos/${added.id}/comments`, { note: 'Hello' }), 403, 'the director only reads');
+    expectStatus(await clients['casting@demo.school']!.get('/api/videos'), 403, 'the casting team has no videos');
+  }
 
   step('the last deletes: student, class');
   expectStatus(await owner.delete(`/api/students/${sara.id}`), 204, 'delete student');

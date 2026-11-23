@@ -15,6 +15,7 @@ import staff from '../features/staff/i18n';
 import students from '../features/students/i18n';
 import talent from '../features/talent/i18n';
 import team from '../features/team/i18n';
+import videos from '../features/videos/i18n';
 import website from '../features/website/i18n';
 import common from './common';
 import type { Namespace } from './types';
@@ -37,6 +38,7 @@ export const namespaces = {
   team,
   chat,
   cafe,
+  videos,
 } satisfies Record<
   string,
   Namespace<any>

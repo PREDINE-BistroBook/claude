@@ -98,6 +98,10 @@ export interface ClearDemoTable {
  * before the accounts go.
  */
 export const CLEAR_DEMO_TABLES: readonly ClearDemoTable[] = [
+  // The video pipeline (it points at workshops, sessions, students and accounts): every video, who is in it, its history
+  { table: t.videoEvents, rows: 'all' },
+  { table: t.videoStudents, rows: 'all' },
+  { table: t.videos, rows: 'all' },
   // The cafeteria's orders (they point at accounts); its menu stays (below)
   { table: t.cafeOrderItems, rows: 'all' },
   { table: t.cafeOrders, rows: 'all' },

@@ -33,6 +33,7 @@ import { AttendanceControl } from './components/AttendanceControl';
 import { CourseTile } from './components/CourseColor';
 import { InfoGrid } from './components/InfoGrid';
 import { SessionFormModal } from './components/SessionFormModal';
+import { VideosBlock } from '../videos/components/VideosBlock';
 
 export default function SessionPage() {
   const { t } = useTranslation('classes');
@@ -145,6 +146,13 @@ export default function SessionPage() {
         ) : (
           <AttendanceReadOnly session={s} showRule={!cancelled && can('attendance.write')} canWrite={canWrite} />
         )}
+
+        {/* Recorded something in class? The link for the video editor (Part L). */}
+        <VideosBlock
+          course={{ id: s.courseId, name: s.courseName }}
+          session={{ id: s.id, date: s.date }}
+          students={s.roster.map((r) => ({ id: r.studentId, firstName: r.firstName, lastName: r.lastName, photoFileId: r.photoFileId }))}
+        />
       </div>
 
       {c && (

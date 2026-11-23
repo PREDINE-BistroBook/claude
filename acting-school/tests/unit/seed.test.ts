@@ -51,10 +51,10 @@ describe('npm run seed', () => {
     expect(count(`select count(*) as n from users where username in ('owner', 'cfo', 'director', 'head', 'casting', 'editor', 'coach', 'coach2', 'reception', 'helper', 'tom')`)).toBe(11);
     expect(count(`select count(*) as n from users u where u.username = 'coach2' and u.email = 'coach2@demo.school'`)).toBe(1);
     expect(count('select count(*) as n from users where must_change_password = 1')).toBe(0);
-    expect(count('select count(*) as n from positions')).toBe(10);
-    // Everyone holds a position; coach2 holds two (acting coach + finance).
+    expect(count('select count(*) as n from positions')).toBe(11);
+    // Everyone holds a position; coach2 holds three (acting coach + finance + video reviewer — like Moaty, Part L).
     expect(count('select count(*) as n from users where id not in (select user_id from user_positions)')).toBe(0);
-    expect(count(`select count(*) as n from user_positions up join users u on u.id = up.user_id where u.email = 'coach2@demo.school'`)).toBe(2);
+    expect(count(`select count(*) as n from user_positions up join users u on u.id = up.user_id where u.email = 'coach2@demo.school'`)).toBe(3);
     expect(count(`select count(*) as n from user_positions up join users u on u.id = up.user_id join positions p on p.id = up.position_id where p.is_owner = 1`)).toBe(2);
     expect(count('select count(*) as n from users where active = 0')).toBe(1);
     expect(count('select count(*) as n from students')).toBeGreaterThanOrEqual(20);
@@ -107,8 +107,8 @@ describe('npm run seed', () => {
     expect(count('select count(distinct kind) as n from message_attachments')).toBe(2);
     expect(count('select count(*) as n from messages')).toBeGreaterThanOrEqual(7);
     expect(count(`select count(*) as n from summons where status = 'on_my_way' and answered_at is not null`)).toBe(1);
-    // … plus the cafeteria's two kinds (a new order, what became of an order).
-    expect(count(`select count(distinct kind) as n from notifications`)).toBe(5);
+    // … plus the cafeteria's two kinds (a new order, what became of an order) and the video pipeline's four.
+    expect(count(`select count(distinct kind) as n from notifications`)).toBe(9);
     expect(count(`select count(*) as n from positions where key = 'executive_director' and permissions like '%staff.summon%'`)).toBe(1);
 
     // Reception and Office helper: one account each, holding the built-in position (Reception allows nothing yet;
@@ -147,6 +147,23 @@ describe('npm run seed', () => {
     // One alert per order for the person who ordered: the director's two (the day before yesterday, this morning).
     expect(count(`select count(*) as n from notifications n join users u on u.id = n.user_id where n.kind = 'cafe_status' and u.email = 'director@demo.school'`)).toBe(2);
     expect(count(`select count(*) as n from settings where key in ('cafeteriaEnabled', 'cafePlaces')`)).toBe(0);
+
+    // The video pipeline (Part L): videos in every state — three new (one late), one being edited, two waiting for a
+    // check, one sent back with changes, three approved — with who is in them and their history (two comments).
+    expect(count('select count(*) as n from videos')).toBe(10);
+    for (const [status, n] of [['new', 3], ['editing', 1], ['in_review', 2], ['changes_requested', 1], ['approved', 3]] as const) {
+      expect(count(`select count(*) as n from videos where status = '${status}'`), status).toBe(n);
+    }
+    expect(count(`select count(*) as n from videos where status = 'new' and due_on < date('now')`)).toBeGreaterThanOrEqual(1);
+    expect(count('select count(*) as n from video_students')).toBeGreaterThan(20);
+    expect(count(`select count(*) as n from video_events where type = 'comment'`)).toBe(2);
+    expect(count(`select count(*) as n from videos v join users u on u.id = v.editor_id where u.username = 'editor'`)).toBe(7);
+    // coach2 checks the edits (Video reviewer on top of coach + finance, like Moaty): the two waiting are in his bell,
+    // unread; no video alert ever reached an owner.
+    expect(count(`select count(*) as n from user_positions up join users u on u.id = up.user_id join positions p on p.id = up.position_id where u.username = 'coach2' and p.key = 'video_reviewer'`)).toBe(1);
+    expect(count(`select count(*) as n from notifications n join users u on u.id = n.user_id where n.kind = 'video_review' and n.read_at is null and u.username = 'coach2'`)).toBe(2);
+    expect(count(`select count(*) as n from notifications n join users u on u.id = n.user_id where n.kind like 'video_%' and u.username in ('owner', 'cfo')`)).toBe(0);
+    expect(count(`select count(*) as n from notifications n join users u on u.id = n.user_id where n.kind = 'video_new' and n.read_at is null and u.username = 'editor'`)).toBe(3);
 
     const again = seed();
     expect(again.status).toBe(1);

@@ -22,7 +22,7 @@
  *   casting   Casting team             (Tarek Samir)
  *   editor    Video editor             (Hany Nabil)
  *   coach     Acting coach             (Layla Haddad — teaches classes)
- *   coach2    Acting coach + Finance   (Daniel Price — teaches classes)
+ *   coach2    Acting coach + Finance + Video reviewer (Daniel Price — teaches classes, checks the edits)
  *   reception Reception                (Nour Hassan — no section yet: Team, Messages, the cafeteria)
  *   helper    Office helper            (Sayed Ramadan — the cafeteria's orders board; his account is in Arabic)
  *   tom       former Acting coach, deactivated (tom.wilkins@demo.school)
@@ -31,7 +31,7 @@
  * sign-in (the API marks every password a manager sets as temporary; the seed
  * clears that mark): a demo is signed into by many people with the one password.
  */
-import { and, asc, eq, gt, gte, inArray, max } from 'drizzle-orm';
+import { and, asc, eq, gt, gte, inArray, isNotNull, max } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { addDays, weekdayOf } from '../../shared/dates';
 import type {
@@ -77,6 +77,8 @@ import {
   siteWorkshops,
   summons,
   users,
+  videoEvents,
+  videos,
 } from './schema';
 import { renderPdf } from './seedDocuments';
 import { lookFor, renderPortrait } from './seedPortraits';
@@ -90,7 +92,7 @@ export const DEMO_LOGINS: SeedDemoResult['logins'] = [
   { username: 'casting', email: 'casting@demo.school', position: 'Casting team', name: 'Tarek Samir' },
   { username: 'editor', email: 'editor@demo.school', position: 'Video editor', name: 'Hany Nabil' },
   { username: 'coach', email: 'coach@demo.school', position: 'Acting coach', name: 'Layla Haddad' },
-  { username: 'coach2', email: 'coach2@demo.school', position: 'Acting coach + Finance', name: 'Daniel Price' },
+  { username: 'coach2', email: 'coach2@demo.school', position: 'Acting coach + Finance + Video reviewer', name: 'Daniel Price' },
   { username: 'reception', email: 'reception@demo.school', position: 'Reception', name: 'Nour Hassan' },
   { username: 'helper', email: 'helper@demo.school', position: 'Office helper', name: 'Sayed Ramadan' },
 ];
@@ -214,8 +216,8 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
     { key: 'casting', name: 'Tarek Samir', username: 'casting', email: 'casting@demo.school', positions: ['casting_team'], phone: '+20 100 555 0105' },
     { key: 'editor', name: 'Hany Nabil', username: 'editor', email: 'editor@demo.school', positions: ['video_editor'], phone: '+20 100 555 0106' },
     { key: 'layla', name: 'Layla Haddad', username: 'coach', email: 'coach@demo.school', positions: ['acting_coach'], phone: '+20 100 555 0102' },
-    // Coaches and also keeps the books (one person, two positions: their permissions add up).
-    { key: 'daniel', name: 'Daniel Price', username: 'coach2', email: 'coach2@demo.school', positions: ['acting_coach', 'finance'], phone: '+20 100 555 0103' },
+    // Coaches, keeps the books and checks every finished video edit (one person, three positions: their permissions add up — like Moaty).
+    { key: 'daniel', name: 'Daniel Price', username: 'coach2', email: 'coach2@demo.school', positions: ['acting_coach', 'finance', 'video_reviewer'], phone: '+20 100 555 0103' },
     // Reception has no section yet (the school will say what it does); the Office helper runs the cafeteria, in Arabic.
     { key: 'reception', name: 'Nour Hassan', username: 'reception', email: 'reception@demo.school', positions: ['reception'], phone: '+20 100 555 0107' },
     { key: 'helper', name: 'Sayed Ramadan', username: 'helper', email: 'helper@demo.school', positions: ['office_helper'], phone: '+20 100 555 0108', locale: 'ar' },
@@ -1108,7 +1110,11 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
 
   await seedCafe();
 
-  // ── 9. The public website ──────────────────────────────────────────────────
+  // ── 9. Class videos: the coaches' footage on its way through the editor to the reviewer, in every state ──
+
+  await seedVideos();
+
+  // ── 10. The public website ─────────────────────────────────────────────────
 
   await seedDemoWebsite({ db, files: opts.files, timeZone, today });
 
@@ -1178,6 +1184,251 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
     db.update(notifications).set({ createdAt: ago(68) }).where(and(eq(notifications.kind, 'cafe_status'), eq(notifications.link, cafeOrderLink(coffee.id)))).run();
     db.update(cafeOrders).set({ createdAt: ago(4) }).where(eq(cafeOrders.id, teas.id)).run();
     db.update(notifications).set({ createdAt: ago(4) }).where(and(eq(notifications.kind, 'cafe_order'), eq(notifications.link, cafeBoardLink(teas.id)))).run();
+  }
+
+  /**
+   * The video pipeline as a working week (Part L): the coaches add the links
+   * after class, Hany (the editor) works through them, Daniel (coach + finance
+   * + Video reviewer, like Moaty) checks every edit. Three new videos (one due
+   * today, one tomorrow, one late), one being edited, two waiting for a check,
+   * one sent back with changes, and three approved (two this week) — through
+   * the API, as the people who would do it, then backdated. The links are
+   * made-up demo links.
+   */
+  async function seedVideos() {
+    const hany = await login('editor');
+    const ago = (minutes: number) => Date.now() - minutes * 60_000;
+    const DAY = 24 * 60;
+    const lastSessions = async (course: string, n: number) => {
+      const detail = await owner.get<CourseDetail>(`/courses/${courseIds[course]}`);
+      return detail.sessions.filter((x) => x.date < today && x.status === 'scheduled').slice(-n);
+    };
+    const [screenPrev, screenLast] = await lastSessions('screen', 2);
+    const [voiceLast] = await lastSessions('voice', 1);
+    const [improvPrev, improvLast] = await lastSessions('improv', 2);
+    const [auditionLast] = await lastSessions('audition', 1);
+    const [kidsLast] = await lastSessions('kids', 1);
+    const s = (key: string) => studentIds[key]!;
+    const drive = (code: string) => `https://drive.google.com/file/d/demo-${code}/view`;
+
+    interface Step {
+      by: ReturnType<typeof as>;
+      path: string;
+      body?: unknown;
+      /** Minutes ago, to backdate the step and its history entry. */
+      at: number;
+    }
+    interface VideoSpec {
+      by: ReturnType<typeof as>;
+      session: { id: number; date: string } | undefined;
+      title: string;
+      kind: string;
+      raw: string;
+      notes?: string;
+      students: string[];
+      /** Days from today; default tomorrow from when it was added (left to the API when the video is added today). */
+      dueIn?: number;
+      addedAgo: number;
+      steps: Step[];
+      /** Alerts still unread in the bell (the newest step's), the rest long read. */
+      unread?: boolean;
+    }
+    const specs: VideoSpec[] = [
+      // New — added yesterday evening after class, due today.
+      {
+        by: layla,
+        session: screenLast,
+        title: 'Screen Acting I — the two-hander',
+        kind: 'scene',
+        raw: drive('raw-screen-two-hander'),
+        notes: 'Two takes of the two-hander: use take 2 for the wide shot, take 1 for Chloe’s close-up. Keep it under 3 minutes.',
+        students: ['maya', 'chloe'],
+        dueIn: 0,
+        addedAgo: 14 * 60,
+        steps: [],
+        unread: true,
+      },
+      // New — added this morning, due tomorrow (the API's default).
+      {
+        by: daniel,
+        session: improvLast,
+        title: 'Improvisation Lab — status games',
+        kind: 'exercise',
+        raw: 'https://we.tl/t-demo-improv-status',
+        notes: 'Just the second half (from 0:35:00). Light cut, no music.',
+        students: ['ethan', 'rami', 'hana', 'oliver'],
+        addedAgo: 50,
+        steps: [],
+        unread: true,
+      },
+      // New — and late: due two days ago, nobody has taken it yet.
+      {
+        by: layla,
+        session: voiceLast,
+        title: 'Voice & Speech — Darwish monologue',
+        kind: 'monologue',
+        raw: drive('raw-voice-darwish'),
+        notes: 'Salma’s monologue, in Arabic. Subtitles in English please.',
+        students: ['salma'],
+        dueIn: -2,
+        addedAgo: 3 * DAY,
+        steps: [],
+        unread: true,
+      },
+      // Being edited.
+      {
+        by: layla,
+        session: auditionLast,
+        title: 'Audition Technique — self-tape practice',
+        kind: 'showreel',
+        raw: drive('raw-audition-selftapes'),
+        notes: 'One clip per student, slate first.',
+        students: ['maya', 'ethan', 'grace', 'kareem'],
+        dueIn: 1,
+        addedAgo: DAY + 120,
+        steps: [{ by: hany, path: 'take', at: 5 * 60 }],
+      },
+      // Waiting for the reviewer's check.
+      {
+        by: layla,
+        session: screenPrev,
+        title: 'Screen Acting I — close-up practice',
+        kind: 'exercise',
+        raw: drive('raw-screen-closeups'),
+        students: ['kareem', 'farah', 'isabella'],
+        dueIn: -1,
+        addedAgo: 2 * DAY + 180,
+        steps: [
+          { by: hany, path: 'take', at: DAY + 300 },
+          { by: hany, path: 'submit', body: { editedLink: 'https://youtu.be/demo-closeups', notes: 'Colour fixed on the second camera. Three clips, one per student.' }, at: 95 },
+        ],
+        unread: true,
+      },
+      {
+        by: daniel,
+        session: improvPrev,
+        title: 'Improvisation Lab — the Harold',
+        kind: 'performance',
+        raw: drive('raw-improv-harold'),
+        students: ['maya', 'chloe', 'youssef', 'isabella'],
+        dueIn: -2,
+        addedAgo: 7 * DAY + 60,
+        steps: [
+          { by: hany, path: 'take', at: 3 * DAY },
+          { by: hany, path: 'submit', body: { editedLink: drive('edit-improv-harold'), notes: null }, at: 30 },
+        ],
+        unread: true,
+      },
+      // Sent back with changes.
+      {
+        by: daniel,
+        session: kidsLast,
+        title: 'Kids Drama — freeze frames',
+        kind: 'exercise',
+        raw: drive('raw-kids-freeze'),
+        notes: 'For the parents’ group. Only children with photo consent.',
+        students: ['adam', 'maryam', 'layan'],
+        dueIn: 0,
+        addedAgo: 3 * DAY,
+        steps: [
+          { by: hany, path: 'take', at: 2 * DAY },
+          { by: hany, path: 'submit', body: { editedLink: 'https://youtu.be/demo-kids-freeze-v1', notes: 'Added music under the games.' }, at: DAY + 200 },
+          { by: daniel, path: 'request-changes', body: { note: 'The music is too loud at 0:42, and please cut the ending before the bows.' }, at: 180 },
+        ],
+        unread: true,
+      },
+      // Approved this week — one this morning (Layla's alert still unread), one two days ago with a comment.
+      {
+        by: layla,
+        session: screenPrev,
+        title: 'Screen Acting I — eyelines drill',
+        kind: 'exercise',
+        raw: drive('raw-screen-eyelines'),
+        students: ['youssef', 'rami', 'nadine'],
+        dueIn: -2,
+        addedAgo: 3 * DAY,
+        steps: [
+          { by: hany, path: 'take', at: 2 * DAY + 60 },
+          { by: hany, path: 'submit', body: { editedLink: 'https://youtu.be/demo-eyelines', notes: null }, at: DAY },
+          { by: daniel, path: 'approve', at: 70 },
+        ],
+        unread: true,
+      },
+      {
+        by: daniel,
+        session: kidsLast,
+        title: 'Kids Drama — story circle',
+        kind: 'exercise',
+        raw: drive('raw-kids-story'),
+        students: ['lina', 'zain', 'sami'],
+        dueIn: -2,
+        addedAgo: 3 * DAY + 30,
+        steps: [
+          { by: hany, path: 'take', at: 3 * DAY - 120 },
+          { by: hany, path: 'comments', body: { note: 'Sami is cut off on the left in the first minute — I’ll crop to the middle.' }, at: 3 * DAY - 150 },
+          { by: daniel, path: 'comments', body: { note: 'Fine, go ahead.' }, at: 3 * DAY - 160 },
+          { by: hany, path: 'submit', body: { editedLink: drive('edit-kids-story'), notes: 'Cropped to the middle.' }, at: 2 * DAY + 60 },
+          { by: daniel, path: 'approve', at: 2 * DAY },
+        ],
+      },
+      // Approved last term-week: Maya's showreel, already on her actor profile.
+      {
+        by: layla,
+        session: undefined,
+        title: 'Maya Collins — showreel 2026',
+        kind: 'showreel',
+        raw: drive('raw-maya-showreel'),
+        notes: 'Best of her scenes this term, 90 seconds.',
+        students: ['maya'],
+        dueIn: -12,
+        addedAgo: 15 * DAY,
+        steps: [
+          { by: hany, path: 'take', at: 14 * DAY },
+          { by: hany, path: 'submit', body: { editedLink: 'https://youtu.be/demo-maya-showreel', notes: '92 seconds, music cleared.' }, at: 11 * DAY },
+          { by: daniel, path: 'approve', at: 10 * DAY },
+        ],
+      },
+    ];
+
+    for (const v of specs) {
+      const created = await v.by.post<{ id: number }>('/videos', {
+        ...(v.session ? { sessionId: v.session.id } : { courseId: courseIds.screen }),
+        title: v.title,
+        kind: v.kind,
+        rawLink: v.raw,
+        notesForEditor: v.notes ?? null,
+        studentIds: v.students.map(s),
+        ...(v.dueIn !== undefined ? { dueOn: addDays(today, v.dueIn) } : {}),
+      });
+      for (const step of v.steps) await step.by.post(`/videos/${created.id}/${step.path}`, step.body);
+      // Backdate: the video, each history entry (in the order they were written), and the alerts.
+      const at = (minutes: number) => ago(minutes);
+      const stamps = [v.addedAgo, ...v.steps.map((st) => st.at)].map(at);
+      const events = db.select({ id: videoEvents.id }).from(videoEvents).where(eq(videoEvents.videoId, created.id)).orderBy(asc(videoEvents.id)).all();
+      events.forEach((e, i) => db.update(videoEvents).set({ createdAt: stamps[i] ?? Date.now() }).where(eq(videoEvents.id, e.id)).run());
+      const stampOf = (path: string) => {
+        const i = v.steps.map((st) => st.path).lastIndexOf(path);
+        return i < 0 ? null : stamps[i + 1]!;
+      };
+      const last = stamps[stamps.length - 1]!;
+      db.update(videos)
+        .set({
+          createdAt: stamps[0],
+          updatedAt: last,
+          takenAt: stampOf('take'),
+          submittedAt: stampOf('submit'),
+          decidedAt: stampOf('approve') ?? stampOf('request-changes'),
+        })
+        .where(eq(videos.id, created.id))
+        .run();
+      const alerts = eq(notifications.link, `/videos/${created.id}`);
+      db.update(notifications).set({ createdAt: last }).where(alerts).run();
+      // Alerts done with along the way (taken, decided) were read then; without `unread`, the newest too.
+      db.update(notifications)
+        .set({ readAt: last + 5 * 60_000 })
+        .where(v.unread ? and(alerts, isNotNull(notifications.readAt)) : alerts)
+        .run();
+    }
   }
 
   /**

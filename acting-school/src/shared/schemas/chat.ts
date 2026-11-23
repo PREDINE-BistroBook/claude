@@ -4,6 +4,7 @@ import type { CafeUnread } from './cafe';
 import { id } from './common';
 import type { SummonsView } from './summons';
 import type { PersonRef } from './team';
+import type { VideoCounts } from './videos';
 
 /**
  * Internal chat (/api/chat, every signed-in worker): direct, one-to-one
@@ -131,8 +132,9 @@ export interface ChatMessagesResponse {
 
 /**
  * GET /api/chat/unread — the one poll (every 20 s while the app is visible)
- * behind the Messages badge, the bell's count, the "call to the office" banner
- * and the cafeteria (switched on or not; orders waiting on the board).
+ * behind the Messages badge, the bell's count, the "call to the office" banner,
+ * the cafeteria (switched on or not; orders waiting on the board) and the
+ * video pipeline (videos to edit, edits to check).
  */
 export interface ChatUnreadResponse {
   /** Unread messages across all my conversations (the Messages badge). */
@@ -143,6 +145,8 @@ export interface ChatUnreadResponse {
   summons: SummonsView[];
   /** The cafeteria: whether it is switched on, and the counts behind the orders board's badge. */
   cafe: CafeUnread;
+  /** The video pipeline: the counts behind the "Videos" badge and the School home's cards; null without any videos permission. */
+  videos: VideoCounts | null;
 }
 
 /** Error codes (error.code) of the chat API besides the generic ones. */

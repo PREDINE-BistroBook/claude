@@ -38,6 +38,8 @@ export const STATUS_TONES = {
   interviewRecommendation: { accept: 'success', maybe: 'warning', decline: 'danger' },
   // Casting applications from the website: new ones need someone, so they stand out.
   castingApplicationStatus: { new: 'accent', reviewing: 'warning', accepted: 'success', declined: 'neutral' },
+  // Class videos (Part L): waiting for someone stands out; sent back is red; approved is done.
+  videoStatus: { new: 'accent', editing: 'info', in_review: 'warning', changes_requested: 'danger', approved: 'success' },
 } as const satisfies Record<string, Record<string, Tone>>;
 
 export type StatusGroup = keyof typeof STATUS_TONES;

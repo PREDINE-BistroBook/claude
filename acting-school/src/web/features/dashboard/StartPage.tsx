@@ -4,10 +4,12 @@ import { Navigate } from 'react-router';
 import { ButtonLink, EmptyState, PageHeader, PageLoader } from '@web/components/ui';
 import { TEAM_PATH, adminNavItems } from '@web/layout/nav';
 import { rememberedSection, sectionByKey, startSection, visibleSections } from '@web/layout/sections';
+import { videosAreHome } from '@shared/permissions';
 import { useAuth } from '@web/lib/auth';
 import { OrderDrinkButton } from '../cafe/components/CafeParts';
 import { CAFE_BOARD_PATH, boardIsHome } from '../cafe/utils';
 import { useUnread } from '../team/api';
+import { VIDEOS_PATH } from '../videos/utils';
 import { firstName, greetingFor } from './utils';
 
 /**
@@ -15,6 +17,9 @@ import { firstName, greetingFor } from './utils';
  * still see it), otherwise their default section (sections.ts defaultSection:
  * the first one — Casting for someone whose School is only the student list,
  * and for someone who writes castings without admissions: the Heads of Casting).
+ *
+ * Someone whose only work is the editor's queue (videosAreHome: videos.edit
+ * and no other section permission) lands on /videos.
  *
  * Someone who sees no section: if they serve the cafeteria (the Office
  * helper), the orders board is their home. Anyone else (Reception, until the
@@ -29,6 +34,8 @@ export default function StartPage() {
   const poll = useUnread();
   const cafe = poll.data?.cafe;
   const visible = visibleSections(can);
+  // Someone whose only work is editing videos starts on the queue (Part L).
+  if (user && videosAreHome(user.permissions)) return <Navigate to={VIDEOS_PATH} replace />;
   const start = startSection(visible, can, rememberedSection(user?.id ?? null));
   if (start) return <Navigate to={sectionByKey(start).home} replace />;
 

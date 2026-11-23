@@ -14,7 +14,7 @@ import {
 import type { ListResponse } from '../../shared/schemas/common';
 import type { CourseListItem } from '../../shared/schemas/courses';
 import type { DB } from '../db/database';
-import { attendance, classSessions, courseFiles, courseSlots, courses, enrollments, students } from '../db/schema';
+import { attendance, classSessions, courseFiles, courseSlots, courses, enrollments, students, videos } from '../db/schema';
 import type { AppEnv } from '../env';
 import {
   daysBetween,
@@ -176,7 +176,9 @@ router.patch('/:id', write, async (c) => {
         endTime: classSessions.endTime,
         extra: classSessions.extra,
         // Explicit aliases: drizzle leaves columns unqualified in a single-table select.
-        marked: sql<boolean>`exists (select 1 from ${attendance} a where a.session_id = "class_sessions"."id")`.mapWith((v) => Boolean(v)),
+        // A session with attendance marks — or class videos (Part L) — is history: a new schedule never removes it.
+        marked: sql<boolean>`(exists (select 1 from ${attendance} a where a.session_id = "class_sessions"."id")
+          or exists (select 1 from ${videos} v where v.session_id = "class_sessions"."id"))`.mapWith((v) => Boolean(v)),
       })
       .from(classSessions)
       .where(eq(classSessions.courseId, id))

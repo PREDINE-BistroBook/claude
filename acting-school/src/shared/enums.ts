@@ -140,9 +140,22 @@ export const SUMMONS_EXPIRY_MS = 2 * 60 * 60 * 1000;
  * In-app notifications (the bell): a new message (one per conversation,
  * updated), a summons, a summons answered; from the cafeteria, a new order
  * (to whoever serves) and what became of an order (to whoever ordered: on the
- * way, delivered, or turned down with a reason — one per order, updated).
+ * way, delivered, or turned down with a reason — one per order, updated);
+ * from the video pipeline (Part L), a new video (to the editors), an edit
+ * ready to check (to the reviewers), changes needed (to the editor) and a
+ * video approved (to the coach who added it) — one per video and kind, updated.
  */
-export const NOTIFICATION_KINDS = ['message', 'summon', 'summon_answer', 'cafe_order', 'cafe_status'] as const;
+export const NOTIFICATION_KINDS = [
+  'message',
+  'summon',
+  'summon_answer',
+  'cafe_order',
+  'cafe_status',
+  'video_new',
+  'video_review',
+  'video_changes',
+  'video_approved',
+] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 
 // ── Cafeteria ───────────────────────────────────────────────────────────────
@@ -173,3 +186,23 @@ export function isOpenCafeOrder(status: CafeOrderStatus): boolean {
 export function nextCafeStep(status: CafeOrderStatus): 'on_the_way' | 'delivered' | null {
   return status === 'new' ? 'on_the_way' : status === 'on_the_way' ? 'delivered' : null;
 }
+
+// ── Videos (Part L): coach → editor → reviewer ─────────────────────────────
+
+/** What a class video is (the coach picks one when adding it). */
+export const VIDEO_KINDS = ['scene', 'monologue', 'exercise', 'showreel', 'performance', 'other'] as const;
+export type VideoKind = (typeof VIDEO_KINDS)[number];
+
+/**
+ * A video's way through the pipeline: new (the coach added the link) →
+ * editing (an editor took it) → in_review (the edit is done, waiting for the
+ * reviewer) → approved, or changes_requested (back to the editor, who takes it
+ * again: editing → in_review). An approved video can be reopened by a
+ * reviewer, with a note: back to changes_requested.
+ */
+export const VIDEO_STATUSES = ['new', 'editing', 'in_review', 'changes_requested', 'approved'] as const;
+export type VideoStatus = (typeof VIDEO_STATUSES)[number];
+
+/** Entries of a video's history (video_events). All but `comment` are written by the app as the video moves. */
+export const VIDEO_EVENT_TYPES = ['added', 'taken', 'submitted', 'changes_requested', 'approved', 'reopened', 'comment'] as const;
+export type VideoEventType = (typeof VIDEO_EVENT_TYPES)[number];

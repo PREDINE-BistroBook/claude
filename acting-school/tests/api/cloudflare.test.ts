@@ -15,6 +15,7 @@ import { insertBatches, MAX_BOUND_PARAMS, rowsPerInsert } from '../../src/server
 import { MAX_JSON_BODY_BYTES } from '../../src/server/middleware/bodyLimit';
 import { folderFileStore } from '../../src/server/nodeFileStore';
 import { addDays } from '../../src/shared/dates';
+import { BUILT_IN_POSITIONS } from '../../src/shared/permissions';
 import type { CourseDetail } from '../../src/shared/schemas/courses';
 import { makeTestContext, PNG_1PX, testDb, todayISO } from '../helpers';
 
@@ -570,7 +571,7 @@ describe('/api/admin (operator endpoints)', () => {
     expect(t.db.select().from(students).all()).toEqual([]);
     expect(t.db.select().from(users).all()).toEqual([]);
     expect(t.db.select().from(fileChunks).all()).toEqual([]);
-    expect(t.db.select().from(positions).all().length).toBe(10);
+    expect(t.db.select().from(positions).all().length).toBe(BUILT_IN_POSITIONS.length);
     expect((await t.anon.get('/api/auth/me')).body.needsSetup).toBe(true);
     expect((await owner.get('/api/students')).status).toBe(401);
   });

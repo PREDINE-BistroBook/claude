@@ -14,6 +14,7 @@ import { staffRoutes } from './features/staff/routes';
 import { studentsRoutes } from './features/students/routes';
 import { talentRoutes } from './features/talent/routes';
 import { teamRoutes } from './features/team/routes';
+import { videosRoutes } from './features/videos/routes';
 import { websiteRoutes } from './features/website/routes';
 import { AppShell } from './layout/AppShell';
 import { RequireAuth } from './lib/auth';
@@ -54,6 +55,7 @@ export const router = createBrowserRouter([
       ...teamRoutes,
       ...chatRoutes,
       ...cafeRoutes,
+      ...videosRoutes,
       { path: 'profile', element: <ProfilePage /> },
       { path: '*', element: <NotFoundPage /> },
     ],

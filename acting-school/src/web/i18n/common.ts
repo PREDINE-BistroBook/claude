@@ -39,6 +39,8 @@ const en = {
     cafeBoard: 'Orders',
     cafeMenu: 'Menu',
     cafeOrder: 'My order',
+    /** The video pipeline's queue (Part L), in School. */
+    videos: 'Videos',
     messages: 'Messages',
     more: 'More',
     admin: 'Administration',
@@ -212,6 +214,15 @@ const en = {
       lost: 'Lost',
     },
     castingApplicationStatus: { new: 'New', reviewing: 'Reviewing', accepted: 'Added to roster', declined: 'Declined' },
+    /** A class video's status, in words (Part L). */
+    videoStatus: {
+      new: 'Waiting for the editor',
+      editing: 'Being edited',
+      in_review: 'Waiting for the check',
+      changes_requested: 'Needs changes',
+      approved: 'Approved',
+    },
+    videoKind: { scene: 'Scene', monologue: 'Monologue', exercise: 'Exercise', showreel: 'Showreel', performance: 'Performance', other: 'Other' },
     summonsStatus: { pending: 'Waiting for an answer', on_my_way: 'On my way', cant_now: 'Can’t come now', cancelled: 'Cancelled', expired: 'No answer' },
     fileKind: { photo: 'Photo', document: 'File' },
     leadLostReason: {
@@ -363,6 +374,7 @@ const ar: TranslationOf<typeof en> = {
     cafeBoard: 'الطلبات',
     cafeMenu: 'المنيو',
     cafeOrder: 'طلبي',
+    videos: 'الفيديوهات',
     messages: 'الرسائل',
     more: 'المزيد',
     admin: 'الإدارة',
@@ -537,6 +549,14 @@ const ar: TranslationOf<typeof en> = {
       lost: 'مفقود',
     },
     castingApplicationStatus: { new: 'جديد', reviewing: 'قيد المراجعة', accepted: 'أُضيف إلى قائمة الممثلين', declined: 'مرفوض' },
+    videoStatus: {
+      new: 'في انتظار المونتير',
+      editing: 'قيد المونتاج',
+      in_review: 'في انتظار المراجعة',
+      changes_requested: 'يحتاج تعديلات',
+      approved: 'تمت الموافقة',
+    },
+    videoKind: { scene: 'مشهد', monologue: 'مونولوج', exercise: 'تمرين', showreel: 'شوريل', performance: 'عرض', other: 'أخرى' },
     summonsStatus: { pending: 'في انتظار الرد', on_my_way: 'في الطريق', cant_now: 'لا أستطيع الآن', cancelled: 'أُلغي', expired: 'لا يوجد رد' },
     fileKind: { photo: 'صورة', document: 'ملف' },
     leadLostReason: {

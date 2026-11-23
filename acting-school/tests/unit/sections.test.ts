@@ -108,9 +108,9 @@ describe('mobileTabs(section, can)', () => {
     expect(mobileTabs('school', canWith(PERMISSIONS))).toEqual(['/school', '/admissions', '/students', '/classes']);
   });
 
-  it('School otherwise: Students, Workshops, Schedule (finance, the video editor)', () => {
+  it('School otherwise: Students, Workshops, Schedule (finance) — the video editor has his queue first (Part L)', () => {
     expect(mobileTabs('school', canWith(builtIn('finance')))).toEqual(['/school', '/students', '/classes', '/schedule']);
-    expect(mobileTabs('school', canWith(builtIn('video_editor')))).toEqual(['/school', '/students', '/classes', '/schedule']);
+    expect(mobileTabs('school', canWith(builtIn('video_editor')))).toEqual(['/school', '/videos', '/students', '/classes']);
   });
 
   it('School for the casting team: only Students is open to them', () => {

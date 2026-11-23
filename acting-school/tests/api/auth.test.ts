@@ -50,7 +50,7 @@ describe('login / logout / me', () => {
     expect(me.body.user).toMatchObject({
       id: u.id,
       isOwner: false,
-      permissions: ['students.read', 'courses.read', 'attendance.write'],
+      permissions: ['students.read', 'courses.read', 'attendance.write', 'videos.add'],
       positions: [expect.objectContaining({ key: 'acting_coach', name: 'Acting coach', nameAr: 'مدرب تمثيل', isOwner: false })],
     });
     expect(Object.keys(me.body.user).sort()).toEqual([

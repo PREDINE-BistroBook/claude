@@ -30,7 +30,8 @@ export const SECTIONS: readonly Section[] = [
     icon: School,
     labelKey: 'sections.school',
     anyPermission: SECTION_PERMISSIONS.school,
-    prefixes: ['/school', '/schedule', '/admissions', '/students', '/classes', '/sessions'],
+    // "/videos": the video queue (Part L).
+    prefixes: ['/school', '/schedule', '/admissions', '/students', '/classes', '/sessions', '/videos'],
   },
   {
     key: 'casting',

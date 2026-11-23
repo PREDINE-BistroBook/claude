@@ -45,6 +45,7 @@ What the school asked for, in the order we plan to build it. Update this file as
 | **Finance** | Moaty | Tuition, payments, reminders, totals, commissions; student/guardian contact details for reminders. |
 | **Reception** *(asked 2026-11-23)* | (name to come) | Nothing in the sections yet: **the school will explain what Reception does.** Meanwhile: Team, Messages, Alerts, cafeteria ordering. |
 | **Office helper** *(asked 2026-11-23)* | (name to come) | "Like the cafeteria: food and beverage are on him" — the cafeteria's orders board and menu. |
+| **Video reviewer** *(asked 2026-11-23)* | Moaty (on top of coach + finance; an owner gives it in Team) | "Moaty checks every edit": alerted when an edit is finished; Approved, or Needs changes with a note. |
 
 Rules that hold for every position: owner accounts are visible and editable only by owners; nobody can give someone (or themselves) a permission they don't hold; holding two positions (Moaty: coach + finance) combines both.
 
@@ -71,6 +72,7 @@ Updated 2026-11-23 with the school's picks from the Idea Board. The numbers in b
 10. **Tuition & payments.** Fees per class, who paid / who owes, overdue list, WhatsApp reminder links to parents. Tracking only — no card payments.
     - Picked ideas: one price list, approved discounts only (#67); numbered receipts that can't vanish (#68); attending-but-unpaid student alerts (#64); payment screenshot reader with copy guard (#63); end-of-day cash closing (#69); expenses, custody and accountant pack (#70); one-click next-term renewals (#1).
 11. **Video editors' work queue.** Tasks (showreels, self-tapes, class footage) with deadlines, status, Google Drive links.
+    - **Started (2026-11-23, Part L of `docs/SECTIONS_AND_WEBSITE.md`):** the class-video pipeline — a coach adds the raw-footage link on the session (who is in it, notes, due tomorrow), the editor's queue (Start editing → Done with the edited link), the Video reviewer (Moaty) alerted at once to check each edit (Approved / Needs changes with a note), the coach told when it is approved; history and comments on each video. Videos stay links ($0). Still to come in this step: tasks that are not class footage (showreels, self-tapes asked by the agency), and the picked ideas below.
     - Picked ideas: children's photo and clip protection (#87) — nothing is marked "OK to post" without the right consent; footage library searchable by student (#49); guided self-tape recorder (#48); monthly content shoot-day planner (#53); Day 1 vs today progress reels (#47); monthly class highlight for parents (#25).
 12. **Student section.**
     - **Sign-in at $0:** a personal link sent by WhatsApp from the app (wa.me, pre-written) plus a short PIN. No email or SMS codes (they cost money; many students only have a phone).

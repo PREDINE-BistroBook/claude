@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { Bell, BellRing, CheckCheck, CircleCheck, Coffee, MessageCircle, type LucideIcon } from 'lucide-react';
+import { Bell, BellRing, CheckCheck, CircleCheck, Clapperboard, Coffee, MessageCircle, PencilLine, ScanEye, type LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation, useNavigate } from 'react-router';
@@ -99,14 +99,31 @@ export function NotificationsButton({ variant }: { variant: Variant }) {
   );
 }
 
-const KIND_ICON: Record<NotificationItem['kind'], LucideIcon> = { message: MessageCircle, summon: BellRing, summon_answer: CircleCheck, cafe_order: Coffee, cafe_status: Coffee };
-/** The tile behind each kind's icon: calls stand out, answers and cafeteria news are good news, messages plain. */
+const KIND_ICON: Record<NotificationItem['kind'], LucideIcon> = {
+  message: MessageCircle,
+  summon: BellRing,
+  summon_answer: CircleCheck,
+  cafe_order: Coffee,
+  cafe_status: Coffee,
+  video_new: Clapperboard,
+  video_review: ScanEye,
+  video_changes: PencilLine,
+  video_approved: CircleCheck,
+};
+/**
+ * The tile behind each kind's icon: calls stand out, answers and cafeteria news are good news, messages plain;
+ * videos: work waiting (a new video, an edit to check, changes needed) stands out, an approval is good news.
+ */
 const KIND_TONE: Record<NotificationItem['kind'], string> = {
   message: 'bg-accent-soft text-accent',
   summon: 'bg-warning-soft text-warning',
   summon_answer: 'bg-success-soft text-success',
   cafe_order: 'bg-warning-soft text-warning',
   cafe_status: 'bg-success-soft text-success',
+  video_new: 'bg-accent-soft text-accent',
+  video_review: 'bg-warning-soft text-warning',
+  video_changes: 'bg-warning-soft text-warning',
+  video_approved: 'bg-success-soft text-success',
 };
 
 /**

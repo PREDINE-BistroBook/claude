@@ -8,8 +8,11 @@ import { makeTestContext } from '../helpers';
 
 type Ctx = Awaited<ReturnType<typeof makeTestContext>>;
 const byKey = (items: Position[], key: string) => items.find((p) => p.key === key)!;
-/** The Executive Director's built-in list: everything but money amounts and the owners' monthly cafeteria page (she serves the cafeteria since grant v4). */
-const ALL_BUT_MONEY = PERMISSIONS.filter((p) => p !== 'payments.manage' && p !== 'cafeteria.report');
+/**
+ * The Executive Director's built-in list: everything but money amounts, the owners' monthly cafeteria page (she serves
+ * the cafeteria since grant v4) and the editor's and reviewer's work on videos (she adds and sees them since grant v5).
+ */
+const ALL_BUT_MONEY = PERMISSIONS.filter((p) => !['payments.manage', 'cafeteria.report', 'videos.edit', 'videos.review'].includes(p));
 const POSITION_KEYS = ['id', 'key', 'name', 'nameAr', 'isOwner', 'permissions', 'sortOrder', 'holderCount', 'editable', 'assignable', 'createdAt', 'updatedAt'].sort();
 const holders = (t: Ctx, positionId: number) =>
   t.db.select().from(userPositions).where(eq(userPositions.positionId, positionId)).all().length;
@@ -32,7 +35,7 @@ describe('permissions (unit)', () => {
   });
 
   it('defines the confirmed built-ins', () => {
-    expect(BUILT_IN_POSITIONS.map((p) => p.key)).toEqual(['ceo', 'cfo', 'executive_director', 'head_of_casting', 'casting_team', 'video_editor', 'acting_coach', 'finance', 'reception', 'office_helper']);
+    expect(BUILT_IN_POSITIONS.map((p) => p.key)).toEqual(['ceo', 'cfo', 'executive_director', 'head_of_casting', 'casting_team', 'video_editor', 'acting_coach', 'finance', 'reception', 'office_helper', 'video_reviewer']);
     expect(byKeyStatic('executive_director').permissions).toEqual(ALL_BUT_MONEY);
     expect(byKeyStatic('casting_team').permissions).not.toContain('castings.send');
     expect(byKeyStatic('head_of_casting').permissions).toContain('castings.send');
@@ -71,7 +74,7 @@ describe('GET /api/positions', () => {
     expect(res.body.items.map((p) => p.key)).toEqual(BUILT_IN_POSITIONS.map((p) => p.key));
     for (const p of res.body.items) expect(Object.keys(p).sort()).toEqual(POSITION_KEYS);
     expect(byKey(res.body.items, 'ceo')).toMatchObject({ name: 'CEO', nameAr: 'الرئيس التنفيذي', isOwner: true, permissions: [...PERMISSIONS], holderCount: 1, editable: true, assignable: true });
-    expect(byKey(res.body.items, 'acting_coach')).toMatchObject({ holderCount: 2, permissions: ['students.read', 'courses.read', 'attendance.write'] });
+    expect(byKey(res.body.items, 'acting_coach')).toMatchObject({ holderCount: 2, permissions: ['students.read', 'courses.read', 'attendance.write', 'videos.add'] });
     expect(byKey(res.body.items, 'finance')).toMatchObject({ holderCount: 1, editable: true, assignable: true });
   });
 
@@ -84,17 +87,19 @@ describe('GET /api/positions', () => {
     await t.createUser('acting_coach');
     const res = await director.get<{ items: Position[] }>('/api/positions');
     expect(res.status).toBe(200);
-    expect(res.body.items.map((p) => p.key)).toEqual(['executive_director', 'head_of_casting', 'casting_team', 'video_editor', 'acting_coach', 'finance', 'reception', 'office_helper']);
+    expect(res.body.items.map((p) => p.key)).toEqual(['executive_director', 'head_of_casting', 'casting_team', 'video_editor', 'acting_coach', 'finance', 'reception', 'office_helper', 'video_reviewer']);
     expect(res.body.items.every((p) => !p.isOwner)).toBe(true);
     expect(byKey(res.body.items, 'acting_coach')).toMatchObject({ holderCount: 2, editable: true, assignable: true });
     expect(byKey(res.body.items, 'executive_director')).toMatchObject({ holderCount: 1, editable: true, assignable: true });
-    // Finance allows payments.manage, which she doesn't hold.
+    // Finance allows payments.manage, which she doesn't hold; the Video editor and the Video reviewer the editor's and the reviewer's work (Part L).
     expect(byKey(res.body.items, 'finance')).toMatchObject({ editable: false, assignable: false });
+    expect(byKey(res.body.items, 'video_editor')).toMatchObject({ editable: false, assignable: false });
+    expect(byKey(res.body.items, 'video_reviewer')).toMatchObject({ editable: false, assignable: false });
   });
 
   it('needs staff.manage or positions.manage; editable/assignable follow which one', async () => {
     const t = await makeTestContext();
-    const assigner = await t.as({ permissions: ['staff.manage', 'students.read', 'courses.read', 'attendance.write'] });
+    const assigner = await t.as({ permissions: ['staff.manage', 'students.read', 'courses.read', 'attendance.write', 'videos.add'] });
     const a = (await assigner.get<{ items: Position[] }>('/api/positions')).body.items;
     expect(byKey(a, 'acting_coach')).toMatchObject({ editable: false, assignable: true });
     expect(byKey(a, 'video_editor')).toMatchObject({ editable: false, assignable: false });
@@ -367,9 +372,10 @@ describe('staff rules: no escalation when assigning positions', () => {
     const coach = await t.createUser('teacher');
     const finance = t.positionId('finance');
     const actingCoach = t.positionId('acting_coach');
-    const editor = t.positionId('video_editor');
+    // Casting team is within her access (the Video editor no longer is: videos.edit, Part L).
+    const editor = t.positionId('casting_team');
 
-    // Assign: Finance allows payments.manage → refused; Video editor → fine.
+    // Assign: Finance allows payments.manage → refused; Casting team → fine.
     const give = await director.patch(`/api/staff/${coach.id}`, { positionIds: [actingCoach, finance] });
     expect(give.status).toBe(403);
     expect(give.body.error.code).toBe('exceeds_your_access');
@@ -378,7 +384,7 @@ describe('staff rules: no escalation when assigning positions', () => {
     // Remove: an owner gave them Finance; the director can't take it away (she couldn't give it either)…
     await owner.patch(`/api/staff/${coach.id}`, { positionIds: [actingCoach, editor, finance] });
     const before = (await owner.get(`/api/staff/${coach.id}`)).body;
-    expect(before.positions.map((p: any) => p.key)).toEqual(['video_editor', 'acting_coach', 'finance']);
+    expect(before.positions.map((p: any) => p.key)).toEqual(['casting_team', 'acting_coach', 'finance']);
     // …and the person now exceeds her access, so she can't touch them at all.
     const take = await director.patch(`/api/staff/${coach.id}`, { positionIds: [actingCoach, editor] });
     expect(take.status).toBe(403);
@@ -429,7 +435,7 @@ describe('staff rules: editing someone more powerful', () => {
   it('the director can manage someone whose access is within hers', async () => {
     const t = await makeTestContext();
     const director = await t.as('admin');
-    const coach = await t.createUser(['acting_coach', 'video_editor']);
+    const coach = await t.createUser(['acting_coach', 'casting_team']);
     expect((await director.get(`/api/staff/${coach.id}`)).body.manageable).toBe(true);
     expect((await director.patch(`/api/staff/${coach.id}`, { password: 'new-password' })).status).toBe(200);
     expect((await director.patch(`/api/staff/${coach.id}`, { active: false })).status).toBe(200);
@@ -441,7 +447,7 @@ describe('staff rules: self changes and the last owner', () => {
     const t = await makeTestContext();
     const director = await t.as('admin');
     await t.as('owner');
-    const res = await director.patch(`/api/staff/${director.user.id}`, { positionIds: [t.positionId('executive_director'), t.positionId('video_editor')] });
+    const res = await director.patch(`/api/staff/${director.user.id}`, { positionIds: [t.positionId('executive_director'), t.positionId('casting_team')] });
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe('cannot_change_self');
     expect((await director.patch(`/api/staff/${director.user.id}`, { active: false })).body.error.code).toBe('cannot_change_self');

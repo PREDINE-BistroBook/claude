@@ -85,9 +85,37 @@ export const PERMISSIONS = [
    * Owners hold it by definition; no other built-in position gets it.
    */
   'cafeteria.report',
+
+  /**
+   * The video pipeline (Part L, /api/videos — videos are links: the app stores
+   * no video). See the pipeline read-only: every video, its links and history.
+   * The Executive Director's (BUILT_IN_GRANTS v5) and the Video reviewer's.
+   */
+  'videos.read',
+  /**
+   * Add class videos for the editor: a raw-footage link on a session (or a
+   * workshop) the person can see — class scope, like the session itself. The
+   * Acting coaches' and the Executive Director's (BUILT_IN_GRANTS v5).
+   */
+  'videos.add',
+  /**
+   * The editor's queue: take a video ("Start editing" / "Start fixing") and
+   * hand in the edited link ("Done"). Sees every video. Alerted about new
+   * videos unless an owner. The Video editor's (BUILT_IN_GRANTS v5).
+   */
+  'videos.edit',
+  /**
+   * Check finished edits: "Approved" or "Needs changes" (with a note), and
+   * reopen an approved video. Sees every video. Alerted about every finished
+   * edit unless an owner. Only through the Video reviewer position (and owners).
+   */
+  'videos.review',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
+
+/** The video pipeline's permissions (Part L): any of them opens the School section, where the queue is. */
+export const VIDEO_PERMISSIONS_LIST = ['videos.read', 'videos.add', 'videos.edit', 'videos.review'] as const satisfies readonly Permission[];
 
 /** How the permissions are grouped on screen (positions form, profile). */
 export const PERMISSION_GROUPS = [
@@ -101,6 +129,7 @@ export const PERMISSION_GROUPS = [
   { id: 'money', permissions: ['payments.status', 'payments.manage'] },
   { id: 'website', permissions: ['website.manage'] },
   { id: 'cafeteria', permissions: ['cafeteria.serve', 'cafeteria.report'] },
+  { id: 'videos', permissions: ['videos.read', 'videos.add', 'videos.edit', 'videos.review'] },
 ] as const satisfies readonly { id: string; permissions: readonly Permission[] }[];
 
 export type PermissionGroupId = (typeof PERMISSION_GROUPS)[number]['id'];
@@ -133,10 +162,11 @@ export function holdsAll(held: readonly Permission[], needed: readonly Permissio
  * Which permissions open each of the team app's three sections (School,
  * Casting, Website): a section shows for anyone holding at least one of its
  * list. The web app's tabs (src/web/layout/sections.ts) and the server's
- * "who is the Office helper" rule (servesFromBoard) both read it here.
+ * "who is the Office helper" rule (servesFromBoard) both read it here. The
+ * video queue (/videos) is in School, so any videos permission opens School.
  */
 export const SECTION_PERMISSIONS = {
-  school: ['courses.read', 'students.read', 'admissions.read'],
+  school: ['courses.read', 'students.read', 'admissions.read', ...VIDEO_PERMISSIONS_LIST],
   casting: ['talent.read', 'castings.read'],
   website: ['website.manage'],
 } as const satisfies Record<'school' | 'casting' | 'website', readonly Permission[]>;
@@ -159,20 +189,38 @@ export function servesFromBoard(held: readonly Permission[]): boolean {
   return held.includes('cafeteria.serve') && !opensAnySection(held);
 }
 
+/**
+ * Someone whose only work in the app is the editor's queue: videos.edit and
+ * no other permission that opens a section (School's students, workshops or
+ * admissions; Casting; Website). "/" opens the queue for them (the
+ * school's decision, Part L). The Video editor position also sees the
+ * workshops and actors read-only, so for him the School home stays the start,
+ * with the queue first in his bottom bar.
+ */
+export function videosAreHome(held: readonly Permission[]): boolean {
+  if (!held.includes('videos.edit')) return false;
+  const videoPermissions: readonly Permission[] = VIDEO_PERMISSIONS_LIST;
+  const others = held.filter((p) => !videoPermissions.includes(p));
+  return !opensAnySection(others);
+}
+
 // ── Built-in positions ──────────────────────────────────────────────────────
 
 /**
- * The Executive Director: everything except money amounts and the owners'
- * monthly cafeteria page (website.manage since BUILT_IN_GRANTS v2,
- * staff.summon since v3, cafeteria.serve since v4 — so she can create the
- * Office helper's account and give him the position; she works in the
- * sections, so she gets no order alerts from it: servesFromBoard).
+ * The Executive Director: everything except money amounts, the owners'
+ * monthly cafeteria page, and the editor's and reviewer's work in the video
+ * pipeline (website.manage since BUILT_IN_GRANTS v2, staff.summon since v3,
+ * cafeteria.serve since v4 — so she can create the Office helper's account
+ * and give him the position; she works in the sections, so she gets no order
+ * alerts from it: servesFromBoard —, videos.add and videos.read since v5: she
+ * adds class videos and sees the pipeline, and is never alerted as an editor
+ * or a reviewer).
  */
-const EXECUTIVE_DIRECTOR_PERMISSIONS = PERMISSIONS.filter((p) => p !== 'payments.manage' && p !== 'cafeteria.report');
+const EXECUTIVE_DIRECTOR_PERMISSIONS = PERMISSIONS.filter((p) => !(['payments.manage', 'cafeteria.report', 'videos.edit', 'videos.review'] as Permission[]).includes(p));
 
 /**
  * The school's positions (confirmed 2026-11-22; Reception and Office helper
- * asked for on 2026-11-23). Created on startup when missing (by `key`) — so a
+ * asked for on 2026-11-23, Video reviewer with the video pipeline, Part L). Created on startup when missing (by `key`) — so a
  * position added here appears once in a database that already exists; owners
  * may rename them and change what they allow afterwards, but can't delete
  * them, and a renamed or changed one is never created again or reset.
@@ -200,14 +248,14 @@ export const BUILT_IN_POSITIONS = [
     name: 'Video editor',
     nameAr: 'مونتير',
     isOwner: false,
-    permissions: ['students.read', 'courses.read', 'classes.all', 'talent.read'],
+    permissions: ['students.read', 'courses.read', 'classes.all', 'talent.read', 'videos.edit'],
   },
   {
     key: 'acting_coach',
     name: 'Acting coach',
     nameAr: 'مدرب تمثيل',
     isOwner: false,
-    permissions: ['students.read', 'courses.read', 'attendance.write'],
+    permissions: ['students.read', 'courses.read', 'attendance.write', 'videos.add'],
   },
   {
     key: 'finance',
@@ -221,6 +269,8 @@ export const BUILT_IN_POSITIONS = [
   { key: 'reception', name: 'Reception', nameAr: 'الاستقبال', isOwner: false, permissions: [] },
   // "Office helper is like the cafeteria, so food and beverage are on him": the orders board and the menu.
   { key: 'office_helper', name: 'Office helper', nameAr: 'عامل المكتب', isOwner: false, permissions: ['cafeteria.serve'] },
+  // "Moaty checks every edit" (Part L): given on top of a person's other positions; alerted about every finished edit.
+  { key: 'video_reviewer', name: 'Video reviewer', nameAr: 'مراجع الفيديو', isOwner: false, permissions: ['videos.read', 'videos.review'] },
 ] as const satisfies readonly { key: string; name: string; nameAr: string; isOwner: boolean; permissions: readonly Permission[] }[];
 
 export type BuiltInPositionKey = (typeof BUILT_IN_POSITIONS)[number]['key'];
@@ -247,7 +297,8 @@ export const FIRST_OWNER_POSITION: BuiltInPositionKey = 'ceo';
  *
  * A NEW built-in position needs no grant: ensureBuiltInPositions creates it
  * with its full list wherever it is missing (Reception and Office helper,
- * 2026-11-23: cafeteria.serve came with the Office helper position itself).
+ * 2026-11-23: cafeteria.serve came with the Office helper position itself;
+ * Video reviewer, Part L: videos.review and videos.read).
  */
 export const BUILT_IN_GRANTS: readonly { version: number; grants: Partial<Record<BuiltInPositionKey, readonly Permission[]>> }[] = [
   { version: 1, grants: { executive_director: ['admissions.read', 'admissions.write', 'admissions.decide'] } },
@@ -259,6 +310,9 @@ export const BUILT_IN_GRANTS: readonly { version: number; grants: Partial<Record
   // him the position, which needs cafeteria.serve ("nobody gives access they don't hold"). No order alerts follow
   // from it: those go only to someone who serves and opens no section (servesFromBoard).
   { version: 4, grants: { executive_director: ['cafeteria.serve'] } },
+  // The video pipeline (Part L): coaches and the director add class videos, the editor works through the queue, the
+  // director sees the pipeline. Checking edits comes with the new Video reviewer position (no grant needed).
+  { version: 5, grants: { acting_coach: ['videos.add'], executive_director: ['videos.add', 'videos.read'], video_editor: ['videos.edit'] } },
 ];
 
 /** Settings key holding the last BUILT_IN_GRANTS version applied to this database. */

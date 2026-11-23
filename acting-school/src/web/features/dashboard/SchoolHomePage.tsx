@@ -4,6 +4,8 @@ import { todayISO } from '@shared/dates';
 import { EmptyState, ErrorState, PageLoader } from '@web/components/ui';
 import { SectionHomeHeader } from '@web/layout/SectionHomeHeader';
 import { useAuth } from '@web/lib/auth';
+import { VideoHomeCards, videoHomeCardKinds } from '../videos/components/VideoHomeCards';
+import { useVideoCounts } from '../videos/api';
 import { useDashboard } from './api';
 import { CardGrid, QuickActions, StatGrid, useAllowedCount, useGreetingLine, type HomeStat, type QuickAction } from './components/HomeParts';
 import { AttendanceCard, FollowUpsCard, InterviewsCard, TodayClassesCard } from './components/Sections';
@@ -25,9 +27,10 @@ const ACTIONS: QuickAction[] = [
 ];
 
 /**
- * /school — the School section's home: today's sessions (a coach's own),
- * attendance still to take, admissions follow-ups and interviews, and the
- * school's counts. Nothing from casting.
+ * /school — the School section's home: the video cards for whoever edits,
+ * checks or adds class videos, today's sessions (a coach's own), attendance
+ * still to take, admissions follow-ups and interviews, and the school's
+ * counts. Nothing from casting.
  */
 export default function SchoolHomePage() {
   const { t } = useTranslation(['dashboard', 'common']);
@@ -37,6 +40,8 @@ export default function SchoolHomePage() {
   const today = data?.today ?? todayISO();
   const greeting = useGreetingLine(today);
   const allowedActions = useAllowedCount(ACTIONS);
+  // The video pipeline's cards (Part L): the editor's, the reviewer's, the coach's — from the 20-second poll.
+  const videoCards = videoHomeCardKinds(useVideoCounts()).length;
 
   const cards = data
     ? [
@@ -55,11 +60,12 @@ export default function SchoolHomePage() {
   let body;
   if (dashboard.isPending) body = <PageLoader />;
   else if (dashboard.isError || !data) body = <ErrorState error={dashboard.error} onRetry={() => void dashboard.refetch()} />;
-  else if (!hasStats && !allowedActions && !cards.length)
+  else if (!hasStats && !allowedActions && !cards.length && !videoCards)
     body = <EmptyState icon={LayoutDashboard} title={t('empty.title')} description={t('empty.hint')} className="rounded-2xl border border-dashed border-line-strong" />;
   else
     body = (
       <div className="space-y-6">
+        <VideoHomeCards />
         <StatGrid stats={STATS} counts={data.counts} />
         <QuickActions actions={ACTIONS} />
         <CardGrid>{cards}</CardGrid>

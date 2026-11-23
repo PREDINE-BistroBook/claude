@@ -12,6 +12,8 @@ import { boardIsHome, cafeBadge } from '../features/cafe/utils';
 import { MessagesButton, NotificationsButton } from '../features/team/components/HeaderButtons';
 import { SummonsAnswerWatcher } from '../features/team/components/SummonsAnswerWatcher';
 import { SummonsBanner } from '../features/team/components/SummonsBanner';
+import { useVideoCounts } from '../features/videos/api';
+import { videosBadge } from '../features/videos/utils';
 import { currentLanguage, setLanguage } from '../i18n';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -147,12 +149,15 @@ export function AppShell() {
   const cafeHome = !!user && boardIsHome(can, visible.length, cafe?.enabled);
 
   // Count badges. New casting applications: fetched only while the person is in the section that lists
-  // them. Cafeteria orders nobody has taken yet: with the poll, for whoever serves.
+  // them. Cafeteria orders nobody has taken yet: with the poll, for whoever serves. Videos waiting for the
+  // editor or the reviewer: with the poll too (owners get no such counts: they are not alerted either).
   const applicationBadge = section === 'casting' && can('talent.read');
   const applicationCounts = useApplicationCounts(applicationBadge);
+  const videoCounts = useVideoCounts();
   const badgeOf = (item: MenuItem): number => {
     if (item.badge === 'newCastingApplications') return applicationBadge ? (applicationCounts.data?.new ?? 0) : 0;
     if (item.badge === 'cafeNewOrders') return cafeBadge(cafe);
+    if (item.badge === 'videosWaiting') return videosBadge(videoCounts);
     return 0;
   };
 

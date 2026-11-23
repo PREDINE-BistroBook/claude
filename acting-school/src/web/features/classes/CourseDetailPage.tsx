@@ -38,9 +38,11 @@ import { AddStudentModal } from './components/AddStudentModal';
 import { CourseTile } from './components/CourseColor';
 import { InfoGrid } from './components/InfoGrid';
 import { SessionFormModal } from './components/SessionFormModal';
+import { usesVideos } from '@shared/schemas/videos';
+import { VideosBlock } from '../videos/components/VideosBlock';
 import { isPast, needsAttendance, rateTone, scheduleLines } from './utils';
 
-type Tab = 'students' | 'sessions' | 'files';
+type Tab = 'students' | 'sessions' | 'files' | 'videos';
 
 export default function CourseDetailPage() {
   const { t } = useTranslation('classes');
@@ -52,7 +54,8 @@ export default function CourseDetailPage() {
   const invalidate = useInvalidateClasses();
   const [params, setParams] = useSearchParams();
   const tabParam = params.get('tab');
-  const tab: Tab = tabParam === 'sessions' || tabParam === 'files' ? tabParam : 'students';
+  const showVideos = !!user && usesVideos(user);
+  const tab: Tab = tabParam === 'sessions' || tabParam === 'files' || (tabParam === 'videos' && showVideos) ? tabParam : 'students';
   const files = useRecordFiles('courses', id);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -112,6 +115,8 @@ export default function CourseDetailPage() {
               { id: 'students', label: t('detail.tabStudents'), count: enrolled },
               { id: 'sessions', label: t('detail.tabSessions'), count: c.sessions.length },
               { id: 'files', label: t('team:files.photosAndFiles'), count: files.data?.items.length },
+              // The workshop's class videos (Part L).
+              ...(showVideos ? [{ id: 'videos' as const, label: t('videos:block.title') }] : []),
             ]}
           />
           <div className="mt-4" role="tabpanel">
@@ -119,6 +124,12 @@ export default function CourseDetailPage() {
               <StudentsTab course={c} canWrite={canWrite} />
             ) : tab === 'sessions' ? (
               <SessionsTab course={c} canWrite={canWrite} />
+            ) : tab === 'videos' ? (
+              <VideosBlock
+                course={{ id: c.id, name: c.name }}
+                sessions={c.sessions.filter((x) => x.status === 'scheduled' && x.date <= todayISO())}
+                students={c.enrollments.filter((e) => e.status !== 'withdrawn').map((e) => ({ id: e.studentId, firstName: e.firstName, lastName: e.lastName, photoFileId: e.photoFileId }))}
+              />
             ) : (
               <RecordFiles resource="courses" recordId={c.id} canAdd={canWrite || isCoach} />
             )}

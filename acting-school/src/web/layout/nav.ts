@@ -5,6 +5,7 @@ import {
   ClipboardList,
   Coffee,
   FileText,
+  Film,
   GraduationCap,
   House,
   Inbox,
@@ -18,7 +19,7 @@ import {
   UtensilsCrossed,
   type LucideIcon,
 } from 'lucide-react';
-import type { Permission } from '@shared/permissions';
+import { VIDEO_PERMISSIONS_LIST, type Permission } from '@shared/permissions';
 import { CAFE_BOARD_PATH, CAFE_MENU_PATH, CAFE_PATH, CAFE_REPORT_PATH } from '../features/cafe/utils';
 import { sectionByKey, sectionForPath, visibleSections, type SectionKey } from './sections';
 
@@ -27,9 +28,10 @@ export type NavSection = SectionKey | 'admin';
 /**
  * A count shown next to a menu entry: things waiting for someone. New casting
  * applications are fetched by AppShell only in that entry's section; cafeteria
- * orders nobody has taken yet come with the 20-second poll.
+ * orders nobody has taken yet, and the videos waiting for the editor or the
+ * reviewer (Part L), come with the 20-second poll.
  */
-export type NavBadge = 'newCastingApplications' | 'cafeNewOrders';
+export type NavBadge = 'newCastingApplications' | 'cafeNewOrders' | 'videosWaiting';
 
 export interface NavItem {
   to: string;
@@ -63,6 +65,8 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/admissions', label: 'admissions', icon: Inbox, permission: 'admissions.read', section: 'school' },
   { to: '/students', label: 'students', icon: Users, permission: 'students.read', section: 'school' },
   { to: '/classes', label: 'classes', icon: GraduationCap, permission: 'courses.read', section: 'school' },
+  // The video queue (Part L): the editor's work, the reviewer's checks, the coaches' videos.
+  { to: '/videos', label: 'videos', icon: Film, anyPermission: VIDEO_PERMISSIONS_LIST, section: 'school', badge: 'videosWaiting' },
   // ── Casting ──
   home('casting'),
   { to: '/talent', label: 'talent', icon: Star, permission: 'talent.read', section: 'casting' },
@@ -191,6 +195,15 @@ export function landingAfterSignIn(next: string, can: (p: Permission) => boolean
   return next;
 }
 
+/**
+ * The video queue is first in the School bottom bar for whoever works through
+ * it — the editor (videos.edit) and the reviewer (videos.review) — unless they
+ * run admissions (the director, owners: enquiries stay their first stop).
+ */
+export function videosFirst(can: (p: Permission) => boolean): boolean {
+  return (can('videos.edit') || can('videos.review')) && !can('admissions.read');
+}
+
 /** Bottom-bar priorities per section, before filtering by permission. */
 const PHONE_PRIORITY = {
   // Coaches mark attendance for their own classes: the timetable first.
@@ -221,6 +234,8 @@ export function mobileTabs(section: SectionKey | null, can: (p: Permission) => b
     if (can('attendance.write') && !can('classes.all')) priority = PHONE_PRIORITY.schoolCoach;
     else if (can('admissions.read')) priority = PHONE_PRIORITY.schoolAdmissions;
     else priority = PHONE_PRIORITY.school;
+    // The editor's queue (and the reviewer's checks) first in the bar — not for the director and owners, whose first stop is admissions.
+    if (videosFirst(can)) priority = ['/videos', ...priority];
   } else priority = PHONE_PRIORITY[section];
   const open = items.map((i) => i.to).filter((to) => to !== homePath);
   const ordered = [...priority.filter((to) => open.includes(to)), ...open.filter((to) => !priority.includes(to))];

@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, ne, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
+import { startOfWeek } from '../../shared/dates';
 import type { FileKind } from '../../shared/enums';
 import {
   CHAT_ERROR_CODES,
@@ -24,15 +25,18 @@ import type { DB } from '../db/database';
 import { conversationMembers, conversations, files, messageAttachments, messages, notifications, users } from '../db/schema';
 import type { AppEnv } from '../env';
 import { cafeUnread, hiddenNotificationKinds } from '../lib/cafe';
+import { epochAt, schoolToday } from '../lib/clock';
 import { ApiError, fieldError, forbidden, notFound } from '../lib/errors';
 import { claimUploads, deleteStoredFiles, takeUnusedFiles } from '../lib/fileRefs';
 import { conversationLink, localeOf, markNotificationsRead, messagePreview, notificationText, notify, preview, unreadNotificationCount } from '../lib/notifications';
 import { queuePush } from '../lib/push';
 import { hitRateLimit, MINUTE_MS } from '../lib/rateLimit';
+import { getSettings } from '../lib/settings';
 import { inChunks } from '../lib/sqlLimits';
 import { incomingSummons } from '../lib/summons';
 import { findActivePerson, missingPerson, personColumns } from '../lib/team';
 import { body, paramId, query } from '../lib/validate';
+import { videoCounts } from '../lib/videos';
 import { currentUser, requireAuth } from '../middleware/auth';
 
 /**
@@ -376,17 +380,20 @@ router.delete('/messages/:id', async (c) => {
 
 // ── The badge poll ──────────────────────────────────────────────────────────
 
-/** The Messages badge, the bell's count, the summonses waiting for me and the cafeteria (on or off, orders waiting) — one poll every 20 s. */
+/** The Messages badge, the bell's count, the summonses waiting for me, the cafeteria (on or off, orders waiting) and the video pipeline's counts — one poll every 20 s. */
 router.get('/unread', (c) => {
   const db = c.get('db');
   const user = currentUser(c);
   const me = user.id;
   const total = [...unreadCounts(db, me).values()].reduce((a, b) => a + b, 0);
+  const today = schoolToday(c);
   const res: ChatUnreadResponse = {
     total,
     notifications: unreadNotificationCount(db, me, Date.now(), hiddenNotificationKinds(db, user)),
     summons: incomingSummons(db, me, Date.now()),
     cafe: cafeUnread(db, user),
+    // "This week" at the school: since midnight (its time zone) on the first day of its week.
+    videos: videoCounts(db, user, today, () => epochAt(c.get('config').timeZone, startOfWeek(today, getSettings(db).weekStartsOn))),
   };
   return c.json(res);
 });

@@ -73,6 +73,7 @@ const en = {
     money: 'Money',
     website: 'Website',
     cafeteria: 'Cafeteria',
+    videos: 'Class videos',
   },
   perm: {
     staff: {
@@ -147,6 +148,24 @@ const en = {
       report: {
         label: 'See monthly cafeteria consumption',
         description: 'A page with what each team member had from the cafeteria in a month, item by item, and the total of each item. Delivered orders only. No prices.',
+      },
+    },
+    videos: {
+      read: {
+        label: 'See the class videos',
+        description: 'Every class video and where it is: waiting for the editor, being edited, waiting for a check, or approved — with both links and the history. Seeing only, no buttons.',
+      },
+      add: {
+        label: 'Add class videos for the editor',
+        description: 'A “+ Add video” button on the sessions and workshops you can see: the link to the raw footage, who is in it, notes for the editor and the day it is due. The editors are told at once.',
+      },
+      edit: {
+        label: 'Edit videos (the editor’s queue)',
+        description: 'The list of videos to edit: “Start editing”, then “Done” with the link to the edited video. Alerts about every new video (owners are not alerted).',
+      },
+      review: {
+        label: 'Check finished edits',
+        description: 'Watch each finished edit and tap “Approved” or “Needs changes” (with a note for the editor). Alerts about every finished edit (owners are not alerted). Comes with the Video reviewer position.',
       },
     },
   },
@@ -236,6 +255,7 @@ const ar: TranslationOf<typeof en> = {
     money: 'المال',
     website: 'الموقع',
     cafeteria: 'البوفيه',
+    videos: 'فيديوهات الحصص',
   },
   perm: {
     staff: {
@@ -310,6 +330,24 @@ const ar: TranslationOf<typeof en> = {
       report: {
         label: 'عرض استهلاك البوفيه الشهري',
         description: 'صفحة بما أخذه كل عضو في الفريق من البوفيه خلال شهر، صنفًا صنفًا، ومجموع كل صنف. الطلبات التي تم توصيلها فقط. بدون أسعار.',
+      },
+    },
+    videos: {
+      read: {
+        label: 'عرض فيديوهات الحصص',
+        description: 'كل فيديوهات الحصص وأين وصل كل فيديو: في انتظار المونتير، أو قيد المونتاج، أو في انتظار المراجعة، أو تمت الموافقة عليه، مع الرابطين وسجلّ الفيديو. عرض فقط، بدون أزرار.',
+      },
+      add: {
+        label: 'إضافة فيديوهات الحصص للمونتير',
+        description: 'زر «+ إضافة فيديو» في الحصص والورش التي يمكنك رؤيتها: رابط التصوير الخام، ومن يظهر فيه، وملاحظات للمونتير، وموعد التسليم. يصل التنبيه للمونتيرين فورًا.',
+      },
+      edit: {
+        label: 'مونتاج الفيديوهات (قائمة المونتير)',
+        description: 'قائمة الفيديوهات المطلوب مونتاجها: «ابدأ المونتاج» ثم «تم» مع رابط الفيديو بعد المونتاج. تنبيه بكل فيديو جديد (لا تصل التنبيهات للمالكين).',
+      },
+      review: {
+        label: 'مراجعة المونتاج',
+        description: 'مشاهدة كل مونتاج منتهٍ والضغط على «موافق» أو «يحتاج تعديلات» (مع ملاحظة للمونتير). تنبيه بكل مونتاج منتهٍ (لا تصل التنبيهات للمالكين). تأتي مع منصب مراجع الفيديو.',
       },
     },
   },
