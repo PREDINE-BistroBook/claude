@@ -38,7 +38,7 @@ npm run cf:dev       # the Cloudflare Worker locally in workerd (wrangler dev --
 npm run cf:smoke     # build, start the Worker on :8790 with throwaway data, seed via /api/admin, API smoke of every module (+ setup code, 413, cookie)
 ```
 
-Cloudflare deploys only through Workers Builds (push to the repo). Never run `wrangler deploy`, `wrangler secret`, `wrangler login`, `wrangler dev --remote` or anything else that talks to the Cloudflare account from here; `cf:dev`/`cf:smoke` strip Cloudflare credentials and run locally.
+Cloudflare deploys through Workers Builds (push to the repo) once its build settings are set in the dashboard. Until then, or when it fails, the operator's session deploys from the cloud container with `npm run cf:deploy-embedded` (`wrangler.embedded.jsonc`: the web app bundled into the Worker, because the container's proxy breaks the static-asset upload — see `src/worker/embeddedAssets.ts`); keep `wrangler.embedded.jsonc` identical to `wrangler.jsonc` except `main`/`assets` (the embed script refuses otherwise). Sub-agents and reviewers never run `wrangler deploy`, `wrangler secret`, `wrangler login`, `wrangler dev --remote` or anything else that talks to the Cloudflare account; `cf:dev`/`cf:smoke` strip Cloudflare credentials and run locally (`cf:smoke -- --embedded` checks the bundled variant).
 
 ## Layout
 
@@ -60,7 +60,7 @@ src/server/
                      clock.ts (schoolToday/schoolNowTime/epochAt: the school's time zone), fileStore.ts (FileStore: sqliteFileStore, fallbackFileStore, memoryFileStore), ownerRecovery.ts (grantOwner)
   db/grantOwner.ts   `npm run owner -- email`: lockout recovery — give an account an owner position (CEO), reactivate it, lift its sign-in brakes
   routes/<module>.ts one Hono router per module (admissions: routes/leads.ts at /api/leads, interviews nested under their lead); routes/admin.ts: /api/admin (bearer ADMIN_TOKEN)
-src/worker/          the Cloudflare Worker: index.ts (fetch: /api/* → the Durable Object — 413 first for a too-large Content-Length —, missing /assets/* → 404), school.ts (SchoolDO extends DurableObject: drizzle durable-sqlite + initDb + createApp, clientIp = CF-Connecting-IP), env.ts, r2FileStore.ts
+src/worker/          the Cloudflare Worker: embedded.ts + embeddedAssets.ts (the bundled-assets variant, scripts/embed-assets.ts writes its entry), index.ts (fetch: /api/* → the Durable Object — 413 first for a too-large Content-Length —, missing /assets/* → 404), school.ts (SchoolDO extends DurableObject: drizzle durable-sqlite + initDb + createApp, clientIp = CF-Connecting-IP), env.ts, r2FileStore.ts
 src/web/
   router.tsx         spreads each feature's routes
   features/<module>/ routes.tsx, pages, components, i18n.ts (en + ar)

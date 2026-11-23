@@ -45,5 +45,10 @@
   // from SQLite.
   // "r2_buckets": [{ "binding": "FILES", "bucket_name": "turquoise-studio-files" }],
 
+  // Public on https://claude.<account subdomain>.workers.dev. No per-version
+  // preview URLs: they would run old code against the same live database.
+  "workers_dev": true,
+  "preview_urls": false,
+
   "observability": { "enabled": true }
 }

@@ -18,6 +18,7 @@
  * refused (413) and the session cookie is __Host- prefixed.
  * Exit code 1 on the first failure. Local only (scripts/cf-local.ts).
  */
+import { spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -439,9 +440,13 @@ async function main() {
   const vars = ensureDevVars();
   if (!vars.ADMIN_TOKEN || vars.ALLOW_DEMO_RESET !== 'true') throw new Error('.dev.vars needs ADMIN_TOKEN and ALLOW_DEMO_RESET=true (delete it to have it recreated)');
   if (!argv.includes('--no-build')) ensureWebBuild(true);
+  // --embedded: the same checks against the bundled-assets Worker (wrangler.embedded.jsonc).
+  const embedded = argv.includes('--embedded');
+  const config = embedded ? 'wrangler.embedded.jsonc' : undefined;
+  if (embedded && spawnSync('npx', ['tsx', 'scripts/embed-assets.ts'], { stdio: 'inherit' }).status !== 0) throw new Error('embed-assets failed');
   const persistTo = fs.mkdtempSync(path.join(os.tmpdir(), 'acting-school-cf-smoke-'));
   const password = `smoke-${randomBytes(9).toString('base64url')}`;
-  let dev = await startWranglerDev({ port, persistTo, quiet: !argv.includes('--verbose') });
+  let dev = await startWranglerDev({ port, persistTo, quiet: !argv.includes('--verbose'), config });
   try {
     console.log(`wrangler dev on ${dev.url} (state in ${persistTo})`);
     const started = Date.now();
@@ -455,7 +460,7 @@ async function main() {
     await staticChecks(dev.url);
 
     await dev.stop();
-    dev = await startWranglerDev({ port, persistTo, quiet: !argv.includes('--verbose') });
+    dev = await startWranglerDev({ port, persistTo, quiet: !argv.includes('--verbose'), config });
     await afterRestart(dev.url, state);
 
     step('demo reset');

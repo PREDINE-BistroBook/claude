@@ -1,0 +1,45 @@
+// The same Worker as wrangler.jsonc, with the web app bundled into the code
+// instead of uploaded as static assets: `npm run cf:deploy-embedded`. Only for
+// deploying from a machine whose network proxy breaks Cloudflare's asset
+// upload (see src/worker/embeddedAssets.ts). Must match wrangler.jsonc in
+// everything but "main" and "assets" (scripts/embed-assets.ts checks this).
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "claude",
+  "main": "dist/cf-embedded/entry.ts",
+  // Must not be newer than the workerd that ships with the installed wrangler.
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // The whole API and its SQLite database live in one Durable Object (src/worker/school.ts).
+  "durable_objects": {
+    "bindings": [{ "name": "SCHOOL", "class_name": "SchoolDO" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SchoolDO"] }],
+
+  // Seeding the demo (POST /api/admin/seed-demo) draws ~30 portraits and hashes
+  // a dozen passwords in one request: more CPU than the 30 s default allows.
+  "limits": { "cpu_ms": 60000 },
+
+  "vars": {
+    "SCHOOL_TIME_ZONE": "Africa/Cairo",
+    // "true" only on a demo deployment (POST /api/admin/reset wipes everything).
+    "ALLOW_DEMO_RESET": "false"
+  },
+  // Secrets (dashboard → Worker → Settings → Variables and Secrets, or `wrangler secret put`):
+  //   ADMIN_TOKEN  bearer token for /api/admin/* (24+ characters), and the setup code first-run setup asks
+  //                for. Set it before the first visit: without it the routes are off and nobody can set up.
+
+  // Uploaded files go to the Durable Object's SQLite until R2 is enabled on the
+  // account. Then create a private bucket and uncomment; the app switches to it
+  // on its own (src/worker/r2FileStore.ts), still reading files uploaded before
+  // from SQLite.
+  // "r2_buckets": [{ "binding": "FILES", "bucket_name": "turquoise-studio-files" }],
+
+  // Public on https://claude.<account subdomain>.workers.dev. No per-version
+  // preview URLs: they would run old code against the same live database.
+  "workers_dev": true,
+  "preview_urls": false,
+
+  "observability": { "enabled": true }
+}

@@ -60,8 +60,9 @@ export interface WranglerDev {
 }
 
 /** Start `wrangler dev --local` on `port` and wait until /api/health answers. */
-export async function startWranglerDev(opts: { port: number; persistTo?: string; quiet?: boolean; timeoutMs?: number }): Promise<WranglerDev> {
+export async function startWranglerDev(opts: { port: number; persistTo?: string; quiet?: boolean; timeoutMs?: number; config?: string }): Promise<WranglerDev> {
   const args = ['wrangler', 'dev', '--local', '--port', String(opts.port), '--ip', '127.0.0.1', '--show-interactive-dev-session=false'];
+  if (opts.config) args.push('-c', opts.config);
   if (opts.persistTo) args.push('--persist-to', opts.persistTo);
   const child = spawn('npx', args, { cwd: ROOT, env: wranglerEnv(), stdio: ['ignore', 'pipe', 'pipe'], detached: true });
   let output = '';

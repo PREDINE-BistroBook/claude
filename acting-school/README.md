@@ -67,11 +67,14 @@ The Durable Object speaks Workers RPC (`extends DurableObject`), so wrangler's l
 
 Uploaded photos are stored in the Durable Object's SQLite (R2 isn't enabled on the account yet). Once it is: create a private bucket, uncomment the `r2_buckets` line in `wrangler.jsonc`, and new uploads go there (older ones are still read from SQLite). Durable Objects keep 30 days of point-in-time recovery for the database.
 
+**Deploying without Workers Builds.** Until the Workers Builds settings above are filled in, the app is deployed by hand with `npm run cf:deploy-embedded` (needs Cloudflare credentials). It's the same Worker and the same Durable Object, but the web app is bundled into the Worker's code (`wrangler.embedded.jsonc`, entry written by `scripts/embed-assets.ts`) instead of uploaded as static assets, because the cloud container's network proxy breaks Cloudflare's asset upload. It answers the same way: the headers from `_headers`, ETags, the SPA fallback, a 404 for a missing hashed file. A later Workers Builds deploy simply replaces it, data kept.
+
 Locally, in the same runtime (workerd), with nothing sent to Cloudflare:
 
 ```
 npm run cf:dev                  # the Worker on http://localhost:8787 (-- --port 8790 for another port); data in .wrangler/state
 npm run cf:smoke                # builds, starts it on :8790 with throwaway data, seeds and checks every module end to end
+npm run cf:smoke -- --embedded  # the same against the bundled variant (wrangler.embedded.jsonc)
 ```
 
 `cf:dev` creates a gitignored `.dev.vars` with a throwaway `ADMIN_TOKEN` and `ALLOW_DEMO_RESET=true` (see `.dev.vars.example`), so the seed command above works against `http://localhost:8787` (and that token is the local setup code).
