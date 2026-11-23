@@ -578,7 +578,7 @@ Asked by the school on 2026-11-23:
 - only those managers can call someone to the office;
 - no COO position.
 
-Free to run (no paid services). Built in its own migration, after the website's.
+Free to run (no paid services). Built in its own migration, after the website's: `0006_team` (one migration; `0005_website` is the website's). **Built 2026-11-23**; G2 as amended at the end of this file (one Team page).
 
 ### G1. Pictures and files
 - **Uploads in general:** `POST /api/files` (existing) accepts images (JPEG/PNG/WebP, resized on the phone with `uploadImage`; HEIC is turned into JPEG on the phone where the browser can) and documents (PDF; Word `.docx`, Excel `.xlsx`, PowerPoint `.pptx`). Each upload is checked by magic bytes and stays ≤ 8 MB.
@@ -740,3 +740,10 @@ The school asked to call it **Team**, not Staff. So there is **one** page, "Team
 - **With `staff.summon`**, each row also has **Call to the office**.
 - **Menu:** one entry, "Team", in the account / "More" menu of every section. The "Administration" group keeps Positions and Settings.
 - **Wording everywhere on screen:** "staff" → "team" / "team member(s)" (Arabic: "الفريق" / "عضو الفريق" / "أعضاء الفريق"), including the sign-in page ("Team accounts only"), permission labels and descriptions, empty states and the Secretary's app guide. Code names (`staff.manage`, `/api/staff`, file names) do not change.
+
+**Built 2026-11-23** (with Part G, merged into the website line the same day). Notes for whoever builds on it:
+- The staff add and edit screens were modals on the old Staff list; they are now pages at `/staff/new` and `/staff/:id` (`features/staff/StaffNewPage.tsx`, `StaffMemberPage.tsx`), both behind `staff.manage`, and saving goes back to `/team`.
+- On the Team page the management side comes from `GET /api/staff` (it has the inactive accounts and says which accounts the caller may edit); everyone's list stays `GET /api/team`. A non-owner manager sees owners on the page (name and photo, from `/api/team`) without a link, because `/api/staff` leaves owner accounts out for them.
+- The link on a row is the member's name block, ending in the word "Edit" (or "View" for an account out of the caller's reach). The filter is two tabs, Active / Inactive, shown only with `staff.manage`.
+- `tests/unit/team-web.test.ts` fails if "staff" (or «موظف») appears in any i18n namespace. The Secretary's app guide (Part F) is not built yet: write it with "Team" from the start.
+- The staff app's address followed the wording: `team.turquoisestudio.app`, with `staff.turquoisestudio.app` forwarding (see "The studio's own domain" in Part D).
