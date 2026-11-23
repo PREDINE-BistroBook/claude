@@ -44,8 +44,8 @@ img{max-width:100%;height:auto;display:block}
 .brand{display:flex;align-items:center;gap:12px;color:#fff;text-decoration:none;font-weight:800;font-size:1.1rem;min-height:48px}
 .mark{width:44px;height:44px;border-radius:50%;flex:none}
 .lang{display:inline-flex;align-items:center;gap:8px;min-height:48px;padding:8px 16px;border:2px solid #3b4a48;border-radius:999px;color:#fff;text-decoration:none;font-weight:700}
-.nav{display:flex;flex-wrap:wrap;gap:8px;padding-bottom:12px}
-.nav a{display:inline-flex;align-items:center;min-height:48px;padding:8px 16px;border-radius:999px;color:var(--mint);text-decoration:none;font-weight:700;background:#121a19}
+.nav{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding-bottom:12px}
+.nav a{display:flex;align-items:center;justify-content:center;text-align:center;min-height:48px;padding:8px 12px;border-radius:999px;color:var(--mint);text-decoration:none;font-weight:700;background:#121a19}
 .nav a[aria-current=page]{background:var(--tq);color:#000}
 .hero{background:radial-gradient(120% 90% at 70% 0%,#0f3d38 0%,#000 60%);color:#fff;padding-block:28px 40px}
 .hero .mark{width:84px;height:84px;margin-bottom:16px}
@@ -66,8 +66,8 @@ img{max-width:100%;height:auto;display:block}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.05)}
 .block.alt .card{background:var(--canvas)}
 .card-body{padding:20px}
-.card h3 a{color:var(--ink);text-decoration:none}
-.card h3 a:hover{text-decoration:underline}
+.card :is(h2,h3) a{display:block;padding-block:8px;margin-block:-8px;color:var(--ink);text-decoration:none}
+.card :is(h2,h3) a:hover{text-decoration:underline}
 .cover{aspect-ratio:16/9;object-fit:cover;width:100%;background:var(--soft)}
 .facts{list-style:none;margin:0 0 16px;padding:0;display:grid;gap:10px}
 .facts li{display:flex;gap:10px;align-items:flex-start}
@@ -134,6 +134,7 @@ legend{padding:0;margin-bottom:8px}
 .bio .btn-line{background:#101817;color:#fff;border-color:#2e3d3b}
 .bio small{display:block;font-weight:600;opacity:.8}
 .bio .lang{margin-top:24px}
+@media (min-width:600px){.nav{display:flex;flex-wrap:wrap}}
 @media (min-width:760px){
 h1{font-size:2.5rem}.hero h1{font-size:3rem}
 .actions{flex-direction:row;flex-wrap:wrap}

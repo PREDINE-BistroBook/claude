@@ -47,7 +47,7 @@ export default function CoachesPage() {
             const name = coachName(c, i18n.language);
             const title = coachTitle(c, i18n.language);
             return (
-              <li key={c.id} className="rounded-2xl border border-line bg-surface p-3 sm:flex sm:items-center sm:gap-4 sm:p-4">
+              <li key={c.id} className="min-w-0 rounded-2xl border border-line bg-surface p-3 sm:flex sm:items-center sm:gap-4 sm:p-4">
                 <Link to={`/website/coaches/${c.id}`} className="-m-1 flex min-h-16 min-w-0 flex-1 items-center gap-3 rounded-xl p-1 hover:bg-surface-2">
                   <Avatar name={name} fileId={c.photoFileId} size="lg" shape="rounded" />
                   <span className="min-w-0 flex-1">

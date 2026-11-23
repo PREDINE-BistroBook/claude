@@ -165,7 +165,7 @@ function CustomLinks({ links }: { links: SiteLink[] }) {
             {links.map((l, i) => {
               const label = linkLabel(l, i18n.language);
               return (
-                <li key={l.id} className="grid gap-3 rounded-xl border border-line p-3">
+                <li key={l.id} className="grid min-w-0 gap-3 rounded-xl border border-line p-3 [&>*]:min-w-0">
                   <div className="flex items-start gap-3">
                     <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-2 text-muted" aria-hidden>
                       <Link2 className="size-5" />

@@ -79,7 +79,7 @@ function WorkshopRow({ workshop: w, index, count, onMove, moving }: { workshop: 
   };
 
   return (
-    <li className="grid gap-3 rounded-2xl border border-line bg-surface p-3 sm:p-4">
+    <li className="grid min-w-0 gap-3 rounded-2xl border border-line bg-surface p-3 sm:p-4 [&>*]:min-w-0">
       <Link to={to} className="-m-1 flex min-w-0 items-start gap-3 rounded-xl p-1 hover:bg-surface-2">
         <Avatar name={title} fileId={w.coverFileId} size="lg" shape="rounded" />
         <span className="min-w-0 flex-1">
