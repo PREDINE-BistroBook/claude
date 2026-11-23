@@ -10,7 +10,7 @@
  *
  * After changing this file run `npm run db:generate` to add a migration.
  */
-import { blob, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { blob, index, integer, primaryKey, sqliteTable, text, uniqueIndex, type AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import {
   ATTENDANCE_STATUSES,
   CASTING_APPLICATION_STATUSES,
@@ -20,6 +20,7 @@ import {
   COURSE_LEVELS,
   COURSE_STATUSES,
   ENROLLMENT_STATUSES,
+  FILE_KINDS,
   GENDERS,
   INTERVIEW_RECOMMENDATIONS,
   INTERVIEW_STATUSES,
@@ -28,9 +29,11 @@ import {
   LEAD_SOURCES,
   LEAD_STATUSES,
   LOCALES,
+  NOTIFICATION_KINDS,
   SESSION_STATUSES,
   STUDENT_STATUSES,
   SUBMISSION_STATUSES,
+  SUMMONS_STATUSES,
   TALENT_STATUSES,
 } from '../../shared/enums';
 import type { Permission } from '../../shared/permissions';
@@ -54,6 +57,12 @@ export const users = sqliteTable('users', {
   locale: text('locale', { enum: LOCALES }).notNull().default('en'),
   active: integer('active', { mode: 'boolean' }).notNull().default(true),
   lastLoginAt: integer('last_login_at'),
+  /**
+   * Profile photo (PUT /api/auth/photo for your own, PUT /api/staff/:id/photo
+   * with staff.manage). Shown beside the person everywhere, owners included
+   * (the Team directory's documented exception to owner hiding).
+   */
+  photoFileId: text('photo_file_id').references((): AnySQLiteColumn => files.id, { onDelete: 'set null' }),
   ...timestamps(),
 });
 
@@ -109,7 +118,8 @@ export const settings = sqliteTable('settings', {
 });
 
 /**
- * Uploaded images. The bytes live in the app's FileStore under `storage_key`
+ * Uploaded files: images (JPEG/PNG/WebP) and documents (PDF, Word, Excel,
+ * PowerPoint), the type decided from the bytes (lib/fileTypes.ts). The bytes live in the app's FileStore under `storage_key`
  * (lib/fileStore.ts): DATA_DIR/uploads/ on the Node server; file_chunks below
  * (or R2 when bound) on Cloudflare.
  */
@@ -631,3 +641,198 @@ export const rateLimits = sqliteTable('rate_limits', {
   /** Epoch ms when the current window started. */
   windowStart: integer('window_start').notNull(),
 });
+
+// ── Team: workshop and casting files, chat, "call to the office", notifications ──
+// Every table that points at files is listed in lib/fileRefs.ts (FILE_REFERENCES),
+// so deleting a record frees the stored file once nothing else uses it.
+
+/** Photos and documents on a workshop's "Photos & files" tab: seen by whoever can see the workshop. */
+export const courseFiles = sqliteTable(
+  'course_files',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    courseId: integer('course_id')
+      .notNull()
+      .references(() => courses.id, { onDelete: 'cascade' }),
+    fileId: text('file_id')
+      .notNull()
+      .references(() => files.id, { onDelete: 'cascade' }),
+    /** From the file's type: images are photos, the rest documents. */
+    kind: text('kind', { enum: FILE_KINDS }).notNull(),
+    caption: text('caption'),
+    uploadedById: integer('uploaded_by_id').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at').notNull().$defaultFn(now),
+  },
+  (t) => [index('course_files_course_idx').on(t.courseId, t.createdAt), index('course_files_file_idx').on(t.fileId)],
+);
+
+/** A casting's files (breakdowns, sides, contracts, reference photos): castings.read to see, castings.write to add or delete. */
+export const castingFiles = sqliteTable(
+  'casting_files',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    castingId: integer('casting_id')
+      .notNull()
+      .references(() => castings.id, { onDelete: 'cascade' }),
+    fileId: text('file_id')
+      .notNull()
+      .references(() => files.id, { onDelete: 'cascade' }),
+    kind: text('kind', { enum: FILE_KINDS }).notNull(),
+    caption: text('caption'),
+    uploadedById: integer('uploaded_by_id').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at').notNull().$defaultFn(now),
+  },
+  (t) => [index('casting_files_casting_idx').on(t.castingId, t.createdAt), index('casting_files_file_idx').on(t.fileId)],
+);
+
+/**
+ * Internal chat: direct (one-to-one) conversations only for now, one per pair
+ * of people (`pair_key` "<smaller user id>:<larger user id>"). Members only:
+ * anyone else gets a 404 (routes/chat.ts).
+ */
+export const conversations = sqliteTable(
+  'conversations',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    /** Direct chats: "<minUserId>:<maxUserId>". */
+    pairKey: text('pair_key').unique(),
+    /** Epoch ms of the newest message; null until the first one (such a conversation isn't listed yet). */
+    lastMessageAt: integer('last_message_at'),
+    createdAt: integer('created_at').notNull().$defaultFn(now),
+  },
+  (t) => [index('conversations_last_message_idx').on(t.lastMessageAt)],
+);
+
+export const conversationMembers = sqliteTable(
+  'conversation_members',
+  {
+    conversationId: integer('conversation_id')
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** The newest message this member has seen (their own count as seen); null = none yet. Drives unread counts and "Seen". */
+    lastReadMessageId: integer('last_read_message_id'),
+  },
+  (t) => [primaryKey({ columns: [t.conversationId, t.userId] }), index('conversation_members_user_idx').on(t.userId)],
+);
+
+export const messages = sqliteTable(
+  'messages',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    conversationId: integer('conversation_id')
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    senderId: integer('sender_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Up to 4000 characters; null for a message that is only attachments (or was deleted). */
+    body: text('body'),
+    createdAt: integer('created_at').notNull().$defaultFn(now),
+    /** Set when the sender deleted it (within 15 minutes): it shows as "deleted", text and attachments gone. */
+    deletedAt: integer('deleted_at'),
+  },
+  (t) => [index('messages_conversation_idx').on(t.conversationId, t.id), index('messages_sender_idx').on(t.senderId, t.createdAt)],
+);
+
+/** A message's photos and documents. A file is attached to one message at most (unique file_id). */
+export const messageAttachments = sqliteTable(
+  'message_attachments',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    messageId: integer('message_id')
+      .notNull()
+      .references(() => messages.id, { onDelete: 'cascade' }),
+    fileId: text('file_id')
+      .notNull()
+      .references(() => files.id, { onDelete: 'cascade' }),
+    kind: text('kind', { enum: FILE_KINDS }).notNull(),
+  },
+  (t) => [index('message_attachments_message_idx').on(t.messageId), uniqueIndex('message_attachments_file_uq').on(t.fileId)],
+);
+
+/**
+ * "Call to the office" (staff.summon): one pending summons per caller and
+ * person at a time; a pending one older than two hours counts as expired
+ * (SUMMONS_EXPIRY_MS, never stored); at most 20 an hour per caller.
+ */
+export const summons = sqliteTable(
+  'summons',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    fromUserId: integer('from_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    toUserId: integer('to_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    note: text('note'),
+    status: text('status', { enum: SUMMONS_STATUSES }).notNull().default('pending'),
+    createdAt: integer('created_at').notNull().$defaultFn(now),
+    /** When the person answered (on_my_way / cant_now). */
+    answeredAt: integer('answered_at'),
+  },
+  (t) => [index('summons_to_idx').on(t.toUserId, t.status, t.createdAt), index('summons_from_idx').on(t.fromUserId, t.createdAt)],
+);
+
+/**
+ * The in-app notification bar (the bell). Texts are written in the
+ * recipient's language when created (lib/notifications.ts); new messages keep
+ * one notification per conversation, updated rather than piled up.
+ */
+export const notifications = sqliteTable(
+  'notifications',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    kind: text('kind', { enum: NOTIFICATION_KINDS }).notNull(),
+    title: text('title').notNull(),
+    body: text('body').notNull().default(''),
+    /** An app path to open (e.g. "/messages/12"). */
+    link: text('link').notNull(),
+    createdAt: integer('created_at').notNull().$defaultFn(now),
+    readAt: integer('read_at'),
+  },
+  (t) => [index('notifications_user_idx').on(t.userId, t.createdAt), index('notifications_user_link_idx').on(t.userId, t.kind, t.link)],
+);
+
+/**
+ * Web Push subscriptions, one per browser/phone (endpoint). Deleted when the
+ * push service answers 404/410, or after 10 failures in a row (lib/push/send.ts).
+ * Each belongs to the sign-in session that turned it on: when that session
+ * ends (sign-out, a password reset or deactivation that signs someone out
+ * everywhere), the subscription goes with it, so a signed-out phone or a
+ * shared office computer stops getting that person's notifications.
+ */
+export const pushSubscriptions = sqliteTable(
+  'push_subscriptions',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /**
+     * The auth_sessions id that subscribed. Not a foreign key (a column added
+     * later can't carry ON DELETE CASCADE): the code that deletes sessions
+     * deletes these rows too, and sending only goes to subscriptions whose
+     * session still exists and hasn't expired. Null only for rows from before
+     * this column: never sent to.
+     */
+    sessionId: text('session_id'),
+    endpoint: text('endpoint').notNull().unique(),
+    /** The browser's P-256 public key (base64url, 65 bytes uncompressed). */
+    p256dh: text('p256dh').notNull(),
+    /** The browser's auth secret (base64url, 16 bytes). */
+    auth: text('auth').notNull(),
+    /** Shortened User-Agent, so a person can tell their devices apart. */
+    userAgent: text('user_agent'),
+    createdAt: integer('created_at').notNull().$defaultFn(now),
+    lastSuccessAt: integer('last_success_at'),
+    failures: integer('failures').notNull().default(0),
+  },
+  (t) => [index('push_subscriptions_user_idx').on(t.userId), index('push_subscriptions_session_idx').on(t.sessionId)],
+);

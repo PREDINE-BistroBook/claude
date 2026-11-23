@@ -43,6 +43,20 @@
       "when": 1795428781257,
       "tag": "0005_website",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1795430151254,
+      "tag": "0006_team",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1795436782774,
+      "tag": "0007_team",
+      "breakpoints": true
     }
   ]
 }

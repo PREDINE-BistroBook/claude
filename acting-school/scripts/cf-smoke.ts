@@ -15,7 +15,9 @@
  * Worker on the same state (sessions, the sign-in brake and files survive),
  * checks the static assets and headers, finishes with the demo reset and
  * checks first-run setup then needs the setup code. Bodies over 1 MB are
- * refused (413) and the session cookie is __Host- prefixed.
+ * refused (413) and the session cookie is __Host- prefixed. The team pack: the
+ * Team directory, a chat round trip with a photo, a workshop document, a call to
+ * the office answered, notifications, push off without VAPID keys.
  * Exit code 1 on the first failure. Local only (scripts/cf-local.ts).
  */
 import { spawnSync } from 'node:child_process';
@@ -291,10 +293,16 @@ export async function runApiSmoke(base: string, opts: { adminToken: string; pass
   expectStatus(await head.patch(`/api/submissions/${submission.id}`, { status: 'submitted' }), 200, 'send submission');
   expectStatus(await head.get(`/api/castings/${casting.id}`), 200, 'casting detail');
   expectStatus(await head.get('/api/castings'), 200, 'castings list');
+  const castingPhoto = await upload(head, noisePng(48), 'mood-board.png');
+  const castingFile = expectStatus(await head.post(`/api/castings/${casting.id}/files`, { fileId: castingPhoto, caption: 'Mood board' }), 201, 'casting file').body;
+  check(castingFile.kind === 'photo' && castingFile.canDelete === true, 'casting file is a photo the head of casting can delete');
+  check(expectStatus(await head.get(`/api/castings/${casting.id}/files`), 200, 'casting files').body.items.some((f: { fileId: string }) => f.fileId === castingPhoto), 'casting files list');
+  expectStatus(await coach.get(`/api/castings/${casting.id}/files`), 403, 'a coach can’t see casting files');
   expectStatus(await head.delete(`/api/submissions/${submission.id}`), 204, 'delete submission');
   expectStatus(await head.delete(`/api/submissions/${submission.id}`), 404, 'delete submission again');
   expectStatus(await head.delete(`/api/castings/${casting.id}/roles/${role.id}`), 204, 'delete role');
   expectStatus(await head.delete(`/api/castings/${casting.id}`), 204, 'delete casting');
+  expectStatus(await head.get(`/api/files/${castingPhoto}`), 404, 'deleting the casting freed its file');
   expectStatus(await head.delete(`/api/castings/${casting.id}`), 404, 'delete casting again');
   expectStatus(await head.delete(`/api/talent/${actor.id}`), 204, 'delete talent');
   expectStatus(await head.delete(`/api/talent/${actor.id}`), 404, 'delete talent again');
@@ -374,6 +382,59 @@ export async function runApiSmoke(base: string, opts: { adminToken: string; pass
   if (streamedPatch.status !== 200) throw new Error(`streamed small body: expected 200, got ${streamedPatch.status} ${(await streamedPatch.text()).slice(0, 200)}`);
   check((await streamedPatch.json()).user.locale === 'ar', 'streamed body applied');
   expectStatus(await coach.patch('/api/auth/profile', { locale: 'en' }), 200, 'profile locale back');
+
+  step('team pack: directory, chat with a photo, workshop document, call to the office, notifications, push off');
+  const team = expectStatus(await coach.get('/api/team'), 200, 'team directory').body.items as { id: number; name: string; positions: unknown[]; photoFileId: string | null }[];
+  const karim = team.find((m) => m.name === 'Karim Mansour');
+  check(karim && karim.positions.length === 0 && karim.photoFileId, 'owners listed to a coach as name and photo, no positions');
+  check(team.every((m) => m.photoFileId), 'every demo worker has a profile photo');
+  const daniel = clients['coach2@demo.school']!;
+  const danielId = expectStatus(await daniel.get('/api/auth/me'), 200, 'coach2 me').body.user.id as number;
+  const danielOldPhoto = team.find((m) => m.id === danielId)!.photoFileId!;
+  const danielPhoto = await upload(daniel, noisePng(40), 'me.png');
+  check(expectStatus(await daniel.put('/api/auth/photo', { fileId: danielPhoto }), 200, 'a coach changes their profile photo').body.user.photoFileId === danielPhoto, 'new profile photo');
+  check(expectStatus(await coach.get('/api/team'), 200, 'team again').body.items.find((m: { id: number }) => m.id === danielId).photoFileId === danielPhoto, 'colleagues see the new photo');
+  expectStatus(await daniel.get(`/api/files/${danielOldPhoto}`), 404, 'the old profile photo is freed');
+  const conv = expectStatus(await coach.post('/api/chat/conversations', { userId: karim!.id }), 201, 'coach opens a chat with the CEO').body;
+  const chatPhoto = await upload(coach, noisePng(64), 'chat.png');
+  const message = expectStatus(await coach.post(`/api/chat/conversations/${conv.id}/messages`, { body: 'Photo from tonight', fileIds: [chatPhoto] }), 201, 'send a photo').body;
+  check(message.attachments[0]?.kind === 'photo', 'attachment is a photo');
+  check(expectStatus(await owner.get('/api/chat/unread'), 200, 'unread').body.total >= 1, 'the CEO has unread messages');
+  const ownerView = expectStatus(await owner.get(`/api/chat/conversations/${conv.id}/messages`), 200, 'the CEO reads the chat').body;
+  check(ownerView.items.at(-1).attachments[0].fileId === chatPhoto, 'the CEO sees the photo');
+  check((expectStatus(await owner.get(`/api/files/${chatPhoto}`), 200, 'the CEO opens the photo').headers.get('content-disposition') ?? '').startsWith('inline'), 'photo inline');
+  expectStatus(await owner.post(`/api/chat/conversations/${conv.id}/read`, { messageId: message.id }), 204, 'mark read');
+  check(expectStatus(await coach.get(`/api/chat/conversations/${conv.id}/messages?after=${message.id}`), 200, 'poll').body.otherLastReadMessageId === message.id, 'Seen');
+  expectStatus(await director.get(`/api/chat/conversations/${conv.id}/messages`), 404, 'outsiders get a 404');
+  const pdf = new TextEncoder().encode('%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n');
+  const pdfForm = new FormData();
+  pdfForm.append('file', new Blob([pdf], { type: 'application/pdf' }), 'خطة الورشة.pdf');
+  const pdfId = expectStatus(await director.post('/api/files', pdfForm), 201, 'upload a PDF').body.id;
+  expectStatus(await director.post(`/api/courses/${course.id}/files`, { fileId: pdfId, caption: 'Plan' }), 201, 'workshop document');
+  const download = expectStatus(await director.get(`/api/files/${pdfId}`), 200, 'download the PDF');
+  check((download.headers.get('content-disposition') ?? '').startsWith('attachment;'), 'documents download as attachments');
+  check(download.headers.get('x-content-type-options') === 'nosniff', 'nosniff on files');
+  const svg = new FormData();
+  svg.append('file', new Blob(['<svg xmlns="http://www.w3.org/2000/svg"/>'], { type: 'image/svg+xml' }), 'x.svg');
+  expectStatus(await director.post('/api/files', svg), 415, 'SVG refused');
+  const wrongForm = new FormData();
+  wrongForm.append('file', new Blob([pdf], { type: 'application/pdf' }), 'wrong-file.pdf');
+  const wrongId = expectStatus(await director.post('/api/files', wrongForm), 201, 'upload the wrong file').body.id;
+  expectStatus(await coach.delete(`/api/files/${wrongId}`), 404, 'someone else can’t delete an upload');
+  expectStatus(await director.delete(`/api/files/${wrongId}`), 204, 'the uploader takes back an unused upload');
+  expectStatus(await director.delete(`/api/files/${pdfId}`), 409, 'an attached file can’t be deleted that way');
+  const coachMe = expectStatus(await coach.get('/api/auth/me'), 200, 'coach me').body.user;
+  const call = expectStatus(await director.post('/api/summons', { userId: coachMe.id, note: 'Smoke test' }), 201, 'director calls the coach to the office').body;
+  expectStatus(await director.post('/api/summons', { userId: coachMe.id }), 409, 'one pending call per person');
+  expectStatus(await coach.post('/api/summons', { userId: karim!.id }), 403, 'a coach can’t call people');
+  check(expectStatus(await coach.get('/api/chat/unread'), 200, 'coach poll').body.summons.some((x: { id: number }) => x.id === call.id), 'the banner shows the call');
+  expectStatus(await coach.post(`/api/summons/${call.id}/answer`, { status: 'on_my_way' }), 200, 'on my way');
+  check(expectStatus(await coach.get(`/api/summons/${call.id}`), 200, 'the person called sees the call').body.status === 'on_my_way', 'what became of the call');
+  const answers = expectStatus(await director.get('/api/notifications'), 200, 'director notifications').body.items;
+  check(answers.some((n: { kind: string; link: string }) => n.kind === 'summon_answer' && n.link === `/team?summons=${call.id}`), 'the director sees the answer');
+  check(expectStatus(await director.get('/api/summons/sent?status=on_my_way'), 200, 'sent').body.items.some((x: { id: number }) => x.id === call.id), 'sent list');
+  expectStatus(await coach.post('/api/notifications/read', { all: true }), 200, 'mark notifications read');
+  check(expectStatus(await coach.get('/api/push/config'), 200, 'push config').body.publicKey === null, 'push is off without VAPID keys');
 
   step('the last deletes: student, class');
   expectStatus(await owner.delete(`/api/students/${sara.id}`), 204, 'delete student');

@@ -27,7 +27,8 @@ export function Tabs<T extends string>({
     else if (r.right > l.right) list.scrollBy({ left: r.right - l.right + 16 });
   }, [value, layoutKey]);
   return (
-    <div ref={listRef} role="tablist" className={clsx('-mx-4 flex gap-1 overflow-x-auto border-b border-line px-4 sm:mx-0 sm:px-0', className)}>
+    // Phones: tighter padding (the first label still starts on the page's 16 px gutter) so three tabs with counts fit 375 px.
+    <div ref={listRef} role="tablist" className={clsx('-mx-4 flex gap-1 overflow-x-auto border-b border-line px-2 sm:mx-0 sm:px-0', className)}>
       {tabs.map((tab) => {
         const active = tab.id === value;
         return (
@@ -38,7 +39,7 @@ export function Tabs<T extends string>({
             aria-selected={active}
             onClick={() => onChange(tab.id)}
             className={clsx(
-              '-mb-px inline-flex shrink-0 items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors',
+              '-mb-px inline-flex min-h-12 shrink-0 items-center gap-1.5 border-b-2 px-2 py-2.5 text-sm font-medium transition-colors sm:gap-2 sm:px-3',
               active ? 'border-accent text-ink' : 'border-transparent text-muted hover:text-ink',
             )}
           >

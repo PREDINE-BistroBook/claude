@@ -1,4 +1,4 @@
-import { Clapperboard, LayoutDashboard, Plus, Star, UserPlus } from 'lucide-react';
+import { BellRing, Clapperboard, LayoutDashboard, Plus, Star, UserPlus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { todayISO } from '@shared/dates';
 import { EmptyState, ErrorState, PageLoader } from '@web/components/ui';
@@ -15,6 +15,7 @@ const STATS: HomeStat[] = [
 const ACTIONS: QuickAction[] = [
   { key: 'addTalent', to: '/talent/new', icon: UserPlus, permission: 'talent.write' },
   { key: 'newCasting', to: '/castings/new', icon: Plus, permission: 'castings.write' },
+  { key: 'callToOffice', to: '/team', icon: BellRing, permission: 'staff.summon' },
 ];
 
 /**

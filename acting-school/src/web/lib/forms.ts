@@ -58,6 +58,8 @@ export function errorMessageKey(err: unknown): string {
         return 'common:errors.invalidCredentials';
       case 'too_large':
         return 'common:errors.fileTooLarge';
+      case 'too_many_uploads':
+        return 'common:errors.tooManyUploads';
       case 'unsupported_type':
         return 'common:errors.fileType';
       case 'payload_too_large':

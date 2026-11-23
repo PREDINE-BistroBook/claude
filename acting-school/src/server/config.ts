@@ -1,4 +1,5 @@
 import { DEFAULT_TIME_ZONE, isValidTimeZone } from './lib/clock';
+import { parseVapidKeys, type VapidKeys } from './lib/push/keys';
 
 /**
  * Settings the API needs on either runtime. Built from process.env on the Node
@@ -25,6 +26,13 @@ export interface AppConfig {
    * Without an ADMIN_TOKEN, setup is then impossible until one is set.
    */
   requireSetupCode: boolean;
+  /**
+   * Web Push (lib/push/): the VAPID key pair — VAPID_PUBLIC_KEY (a var on
+   * Cloudflare, env on Node) and VAPID_PRIVATE_KEY (a secret), both base64url
+   * as `npm run vapid-keys` prints them. null (either missing or invalid): push
+   * is off; the in-app notification bell still works.
+   */
+  vapid: VapidKeys | null;
 }
 
 /** Shortest ADMIN_TOKEN accepted; a shorter one is ignored (admin routes stay off) so a weak token can't be guessed. */
@@ -59,6 +67,13 @@ export function configFromVars(vars: ConfigVars, defaults: RuntimeDefaults): App
     console.error(`ADMIN_TOKEN is shorter than ${MIN_ADMIN_TOKEN_LENGTH} characters, so the admin routes stay off.`);
   }
   const sessionDays = Number(vars.SESSION_DAYS ?? 30);
+  const vapidPublic = vars.VAPID_PUBLIC_KEY?.trim() || null;
+  const vapidPrivate = vars.VAPID_PRIVATE_KEY?.trim() || null;
+  const vapid = vapidPublic && vapidPrivate ? parseVapidKeys(vapidPublic, vapidPrivate) : null;
+  if ((vapidPublic || vapidPrivate) && !vapid) {
+    // Never print the private key itself.
+    console.error('VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY are missing one half or are not a P-256 key pair (base64url), so push notifications stay off.');
+  }
   return {
     // COOKIE_SECURE=false only to try a production build over plain http on a private network.
     cookieSecure: vars.COOKIE_SECURE ? vars.COOKIE_SECURE === 'true' : defaults.cookieSecure,
@@ -69,6 +84,7 @@ export function configFromVars(vars: ConfigVars, defaults: RuntimeDefaults): App
     allowDemoReset: vars.ALLOW_DEMO_RESET === 'true',
     // Can be switched on, never off where the runtime requires it (Cloudflare).
     requireSetupCode: defaults.requireSetupCode || vars.REQUIRE_SETUP_CODE === 'true',
+    vapid,
   };
 }
 
@@ -82,6 +98,7 @@ export function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     adminToken: null,
     allowDemoReset: false,
     requireSetupCode: false,
+    vapid: null,
     ...overrides,
   };
 }

@@ -40,7 +40,14 @@ export class SchoolDO extends DurableObject<Env> {
       const files = env.FILES ? fallbackFileStore(r2FileStore(env.FILES), sqliteFileStore(db)) : sqliteFileStore(db);
       // The client's address for the sign-in brakes: set by Cloudflare's edge (clients can't forge
       // it), passed on unchanged by the Worker (index.ts), the only thing that reaches this object.
-      this.app = createApp({ db, config, files, clientIp: (c) => c.req.header('cf-connecting-ip') });
+      this.app = createApp({
+        db,
+        config,
+        files,
+        clientIp: (c) => c.req.header('cf-connecting-ip'),
+        // Push notifications are sent after the response (lib/push); keep the object at it until they're out.
+        waitUntil: (task) => ctx.waitUntil(task),
+      });
       if (db.select({ id: users.id }).from(users).limit(1).get() && activeOwnerCount(db) === 0) {
         console.warn('No active account holds an owner position. Give one back with POST /api/admin/grant-owner (README).');
       }

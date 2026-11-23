@@ -13,3 +13,7 @@ export * from './dashboard';
 export * from './admissions';
 export * from './site';
 export * from './castingApplications';
+export * from './team';
+export * from './chat';
+export * from './summons';
+export * from './notifications';

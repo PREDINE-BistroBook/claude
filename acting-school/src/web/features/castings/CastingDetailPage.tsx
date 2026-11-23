@@ -21,6 +21,7 @@ import {
 import { ApiError } from '@web/lib/api';
 import { useAuth } from '@web/lib/auth';
 import { useFormat } from '@web/lib/format';
+import { RecordFiles } from '../team/components/RecordFiles';
 import { castingsErrorKey, useCasting, useDeleteCasting, useDeleteRole } from './api';
 import { AddTalentModal } from './components/AddTalentModal';
 import { CastingTypeIcon, DeadlineBadge } from './components/bits';
@@ -174,21 +175,27 @@ function CastingView({ casting: c, del }: { casting: CastingDetail; del: ReturnT
       />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:items-start">
-        <Card title={t('detail.details')} className="lg:sticky lg:top-6">
-          {hasDetails ? (
-            <DescriptionList items={details} hideEmpty columns={1} className="sm:grid-cols-2 lg:grid-cols-1" />
-          ) : (
-            <p className="text-sm text-muted">{t('detail.noDetails')}</p>
-          )}
-          {c.description && (
-            <div className="mt-5 border-t border-line pt-4">
-              <h3 className="text-xs font-medium tracking-wide text-muted uppercase">{t('detail.description')}</h3>
-              <p dir="auto" className="mt-1 text-start text-sm leading-relaxed whitespace-pre-line break-words text-ink">
-                {c.description}
-              </p>
-            </div>
-          )}
-        </Card>
+        <div className="grid min-w-0 grid-cols-1 gap-5">
+          <Card title={t('detail.details')}>
+            {hasDetails ? (
+              <DescriptionList items={details} hideEmpty columns={1} className="sm:grid-cols-2 lg:grid-cols-1" />
+            ) : (
+              <p className="text-sm text-muted">{t('detail.noDetails')}</p>
+            )}
+            {c.description && (
+              <div className="mt-5 border-t border-line pt-4">
+                <h3 className="text-xs font-medium tracking-wide text-muted uppercase">{t('detail.description')}</h3>
+                <p dir="auto" className="mt-1 text-start text-sm leading-relaxed whitespace-pre-line break-words text-ink">
+                  {c.description}
+                </p>
+              </div>
+            )}
+          </Card>
+          {/* Breakdowns, scripts, sides, reference photos: castings.read sees them, castings.write adds or deletes. */}
+          <Card title={t('team:files.files')}>
+            <RecordFiles resource="castings" recordId={c.id} canAdd={canWrite} />
+          </Card>
+        </div>
 
         <section aria-labelledby="roles-heading" className="min-w-0">
           <div className="mb-3 flex items-center justify-between gap-3">

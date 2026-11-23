@@ -28,6 +28,7 @@ import { api } from '@web/lib/api';
 import { useAuth } from '@web/lib/auth';
 import { fullName, useFormat } from '@web/lib/format';
 import { classesErrorKey, keys, useCourse, useInvalidateClasses, useSession } from './api';
+import { PersonAvatar } from '../team/components/PersonAvatar';
 import { AttendanceControl } from './components/AttendanceControl';
 import { CourseTile } from './components/CourseColor';
 import { InfoGrid } from './components/InfoGrid';
@@ -119,6 +120,7 @@ export default function SessionPage() {
                 label: t('fields.teacher'),
                 value: s.teacherName ? (
                   <span className="inline-flex flex-wrap items-center gap-1.5">
+                    <PersonAvatar userId={s.teacherId} name={s.teacherName} size="xs" />
                     {s.teacherName}
                     {isSubstitute && <Badge tone="warning">{t('sessions.substitute')}</Badge>}
                   </span>

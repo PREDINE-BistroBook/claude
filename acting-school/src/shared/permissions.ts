@@ -16,6 +16,12 @@ export const PERMISSIONS = [
   'positions.manage',
   /** School name, default language, week start, interview criteria, WhatsApp country code. */
   'settings.manage',
+  /**
+   * "Call to the office": summon a colleague, who gets a can't-miss banner and a
+   * push notification and answers "On my way" / "Can't come now" (/api/summons).
+   * Messaging needs no permission: every signed-in worker can message every other.
+   */
+  'staff.summon',
 
   /** See students (only students in your own classes or that you added, unless classes.all). */
   'students.read',
@@ -69,7 +75,7 @@ export type Permission = (typeof PERMISSIONS)[number];
 
 /** How the permissions are grouped on screen (positions form, profile). */
 export const PERMISSION_GROUPS = [
-  { id: 'staff', permissions: ['staff.manage', 'positions.manage', 'settings.manage'] },
+  { id: 'staff', permissions: ['staff.manage', 'positions.manage', 'settings.manage', 'staff.summon'] },
   {
     id: 'school',
     permissions: ['students.read', 'students.contact', 'students.write', 'courses.read', 'courses.write', 'classes.all', 'attendance.write'],
@@ -106,7 +112,7 @@ export function holdsAll(held: readonly Permission[], needed: readonly Permissio
 
 // ── Built-in positions ──────────────────────────────────────────────────────
 
-/** The Executive Director: everything except money amounts (website.manage included since BUILT_IN_GRANTS v2). */
+/** The Executive Director: everything except money amounts (website.manage since BUILT_IN_GRANTS v2, staff.summon since v3). */
 const ALL_BUT_PAYMENTS_MANAGE = PERMISSIONS.filter((p) => p !== 'payments.manage');
 
 /**
@@ -181,6 +187,8 @@ export const BUILT_IN_GRANTS: readonly { version: number; grants: Partial<Record
   { version: 1, grants: { executive_director: ['admissions.read', 'admissions.write', 'admissions.decide'] } },
   // The public website (2026-11-23): the director runs it; owners have it already.
   { version: 2, grants: { executive_director: ['website.manage'] } },
+  // The team pack (2026-11-23): Executive Directors can call people to the office; owners (CEO, CFO) have it already.
+  { version: 3, grants: { executive_director: ['staff.summon'] } },
 ];
 
 /** Settings key holding the last BUILT_IN_GRANTS version applied to this database. */

@@ -41,6 +41,8 @@ import { ApiError } from '@web/lib/api';
 import { useAuth } from '@web/lib/auth';
 import { ageOn, fullName, useFormat } from '@web/lib/format';
 import { admissionsErrorKey, useAdmissionsSettings, useCourseOptions, useDeleteLead, useLead, useUpdateInterview, useUpdateLead } from './api';
+import { PersonActions } from '../team/components/PersonActions';
+import { PersonAvatar } from '../team/components/PersonAvatar';
 import { AssessmentModal } from './components/AssessmentModal';
 import { FollowUpLabel, SourceLabel } from './components/bits';
 import { EnrolModal } from './components/EnrolModal';
@@ -217,7 +219,18 @@ function LeadView({ lead, del }: { lead: LeadDetail; del: ReturnType<typeof useD
                 </InfoRow>
               )}
               <InfoRow label={t('fields.assignedTo')}>
-                {lead.assignedToName ? <BidiText className="text-ink">{lead.assignedToName}</BidiText> : <span className="text-muted">{t('form.unassigned')}</span>}
+                {lead.assignedToName ? (
+                  <span className="grid gap-2">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <PersonAvatar userId={lead.assignedToId} name={lead.assignedToName} />
+                      <BidiText className="text-ink">{lead.assignedToName}</BidiText>
+                    </span>
+                    {/* "Message" / "Call to the office" for the person handling this enquiry. */}
+                    <PersonActions userId={lead.assignedToId} compact />
+                  </span>
+                ) : (
+                  <span className="text-muted">{t('form.unassigned')}</span>
+                )}
               </InfoRow>
               {nextIv && (
                 <InfoRow label={t('detail.nextInterview')}>

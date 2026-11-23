@@ -30,6 +30,9 @@ import {
 import { api } from '@web/lib/api';
 import { useAuth } from '@web/lib/auth';
 import { fullName, useFormat } from '@web/lib/format';
+import { usePersonPhoto, useRecordFiles } from '../team/api';
+import { PersonActions } from '../team/components/PersonActions';
+import { RecordFiles } from '../team/components/RecordFiles';
 import { classesErrorKey, useCourse, useInvalidateClasses, useWeekStart } from './api';
 import { AddStudentModal } from './components/AddStudentModal';
 import { CourseTile } from './components/CourseColor';
@@ -37,18 +40,20 @@ import { InfoGrid } from './components/InfoGrid';
 import { SessionFormModal } from './components/SessionFormModal';
 import { isPast, needsAttendance, rateTone, scheduleLines } from './utils';
 
-type Tab = 'students' | 'sessions';
+type Tab = 'students' | 'sessions' | 'files';
 
 export default function CourseDetailPage() {
   const { t } = useTranslation('classes');
   const id = Number(useParams().id);
   const course = useCourse(id);
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
   const invalidate = useInvalidateClasses();
   const [params, setParams] = useSearchParams();
-  const tab: Tab = params.get('tab') === 'sessions' ? 'sessions' : 'students';
+  const tabParam = params.get('tab');
+  const tab: Tab = tabParam === 'sessions' || tabParam === 'files' ? tabParam : 'students';
+  const files = useRecordFiles('courses', id);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const remove = useMutation({
@@ -69,6 +74,8 @@ export default function CourseDetailPage() {
   const c = course.data;
   const canWrite = can('courses.write');
   const enrolled = c.enrollments.filter((e) => e.status === 'enrolled').length;
+  // Photos & files: courses.write or the workshop's coach (its teacher, or a substitute on one of its sessions) adds them.
+  const isCoach = !!user && (c.teacherId === user.id || c.sessions.some((s) => s.teacherId === user.id));
 
   return (
     <div>
@@ -104,10 +111,17 @@ export default function CourseDetailPage() {
             tabs={[
               { id: 'students', label: t('detail.tabStudents'), count: enrolled },
               { id: 'sessions', label: t('detail.tabSessions'), count: c.sessions.length },
+              { id: 'files', label: t('team:files.photosAndFiles'), count: files.data?.items.length },
             ]}
           />
           <div className="mt-4" role="tabpanel">
-            {tab === 'students' ? <StudentsTab course={c} canWrite={canWrite} /> : <SessionsTab course={c} canWrite={canWrite} />}
+            {tab === 'students' ? (
+              <StudentsTab course={c} canWrite={canWrite} />
+            ) : tab === 'sessions' ? (
+              <SessionsTab course={c} canWrite={canWrite} />
+            ) : (
+              <RecordFiles resource="courses" recordId={c.id} canAdd={canWrite || isCoach} />
+            )}
           </div>
         </div>
       </div>
@@ -131,9 +145,10 @@ function InfoCard({ course: c, enrolled }: { course: CourseDetail; enrolled: num
   const lines = scheduleLines(c.schedule, f, weekStart);
   return (
     <Card>
+      {c.teacherId !== null && c.teacherName && <CoachRow teacherId={c.teacherId} name={c.teacherName} />}
       <InfoGrid
         items={[
-          { label: t('fields.teacher'), value: c.teacherName },
+          ...(c.teacherId !== null && c.teacherName ? [] : [{ label: t('fields.teacher'), value: c.teacherName }]),
           { label: t('fields.room'), value: c.room },
           {
             label: t('fields.enrolled'),
@@ -159,6 +174,24 @@ function InfoCard({ course: c, enrolled }: { course: CourseDetail; enrolled: num
         ]}
       />
     </Card>
+  );
+}
+
+/** The workshop's coach: photo, name, and "Message" / "Call to the office". */
+function CoachRow({ teacherId, name }: { teacherId: number; name: string }) {
+  const { t } = useTranslation('classes');
+  const photo = usePersonPhoto(teacherId);
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-line pb-4">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <Avatar name={name} fileId={photo} size="lg" />
+        <div className="min-w-0">
+          <div className="text-xs font-medium uppercase tracking-wide text-muted">{t('fields.teacher')}</div>
+          <bdi className="block truncate text-base font-semibold text-ink">{name}</bdi>
+        </div>
+      </div>
+      <PersonActions userId={teacherId} compact className="w-full sm:w-auto" />
+    </div>
   );
 }
 

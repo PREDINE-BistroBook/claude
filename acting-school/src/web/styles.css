@@ -191,6 +191,9 @@ html[lang="ar"] {
   html {
     -webkit-text-size-adjust: 100%;
     -webkit-tap-highlight-color: transparent;
+    /* The sticky header (and a call-to-the-office banner) is --app-top tall (AppShell): a field
+       scrolled into view, or focused with the keyboard, mustn't land underneath it. */
+    scroll-padding-top: calc(var(--app-top, 0px) + 0.5rem);
   }
 
   body {

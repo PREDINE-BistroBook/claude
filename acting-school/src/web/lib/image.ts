@@ -1,3 +1,4 @@
+import type { UploadedFile } from '@shared/schemas/files';
 import { api } from './api';
 
 /**
@@ -26,10 +27,14 @@ export async function resizeImage(file: File, maxSize = 1600, quality = 0.85): P
   return new Promise((resolve) => canvas.toBlob((b) => resolve(b ?? file), 'image/jpeg', quality));
 }
 
-/** Resize + upload; resolves to the new file id. */
-export async function uploadImage(file: File): Promise<string> {
+/** Resize + upload; resolves to what the server stored. */
+export async function uploadImageFile(file: File): Promise<UploadedFile> {
   const blob = await resizeImage(file);
   const name = file.name.replace(/\.[^.]+$/, '') + (blob.type === 'image/jpeg' ? '.jpg' : '');
-  const res = await api.upload(blob, name || 'image.jpg');
-  return res.id;
+  return api.upload(blob, name || 'image.jpg');
+}
+
+/** Resize + upload; resolves to the new file id. */
+export async function uploadImage(file: File): Promise<string> {
+  return (await uploadImageFile(file)).id;
 }

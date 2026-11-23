@@ -1,9 +1,11 @@
 import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { ListResponse } from '../../shared/schemas/common';
+import { FRESH_UPLOAD_MS } from '../../shared/schemas/chat';
 import { STAFF_ERROR_CODES, staffCreateInput, staffUpdateInput, type StaffDirectoryEntry, type StaffMember } from '../../shared/schemas/staff';
+import { photoInput, TEAM_ERROR_KEYS } from '../../shared/schemas/team';
 import type { DB } from '../db/database';
-import { authSessions, positions, userPositions, users } from '../db/schema';
+import { positions, userPositions, users } from '../db/schema';
 import type { AppEnv } from '../env';
 import {
   accessFrom,
@@ -18,10 +20,11 @@ import {
 } from '../lib/access';
 import { inChunks, insertBatches } from '../lib/sqlLimits';
 import { ApiError, notFound } from '../lib/errors';
+import { claimUploads, releaseFile } from '../lib/fileRefs';
 import { hashPassword } from '../lib/password';
 import { getSettings } from '../lib/settings';
 import { body, paramId } from '../lib/validate';
-import { currentUser, requireAuth, requirePermission } from '../middleware/auth';
+import { currentUser, requireAuth, requirePermission, signOutUser } from '../middleware/auth';
 
 /**
  * Staff accounts and the positions they hold. staff.manage lets someone add
@@ -56,6 +59,7 @@ function toStaffMember(u: UserRow, access: UserAccess, actor: Actor): StaffMembe
     active: u.active,
     lastLoginAt: u.lastLoginAt,
     createdAt: u.createdAt,
+    photoFileId: u.photoFileId,
     positions: access.positions,
     isOwner: access.isOwner,
     manageable: withinAccess(actor, access.permissions),
@@ -125,7 +129,7 @@ router.get('/directory', (c) => {
   const db = c.get('db');
   const me = currentUser(c);
   const rows = db
-    .select({ id: users.id, name: users.name, active: users.active })
+    .select({ id: users.id, name: users.name, active: users.active, photoFileId: users.photoFileId })
     .from(users)
     .where(me.isOwner ? undefined : notAnOwner)
     .orderBy(asc(byName), asc(users.id))
@@ -262,16 +266,45 @@ router.patch('/:id', canManage, async (c) => {
     }
     if (signOutEverywhere) {
       // Resetting your own password here keeps this device signed in (same as POST /auth/password).
-      const keep = isSelf && currentSession ? ne(authSessions.id, currentSession) : undefined;
-      tx.delete(authSessions)
-        .where(keep ? and(eq(authSessions.userId, id), keep) : eq(authSessions.userId, id))
-        .run();
+      // The person's push subscriptions go with their sessions: a lost phone stops getting notifications.
+      signOutUser(tx, id, isSelf ? currentSession : null);
     }
     return row;
   });
   if (result === 'last_owner') throw lastOwnerError();
   if (result === 'email_taken') throw emailTakenError();
   return c.json(staffMember(db, result, me));
+});
+
+/**
+ * Set or remove someone's profile photo (staff.manage), with the same reach
+ * rules as editing them: owner accounts are a 404 for non-owners, and someone
+ * who can do more than you is out of your reach (403). The photo is an image
+ * the caller uploaded in the last hour; the old one's file is deleted when
+ * nothing else uses it.
+ */
+router.put('/:id/photo', canManage, async (c) => {
+  const id = paramId(c);
+  const input = await body(c, photoInput);
+  const me = currentUser(c);
+  const db = c.get('db');
+  const target = db.select().from(users).where(eq(users.id, id)).get();
+  if (!target) throw notFound('Staff member not found');
+  const access = loadAccess(db, [id]).get(id)!;
+  if (!me.isOwner && access.isOwner) throw notFound('Staff member not found');
+  if (!withinAccess(me, access.permissions)) throw exceedsError();
+  const now = Date.now();
+  const previous = db.transaction((tx) => {
+    const old = tx.select({ photoFileId: users.photoFileId }).from(users).where(eq(users.id, id)).get()?.photoFileId ?? null;
+    if (input.fileId === old) return null;
+    if (input.fileId) {
+      claimUploads(tx, me.id, [input.fileId], { now, maxAgeMs: FRESH_UPLOAD_MS, path: ['fileId'], message: TEAM_ERROR_KEYS.photoNotYours, imagesOnly: true });
+    }
+    tx.update(users).set({ photoFileId: input.fileId }).where(eq(users.id, id)).run();
+    return old;
+  });
+  await releaseFile(db, c.get('files'), previous);
+  return c.json(staffMember(db, db.select().from(users).where(eq(users.id, id)).get()!, me));
 });
 
 export default router;

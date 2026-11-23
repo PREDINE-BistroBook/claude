@@ -14,7 +14,7 @@ import {
 import type { ListResponse } from '../../shared/schemas/common';
 import type { CourseListItem } from '../../shared/schemas/courses';
 import type { DB } from '../db/database';
-import { attendance, classSessions, courseSlots, courses, enrollments, students } from '../db/schema';
+import { attendance, classSessions, courseFiles, courseSlots, courses, enrollments, students } from '../db/schema';
 import type { AppEnv } from '../env';
 import {
   daysBetween,
@@ -32,6 +32,7 @@ import { schoolToday } from '../lib/clock';
 import { canSeeStudent, courseScope, isVisibleActiveStaff, type Actor } from '../lib/access';
 import { addEnrollment, setEnrollmentStatus } from '../lib/enrollments';
 import { ApiError, fieldError, notFound } from '../lib/errors';
+import { releaseFiles } from '../lib/fileRefs';
 import { body, paramId, query } from '../lib/validate';
 import { currentUser, requireAuth, requirePermission } from '../middleware/auth';
 
@@ -192,11 +193,14 @@ router.patch('/:id', write, async (c) => {
   return c.json(loadCourseDetail(db, id, today));
 });
 
-router.delete('/:id', write, (c) => {
+router.delete('/:id', write, async (c) => {
   const id = paramId(c);
   const db = c.get('db');
   requireCourse(db, id, currentUser(c));
+  // Its photos & files go with it (cascade); their stored files too, unless used elsewhere.
+  const fileIds = db.select({ fileId: courseFiles.fileId }).from(courseFiles).where(eq(courseFiles.courseId, id)).all().map((r) => r.fileId);
   db.delete(courses).where(eq(courses.id, id)).run();
+  await releaseFiles(db, c.get('files'), fileIds);
   return c.body(null, 204);
 });
 

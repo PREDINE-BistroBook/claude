@@ -56,7 +56,8 @@
     "e2e": "playwright test",
     "cf:dev": "tsx scripts/cf-dev.ts",
     "cf:smoke": "tsx scripts/cf-smoke.ts",
-    "cf:deploy-embedded": "npm run build && tsx scripts/embed-assets.ts && wrangler deploy -c wrangler.embedded.jsonc"
+    "cf:deploy-embedded": "npm run build && tsx scripts/embed-assets.ts && wrangler deploy -c wrangler.embedded.jsonc",
+    "vapid-keys": "tsx scripts/vapid-keys.ts"
   },
   "engines": {
     "node": ">=22"

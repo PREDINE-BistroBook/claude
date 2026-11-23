@@ -10,12 +10,16 @@ import { limitBody, MAX_JSON_BODY_BYTES } from './middleware/bodyLimit';
 import { adminRoutes } from './routes/admin';
 import authRoutes from './routes/auth';
 import castingApplicationRoutes from './routes/castingApplications';
+import chatRoutes from './routes/chat';
 import castingRoutes from './routes/castings';
 import courseRoutes from './routes/courses';
 import dashboardRoutes from './routes/dashboard';
 import fileRoutes from './routes/files';
 import leadRoutes from './routes/leads';
+import notificationRoutes from './routes/notifications';
 import positionRoutes from './routes/positions';
+import pushRoutes from './routes/push';
+import { castingFileRoutes, courseFileRoutes } from './routes/recordFiles';
 import scheduleRoutes from './routes/schedule';
 import sessionRoutes from './routes/sessions';
 import siteRoutes from './routes/site';
@@ -23,7 +27,9 @@ import settingsRoutes from './routes/settings';
 import staffRoutes from './routes/staff';
 import studentRoutes from './routes/students';
 import submissionRoutes from './routes/submissions';
+import summonsRoutes from './routes/summons';
 import talentRoutes from './routes/talent';
+import teamRoutes from './routes/team';
 
 export interface AppDeps {
   db: DB;
@@ -36,7 +42,20 @@ export interface AppDeps {
    * sign-in brakes (lib/signInBrake.ts). Omitted (tests): unknown.
    */
   clientIp?: (c: Context<AppEnv>) => string | null | undefined;
+  /**
+   * Keeps background work going after the response (push notifications,
+   * lib/push): the Durable Object's ctx.waitUntil on Cloudflare. Omitted (Node,
+   * scripts): the task just runs on — fire and forget, errors logged.
+   */
+  waitUntil?: (task: Promise<unknown>) => void;
+  /** fetch for calls to other servers (the browsers' push services). Default: the runtime's fetch. Tests pass a fake. */
+  outboundFetch?: typeof fetch;
 }
+
+/** Fire and forget: the promise runs on; a failure is logged, never unhandled. */
+const runInBackground = (task: Promise<unknown>) => {
+  task.catch((err) => console.error('Background task failed', err));
+};
 
 /**
  * The API as a plain Hono app — no runtime specifics, so the same app runs on
@@ -52,6 +71,8 @@ export function createApp(deps: AppDeps) {
     c.set('config', deps.config);
     c.set('files', deps.files);
     c.set('clientIp', deps.clientIp?.(c) || null);
+    c.set('waitUntil', deps.waitUntil ?? runInBackground);
+    c.set('outboundFetch', deps.outboundFetch ?? ((input, init) => fetch(input, init)));
     await next();
   });
 
@@ -77,6 +98,9 @@ export function createApp(deps: AppDeps) {
   app.route('/api/positions', positionRoutes);
   app.route('/api/settings', settingsRoutes);
   app.route('/api/students', studentRoutes);
+  // A workshop's and a casting's photos & files (before the parent routers; routes/recordFiles.ts).
+  app.route('/api/courses/:courseId/files', courseFileRoutes);
+  app.route('/api/castings/:castingId/files', castingFileRoutes);
   app.route('/api/courses', courseRoutes);
   app.route('/api/sessions', sessionRoutes);
   app.route('/api/talent', talentRoutes);
@@ -87,6 +111,12 @@ export function createApp(deps: AppDeps) {
   app.route('/api/dashboard', dashboardRoutes);
   app.route('/api/site', siteRoutes);
   app.route('/api/casting-applications', castingApplicationRoutes);
+  // The team pack: directory, chat, call to the office, notifications, push.
+  app.route('/api/team', teamRoutes);
+  app.route('/api/chat', chatRoutes);
+  app.route('/api/summons', summonsRoutes);
+  app.route('/api/notifications', notificationRoutes);
+  app.route('/api/push', pushRoutes);
 
   app.all('/api/*', (c) => c.json({ error: { code: 'not_found', message: 'No such API route' } }, 404));
 

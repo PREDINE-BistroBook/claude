@@ -2,6 +2,7 @@ import { lazy } from 'react';
 import { createBrowserRouter } from 'react-router';
 import { admissionsRoutes } from './features/admissions/routes';
 import { castingsRoutes } from './features/castings/routes';
+import { chatRoutes } from './features/chat/routes';
 import { classesRoutes } from './features/classes/routes';
 import { dashboardRoutes } from './features/dashboard/routes';
 import { positionsRoutes } from './features/positions/routes';
@@ -10,6 +11,7 @@ import { settingsRoutes } from './features/settings/routes';
 import { staffRoutes } from './features/staff/routes';
 import { studentsRoutes } from './features/students/routes';
 import { talentRoutes } from './features/talent/routes';
+import { teamRoutes } from './features/team/routes';
 import { AppShell } from './layout/AppShell';
 import { RequireSection } from './layout/RequireSection';
 import { RequireAuth } from './lib/auth';
@@ -47,6 +49,8 @@ export const router = createBrowserRouter([
       ...staffRoutes,
       ...positionsRoutes,
       ...settingsRoutes,
+      ...teamRoutes,
+      ...chatRoutes,
       {
         path: 'website/*',
         element: (

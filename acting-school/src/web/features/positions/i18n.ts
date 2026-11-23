@@ -76,6 +76,10 @@ const en = {
   perm: {
     staff: {
       manage: { label: 'Manage staff', description: 'Add and edit staff accounts, give positions, reset passwords, deactivate accounts.' },
+      summon: {
+        label: 'Call someone to the office',
+        description: 'A “Call to the office” button beside each colleague. They get a big notice on their screen and phone and answer “On my way” or “Can’t come now”.',
+      },
     },
     positions: {
       manage: { label: 'Manage positions', description: 'Create and edit positions and what each one allows.' },
@@ -223,6 +227,10 @@ const ar: TranslationOf<typeof en> = {
   perm: {
     staff: {
       manage: { label: 'إدارة الفريق', description: 'إضافة حسابات الفريق وتعديلها، ومنح المناصب، وإعادة تعيين كلمات المرور، وإيقاف الحسابات.' },
+      summon: {
+        label: 'طلب شخص إلى المكتب',
+        description: 'زر «استدعاء للمكتب» بجانب كل زميل. يظهر للشخص تنبيه كبير على الشاشة والهاتف، ويمكنه الرد بـ«في الطريق» أو «لا أستطيع الآن».',
+      },
     },
     positions: {
       manage: { label: 'إدارة المناصب', description: 'إنشاء المناصب وتعديلها وتحديد ما يسمح به كلٌّ منها.' },

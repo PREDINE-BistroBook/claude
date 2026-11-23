@@ -1,16 +1,19 @@
-import { and, count, eq, ne } from 'drizzle-orm';
+import { count, eq } from 'drizzle-orm';
 import { Hono, type Context } from 'hono';
 import { FIRST_OWNER_POSITION } from '../../shared/permissions';
 import { changePasswordInput, loginInput, profileInput, setupInput, type MeResponse } from '../../shared/schemas/auth';
-import { authSessions, positions, userPositions, users } from '../db/schema';
+import { FRESH_UPLOAD_MS } from '../../shared/schemas/chat';
+import { photoInput, TEAM_ERROR_KEYS } from '../../shared/schemas/team';
+import { positions, userPositions, users } from '../db/schema';
 import type { AppEnv } from '../env';
 import { ensureBuiltInPositions, toSessionUser } from '../lib/access';
 import { ApiError } from '../lib/errors';
+import { claimUploads, releaseFile } from '../lib/fileRefs';
 import { getDummyHash, hashPassword, sameSecret, verifyPassword } from '../lib/password';
 import { getSettings, saveSettings } from '../lib/settings';
 import { clearSignInFailures, recordSignInFailure, signInBlocked } from '../lib/signInBrake';
 import { body } from '../lib/validate';
-import { currentUser, endSession, requireAuth, startSession } from '../middleware/auth';
+import { currentUser, endSession, requireAuth, signOutUser, startSession } from '../middleware/auth';
 
 const router = new Hono<AppEnv>();
 
@@ -112,6 +115,31 @@ router.patch('/profile', requireAuth, async (c) => {
   return c.json({ user: toSessionUser(db, updated!) });
 });
 
+/**
+ * Your own profile photo: an image you uploaded in the last hour (POST
+ * /api/files), or null to remove it. The old photo's file is deleted when
+ * nothing else uses it. Answers { user } like PATCH /profile.
+ */
+router.put('/photo', requireAuth, async (c) => {
+  const input = await body(c, photoInput);
+  const me = currentUser(c);
+  const db = c.get('db');
+  const now = Date.now();
+  const previous = db.transaction((tx) => {
+    const row = tx.select({ photoFileId: users.photoFileId }).from(users).where(eq(users.id, me.id)).get();
+    const old = row?.photoFileId ?? null;
+    if (input.fileId === old) return null;
+    if (input.fileId) {
+      claimUploads(tx, me.id, [input.fileId], { now, maxAgeMs: FRESH_UPLOAD_MS, path: ['fileId'], message: TEAM_ERROR_KEYS.photoNotYours, imagesOnly: true });
+    }
+    tx.update(users).set({ photoFileId: input.fileId }).where(eq(users.id, me.id)).run();
+    return old;
+  });
+  await releaseFile(db, c.get('files'), previous);
+  const updated = db.select().from(users).where(eq(users.id, me.id)).get()!;
+  return c.json({ user: toSessionUser(db, updated) });
+});
+
 router.post('/password', requireAuth, async (c) => {
   const input = await body(c, changePasswordInput);
   const me = currentUser(c);
@@ -123,10 +151,12 @@ router.post('/password', requireAuth, async (c) => {
     ]);
   }
   const passwordHash = await hashPassword(input.newPassword);
-  db.update(users).set({ passwordHash }).where(eq(users.id, me.id)).run();
-  // Sign out every other device.
   const sid = c.get('sessionId');
-  if (sid) db.delete(authSessions).where(and(eq(authSessions.userId, me.id), ne(authSessions.id, sid))).run();
+  db.transaction((tx) => {
+    tx.update(users).set({ passwordHash }).where(eq(users.id, me.id)).run();
+    // Sign out every other device (and stop their notifications).
+    if (sid) signOutUser(tx, me.id, sid);
+  });
   return c.json({ ok: true });
 });
 

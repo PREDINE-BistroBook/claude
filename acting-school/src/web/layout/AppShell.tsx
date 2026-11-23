@@ -1,11 +1,14 @@
 import clsx from 'clsx';
-import { Ellipsis, House, Languages, LogOut, UserRound, WifiOff, X } from 'lucide-react';
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Contact, Ellipsis, House, Languages, LogOut, UserRound, WifiOff, X } from 'lucide-react';
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, NavLink, Outlet, useLocation } from 'react-router';
 import { Avatar } from '../components/ui/Avatar';
 import { BrandMark } from '../components/ui/BrandMark';
 import { PageLoader } from '../components/ui/States';
+import { MessagesButton, NotificationsButton } from '../features/team/components/HeaderButtons';
+import { SummonsAnswerWatcher } from '../features/team/components/SummonsAnswerWatcher';
+import { SummonsBanner } from '../features/team/components/SummonsBanner';
 import { currentLanguage, setLanguage } from '../i18n';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -27,11 +30,38 @@ function useLanguageToggle() {
   };
 }
 
+/**
+ * Keeps the height of the sticky block at the top (the phone header plus a
+ * call-to-the-office banner) in the CSS variable --app-top: a chat's own bar
+ * sticks just under it, and html's scroll-padding-top (styles.css) keeps a
+ * field scrolled into view from landing underneath it.
+ */
+function useStickyTopHeight() {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const root = document.documentElement;
+    const set = () => root.style.setProperty('--app-top', `${Math.round(el.getBoundingClientRect().height)}px`);
+    set();
+    if (typeof ResizeObserver === 'undefined') return () => root.style.removeProperty('--app-top');
+    const observer = new ResizeObserver(set);
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty('--app-top');
+    };
+  }, []);
+  return ref;
+}
+
 type MenuItem = Pick<NavItem, 'to' | 'label' | 'icon' | 'end'>;
 
 /** The plain home ("/") for someone who sees no section yet. */
 const START_ITEM: MenuItem = { to: '/', label: 'home', icon: House, end: true };
 const PROFILE_ITEM: MenuItem = { to: '/profile', label: 'profile', icon: UserRound };
+/** The Team directory: every signed-in worker, from the account menu in every section. */
+const TEAM_ITEM: MenuItem = { to: '/team', label: 'team', icon: Contact };
 
 /**
  * The signed-in frame. The app has three sections (School, Casting, Website,
@@ -51,6 +81,7 @@ export function AppShell() {
   const positionNames = usePositionNames();
   const [moreOpen, setMoreOpen] = useState(false);
   const userId = user?.id ?? null;
+  const stickyTop = useStickyTopHeight();
 
   const visible = useMemo(() => visibleSections(can), [can]);
   const section = currentSection(pathname, visible, rememberedSection());
@@ -88,7 +119,7 @@ export function AppShell() {
   const tabPaths = user ? mobileTabs(section, can) : [];
   const tabs = tabPaths.map((to) => (to === '/' ? START_ITEM : sectionItems.find((i) => i.to === to))).filter(Boolean) as MenuItem[];
   const moreSection = sectionItems.filter((i) => !tabPaths.includes(i.to));
-  const moreActive = [...moreSection, ...adminItems, PROFILE_ITEM].some((i) => navItemActive(i, pathname));
+  const moreActive = [...moreSection, ...adminItems, PROFILE_ITEM, TEAM_ITEM].some((i) => navItemActive(i, pathname));
   const myPositions = user ? positionNames(user.positions) : '';
   const showTabs = visible.length > 1;
 
@@ -111,7 +142,12 @@ export function AppShell() {
             {sectionLabel && <span className="block truncate text-sm font-semibold text-section">{sectionLabel}</span>}
           </span>
         </Link>
-        <nav aria-label={t('nav.mainMenu')} className="flex-1 overflow-y-auto px-3 pb-4">
+        {/* Messages and notifications: in every section. */}
+        <div className="grid gap-0.5 px-3 pb-3">
+          <MessagesButton variant="sidebar" />
+          <NotificationsButton variant="sidebar" />
+        </div>
+        <nav aria-label={t('nav.mainMenu')} className="flex-1 overflow-y-auto border-t border-line px-3 pb-4 pt-4">
           {sidebarGroups.map((g) =>
             g.items.length ? (
               <div key={g.id} className="mt-5 first:mt-0">
@@ -149,10 +185,22 @@ export function AppShell() {
             <span lang={currentLanguage() === 'ar' ? 'en' : 'ar'}>{t('language.switchTo')}</span>
           </button>
           <NavLink
+            to={TEAM_ITEM.to}
+            className={({ isActive: a }) =>
+              clsx(
+                'mt-1 flex min-h-11 items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium',
+                a ? 'bg-section-soft font-semibold text-section' : 'text-ink/80 hover:bg-surface-2',
+              )
+            }
+          >
+            <TEAM_ITEM.icon className="size-5" aria-hidden />
+            {t('nav.team')}
+          </NavLink>
+          <NavLink
             to="/profile"
             className={({ isActive: a }) => clsx('mt-1 flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-surface-2', a && 'bg-surface-2')}
           >
-            <Avatar name={user?.name ?? ''} size="sm" />
+            <Avatar name={user?.name ?? ''} fileId={user?.photoFileId} size="sm" />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium">{user?.name}</span>
               <span className="block truncate text-xs text-muted">{myPositions}</span>
@@ -169,31 +217,43 @@ export function AppShell() {
         </div>
       </aside>
 
-      {/* ── Phone top bar: school name + the section you're in ──────── */}
-      <header className="pt-safe sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur lg:hidden">
-        <div aria-hidden className="h-1 bg-section" />
-        <div className="flex h-14 items-center justify-between gap-3 px-4">
-          <Link
-            to={homeHref}
-            className="flex min-w-0 items-center gap-2.5"
-            aria-label={sectionLabel ? `${school} · ${t('sections.youAreIn', { section: sectionLabel })}` : undefined}
-          >
-            <BrandMark className="size-9 shrink-0" />
-            <span className="min-w-0 leading-tight">
-              <span className="block truncate font-semibold">{school}</span>
-              {sectionLabel && <span className="block truncate text-sm font-semibold text-section">{sectionLabel}</span>}
-            </span>
-          </Link>
-          <button
-            type="button"
-            onClick={toggleLanguage}
-            className="inline-flex min-h-12 shrink-0 items-center gap-1.5 rounded-xl px-3 text-sm font-medium text-ink/80 hover:bg-surface-2 hover:text-ink"
-          >
-            <Languages className="size-[18px]" aria-hidden />
-            <span lang={currentLanguage() === 'ar' ? 'en' : 'ar'}>{t('language.switchTo')}</span>
-          </button>
+      {/* ── Phone top bar (school name + the section you're in, Messages, the bell) and,
+           on every screen, the call-to-the-office banner: one sticky block. ── */}
+      <div ref={stickyTop} className="sticky top-0 z-30">
+        <header className="pt-safe border-b border-line bg-surface/95 backdrop-blur lg:hidden">
+          <div aria-hidden className="h-1 bg-section" />
+          <div className="flex h-14 items-center justify-between gap-1 ps-4 pe-2">
+            <Link
+              to={homeHref}
+              className="flex min-w-0 items-center gap-2.5"
+              aria-label={sectionLabel ? `${school} · ${t('sections.youAreIn', { section: sectionLabel })}` : undefined}
+            >
+              <BrandMark className="size-9 shrink-0" />
+              <span className="min-w-0 leading-tight">
+                <span className="block truncate font-semibold">{school}</span>
+                {sectionLabel && <span className="block truncate text-sm font-semibold text-section">{sectionLabel}</span>}
+              </span>
+            </Link>
+            <div className="flex shrink-0 items-center">
+              <MessagesButton variant="phone" />
+              <NotificationsButton variant="phone" />
+              {/* Icon over its label, like the two buttons beside it, so the school name keeps its room. */}
+              <button
+                type="button"
+                onClick={toggleLanguage}
+                className="inline-flex min-h-12 min-w-12 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1.5 text-[11px] font-medium leading-none text-ink/80 hover:bg-surface-2 hover:text-ink"
+              >
+                <Languages className="size-[22px]" aria-hidden />
+                <span lang={currentLanguage() === 'ar' ? 'en' : 'ar'}>{t('language.switchTo')}</span>
+              </button>
+            </div>
+          </div>
+        </header>
+        <div className="lg:ms-64">
+          <SummonsBanner />
+          {user && can('staff.summon') && <SummonsAnswerWatcher />}
         </div>
-      </header>
+      </div>
 
       {/* ── Section tabs (phones: under the header; desktop: top of the content) ── */}
       {showTabs && (
@@ -276,7 +336,7 @@ export function AppShell() {
           <div className="pb-safe absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto rounded-t-3xl border-t border-line bg-surface shadow-2xl">
             <div className="flex items-center justify-between px-5 pb-2 pt-4">
               <div className="flex min-w-0 items-center gap-3">
-                <Avatar name={user?.name ?? ''} size="md" />
+                <Avatar name={user?.name ?? ''} fileId={user?.photoFileId} size="md" />
                 <div className="min-w-0">
                   <div className="truncate font-medium">{user?.name}</div>
                   <div className="truncate text-sm text-muted">{myPositions}</div>
@@ -296,6 +356,21 @@ export function AppShell() {
             )}
             {adminItems.length > 0 && <MoreGroup label={t('nav.admin')} items={adminItems} pathname={pathname} />}
             <div className="mt-2 grid grid-cols-2 gap-2 border-t border-line px-4 py-3">
+              <Link
+                to={TEAM_ITEM.to}
+                aria-current={pathname === TEAM_ITEM.to ? 'page' : undefined}
+                className={clsx(
+                  'col-span-2 flex min-h-14 items-center justify-center gap-3 rounded-xl px-3 py-2 text-sm font-medium',
+                  pathname === TEAM_ITEM.to ? 'bg-section-soft text-section' : 'bg-surface-2 text-ink',
+                )}
+              >
+                <Contact className="size-5 shrink-0" aria-hidden />
+                {/* What Team is for, in plain words: older owners won't guess "Team" means "message or call someone". */}
+                <span className="min-w-0 text-start leading-tight">
+                  <span className="block font-semibold">{t('nav.team')}</span>
+                  <span className="block text-xs text-muted">{can('staff.summon') ? t('nav.teamHintSummon') : t('nav.teamHint')}</span>
+                </span>
+              </Link>
               <Link
                 to={PROFILE_ITEM.to}
                 aria-current={pathname === PROFILE_ITEM.to ? 'page' : undefined}

@@ -49,9 +49,26 @@ import { createWebsiteLead } from '../lib/admissions';
 import { createCastingApplication } from '../lib/castingApplications';
 import { epochAt, todayIn } from '../lib/clock';
 import type { FileStore } from '../lib/fileStore';
+import { summonsInboxLink, summonsLink } from '../lib/notifications';
 import { findPublicWorkshop, saveSiteContent } from '../lib/siteContent';
 import type { DB } from './database';
-import { castingApplications, courses, enrollments, files as filesTable, interviews, leadActivities, leads, siteCoaches, siteWorkshops, users } from './schema';
+import {
+  castingApplications,
+  conversations,
+  courses,
+  enrollments,
+  files as filesTable,
+  interviews,
+  leadActivities,
+  leads,
+  messages,
+  notifications,
+  siteCoaches,
+  siteWorkshops,
+  summons,
+  users,
+} from './schema';
+import { renderPdf } from './seedDocuments';
 import { lookFor, renderPortrait } from './seedPortraits';
 
 /** The seeded sign-ins (active accounts), in the order the CLI prints them. */
@@ -171,6 +188,7 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
     ...(opts.setupCode ? { setupCode: opts.setupCode } : {}),
   });
   const owner = as(setup.cookie!);
+  const setupOwnerId: number = setup.body.user.id;
   await owner.patch('/settings', { weekStartsOn: 1, defaultLocale: 'en' });
 
   // The built-in positions exist from the start; staff are given them by key.
@@ -757,6 +775,7 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
     },
   ];
 
+  const castingIds: Record<string, number> = {};
   for (const c of castingSpec) {
     const casting = await agent.post<{ id: number }>('/castings', {
       title: c.title,
@@ -773,6 +792,7 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
       shootEnd: addDays(today, c.shoot[1]),
       rate: c.rate,
     });
+    castingIds[c.title] = casting.id;
     for (const r of c.roles) {
       const { submissions, ...roleInput } = r;
       const role = await agent.post<{ id: number }>(`/castings/${casting.id}/roles`, roleInput);
@@ -1060,9 +1080,124 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
   // Tom left at the end of last term.
   await owner.patch(`/staff/${staff.tom}`, { active: false });
 
-  // ── 7. The public website ──────────────────────────────────────────────────
+  // ── 7. The team: profile photos, workshop and casting files, chat, a call to the office ──
+
+  await seedTeam();
+
+  // ── 8. The public website ──────────────────────────────────────────────────
 
   await seedDemoWebsite({ db, files: opts.files, timeZone, today });
+
+  /**
+   * Everyone's profile photo (generated portraits, like the talent's; the two
+   * coaches look as they do on the website), a few photos and documents on
+   * workshops and castings, three conversations and one answered call to the
+   * office — all through the API, then backdated so the morning looks lived in.
+   */
+  async function seedTeam() {
+    async function upload(client: ReturnType<typeof as>, bytes: Uint8Array, name: string, type: string): Promise<string> {
+      const form = new FormData();
+      form.append('file', new Blob([new Uint8Array(bytes)], { type }), name);
+      return (await client.post<{ id: string }>('/files', form)).id;
+    }
+    const portrait = (client: ReturnType<typeof as>, person: number, gender: Gender, hair: string | null, name: string, variant = 0) =>
+      upload(client, renderPortrait(lookFor(person, gender, { hair, variant })), name, 'image/png');
+
+    // Profile photos: the CEO sets his own, and everyone else's from the staff page.
+    // (Layla and Daniel use the same looks as their website coach photos: 300 and 301.)
+    const looks: { key: keyof typeof staff | 'karim'; person: number; gender: Gender; hair: string | null }[] = [
+      { key: 'karim', person: 410, gender: 'male', hair: 'Grey' },
+      { key: 'cfo', person: 411, gender: 'male', hair: 'Black' },
+      { key: 'director', person: 412, gender: 'female', hair: 'Dark brown' },
+      { key: 'head', person: 413, gender: 'male', hair: 'Black' },
+      { key: 'casting', person: 414, gender: 'male', hair: 'Brown' },
+      { key: 'editor', person: 415, gender: 'male', hair: 'Black' },
+      { key: 'layla', person: 300, gender: 'female', hair: 'Black' },
+      { key: 'daniel', person: 301, gender: 'male', hair: 'Brown' },
+    ];
+    for (const l of looks) {
+      const fileId = await portrait(owner, l.person, l.gender, l.hair, `${l.key}.png`);
+      if (l.key === 'karim') await owner.put('/auth/photo', { fileId });
+      else await owner.put(`/staff/${staff[l.key]}/photo`, { fileId });
+    }
+
+    // Workshop photos & files: the coaches add rehearsal photos; the director adds the term plan.
+    const reh1 = await portrait(layla, people.get('maya') ?? 0, 'female', 'Auburn', 'rehearsal-scene-two-hander.png', 2);
+    await layla.post(`/courses/${courseIds.screen}/files`, { fileId: reh1, caption: 'Scene work: the two-hander, last Thursday' });
+    const reh2 = await portrait(layla, people.get('kareem') ?? 1, 'male', 'Black', 'rehearsal-close-up.png', 3);
+    await layla.post(`/courses/${courseIds.screen}/files`, { fileId: reh2, caption: 'Close-up practice' });
+    const running = await upload(
+      daniel,
+      renderPdf('Showcase running order', ['1. Warm-up games (all)', '2. Freeze frames: "The Market"', '3. Story circle', '4. Masks', '5. Bows and photos with parents']),
+      'Showcase running order.pdf',
+      'application/pdf',
+    );
+    await daniel.post(`/courses/${courseIds.kids}/files`, { fileId: running, caption: 'For the last Saturday' });
+    const plan = await upload(
+      director,
+      renderPdf('Voice & Speech - term plan', ['Weeks 1-3: breath and support', 'Weeks 4-6: resonance and articulation', 'Weeks 7-9: projection in the big room', 'Week 10: text work (English and Arabic)']),
+      'Voice and Speech term plan.pdf',
+      'application/pdf',
+    );
+    await director.post(`/courses/${courseIds.voice}/files`, { fileId: plan, caption: 'Term plan' });
+
+    // Casting files: the breakdown for the theatre casting, a reference photo for the series.
+    const falaki = castingIds['A Midsummer Night’s Dream'];
+    if (falaki) {
+      const breakdown = await upload(
+        agent,
+        renderPdf('A Midsummer Night\'s Dream - breakdown', ['Falaki Theatre, spring season', 'Puck: 18-30, quick and physical', 'Helena: 20-30, lovesick and determined', 'Bottom: 30-50, comic timing essential', 'Rehearsals: six weeks, paid']),
+        'Midsummer breakdown.pdf',
+        'application/pdf',
+      );
+      await agent.post(`/castings/${falaki}/files`, { fileId: breakdown, caption: 'Breakdown from the director' });
+    }
+    const series = castingIds['بيت العائلة — الموسم الثاني'];
+    if (series) {
+      const ref = await portrait(agent, 416, 'female', 'Grey', 'grandmother-reference.png');
+      await agent.post(`/castings/${series}/files`, { fileId: ref, caption: 'Look reference for the grandmother' });
+    }
+
+    // Chat: three conversations (one in Arabic, one with a photo, one with a document).
+    const tarek = await login('casting@demo.school');
+    const sent: { id: number; minutesAgo: number }[] = [];
+    async function say(client: ReturnType<typeof as>, conversationId: number, minutesAgo: number, body: string | null, fileIds?: string[]) {
+      const m = await client.post<{ id: number }>(`/chat/conversations/${conversationId}/messages`, { body, ...(fileIds ? { fileIds } : {}) });
+      sent.push({ id: m.id, minutesAgo });
+      return m.id;
+    }
+    const withLayla = (await director.post<{ id: number }>('/chat/conversations', { userId: staff.layla })).id;
+    await say(director, withLayla, 185, 'Good morning Layla! Could you send me a photo from last night’s Screen Acting class? For Instagram.');
+    const shot = await portrait(layla, people.get('chloe') ?? 2, 'female', 'Blonde', 'class-photo.png', 4);
+    const laylaLast = await say(layla, withLayla, 170, 'Of course — Chloe in the two-hander. She was wonderful.', [shot]);
+    await say(director, withLayla, 160, 'Perfect, thank you! Posting it at lunchtime.');
+    await layla.post(`/chat/conversations/${withLayla}/read`, { messageId: laylaLast });
+
+    const withKarim = (await director.post<{ id: number }>('/chat/conversations', { userId: setupOwnerId })).id;
+    await say(director, withKarim, 95, 'صباح الخير أستاذ كريم، ورشة الأطفال اكتمل عددها هذا الأسبوع.');
+    await say(owner, withKarim, 80, 'ممتاز يا داليا، شكرًا. هل نفتح مجموعة ثانية يوم الجمعة؟');
+
+    const withTarek = (await agent.post<{ id: number }>('/chat/conversations', { userId: staff.casting })).id;
+    const sides = await upload(agent, renderPdf('Puck - audition sides', ['Act 2, Scene 1: "Thou speak\'st aright"', 'Act 3, Scene 2: "Captain of our fairy band"', 'Please learn both; readers will be provided.']), 'Puck sides.pdf', 'application/pdf');
+    await say(agent, withTarek, 60, 'طارق، دي مشاهد تجربة الأداء لدور باك. ابعتها للممثلين المرشحين النهارده.', [sides]);
+    await say(tarek, withTarek, 52, 'تمام، هبعتها لليو وإيثان دلوقتي.');
+
+    // A call to the office: the director called Tarek, who's on his way.
+    const call = await director.post<{ id: number }>('/summons', { userId: staff.casting, note: 'Please bring the Falaki shortlist.' });
+    await tarek.post(`/summons/${call.id}/answer`, { status: 'on_my_way' });
+
+    // Backdate (the API stamps everything "now"): each message, its conversation, the notifications.
+    const ago = (minutes: number) => Date.now() - minutes * 60_000;
+    for (const m of sent) db.update(messages).set({ createdAt: ago(m.minutesAgo) }).where(eq(messages.id, m.id)).run();
+    for (const conv of [withLayla, withKarim, withTarek]) {
+      const newest = db.select({ at: max(messages.createdAt) }).from(messages).where(eq(messages.conversationId, conv)).get()?.at ?? Date.now();
+      db.update(conversations).set({ lastMessageAt: newest }).where(eq(conversations.id, conv)).run();
+      db.update(notifications).set({ createdAt: newest }).where(and(eq(notifications.kind, 'message'), eq(notifications.link, `/messages/${conv}`))).run();
+    }
+    db.update(summons).set({ createdAt: ago(40), answeredAt: ago(38) }).where(eq(summons.id, call.id)).run();
+    db.update(notifications).set({ createdAt: ago(40) }).where(and(eq(notifications.kind, 'summon'), eq(notifications.link, summonsInboxLink(call.id, staff.director)))).run();
+    db.update(notifications).set({ createdAt: ago(38) }).where(and(eq(notifications.kind, 'summon_answer'), eq(notifications.link, summonsLink(call.id)))).run();
+  }
 
   return {
     ok: true,

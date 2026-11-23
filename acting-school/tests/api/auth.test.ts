@@ -53,7 +53,7 @@ describe('login / logout / me', () => {
       permissions: ['students.read', 'courses.read', 'attendance.write'],
       positions: [expect.objectContaining({ key: 'acting_coach', name: 'Acting coach', nameAr: 'مدرب تمثيل', isOwner: false })],
     });
-    expect(Object.keys(me.body.user).sort()).toEqual(['email', 'id', 'isOwner', 'locale', 'name', 'permissions', 'phone', 'positions']);
+    expect(Object.keys(me.body.user).sort()).toEqual(['email', 'id', 'isOwner', 'locale', 'name', 'permissions', 'phone', 'photoFileId', 'positions']);
     expect(me.body.user.passwordHash).toBeUndefined();
 
     await client.post('/api/auth/logout');

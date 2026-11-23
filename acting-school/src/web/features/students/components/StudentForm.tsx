@@ -119,7 +119,7 @@ export function StudentForm({ student }: { student?: Student }) {
       <FormError messageKey={form.formError} />
 
       <FormSection title={t('form.photo')} description={t('form.photoHint')}>
-        <PhotoInput value={v.photoFileId} onChange={(id) => form.set('photoFileId', id)} name={displayName} />
+        <PhotoInput value={v.photoFileId} onChange={(id) => form.set('photoFileId', id)} name={displayName} discardReplaced />
         {photoError && (
           <p className="text-sm text-danger" role="alert">
             {t(photoError)}

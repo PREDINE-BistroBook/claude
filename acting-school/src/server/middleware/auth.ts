@@ -1,9 +1,10 @@
-import { and, eq, gt } from 'drizzle-orm';
+import { and, eq, gt, isNull, ne, or } from 'drizzle-orm';
 import type { Context, MiddlewareHandler } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { Permission } from '../../shared/permissions';
 import type { SessionUser } from '../../shared/schemas/auth';
-import { authSessions, positions, userPositions, users } from '../db/schema';
+import type { DB } from '../db/database';
+import { authSessions, positions, pushSubscriptions, userPositions, users } from '../db/schema';
 import type { AppEnv } from '../env';
 import { accessFrom, hasPermission, positionOrder } from '../lib/access';
 import { ApiError } from '../lib/errors';
@@ -45,6 +46,7 @@ export const loadSession: MiddlewareHandler<AppEnv> = async (c, next) => {
         name: users.name,
         phone: users.phone,
         locale: users.locale,
+        photoFileId: users.photoFileId,
         active: users.active,
         positionId: positions.id,
         positionKey: positions.key,
@@ -67,7 +69,15 @@ export const loadSession: MiddlewareHandler<AppEnv> = async (c, next) => {
           ? []
           : [{ id: r.positionId, key: r.positionKey, name: r.positionName!, nameAr: r.positionNameAr, isOwner: !!r.positionIsOwner, permissions: r.positionPermissions ?? [] }],
       );
-      const user: SessionUser = { id: row.id, email: row.email, name: row.name, phone: row.phone, locale: row.locale, ...accessFrom(held) };
+      const user: SessionUser = {
+        id: row.id,
+        email: row.email,
+        name: row.name,
+        phone: row.phone,
+        locale: row.locale,
+        photoFileId: row.photoFileId,
+        ...accessFrom(held),
+      };
       c.set('user', user);
       c.set('sessionId', id);
       // Sliding expiry: renew when less than half the lifetime is left.
@@ -145,8 +155,34 @@ export function startSession(c: Context<AppEnv>, userId: number) {
   writeCookie(c, token, expiresAt);
 }
 
+/**
+ * Sign out this request's session: its row, the push subscriptions it turned
+ * on (so this phone/browser stops getting the person's notifications), and
+ * the cookie.
+ */
 export function endSession(c: Context<AppEnv>) {
   const id = c.get('sessionId');
-  if (id) c.get('db').delete(authSessions).where(eq(authSessions.id, id)).run();
+  if (id) c.get('db').transaction((tx) => deleteSession(tx, id));
   deleteCookie(c, sessionCookieName(c.get('config')), { path: '/', secure: c.get('config').cookieSecure });
+}
+
+type Deleter = Pick<DB, 'delete'>;
+
+/** Delete one session and the push subscriptions it turned on. Call inside a transaction. */
+export function deleteSession(tx: Deleter, sessionId: string) {
+  tx.delete(pushSubscriptions).where(eq(pushSubscriptions.sessionId, sessionId)).run();
+  tx.delete(authSessions).where(eq(authSessions.id, sessionId)).run();
+}
+
+/**
+ * Sign a person out everywhere — every session but `keepSessionId` (resetting
+ * your own password keeps this device signed in) — together with every push
+ * subscription not turned on by the kept session: a lost phone stops getting
+ * message previews and calls to the office. Call inside a transaction.
+ */
+export function signOutUser(tx: Deleter, userId: number, keepSessionId?: string | null) {
+  const keepPush = keepSessionId ? or(isNull(pushSubscriptions.sessionId), ne(pushSubscriptions.sessionId, keepSessionId)) : undefined;
+  tx.delete(pushSubscriptions).where(and(eq(pushSubscriptions.userId, userId), keepPush)).run();
+  const keepSession = keepSessionId ? ne(authSessions.id, keepSessionId) : undefined;
+  tx.delete(authSessions).where(and(eq(authSessions.userId, userId), keepSession)).run();
 }

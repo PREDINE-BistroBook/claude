@@ -242,7 +242,7 @@ const en = {
     followUpCleared: 'Follow-up removed',
   },
   detail: {
-    call: 'Call',
+    call: 'Phone',
     whatsapp: 'WhatsApp',
     logContact: 'Log contact',
     interview: 'Interview',

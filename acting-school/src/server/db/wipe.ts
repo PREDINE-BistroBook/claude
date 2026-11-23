@@ -7,6 +7,15 @@ import * as t from './schema';
 
 /** Every table, children before parents (so no cascade has work left to do). */
 const WIPE_ORDER: SQLiteTable[] = [
+  t.pushSubscriptions,
+  t.notifications,
+  t.summons,
+  t.messageAttachments,
+  t.messages,
+  t.conversationMembers,
+  t.conversations,
+  t.castingFiles,
+  t.courseFiles,
   t.castingApplicationPhotos,
   t.castingApplications,
   t.siteWorkshops,
@@ -45,6 +54,8 @@ const WIPE_ORDER: SQLiteTable[] = [
 export async function wipeAllData(db: DB, files: FileStore): Promise<{ deletedFiles: number }> {
   const keys = db.transaction((tx) => {
     const stored = tx.select({ key: t.files.storageKey }).from(t.files).all().map((r) => r.key);
+    // Profile photos point at files from users, which go after files (users.photo_file_id has no ON DELETE action in the database).
+    tx.update(t.users).set({ photoFileId: null }).run();
     for (const table of WIPE_ORDER) tx.delete(table).run();
     return stored;
   });

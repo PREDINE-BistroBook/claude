@@ -112,3 +112,30 @@ export const INTERVIEW_SCORE_MAX = 5;
  */
 export const CASTING_APPLICATION_STATUSES = ['new', 'reviewing', 'accepted', 'declined'] as const;
 export type CastingApplicationStatus = (typeof CASTING_APPLICATION_STATUSES)[number];
+
+// ── Team: files, chat, "call to the office", notifications ─────────────────
+
+/** What a stored file is, decided from its bytes (POST /api/files): a picture shown inline, or a document downloaded. */
+export const FILE_KINDS = ['photo', 'document'] as const;
+export type FileKind = (typeof FILE_KINDS)[number];
+
+/**
+ * A "call to the office" (summons): pending until the person answers (on my
+ * way / can't come now) or the caller cancels it. A pending one older than
+ * SUMMONS_EXPIRY_MS counts as expired: the API shows it as 'expired'
+ * (SummonsView.status) without storing that.
+ */
+export const SUMMONS_STATUSES = ['pending', 'on_my_way', 'cant_now', 'cancelled'] as const;
+export type SummonsStatus = (typeof SUMMONS_STATUSES)[number];
+/** The answers the person called can give. */
+export const SUMMONS_ANSWERS = ['on_my_way', 'cant_now'] as const satisfies readonly SummonsStatus[];
+export type SummonsAnswer = (typeof SUMMONS_ANSWERS)[number];
+/** A status as the API shows it: a pending summons past its time is 'expired'. */
+export const SUMMONS_VIEW_STATUSES = [...SUMMONS_STATUSES, 'expired'] as const;
+export type SummonsViewStatus = (typeof SUMMONS_VIEW_STATUSES)[number];
+/** A pending summons older than this (2 hours) counts as expired. */
+export const SUMMONS_EXPIRY_MS = 2 * 60 * 60 * 1000;
+
+/** In-app notifications (the bell): a new message (one per conversation, updated), a summons, a summons answered. */
+export const NOTIFICATION_KINDS = ['message', 'summon', 'summon_answer'] as const;
+export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];

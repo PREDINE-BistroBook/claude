@@ -111,12 +111,18 @@ let hashed: Promise<string> | null = null;
  *   const custom = await t.as({ permissions: ['students.read'] });
  *   const res = await admin.post('/api/students', { firstName: 'A', lastName: 'B' });
  */
-export async function makeTestContext(opts: { config?: Partial<AppConfig>; files?: FileStore; clientIp?: AppDeps['clientIp'] } = {}) {
+export async function makeTestContext(
+  opts: { config?: Partial<AppConfig>; files?: FileStore; clientIp?: AppDeps['clientIp']; outboundFetch?: typeof fetch } = {},
+) {
   const config: AppConfig = testConfig(opts.config);
   const db: DB = testDb();
   // Files go into the database itself, as on Cloudflare without R2 (lib/fileStore.ts).
   const files = opts.files ?? sqliteFileStore(db);
-  const app = createApp({ db, config, files, clientIp: opts.clientIp });
+  // Background work (push notifications) is collected so a test can wait for it: await t.settle().
+  const background: Promise<unknown>[] = [];
+  // Outbound calls never leave the test: a fake unless the test passes its own.
+  const outboundFetch: typeof fetch = opts.outboundFetch ?? (async () => new Response(null, { status: 201 }));
+  const app = createApp({ db, config, files, clientIp: opts.clientIp, waitUntil: (task) => void background.push(task), outboundFetch });
   hashed ??= hashPassword(PASSWORD);
   let n = 0;
 
@@ -195,6 +201,10 @@ export async function makeTestContext(opts: { config?: Partial<AppConfig>; files
     login,
     as,
     password: PASSWORD,
+    /** Wait for the background work queued so far (push notifications sent after a response). */
+    settle: async () => {
+      while (background.length) await Promise.allSettled(background.splice(0));
+    },
     cleanup: () => {},
   };
 }
@@ -211,3 +221,71 @@ export async function uploadPng(client: Client): Promise<string> {
   if (res.status !== 201) throw new Error(`upload failed: ${res.status} ${JSON.stringify(res.body)}`);
   return res.body.id as string;
 }
+
+/** Upload any bytes as a file (POST /api/files); returns the whole response. */
+export async function uploadBytes(client: Client, bytes: Uint8Array | string, name: string, type = 'application/octet-stream') {
+  const form = new FormData();
+  form.append('file', new Blob([typeof bytes === 'string' ? bytes : new Uint8Array(bytes)], { type }), name);
+  return client.post('/api/files', form);
+}
+
+/** A small valid PDF (one empty page). */
+export const PDF_BYTES = new TextEncoder().encode(
+  '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n' +
+    '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n',
+);
+
+/**
+ * A ZIP (stored, no compression) holding these files — enough for the
+ * Office-file check, which reads the names in the central directory.
+ */
+export function makeZip(entries: Record<string, string>): Uint8Array {
+  const enc = new TextEncoder();
+  const locals: Uint8Array[] = [];
+  const centrals: Uint8Array[] = [];
+  let offset = 0;
+  for (const [name, text] of Object.entries(entries)) {
+    const nameBytes = enc.encode(name);
+    const data = enc.encode(text);
+    const local = new Uint8Array(30 + nameBytes.length + data.length);
+    const lv = new DataView(local.buffer);
+    lv.setUint32(0, 0x04034b50, true);
+    lv.setUint16(4, 20, true);
+    lv.setUint32(18, data.length, true);
+    lv.setUint32(22, data.length, true);
+    lv.setUint16(26, nameBytes.length, true);
+    local.set(nameBytes, 30);
+    local.set(data, 30 + nameBytes.length);
+    const central = new Uint8Array(46 + nameBytes.length);
+    const cv = new DataView(central.buffer);
+    cv.setUint32(0, 0x02014b50, true);
+    cv.setUint16(4, 20, true);
+    cv.setUint16(6, 20, true);
+    cv.setUint32(20, data.length, true);
+    cv.setUint32(24, data.length, true);
+    cv.setUint16(28, nameBytes.length, true);
+    cv.setUint32(42, offset, true);
+    central.set(nameBytes, 46);
+    locals.push(local);
+    centrals.push(central);
+    offset += local.length;
+  }
+  const cdSize = centrals.reduce((n, c) => n + c.length, 0);
+  const end = new Uint8Array(22);
+  const ev = new DataView(end.buffer);
+  ev.setUint32(0, 0x06054b50, true);
+  ev.setUint16(8, centrals.length, true);
+  ev.setUint16(10, centrals.length, true);
+  ev.setUint32(12, cdSize, true);
+  ev.setUint32(16, offset, true);
+  const out = new Uint8Array(offset + cdSize + 22);
+  let at = 0;
+  for (const part of [...locals, ...centrals, end]) {
+    out.set(part, at);
+    at += part.length;
+  }
+  return out;
+}
+
+/** A minimal Word file (.docx) for upload tests. */
+export const DOCX_BYTES = makeZip({ '[Content_Types].xml': '<Types/>', '_rels/.rels': '<Relationships/>', 'word/document.xml': '<w:document/>' });

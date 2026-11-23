@@ -16,4 +16,8 @@ export interface Env {
   SESSION_DAYS?: string;
   /** "false" to send the session cookie without Secure (never needed on Cloudflare, which always serves HTTPS). */
   COOKIE_SECURE?: string;
+  /** Web Push: the VAPID public key (base64url; a var, added by the operator at deploy — `npm run vapid-keys`). Push is off without it. */
+  VAPID_PUBLIC_KEY?: string;
+  /** Secret: the VAPID private key (base64url) that goes with VAPID_PUBLIC_KEY. */
+  VAPID_PRIVATE_KEY?: string;
 }

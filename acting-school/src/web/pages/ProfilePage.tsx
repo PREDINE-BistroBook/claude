@@ -1,21 +1,26 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { LOCALES, type Locale } from '@shared/enums';
 import { changePasswordInput, profileInput } from '@shared/schemas/auth';
 import { Crown } from 'lucide-react';
-import { Avatar, Button, Card, Field, FormError, FormGrid, PageHeader, Select, TextField, useToast } from '../components/ui';
+import type { MeResponse } from '@shared/schemas/auth';
+import { Avatar, Button, Card, Field, FormError, FormGrid, PageHeader, PhotoInput, Select, TextField, useToast } from '../components/ui';
 import { PermissionSummary } from '../features/positions/components/PermissionList';
 import { PositionChips } from '../features/staff/components/bits';
+import { teamErrorKey, teamKeys } from '../features/team/api';
+import { PushCard } from '../features/team/components/PushCard';
 import { setLanguage } from '../i18n';
 import { api } from '../lib/api';
+import { discardUpload } from '../lib/files';
 import { useAuth } from '../lib/auth';
 import { useForm } from '../lib/forms';
 import { PasswordInput } from './PasswordInput';
 
 export default function ProfilePage() {
-  const { t } = useTranslation(['common', 'positions', 'staff']);
+  const { t } = useTranslation(['common', 'positions', 'staff', 'team']);
   const { user, refresh } = useAuth();
   const toast = useToast();
+  const qc = useQueryClient();
   const details = useForm({ name: user?.name ?? '', phone: user?.phone ?? '', locale: (user?.locale ?? 'en') as Locale });
   const pw = useForm({ currentPassword: '', newPassword: '' });
 
@@ -38,15 +43,34 @@ export default function ProfilePage() {
     onError: pw.setServerError,
   });
 
+  // Your own photo: saved as soon as it's chosen (PUT /api/auth/photo).
+  const savePhoto = useMutation({
+    mutationFn: (fileId: string | null) => api.put<MeResponse>('/auth/photo', { fileId }),
+    onSuccess: async (_res, fileId) => {
+      await Promise.all([refresh(), qc.invalidateQueries({ queryKey: teamKeys.team })]);
+      toast.success(t(fileId ? 'team:photo.saved' : 'team:photo.removed'));
+    },
+    onError: (err, fileId) => {
+      discardUpload(fileId);
+      toast.error(t(teamErrorKey(err)));
+    },
+  });
+
   if (!user) return null;
 
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader
         title={t('profile.title')}
-        leading={<Avatar name={user.name} size="lg" />}
+        leading={<Avatar name={user.name} fileId={user.photoFileId} size="lg" />}
       />
       <div className="grid gap-5">
+        <Card title={t('team:photo.title')} description={t('team:photo.description')}>
+          <PhotoInput value={user.photoFileId} name={user.name} onChange={(id) => savePhoto.mutate(id)} busy={savePhoto.isPending} />
+        </Card>
+
+        <PushCard />
+
         <Card title={t('profile.whatYouCanDo')} description={user.isOwner ? undefined : t('profile.whatYouCanDoHint')}>
           <div className="mb-4">
             <h3 className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">{t('profile.yourPositions')}</h3>
