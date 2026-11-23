@@ -1,6 +1,6 @@
 import clsx from 'clsx';
-import { Ellipsis, Languages, LogOut, UserRound, WifiOff, X } from 'lucide-react';
-import { Suspense, useEffect, useState } from 'react';
+import { Ellipsis, House, Languages, LogOut, UserRound, WifiOff, X } from 'lucide-react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, NavLink, Outlet, useLocation } from 'react-router';
 import { Avatar } from '../components/ui/Avatar';
@@ -11,7 +11,9 @@ import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useOnline, useSchoolName } from '../lib/hooks';
 import { usePositionNames } from '../lib/positions';
-import { NAV_ITEMS, mobileTabs, navItemOpen, type NavItem } from './nav';
+import { adminNavItems, mobileTabs, navItemActive, sectionNavItems, type NavItem } from './nav';
+import { SectionTabs } from './SectionTabs';
+import { currentSection, rememberRoute, rememberSection, rememberedSection, sectionByKey, sectionForPath, visibleSections } from './sections';
 
 function useLanguageToggle() {
   const { user, refresh } = useAuth();
@@ -25,19 +27,44 @@ function useLanguageToggle() {
   };
 }
 
-function isActive(pathname: string, to: string) {
-  return to === '/' ? pathname === '/' : pathname === to || pathname.startsWith(`${to}/`);
-}
+type MenuItem = Pick<NavItem, 'to' | 'label' | 'icon' | 'end'>;
 
+/** The plain home ("/") for someone who sees no section yet. */
+const START_ITEM: MenuItem = { to: '/', label: 'home', icon: House, end: true };
+const PROFILE_ITEM: MenuItem = { to: '/profile', label: 'profile', icon: UserRound };
+
+/**
+ * The signed-in frame. The app has three sections (School, Casting, Website,
+ * layout/sections.ts): the tabs at the top switch between them (only for
+ * people who see two or more), and the menus — sidebar on desktop, bottom bar
+ * + "More" on phones — show the current section's pages plus Administration.
+ * The current section's colour marks the line at the top, the active tab and
+ * the active menu entry (data-section → bg-section / text-section).
+ */
 export function AppShell() {
   const { t } = useTranslation();
   const { user, can, signOut } = useAuth();
   const school = useSchoolName();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const online = useOnline();
   const toggleLanguage = useLanguageToggle();
   const positionNames = usePositionNames();
   const [moreOpen, setMoreOpen] = useState(false);
+  const userId = user?.id ?? null;
+
+  const visible = useMemo(() => visibleSections(can), [can]);
+  const section = currentSection(pathname, visible, rememberedSection());
+  const sectionLabel = section ? t(sectionByKey(section).labelKey) : null;
+  const homeHref = section ? sectionByKey(section).home : '/';
+
+  // Remember the section, and the page within it, so "/" and the section's tab bring the person back.
+  useEffect(() => {
+    const own = sectionForPath(pathname);
+    if (own && visible.some((s) => s.key === own)) {
+      rememberSection(own);
+      rememberRoute(own, pathname + search, userId);
+    }
+  }, [pathname, search, visible, userId]);
 
   useEffect(() => {
     setMoreOpen(false);
@@ -47,63 +74,78 @@ export function AppShell() {
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [pathname]);
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMoreOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [moreOpen]);
 
-  const items = NAV_ITEMS.filter((i) => navItemOpen(i, can));
-  const tabs = (user ? mobileTabs(can) : []).map((to) => items.find((i) => i.to === to)).filter(Boolean) as NavItem[];
+  const sectionItems = section ? sectionNavItems(section, can) : [];
+  const adminItems = adminNavItems(can);
+  const tabPaths = user ? mobileTabs(section, can) : [];
+  const tabs = tabPaths.map((to) => (to === '/' ? START_ITEM : sectionItems.find((i) => i.to === to))).filter(Boolean) as MenuItem[];
+  const moreSection = sectionItems.filter((i) => !tabPaths.includes(i.to));
+  const moreActive = [...moreSection, ...adminItems, PROFILE_ITEM].some((i) => navItemActive(i, pathname));
   const myPositions = user ? positionNames(user.positions) : '';
-  const moreItems = items.filter((i) => !tabs.includes(i));
-  const groups: { id: NavItem['group']; label?: string }[] = [
-    { id: 'main' },
-    { id: 'school', label: t('nav.school') },
-    { id: 'agency', label: t('nav.agency') },
-    { id: 'admin', label: t('nav.admin') },
+  const showTabs = visible.length > 1;
+
+  const sidebarGroups: { id: string; label: string | null; items: MenuItem[] }[] = [
+    { id: 'section', label: sectionLabel, items: sectionItems.length ? sectionItems : section ? [] : [START_ITEM] },
+    { id: 'admin', label: t('nav.admin'), items: adminItems },
   ];
 
   return (
-    <div className="min-h-dvh bg-canvas">
+    <div className="min-h-dvh bg-canvas" data-section={section ?? undefined}>
+      {/* Thin line in the section's colour across the top (desktop; phones have it in the header). */}
+      <div aria-hidden className="fixed inset-x-0 top-0 z-40 hidden h-1 bg-section lg:block" />
+
       {/* ── Desktop sidebar ─────────────────────────────────────────── */}
-      <aside className="fixed inset-y-0 start-0 z-30 hidden w-64 flex-col border-e border-line bg-surface lg:flex">
-        <Link to="/" className="flex items-center gap-2.5 px-5 py-5">
+      <aside className="fixed inset-y-0 start-0 z-30 hidden w-64 flex-col border-e border-line bg-surface pt-1 lg:flex">
+        <Link to={homeHref} className="flex items-center gap-2.5 px-5 py-5">
           <BrandMark className="size-9" />
-          <span className="min-w-0 truncate text-[15px] font-semibold leading-tight">{school}</span>
+          <span className="min-w-0 leading-tight">
+            <span className="block truncate text-[15px] font-semibold">{school}</span>
+            {sectionLabel && <span className="block truncate text-sm font-semibold text-section">{sectionLabel}</span>}
+          </span>
         </Link>
         <nav aria-label={t('nav.mainMenu')} className="flex-1 overflow-y-auto px-3 pb-4">
-          {groups.map((g) => {
-            const groupItems = items.filter((i) => i.group === g.id);
-            if (!groupItems.length) return null;
-            return (
-              <div key={g.id} className="mt-4 first:mt-0">
-                {g.label && <div className="px-3 pb-1.5 text-xs font-medium uppercase tracking-wider text-muted">{g.label}</div>}
+          {sidebarGroups.map((g) =>
+            g.items.length ? (
+              <div key={g.id} className="mt-5 first:mt-0">
+                {g.label && <div className="px-3 pb-1.5 text-xs font-semibold uppercase tracking-wider text-muted">{g.label}</div>}
                 <ul className="space-y-0.5">
-                  {groupItems.map((item) => (
+                  {g.items.map((item) => (
                     <li key={item.to}>
                       <NavLink
                         to={item.to}
-                        end={item.to === '/'}
+                        end={item.end}
                         className={({ isActive: a }) =>
                           clsx(
-                            'flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors',
-                            a ? 'bg-accent-soft text-accent' : 'text-ink/80 hover:bg-surface-2 hover:text-ink',
+                            'flex min-h-11 items-center gap-3 rounded-xl px-3 py-2 text-[15px] font-medium transition-colors',
+                            a ? 'bg-section-soft font-semibold text-section' : 'text-ink/85 hover:bg-surface-2 hover:text-ink',
                           )
                         }
                       >
-                        <item.icon className="size-[18px] shrink-0" aria-hidden />
+                        <item.icon className="size-5 shrink-0" aria-hidden />
                         {t(`nav.${item.label}`)}
                       </NavLink>
                     </li>
                   ))}
                 </ul>
               </div>
-            );
-          })}
+            ) : null,
+          )}
         </nav>
         <div className="border-t border-line p-3">
           <button
             type="button"
             onClick={toggleLanguage}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-ink/80 hover:bg-surface-2"
+            className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-ink/80 hover:bg-surface-2"
           >
-            <Languages className="size-[18px]" aria-hidden />
+            <Languages className="size-5" aria-hidden />
             <span lang={currentLanguage() === 'ar' ? 'en' : 'ar'}>{t('language.switchTo')}</span>
           </button>
           <NavLink
@@ -119,41 +161,63 @@ export function AppShell() {
           <button
             type="button"
             onClick={() => void signOut()}
-            className="mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-muted hover:bg-surface-2 hover:text-ink"
+            className="mt-1 flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-muted hover:bg-surface-2 hover:text-ink"
           >
-            <LogOut className="size-[18px] rtl:-scale-x-100" aria-hidden />
+            <LogOut className="size-5 rtl:-scale-x-100" aria-hidden />
             {t('nav.signOut')}
           </button>
         </div>
       </aside>
 
-      {/* ── Phone top bar ───────────────────────────────────────────── */}
-      <header className="pt-safe sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur lg:hidden">
+      {/* ── Phone top bar: school name + the section you're in ──────── */}
+      <header className="pt-safe sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur lg:hidden">
+        <div aria-hidden className="h-1 bg-section" />
         <div className="flex h-14 items-center justify-between gap-3 px-4">
-          <Link to="/" className="flex min-w-0 items-center gap-2">
-            <BrandMark className="size-8" />
-            <span className="truncate font-semibold">{school}</span>
+          <Link
+            to={homeHref}
+            className="flex min-w-0 items-center gap-2.5"
+            aria-label={sectionLabel ? `${school} · ${t('sections.youAreIn', { section: sectionLabel })}` : undefined}
+          >
+            <BrandMark className="size-9 shrink-0" />
+            <span className="min-w-0 leading-tight">
+              <span className="block truncate font-semibold">{school}</span>
+              {sectionLabel && <span className="block truncate text-sm font-semibold text-section">{sectionLabel}</span>}
+            </span>
           </Link>
           <button
             type="button"
             onClick={toggleLanguage}
-            className="shrink-0 rounded-lg px-2.5 py-1.5 text-sm font-medium text-muted hover:bg-surface-2 hover:text-ink"
-            lang={currentLanguage() === 'ar' ? 'en' : 'ar'}
+            className="inline-flex min-h-12 shrink-0 items-center gap-1.5 rounded-xl px-3 text-sm font-medium text-ink/80 hover:bg-surface-2 hover:text-ink"
           >
-            {t('language.switchTo')}
+            <Languages className="size-[18px]" aria-hidden />
+            <span lang={currentLanguage() === 'ar' ? 'en' : 'ar'}>{t('language.switchTo')}</span>
           </button>
         </div>
       </header>
 
+      {/* ── Section tabs (phones: under the header; desktop: top of the content) ── */}
+      {showTabs && (
+        <>
+          <div className="px-4 pt-3 sm:px-6 lg:hidden">
+            <SectionTabs sections={visible} current={section} pathname={pathname} userId={userId} />
+          </div>
+          <div className="hidden pt-1 lg:ms-64 lg:block">
+            <div className="mx-auto max-w-6xl px-8 pt-6">
+              <SectionTabs sections={visible} current={section} pathname={pathname} userId={userId} className="max-w-2xl" />
+            </div>
+          </div>
+        </>
+      )}
+
       {!online && (
-        <div className="flex items-center justify-center gap-2 bg-warning-soft px-4 py-2 text-sm text-warning lg:ms-64">
+        <div className="mt-3 flex items-center justify-center gap-2 bg-warning-soft px-4 py-2 text-sm text-warning lg:ms-64">
           <WifiOff className="size-4" aria-hidden />
           {t('pwa.offline')}
         </div>
       )}
 
       {/* ── Page ────────────────────────────────────────────────────── */}
-      <main className="lg:ms-64">
+      <main className={clsx('lg:ms-64', !showTabs && 'lg:pt-1')}>
         <div className="mx-auto max-w-6xl px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-5 sm:px-6 sm:pt-6 lg:px-8 lg:pb-12 lg:pt-8">
           <Suspense fallback={<PageLoader />}>
             <Outlet />
@@ -161,46 +225,55 @@ export function AppShell() {
         </div>
       </main>
 
-      {/* ── Phone bottom tabs ───────────────────────────────────────── */}
+      {/* ── Phone bottom bar: the section's Home, up to three of its pages, More ── */}
       <nav aria-label={t('nav.mainMenu')} className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 backdrop-blur lg:hidden">
-        <ul className="mx-auto flex h-16 max-w-lg items-stretch">
+        {/* Icons on one line and labels under them: a two-line label ("Workshops on site") doesn't push its icon up. */}
+        <ul className="mx-auto flex h-[4.25rem] max-w-lg items-stretch">
           {tabs.map((item) => {
-            const active = isActive(pathname, item.to);
+            const active = navItemActive(item, pathname);
             return (
-              <li key={item.to} className="flex-1">
+              <li key={item.to} className="min-w-0 flex-1">
                 <Link
                   to={item.to}
                   aria-current={active ? 'page' : undefined}
-                  className={clsx('flex h-full flex-col items-center justify-center gap-1 text-[11px] font-medium', active ? 'text-accent' : 'text-muted')}
+                  className={clsx(
+                    'flex h-full flex-col items-center justify-start gap-0.5 px-0.5 pt-2 text-center text-xs font-medium leading-tight',
+                    active ? 'font-semibold text-section' : 'text-muted',
+                  )}
                 >
-                  <item.icon className="size-[22px]" aria-hidden strokeWidth={active ? 2.2 : 1.8} />
-                  {t(`nav.${item.label}`)}
+                  <span className={clsx('flex h-7 w-12 items-center justify-center rounded-full', active && 'bg-section-soft')}>
+                    <item.icon className="size-[22px]" aria-hidden strokeWidth={active ? 2.2 : 1.8} />
+                  </span>
+                  <span className="line-clamp-2 max-w-full">{t(`nav.${item.label}`)}</span>
                 </Link>
               </li>
             );
           })}
-          <li className="flex-1">
+          <li className="min-w-0 flex-1">
             <button
               type="button"
               onClick={() => setMoreOpen(true)}
               aria-expanded={moreOpen}
+              aria-haspopup="dialog"
               className={clsx(
-                'flex h-full w-full flex-col items-center justify-center gap-1 text-[11px] font-medium',
-                moreItems.some((i) => isActive(pathname, i.to)) || pathname === '/profile' ? 'text-accent' : 'text-muted',
+                'flex h-full w-full flex-col items-center justify-start gap-0.5 pt-2 text-xs font-medium leading-tight',
+                moreActive ? 'font-semibold text-section' : 'text-muted',
               )}
             >
-              <Ellipsis className="size-[22px]" aria-hidden />
+              <span className={clsx('flex h-7 w-12 items-center justify-center rounded-full', moreActive && 'bg-section-soft')}>
+                <Ellipsis className="size-[22px]" aria-hidden />
+              </span>
               {t('nav.more')}
             </button>
           </li>
         </ul>
       </nav>
 
-      {/* ── Phone "More" sheet ──────────────────────────────────────── */}
+      {/* ── Phone "More" sheet: the rest of the section, Administration, profile ── */}
       {moreOpen && (
         <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label={t('nav.more')}>
           <button type="button" className="absolute inset-0 bg-black/40" aria-label={t('actions.close')} onClick={() => setMoreOpen(false)} />
-          <div className="pb-safe absolute inset-x-0 bottom-0 rounded-t-3xl border-t border-line bg-surface shadow-2xl">
+          <div className="pb-safe absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto rounded-t-3xl border-t border-line bg-surface shadow-2xl">
             <div className="flex items-center justify-between px-5 pb-2 pt-4">
               <div className="flex min-w-0 items-center gap-3">
                 <Avatar name={user?.name ?? ''} size="md" />
@@ -209,33 +282,37 @@ export function AppShell() {
                   <div className="truncate text-sm text-muted">{myPositions}</div>
                 </div>
               </div>
-              <button type="button" onClick={() => setMoreOpen(false)} className="rounded-lg p-2 text-muted hover:bg-surface-2" aria-label={t('actions.close')}>
-                <X className="size-5" aria-hidden />
+              <button
+                type="button"
+                onClick={() => setMoreOpen(false)}
+                className="inline-flex size-12 shrink-0 items-center justify-center rounded-xl text-muted hover:bg-surface-2"
+                aria-label={t('actions.close')}
+              >
+                <X className="size-6" aria-hidden />
               </button>
             </div>
-            <ul className="grid grid-cols-3 gap-2 p-4">
-              {[...moreItems, { to: '/profile', label: 'profile', icon: UserRound, group: 'admin' as const }].map((item) => (
-                <li key={item.to}>
-                  <Link
-                    to={item.to}
-                    className={clsx(
-                      'flex flex-col items-center gap-2 rounded-2xl px-2 py-4 text-center text-sm font-medium',
-                      isActive(pathname, item.to) ? 'bg-accent-soft text-accent' : 'bg-surface-2 text-ink',
-                    )}
-                  >
-                    <item.icon className="size-6" aria-hidden />
-                    {t(`nav.${item.label}`)}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-            <div className="border-t border-line px-4 py-3">
+            {moreSection.length > 0 && sectionLabel && (
+              <MoreGroup label={t('nav.moreSection', { section: sectionLabel })} items={moreSection} pathname={pathname} />
+            )}
+            {adminItems.length > 0 && <MoreGroup label={t('nav.admin')} items={adminItems} pathname={pathname} />}
+            <div className="mt-2 grid grid-cols-2 gap-2 border-t border-line px-4 py-3">
+              <Link
+                to={PROFILE_ITEM.to}
+                aria-current={pathname === PROFILE_ITEM.to ? 'page' : undefined}
+                className={clsx(
+                  'flex min-h-12 items-center justify-center gap-2 rounded-xl px-3 text-sm font-medium',
+                  pathname === PROFILE_ITEM.to ? 'bg-section-soft text-section' : 'bg-surface-2 text-ink',
+                )}
+              >
+                <UserRound className="size-5 shrink-0" aria-hidden />
+                {t('nav.profile')}
+              </Link>
               <button
                 type="button"
                 onClick={() => void signOut()}
-                className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-medium text-danger hover:bg-danger-soft"
+                className="flex min-h-12 items-center justify-center gap-2 rounded-xl px-3 text-sm font-medium text-danger hover:bg-danger-soft"
               >
-                <LogOut className="size-4 rtl:-scale-x-100" aria-hidden />
+                <LogOut className="size-5 shrink-0 rtl:-scale-x-100" aria-hidden />
                 {t('nav.signOut')}
               </button>
             </div>
@@ -243,5 +320,34 @@ export function AppShell() {
         </div>
       )}
     </div>
+  );
+}
+
+function MoreGroup({ label, items, pathname }: { label: string; items: MenuItem[]; pathname: string }) {
+  const { t } = useTranslation();
+  return (
+    <section className="px-4 pb-2 pt-3">
+      <h2 className="px-1 pb-2 text-xs font-semibold uppercase tracking-wider text-muted">{label}</h2>
+      <ul className="grid grid-cols-3 gap-2">
+        {items.map((item) => {
+          const active = navItemActive(item, pathname);
+          return (
+            <li key={item.to}>
+              <Link
+                to={item.to}
+                aria-current={active ? 'page' : undefined}
+                className={clsx(
+                  'flex min-h-20 flex-col items-center justify-center gap-2 rounded-2xl px-2 py-3 text-center text-sm font-medium leading-tight',
+                  active ? 'bg-section-soft text-section' : 'bg-surface-2 text-ink',
+                )}
+              >
+                <item.icon className="size-6 shrink-0" aria-hidden />
+                {t(`nav.${item.label}`)}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }

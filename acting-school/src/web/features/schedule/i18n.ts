@@ -1,7 +1,13 @@
 import type { Namespace, TranslationOf } from '@web/i18n/types';
 
 const en = {
-  title: 'Schedule',
+  /** Page title by what the schedule shows: one kind, or several (the School schedule). */
+  titles: {
+    class: 'Workshop schedule',
+    audition: 'Audition schedule',
+    interview: 'Interview schedule',
+    mixed: 'Schedule',
+  },
   subtitles: {
     classes: 'Workshops, week by week.',
     auditions: 'Auditions, week by week.',
@@ -12,8 +18,12 @@ const en = {
     classes_auditions_interviews: 'Workshops, auditions and admissions interviews, week by week.',
   },
   nothingToShow: 'No schedule for your positions',
-  nothingToShowHint:
-    'The schedule shows workshops, auditions and admissions interviews, and your positions include none of them. Ask whoever manages staff accounts if you need them.',
+  /** By the kinds this schedule shows, sorted and joined with "_". */
+  nothingToShowHint: {
+    class_interview: 'This schedule shows workshops and admissions interviews, and your positions include neither. Ask whoever manages staff accounts if you need them.',
+    audition: 'This schedule shows auditions, and your positions don’t include castings. Ask whoever manages staff accounts if you need them.',
+    any: 'Your positions don’t include anything this schedule shows. Ask whoever manages staff accounts if you need it.',
+  },
   previousWeek: 'Previous week',
   nextWeek: 'Next week',
   goToToday: 'Go to today',
@@ -53,7 +63,12 @@ const en = {
 };
 
 const ar: TranslationOf<typeof en> = {
-  title: 'الجدول',
+  titles: {
+    class: 'جدول الورش',
+    audition: 'جدول الاختبارات',
+    interview: 'جدول المقابلات',
+    mixed: 'الجدول',
+  },
   subtitles: {
     classes: 'الورش أسبوعًا بأسبوع.',
     auditions: 'الاختبارات أسبوعًا بأسبوع.',
@@ -64,7 +79,11 @@ const ar: TranslationOf<typeof en> = {
     classes_auditions_interviews: 'الورش والاختبارات ومقابلات القبول أسبوعًا بأسبوع.',
   },
   nothingToShow: 'لا يوجد جدول لمناصبك',
-  nothingToShowHint: 'يعرض الجدول الورش والاختبارات ومقابلات القبول، ومناصبك لا تشمل أيًّا منها. اطلب ذلك ممن يدير حسابات الفريق إن احتجت إليها.',
+  nothingToShowHint: {
+    class_interview: 'يعرض هذا الجدول الورش ومقابلات القبول، ومناصبك لا تشمل أيًّا منهما. اطلب ذلك ممن يدير حسابات الفريق إن احتجت إليه.',
+    audition: 'يعرض هذا الجدول الاختبارات، ومناصبك لا تشمل تجارب الأداء. اطلب ذلك ممن يدير حسابات الفريق إن احتجت إليه.',
+    any: 'مناصبك لا تشمل أي شيء يعرضه هذا الجدول. اطلب ذلك ممن يدير حسابات الفريق إن احتجت إليه.',
+  },
   previousWeek: 'الأسبوع السابق',
   nextWeek: 'الأسبوع التالي',
   goToToday: 'الانتقال إلى اليوم',

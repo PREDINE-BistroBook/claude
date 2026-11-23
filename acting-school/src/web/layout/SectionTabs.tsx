@@ -40,7 +40,7 @@ export function SectionTabs({
                 // "page" when this page is in the section; on admin pages and the profile the section stays highlighted as the one you're in.
                 aria-current={active ? (inSection === s.key ? 'page' : 'true') : undefined}
                 className={clsx(
-                  'flex min-h-12 items-center justify-center gap-2 rounded-xl px-2 text-[15px] font-semibold transition-colors',
+                  'flex min-h-12 items-center justify-center gap-2 rounded-xl px-2 text-[15px] font-semibold',
                   active ? 'bg-section text-section-ink shadow-sm' : 'text-ink hover:bg-surface',
                 )}
               >

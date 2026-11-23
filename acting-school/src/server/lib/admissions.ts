@@ -1,6 +1,8 @@
 /**
  * Admissions read models and helpers shared by the leads router, the schedule
- * and the dashboard. Every loader runs a fixed number of queries per request.
+ * and the dashboard, plus lead creation (createLead: the one path every new
+ * lead takes — POST /api/leads and the website's enquiry form,
+ * createWebsiteLead). Every loader runs a fixed number of queries per request.
  */
 import { and, asc, desc, eq, gte, inArray, lte, ne, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import { splitDateTime, timeToMinutes } from '../../shared/dates';
@@ -9,9 +11,14 @@ import { internationalPhone } from '../../shared/phone';
 import type { DuplicateMatch, Interview, LeadActivity, LeadDetail, LeadListItem } from '../../shared/schemas/admissions';
 import type { SessionUser } from '../../shared/schemas/auth';
 import type { InterviewEvent } from '../../shared/schemas/schedule';
+import type { SiteApplyInput, SiteExperienceLevel, SiteHeardFrom } from '../../shared/schemas/site';
 import type { DB } from '../db/database';
 import { courses, interviews, leadActivities, leads, students, users } from '../db/schema';
 import { maySeeStudent, type Conn } from './access';
+import { notFound } from './errors';
+import { withPhoneDigits } from './phone';
+import { getSettings } from './settings';
+import { findPublicWorkshop } from './siteContent';
 import { inChunks } from './sqlLimits';
 
 export type LeadRow = typeof leads.$inferSelect;
@@ -335,5 +342,105 @@ export function loadInterviewEvents(
       interviewerName: r.interviewerName,
       status: r.status,
     };
+  });
+}
+
+// ── Creating leads ──────────────────────────────────────────────────────────
+
+/** A new lead's columns (the caller has worked out status, assignee, follow-up…). */
+export type NewLead = Omit<typeof leads.$inferInsert, 'id' | 'phoneDigits' | 'createdAt' | 'updatedAt'>;
+
+/**
+ * Insert a lead — the one path every new lead takes (POST /api/leads, the
+ * website's enquiry form): phone_digits kept in step with the phone, source
+ * 'other' and status 'new' unless given. Returns the new id. Inside a
+ * transaction for multi-step writes.
+ */
+export function createLead(db: Pick<DB, 'insert'>, values: NewLead): number {
+  return db
+    .insert(leads)
+    .values(withPhoneDigits({ ...values, source: values.source ?? 'other', status: values.status ?? 'new' }))
+    .returning({ id: leads.id })
+    .get().id;
+}
+
+/**
+ * The most recently updated open lead with this phone (compared as
+ * international digits, so "010…" matches "+20 10…"), or null. SQL narrows by
+ * the last 7 digits of the stored phone_digits; the exact match runs here.
+ */
+export function findOpenLeadByPhone(db: Pick<DB, 'select'>, phone: string, countryCode: string): { id: number } | null {
+  const intl = internationalPhone(phone, countryCode);
+  if (!intl) return null;
+  const match = db
+    .select({ id: leads.id, phone: leads.phone })
+    .from(leads)
+    .where(and(leadIsOpen, sql`${leads.phoneDigits} like ${`%${intl.slice(-7)}`}`))
+    .orderBy(desc(leads.updatedAt), desc(leads.id))
+    .all()
+    .find((l) => internationalPhone(l.phone, countryCode) === intl);
+  return match ? { id: match.id } : null;
+}
+
+/** How the website form's answers read in a lead (staff-facing text). */
+export const SITE_EXPERIENCE_TEXT: Record<SiteExperienceLevel, string> = { none: 'No acting experience', some: 'Some acting experience', a_lot: 'A lot of acting experience' };
+export const SITE_HEARD_FROM_TEXT: Record<SiteHeardFrom, string> = { instagram: 'Instagram', friend: 'A friend', other: 'Other' };
+
+/** sourceDetail of a website enquiry without a workshop. */
+export const WEBSITE_GENERAL_ENQUIRY = 'general';
+
+/**
+ * The website's enquiry form → a lead (source 'website', status 'new', nobody
+ * assigned, no creator), with a note on its timeline saying where it came from.
+ * `courseId`: the workshop applied for — it must appear on the site and accept
+ * applications (else 404); null for the general form ("Not sure which
+ * workshop? Ask us"). `today`: the school's (schoolToday(c)).
+ *
+ * If an open lead with the same phone already exists, no duplicate is made: a
+ * note "Applied again on the website: …" is added to that lead instead
+ * (`created: false`).
+ */
+export function createWebsiteLead(db: DB, input: SiteApplyInput, opts: { courseId: number | null; today: string }): { leadId: number; created: boolean } {
+  let detail = WEBSITE_GENERAL_ENQUIRY;
+  if (opts.courseId !== null) {
+    const workshop = findPublicWorkshop(db, opts.courseId, opts.today);
+    if (!workshop || !workshop.acceptingApplications) throw notFound('Workshop not found');
+    detail = workshop.title.en;
+  }
+  const countryCode = getSettings(db).defaultCountryCode;
+  const facts = [
+    `Experience: ${SITE_EXPERIENCE_TEXT[input.experience]}`,
+    `How they heard about us: ${SITE_HEARD_FROM_TEXT[input.heardFrom]}`,
+    input.minor ? `Under 18 — guardian: ${input.guardianName ?? '?'} (${input.guardianPhone ?? '?'}), consent given` : null,
+    `Sent from the ${input.locale === 'ar' ? 'Arabic' : 'English'} website`,
+  ].filter((l): l is string => !!l);
+
+  return db.transaction((tx) => {
+    const existing = findOpenLeadByPhone(tx, input.phone, countryCode);
+    if (existing) {
+      const body = [`Applied again on the website: ${detail}`, `${input.firstName} ${input.lastName}`, input.message, ...facts].filter(Boolean).join('\n');
+      tx.insert(leadActivities).values({ leadId: existing.id, type: 'note', body, meta: null, createdById: null }).run();
+      tx.update(leads).set({ updatedAt: Date.now() }).where(eq(leads.id, existing.id)).run();
+      return { leadId: existing.id, created: false };
+    }
+    const leadId = createLead(tx, {
+      firstName: input.firstName,
+      lastName: input.lastName,
+      phone: input.phone,
+      email: input.email,
+      dateOfBirth: input.dateOfBirth,
+      guardianName: input.guardianName,
+      guardianPhone: input.guardianPhone,
+      source: 'website',
+      sourceDetail: detail,
+      experience: SITE_EXPERIENCE_TEXT[input.experience],
+      preferredCourseId: opts.courseId,
+      status: 'new',
+      assignedToId: null,
+      createdById: null,
+      notes: [input.message, facts.join('\n')].filter(Boolean).join('\n\n'),
+    });
+    tx.insert(leadActivities).values({ leadId, type: 'note', body: `Applied on the website: ${detail}`, meta: null, createdById: null }).run();
+    return { leadId, created: true };
   });
 }

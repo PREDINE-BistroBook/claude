@@ -11,7 +11,7 @@ import { DayAgenda } from './components/DayAgenda';
 import { WeekGrid } from './components/WeekGrid';
 import { WeekStrip } from './components/WeekStrip';
 import { useCalendarFormat } from './format';
-import { filterEvents, groupByDate, parseDateParam, parseFilterParam, weekOf, type VisibleKinds } from './utils';
+import { eventsOfKinds, filterEvents, groupByDate, parseDateParam, parseFilterParam, visibleKinds, weekOf, type EventKind } from './utils';
 
 const KINDS = ['classes', 'auditions', 'interviews'] as const;
 
@@ -30,18 +30,25 @@ function StepButton({ icon: Icon, label, onClick }: { icon: LucideIcon; label: s
   );
 }
 
-export default function SchedulePage() {
+/**
+ * One week's schedule. Each section has its own (routes.tsx): School shows
+ * workshops and admissions interviews (/schedule), Casting shows auditions
+ * (/casting/schedule). Same API for both; each keeps its own `kinds`.
+ */
+export default function SchedulePage({ kinds: sectionKinds }: { kinds: readonly EventKind[] }) {
   const { t } = useTranslation(['schedule', 'common']);
   const { can } = useAuth();
   const f = useCalendarFormat();
   const [params, setParams] = useSearchParams();
   // The API adds class sessions only with courses.read, auditions only with castings.read and
-  // admissions interviews only with admissions.read.
-  const sees: VisibleKinds = { classes: can('courses.read'), auditions: can('castings.read'), interviews: can('admissions.read') };
+  // admissions interviews only with admissions.read; this schedule shows its own section's kinds of those.
+  const sees = visibleKinds(sectionKinds, can);
   const kinds = KINDS.filter((k) => sees[k]);
   const canSeeAnything = kinds.length > 0;
-  // The All / Classes / Auditions / Interviews switch only makes sense to someone who sees several kinds.
+  // The All / Workshops / Interviews switch only makes sense to someone who sees several kinds.
   const canFilter = kinds.length > 1;
+  const titleKey = sectionKinds.length === 1 ? sectionKinds[0]! : 'mixed';
+  const hintKey = [...sectionKinds].sort().join('_');
 
   const today = todayISO();
   const selected = parseDateParam(params.get('date')) ?? today;
@@ -72,7 +79,7 @@ export default function SchedulePage() {
 
   // Placeholder data is the previous week's: don't spread it over this week's days.
   const loadingWeek = schedule.isPlaceholderData;
-  const events = useMemo(() => filterEvents(schedule.data?.items ?? [], filter), [schedule.data, filter]);
+  const events = useMemo(() => filterEvents(eventsOfKinds(schedule.data?.items ?? [], sectionKinds), filter), [schedule.data, sectionKinds, filter]);
   const byDate = useMemo(() => groupByDate(events), [events]);
   const counts = useMemo(() => new Map([...byDate].map(([d, list]) => [d, list.length])), [byDate]);
 
@@ -89,7 +96,7 @@ export default function SchedulePage() {
       <EmptyState
         icon={CalendarOff}
         title={t('nothingToShow')}
-        description={t('nothingToShowHint')}
+        description={t(`nothingToShowHint.${hintKey}`, { defaultValue: t('nothingToShowHint.any') })}
         className="rounded-2xl border border-dashed border-line-strong"
       />
     );
@@ -112,7 +119,7 @@ export default function SchedulePage() {
 
   return (
     <div>
-      <PageHeader title={t('title')} subtitle={subtitle} />
+      <PageHeader title={t(`titles.${titleKey}`)} subtitle={subtitle} />
 
       {canSeeAnything && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

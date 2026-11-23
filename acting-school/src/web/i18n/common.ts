@@ -37,7 +37,7 @@ const en = {
     school: 'School',
     casting: 'Casting',
     website: 'Website',
-    /** Header: "<school name> · <section>", read out as one. */
+    /** Read out with the school name in the phone header. */
     youAreIn: 'You are in: {{section}}',
   },
   actions: {
@@ -183,6 +183,7 @@ const en = {
       declined: 'Declined',
       lost: 'Lost',
     },
+    castingApplicationStatus: { new: 'New', reviewing: 'Reviewing', accepted: 'Added to roster', declined: 'Declined' },
     leadLostReason: {
       no_response: 'No response',
       not_interested: 'Not interested',
@@ -449,6 +450,7 @@ const ar: TranslationOf<typeof en> = {
       declined: 'مرفوض',
       lost: 'مفقود',
     },
+    castingApplicationStatus: { new: 'جديد', reviewing: 'قيد المراجعة', accepted: 'أُضيف إلى قائمة الممثلين', declined: 'مرفوض' },
     leadLostReason: {
       no_response: 'لا يرد',
       not_interested: 'غير مهتم',

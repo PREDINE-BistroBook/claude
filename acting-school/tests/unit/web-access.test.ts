@@ -39,46 +39,43 @@ describe('schedule filter follows what the person can see', () => {
 });
 
 describe('navigation', () => {
-  const schedule = NAV_ITEMS.find((i) => i.to === '/schedule')!;
+  const schoolSchedule = NAV_ITEMS.find((i) => i.to === '/schedule')!;
+  const castingSchedule = NAV_ITEMS.find((i) => i.to === '/casting/schedule')!;
 
-  it('Schedule is offered only to people who can see classes, auditions or interviews', () => {
-    expect(navItemOpen(schedule, canWith([]))).toBe(false);
-    expect(navItemOpen(schedule, canWith(['staff.manage', 'students.read']))).toBe(false);
-    expect(navItemOpen(schedule, canWith(['courses.read']))).toBe(true);
-    expect(navItemOpen(schedule, canWith(builtIn('casting_team')))).toBe(true);
-    expect(navItemOpen(schedule, canWith(['admissions.read']))).toBe(true);
+  it('the School schedule is offered to people who can see classes or interviews; the Casting one to people who see castings', () => {
+    expect(schoolSchedule.section).toBe('school');
+    expect(navItemOpen(schoolSchedule, canWith([]))).toBe(false);
+    expect(navItemOpen(schoolSchedule, canWith(['staff.manage', 'students.read']))).toBe(false);
+    expect(navItemOpen(schoolSchedule, canWith(['courses.read']))).toBe(true);
+    expect(navItemOpen(schoolSchedule, canWith(['admissions.read']))).toBe(true);
+    // The casting team sees no classes or interviews, so no School schedule…
+    expect(navItemOpen(schoolSchedule, canWith(builtIn('casting_team')))).toBe(false);
+    // …but has the Casting one.
+    expect(castingSchedule.section).toBe('casting');
+    expect(navItemOpen(castingSchedule, canWith(builtIn('casting_team')))).toBe(true);
+    expect(navItemOpen(castingSchedule, canWith(builtIn('acting_coach')))).toBe(false);
   });
 
   it('Admissions is offered only with admissions.read (the director, not coaches or the agency)', () => {
     const admissions = NAV_ITEMS.find((i) => i.to === '/admissions')!;
-    expect(admissions.group).toBe('school');
+    expect(admissions.section).toBe('school');
     expect(navItemOpen(admissions, canWith(builtIn('executive_director')))).toBe(true);
     for (const key of ['acting_coach', 'casting_team', 'head_of_casting', 'video_editor', 'finance']) {
       expect(navItemOpen(admissions, canWith(builtIn(key)))).toBe(false);
     }
   });
 
-  it('the director’s phone tabs: Home, Admissions, Students, Schedule', () => {
-    expect(mobileTabs(canWith(builtIn('executive_director')))).toEqual(['/', '/admissions', '/students', '/schedule']);
-    // Owners hold everything and teach no classes of their own: same priority.
-    expect(mobileTabs(canWith(PERMISSIONS))).toEqual(['/', '/admissions', '/students', '/schedule']);
-  });
-
-  it('coaches keep their class-first tabs, even with admissions.read added', () => {
-    expect(mobileTabs(canWith(builtIn('acting_coach')))).toEqual(['/', '/schedule', '/classes', '/students']);
-    expect(mobileTabs(canWith([...builtIn('acting_coach'), 'admissions.read']))).toEqual(['/', '/schedule', '/classes', '/students']);
-  });
-
-  it('an account whose positions allow nothing gets Home only', () => {
-    expect(mobileTabs(canWith([]))).toEqual(['/']);
-  });
-
-  it('phone tabs never include a section the person cannot open', () => {
+  it('phone tabs never include a page the person cannot open, or one from another section', () => {
     for (const p of BUILT_IN_POSITIONS) {
       const can = canWith(p.permissions as readonly Permission[]);
-      for (const to of mobileTabs(can)) expect(navItemOpen(NAV_ITEMS.find((i) => i.to === to)!, can)).toBe(true);
+      for (const section of ['school', 'casting', 'website'] as const) {
+        for (const to of mobileTabs(section, can)) {
+          const item = NAV_ITEMS.find((i) => i.to === to)!;
+          expect(item.section).toBe(section);
+          expect(navItemOpen(item, can)).toBe(true);
+        }
+      }
     }
-    expect(mobileTabs(canWith(builtIn('casting_team')))).toEqual(['/', '/schedule', '/talent', '/castings']);
   });
 });
 

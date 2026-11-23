@@ -4,8 +4,12 @@ const en = {
   title: 'Home',
   noAccess: 'Your account can’t see anything yet',
   empty: {
-    title: 'Nothing for you on Home',
-    hint: 'Open the sections your positions allow from the menu.',
+    title: 'Nothing here for you yet',
+    hint: 'Use the menu to open the pages your positions allow.',
+  },
+  start: {
+    noSection: 'Nothing assigned to you yet',
+    noSectionHint: 'Your positions don’t include the School, Casting or Website sections. Ask whoever manages staff accounts if you need them.',
   },
   greeting: {
     morning: 'Good morning, {{name}}',
@@ -16,7 +20,7 @@ const en = {
     label: 'At a glance',
     activeStudents: 'Active students',
     activeCourses: 'Active workshops',
-    activeTalent: 'Active talent',
+    activeTalent: 'Talent on the roster',
     openCastings: 'Open castings',
     openLeads: 'Open enquiries',
     newLeadsThisWeek: 'New this week',
@@ -25,8 +29,7 @@ const en = {
     label: 'Quick actions',
     newEnquiry: 'New enquiry',
     newStudent: 'New student',
-    newClass: 'New workshop',
-    addTalent: 'Add talent',
+    addTalent: 'New talent',
     newCasting: 'New casting',
   },
   today: {
@@ -77,8 +80,12 @@ const ar: TranslationOf<typeof en> = {
   title: 'الرئيسية',
   noAccess: 'لا يمكن لحسابك رؤية أي شيء بعد',
   empty: {
-    title: 'لا شيء لك في الصفحة الرئيسية',
-    hint: 'افتح من القائمة الأقسام التي تسمح بها مناصبك.',
+    title: 'لا شيء لك هنا بعد',
+    hint: 'استخدم القائمة لفتح الصفحات التي تسمح بها مناصبك.',
+  },
+  start: {
+    noSection: 'لم يُخصَّص لك شيء بعد',
+    noSectionHint: 'مناصبك لا تشمل أقسام المدرسة أو الكاستينج أو الموقع. اطلبها ممن يدير حسابات الفريق إن احتجت إليها.',
   },
   greeting: {
     morning: 'صباح الخير، {{name}}',
@@ -89,7 +96,7 @@ const ar: TranslationOf<typeof en> = {
     label: 'نظرة سريعة',
     activeStudents: 'الطلاب النشطون',
     activeCourses: 'الورش النشطة',
-    activeTalent: 'المواهب النشطة',
+    activeTalent: 'المواهب في القائمة',
     openCastings: 'تجارب الأداء المفتوحة',
     openLeads: 'الاستفسارات المفتوحة',
     newLeadsThisWeek: 'جديدة هذا الأسبوع',
@@ -98,8 +105,7 @@ const ar: TranslationOf<typeof en> = {
     label: 'إجراءات سريعة',
     newEnquiry: 'استفسار جديد',
     newStudent: 'طالب جديد',
-    newClass: 'ورشة جديدة',
-    addTalent: 'إضافة موهبة',
+    addTalent: 'موهبة جديدة',
     newCasting: 'تجربة أداء جديدة',
   },
   today: {

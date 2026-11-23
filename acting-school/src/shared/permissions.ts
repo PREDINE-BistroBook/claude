@@ -60,6 +60,9 @@ export const PERMISSIONS = [
   'payments.status',
   /** Amounts, totals, revenue, commissions (Tuition module, later). */
   'payments.manage',
+
+  /** Edit the public website: pages, coaches, workshops shown, casting call, links. */
+  'website.manage',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -74,6 +77,7 @@ export const PERMISSION_GROUPS = [
   { id: 'agency', permissions: ['talent.read', 'talent.contact', 'talent.write', 'castings.read', 'castings.write', 'castings.send'] },
   { id: 'admissions', permissions: ['admissions.read', 'admissions.write', 'admissions.decide'] },
   { id: 'money', permissions: ['payments.status', 'payments.manage'] },
+  { id: 'website', permissions: ['website.manage'] },
 ] as const satisfies readonly { id: string; permissions: readonly Permission[] }[];
 
 export type PermissionGroupId = (typeof PERMISSION_GROUPS)[number]['id'];
@@ -102,6 +106,7 @@ export function holdsAll(held: readonly Permission[], needed: readonly Permissio
 
 // ── Built-in positions ──────────────────────────────────────────────────────
 
+/** The Executive Director: everything except money amounts (website.manage included since BUILT_IN_GRANTS v2). */
 const ALL_BUT_PAYMENTS_MANAGE = PERMISSIONS.filter((p) => p !== 'payments.manage');
 
 /**
@@ -174,6 +179,8 @@ export const FIRST_OWNER_POSITION: BuiltInPositionKey = 'ceo';
  */
 export const BUILT_IN_GRANTS: readonly { version: number; grants: Partial<Record<BuiltInPositionKey, readonly Permission[]>> }[] = [
   { version: 1, grants: { executive_director: ['admissions.read', 'admissions.write', 'admissions.decide'] } },
+  // The public website (2026-11-23): the director runs it; owners have it already.
+  { version: 2, grants: { executive_director: ['website.manage'] } },
 ];
 
 /** Settings key holding the last BUILT_IN_GRANTS version applied to this database. */

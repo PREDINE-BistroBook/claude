@@ -31,6 +31,7 @@ import type { AppEnv } from '../env';
 import { schoolToday } from '../lib/clock';
 import { hasPermission, isVisibleActiveStaff, type Conn } from '../lib/access';
 import {
+  createLead,
   findDuplicates,
   findStudentMatches,
   followUpDue,
@@ -297,23 +298,17 @@ router.post('/', canWrite, async (c) => {
   if (input.preferredCourseId) assertCourseAvailable(db, input.preferredCourseId, 'preferredCourseId');
   const plan = planStatus(me, null, input);
   const { status: _s, lostReason: _l, nextFollowUpOn: _n, ...fields } = input;
-  const created = db
-    .insert(leads)
-    .values(
-      withPhoneDigits({
-        ...fields,
-        source: input.source ?? 'other',
-        // The creator unless someone (or nobody: null) was named.
-        assignedToId: input.assignedToId === undefined ? me.id : input.assignedToId,
-        status: plan.status,
-        lostReason: plan.lostReason,
-        nextFollowUpOn: plan.nextFollowUpOn ?? null,
-        createdById: me.id,
-      }),
-    )
-    .returning({ id: leads.id })
-    .get();
-  return c.json(detail(db, created.id, me), 201);
+  const createdId = createLead(db, {
+    ...fields,
+    source: input.source ?? 'other',
+    // The creator unless someone (or nobody: null) was named.
+    assignedToId: input.assignedToId === undefined ? me.id : input.assignedToId,
+    status: plan.status,
+    lostReason: plan.lostReason,
+    nextFollowUpOn: plan.nextFollowUpOn ?? null,
+    createdById: me.id,
+  });
+  return c.json(detail(db, createdId, me), 201);
 });
 
 router.get('/:id', (c) => c.json(detail(c.get('db'), paramId(c), currentUser(c))));

@@ -18,6 +18,10 @@ export interface DashboardData {
     openLeads?: number;
     /** (admissions.read) Leads created since the start of this week (settings.weekStartsOn). */
     newLeadsThisWeek?: number;
+    /** Website enquiries waiting: leads with source 'website' and status 'new'. Always present: null without admissions.read. */
+    newWebsiteLeads: number | null;
+    /** Casting applications from the website with status 'new'. Always present: null without talent.read. */
+    newCastingApplications: number | null;
   };
   /** Today's class sessions (without classes.all: only the ones the caller teaches). */
   todaySessions?: ClassSession[];

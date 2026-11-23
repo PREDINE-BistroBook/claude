@@ -102,3 +102,13 @@ export type InterviewRecommendation = (typeof INTERVIEW_RECOMMENDATIONS)[number]
 /** Interview scores run from 1 (weak) to 5 (excellent). */
 export const INTERVIEW_SCORE_MIN = 1;
 export const INTERVIEW_SCORE_MAX = 5;
+
+// ── Website ─────────────────────────────────────────────────────────────────
+
+/**
+ * A casting application sent from the public website's casting-call form:
+ * new → reviewing → accepted (a talent profile was made from it) or declined.
+ * `accepted` is final (POST /api/casting-applications/:id/accept).
+ */
+export const CASTING_APPLICATION_STATUSES = ['new', 'reviewing', 'accepted', 'declined'] as const;
+export type CastingApplicationStatus = (typeof CASTING_APPLICATION_STATUSES)[number];

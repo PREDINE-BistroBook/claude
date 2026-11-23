@@ -13,6 +13,7 @@
 import { blob, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import {
   ATTENDANCE_STATUSES,
+  CASTING_APPLICATION_STATUSES,
   CASTING_STATUSES,
   CASTING_TYPES,
   COURSE_COLORS,
@@ -509,3 +510,127 @@ export const interviews = sqliteTable(
   },
   (t) => [index('interviews_lead_idx').on(t.leadId), index('interviews_scheduled_idx').on(t.scheduledAt)],
 );
+
+// ── Website ─────────────────────────────────────────────────────────────────
+// The public site (/site) and what staff with website.manage edit for it. The
+// studio texts, contact lines, casting call and custom links are one JSON
+// object in settings ('site', lib/siteContent.ts); these tables hold the rest.
+
+/** Coaches shown on the public site, in sort_order. Bilingual texts: '' = not given (the site shows the other language). */
+export const siteCoaches = sqliteTable(
+  'site_coaches',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    /** Optional link to the coach's staff account. */
+    userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }),
+    nameEn: text('name_en').notNull().default(''),
+    nameAr: text('name_ar').notNull().default(''),
+    titleEn: text('title_en').notNull().default(''),
+    titleAr: text('title_ar').notNull().default(''),
+    bioEn: text('bio_en').notNull().default(''),
+    bioAr: text('bio_ar').notNull().default(''),
+    /** Public (served by /site/media) while the coach is visible. */
+    photoFileId: text('photo_file_id').references(() => files.id, { onDelete: 'set null' }),
+    visible: integer('visible', { mode: 'boolean' }).notNull().default(true),
+    sortOrder: integer('sort_order').notNull().default(0),
+    ...timestamps(),
+  },
+  (t) => [index('site_coaches_sort_idx').on(t.sortOrder)],
+);
+
+/**
+ * One row per course shown on (or prepared for) the public site. It appears
+ * there only while `visible`, the course is active and its end date is on or
+ * after the school's today. Empty titles mean "use the course name".
+ */
+export const siteWorkshops = sqliteTable('site_workshops', {
+  courseId: integer('course_id')
+    .primaryKey()
+    .references(() => courses.id, { onDelete: 'cascade' }),
+  visible: integer('visible', { mode: 'boolean' }).notNull().default(false),
+  titleEn: text('title_en').notNull().default(''),
+  titleAr: text('title_ar').notNull().default(''),
+  descriptionEn: text('description_en').notNull().default(''),
+  descriptionAr: text('description_ar').notNull().default(''),
+  /** Free text: "3,500 EGP" / "٣٥٠٠ جنيه". */
+  priceEn: text('price_en').notNull().default(''),
+  priceAr: text('price_ar').notNull().default(''),
+  /** Public (served by /site/media) while the workshop appears on the site. */
+  coverFileId: text('cover_file_id').references(() => files.id, { onDelete: 'set null' }),
+  acceptingApplications: integer('accepting_applications', { mode: 'boolean' }).notNull().default(true),
+  sortOrder: integer('sort_order').notNull().default(0),
+  ...timestamps(),
+});
+
+/**
+ * Answers to the public casting call (lib/castingApplications.ts). Accepting
+ * one creates a talent profile (talent_id) with the same photos. Contact
+ * fields follow talent.contact.
+ */
+export const castingApplications = sqliteTable(
+  'casting_applications',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    firstName: text('first_name').notNull(),
+    lastName: text('last_name').notNull(),
+    gender: text('gender', { enum: GENDERS }),
+    dateOfBirth: text('date_of_birth').notNull(),
+    phone: text('phone').notNull(),
+    /** phoneDigits(phone), kept in step on every write (lib/phone.ts withPhoneDigits): search. */
+    phoneDigits: text('phone_digits'),
+    email: text('email'),
+    city: text('city'),
+    heightCm: integer('height_cm'),
+    languages: text('languages', { mode: 'json' }).$type<string[]>().notNull().$defaultFn(() => []),
+    skills: text('skills', { mode: 'json' }).$type<string[]>().notNull().$defaultFn(() => []),
+    experience: text('experience'),
+    /** https only, at most 3 (Instagram, showreel…). */
+    links: text('links', { mode: 'json' }).$type<string[]>().notNull().$defaultFn(() => []),
+    message: text('message'),
+    /** Required (with consent) when under 18. */
+    guardianName: text('guardian_name'),
+    guardianPhone: text('guardian_phone'),
+    guardianConsent: integer('guardian_consent', { mode: 'boolean' }).notNull().default(false),
+    /** The language of the page they applied from. */
+    locale: text('locale', { enum: LOCALES }).notNull().default('en'),
+    status: text('status', { enum: CASTING_APPLICATION_STATUSES }).notNull().default('new'),
+    reviewedById: integer('reviewed_by_id').references(() => users.id, { onDelete: 'set null' }),
+    reviewedAt: integer('reviewed_at'),
+    /** The talent profile made from it (status accepted). */
+    talentId: integer('talent_id').references(() => talent.id, { onDelete: 'set null' }),
+    ...timestamps(),
+  },
+  (t) => [
+    index('casting_applications_status_idx').on(t.status),
+    index('casting_applications_created_idx').on(t.createdAt),
+    index('casting_applications_phone_digits_idx').on(t.phoneDigits),
+  ],
+);
+
+/** A casting application's photos, in order (the first is the headshot). Never public. */
+export const castingApplicationPhotos = sqliteTable(
+  'casting_application_photos',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    applicationId: integer('application_id')
+      .notNull()
+      .references(() => castingApplications.id, { onDelete: 'cascade' }),
+    fileId: text('file_id')
+      .notNull()
+      .references(() => files.id, { onDelete: 'cascade' }),
+    sortOrder: integer('sort_order').notNull().default(0),
+  },
+  (t) => [index('casting_application_photos_application_idx').on(t.applicationId, t.sortOrder), index('casting_application_photos_file_idx').on(t.fileId)],
+);
+
+/**
+ * Fixed-window counters for the public forms (lib/rateLimit.ts hitRateLimit):
+ * per client address, school-wide, and photo bytes per day. Expired rows are
+ * deleted as new hits come in.
+ */
+export const rateLimits = sqliteTable('rate_limits', {
+  key: text('key').primaryKey(),
+  count: integer('count').notNull(),
+  /** Epoch ms when the current window started. */
+  windowStart: integer('window_start').notNull(),
+});

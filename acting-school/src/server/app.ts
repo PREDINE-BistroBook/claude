@@ -9,6 +9,7 @@ import { loadSession, requireAjaxHeader } from './middleware/auth';
 import { limitBody, MAX_JSON_BODY_BYTES } from './middleware/bodyLimit';
 import { adminRoutes } from './routes/admin';
 import authRoutes from './routes/auth';
+import castingApplicationRoutes from './routes/castingApplications';
 import castingRoutes from './routes/castings';
 import courseRoutes from './routes/courses';
 import dashboardRoutes from './routes/dashboard';
@@ -17,6 +18,7 @@ import leadRoutes from './routes/leads';
 import positionRoutes from './routes/positions';
 import scheduleRoutes from './routes/schedule';
 import sessionRoutes from './routes/sessions';
+import siteRoutes from './routes/site';
 import settingsRoutes from './routes/settings';
 import staffRoutes from './routes/staff';
 import studentRoutes from './routes/students';
@@ -83,6 +85,8 @@ export function createApp(deps: AppDeps) {
   app.route('/api/leads', leadRoutes);
   app.route('/api/schedule', scheduleRoutes);
   app.route('/api/dashboard', dashboardRoutes);
+  app.route('/api/site', siteRoutes);
+  app.route('/api/casting-applications', castingApplicationRoutes);
 
   app.all('/api/*', (c) => c.json({ error: { code: 'not_found', message: 'No such API route' } }, 404));
 

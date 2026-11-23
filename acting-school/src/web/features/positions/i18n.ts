@@ -71,6 +71,7 @@ const en = {
     agency: 'Agency',
     admissions: 'Admissions',
     money: 'Money',
+    website: 'Website',
   },
   perm: {
     staff: {
@@ -125,6 +126,12 @@ const en = {
     payments: {
       status: { label: 'Payment status', description: 'Who has paid and who still owes (comes with Tuition).' },
       manage: { label: 'Money', description: 'Amounts, totals, revenue and commissions (comes with Tuition).' },
+    },
+    website: {
+      manage: {
+        label: 'Edit the website',
+        description: 'Change the public website: studio text and contact details, coaches, which workshops are shown, the casting call and the link-in-bio links.',
+      },
     },
   },
 };
@@ -211,6 +218,7 @@ const ar: TranslationOf<typeof en> = {
     agency: 'الوكالة',
     admissions: 'القبول',
     money: 'المال',
+    website: 'الموقع',
   },
   perm: {
     staff: {
@@ -265,6 +273,12 @@ const ar: TranslationOf<typeof en> = {
     payments: {
       status: { label: 'حالة الدفع', description: 'من دفع ومن لا يزال عليه مستحقات (مع وحدة الرسوم الدراسية).' },
       manage: { label: 'الأمور المالية', description: 'المبالغ والإجماليات والإيرادات والعمولات (مع وحدة الرسوم الدراسية).' },
+    },
+    website: {
+      manage: {
+        label: 'تعديل الموقع',
+        description: 'تغيير الموقع العام: نصوص الاستوديو وبيانات التواصل، والمدربون، والورش المعروضة، ونداء الكاستينج، وروابط صفحة الروابط.',
+      },
     },
   },
 };

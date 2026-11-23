@@ -14,7 +14,7 @@ import {
   type DashboardData,
 } from '../../shared/schemas/dashboard';
 import type { DB } from '../db/database';
-import { attendance, castings, classSessions, courses, enrollments, leads, students, talent, users } from '../db/schema';
+import { attendance, castingApplications, castings, classSessions, courses, enrollments, leads, students, talent, users } from '../db/schema';
 import type { AppEnv } from '../env';
 import { epochAt, schoolNowTime, schoolToday } from '../lib/clock';
 import { courseScope, seesAllClasses, studentScope, takesAttendance } from '../lib/access';
@@ -25,7 +25,9 @@ import { loadAuditionEvents } from './schedule';
 
 /**
  * Home screen data, shaped by permissions: a section the caller can't see is
- * left out of the JSON entirely (not sent empty). Admissions blocks (open and
+ * left out of the JSON entirely (not sent empty) — except the two website
+ * counts (newWebsiteLeads: admissions.read, newCastingApplications:
+ * talent.read), always present and null when not permitted. Admissions blocks (open and
  * new-this-week lead counts, follow-ups due, upcoming interviews) need
  * admissions.read. Without classes.all the
  * counts cover only the classes you teach (and their students), and the
@@ -67,7 +69,7 @@ function loadClassSessions(db: DB, where: SQL | undefined, order: SQL[]): ClassS
     .all();
 }
 
-const countWhere = (db: DB, table: typeof students | typeof courses | typeof talent | typeof castings | typeof leads, where: SQL) =>
+const countWhere = (db: DB, table: typeof students | typeof courses | typeof talent | typeof castings | typeof leads | typeof castingApplications, where: SQL) =>
   db.select({ n: count() }).from(table).where(where).get()?.n ?? 0;
 
 router.get('/', (c) => {
@@ -78,7 +80,14 @@ router.get('/', (c) => {
   // Without classes.all: only your own teaching — the substitute if set, else the course's teacher.
   const mine = seesAllClasses(me) ? undefined : sql`${effectiveTeacherId} = ${me.id}`;
 
-  const data: DashboardData = { today, counts: {} };
+  const data: DashboardData = {
+    today,
+    counts: {
+      // The website's new arrivals (section homes): null when the caller may not see them.
+      newWebsiteLeads: userCan(c, 'admissions.read') ? countWhere(db, leads, and(eq(leads.source, 'website'), eq(leads.status, 'new'))!) : null,
+      newCastingApplications: userCan(c, 'talent.read') ? countWhere(db, castingApplications, eq(castingApplications.status, 'new')) : null,
+    },
+  };
 
   if (userCan(c, 'students.read')) data.counts.activeStudents = countWhere(db, students, and(eq(students.status, 'active'), studentScope(me))!);
   if (userCan(c, 'courses.read')) data.counts.activeCourses = countWhere(db, courses, and(eq(courses.status, 'active'), courseScope(me))!);

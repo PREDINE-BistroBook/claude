@@ -100,7 +100,7 @@ export function AuditionsCard({ auditions }: { auditions: DashboardAudition[] })
   const { t } = useTranslation(['dashboard', 'common']);
   const f = useCalendarFormat();
   return (
-    <SectionCard title={t('auditions.title')} description={t('auditions.subtitle')} viewAll="/schedule?show=auditions">
+    <SectionCard title={t('auditions.title')} description={t('auditions.subtitle')} viewAll="/casting/schedule">
       {auditions.length ? (
         <SectionList>
           {auditions.map((a) => (
