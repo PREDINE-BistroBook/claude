@@ -44,6 +44,9 @@ export function useUpdateSiteContent() {
     },
     onSuccess: (saved) => {
       qc.setQueryData(siteKeys.content, saved);
+      // The home's casting-call switch follows at once (the refetch below confirms it).
+      const summary = qc.getQueryData<SiteSummary>(siteKeys.summary);
+      if (summary) qc.setQueryData(siteKeys.summary, { ...summary, castingCallOpen: saved.castingCall.open });
       invalidateSite(qc);
     },
   });
