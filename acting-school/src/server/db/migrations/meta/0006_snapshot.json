@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "b0c5b0ac-c110-4253-bef0-ef0d42544c80",
+  "id": "aada829f-73c4-446d-9380-b05c73759ec0",
   "prevId": "12fb6802-652c-4589-883b-5309383a3d90",
   "tables": {
     "attendance": {
@@ -2680,6 +2680,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "session_id": {
+          "name": "session_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "endpoint": {
           "name": "endpoint",
           "type": "text",
@@ -2743,6 +2750,13 @@
           "name": "push_subscriptions_user_idx",
           "columns": [
             "user_id"
+          ],
+          "isUnique": false
+        },
+        "push_subscriptions_session_idx": {
+          "name": "push_subscriptions_session_idx",
+          "columns": [
+            "session_id"
           ],
           "isUnique": false
         }
