@@ -4,10 +4,10 @@ import { useTranslation } from 'react-i18next';
 import { ATTENDANCE_STATUSES, type AttendanceStatus } from '@shared/enums';
 
 const SELECTED: Record<AttendanceStatus, string> = {
-  present: 'bg-success text-white border-success',
-  late: 'bg-warning text-white border-warning',
-  absent: 'bg-danger text-white border-danger',
-  excused: 'bg-info text-white border-info',
+  present: 'bg-success text-success-ink border-success',
+  late: 'bg-warning text-warning-ink border-warning',
+  absent: 'bg-danger text-danger-ink border-danger',
+  excused: 'bg-info text-info-ink border-info',
 };
 
 /**

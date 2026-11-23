@@ -44,7 +44,8 @@ export function Switch({
             checked ? 'bg-accent' : 'bg-line-strong',
           )}
         >
-          <span className={clsx('size-5 rounded-full bg-white shadow-sm transition-[margin] duration-150', checked ? 'ms-5' : 'ms-0')} />
+          {/* On the accent track the thumb takes the accent's text colour (white in light mode, near-black in dark) so it stays visible. */}
+          <span className={clsx('size-5 rounded-full shadow-sm transition-[margin] duration-150', checked ? 'ms-5 bg-accent-ink' : 'ms-0 bg-white')} />
         </span>
       </button>
     </div>

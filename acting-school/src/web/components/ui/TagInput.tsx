@@ -70,7 +70,7 @@ export function TagInput({
         onKeyDown={onKeyDown}
         onBlur={() => draft && add(draft)}
         placeholder={value.length ? '' : placeholder}
-        className="h-8 w-0 min-w-[8rem] flex-1 bg-transparent px-1 text-base text-ink placeholder:text-muted/70 focus:outline-none sm:text-sm"
+        className="h-8 w-0 min-w-[8rem] flex-1 bg-transparent px-1 text-base text-ink placeholder:text-muted focus:outline-none sm:text-sm"
       />
       {suggestions.length > 0 && (
         <datalist id={listId}>

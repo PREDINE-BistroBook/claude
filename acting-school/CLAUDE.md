@@ -2,6 +2,8 @@
 
 A standalone project. It shares nothing with the rest of this repository: not the Amico Mio businesses, not `sites/` (Zen etc.). Don't import from, copy from, or "align with" anything outside `acting-school/`. The Notion/Slack/approval rules in the root `CLAUDE.md` are about running those businesses; they don't apply to building this app.
 
+**Whose it is:** Turquoise Studio (Turquoise Casting Studio, Giza; Arabic: استوديو تركواز) — an acting school that sells workshops (ورش) led by named coaches, plus a casting agency. Brand: black + turquoise, the turquoise "T" mark (`BrandMark`; interim drawing until the studio sends the original logo file).
+
 **What it is:** an internal web app (works on phones, installable as a PWA) for the staff of an acting school that is also a talent agency. Staff only — students and actors don't sign in. English + Arabic, with full right-to-left layout.
 
 - **School:** students, classes (courses with a weekly schedule → dated sessions), enrollments, attendance.

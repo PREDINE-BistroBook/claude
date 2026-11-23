@@ -3,7 +3,7 @@ import { useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttribu
 import { useTranslation } from 'react-i18next';
 
 const control =
-  'w-full rounded-xl border border-line-strong bg-surface px-3 text-ink placeholder:text-muted/70 transition-colors ' +
+  'w-full rounded-xl border border-line-strong bg-surface px-3 text-ink placeholder:text-muted transition-colors ' +
   'focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25 disabled:bg-surface-2 disabled:text-muted ' +
   'aria-[invalid=true]:border-danger aria-[invalid=true]:ring-danger/20';
 

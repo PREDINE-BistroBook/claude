@@ -202,7 +202,7 @@ export default function TalentPage() {
               type="button"
               onClick={() => applyExtra({ ...extra, [chip.key]: undefined })}
               aria-label={t('list.removeFilter', { label: chip.label })}
-              className="inline-flex min-h-10 items-center gap-1.5 rounded-full bg-accent-soft py-1 ps-3 pe-2 text-sm font-medium text-accent transition-colors hover:bg-accent/15 sm:min-h-8"
+              className="inline-flex min-h-10 items-center gap-1.5 rounded-full bg-accent-soft py-1 ps-3 pe-2 text-sm font-medium text-accent transition-colors hover:bg-accent/15 hover:text-accent-hover sm:min-h-8"
             >
               <span dir="auto">{chip.label}</span>
               <X className="size-4 shrink-0" aria-hidden />

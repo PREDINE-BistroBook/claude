@@ -26,7 +26,7 @@ export function SearchInput({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder ?? t('common:actions.search')}
         aria-label={placeholder ?? t('common:actions.search')}
-        className="h-11 w-full rounded-xl border border-line-strong bg-surface ps-9 pe-9 text-base text-ink placeholder:text-muted/70 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25 sm:h-10 sm:text-sm [&::-webkit-search-cancel-button]:hidden"
+        className="h-11 w-full rounded-xl border border-line-strong bg-surface ps-9 pe-9 text-base text-ink placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25 sm:h-10 sm:text-sm [&::-webkit-search-cancel-button]:hidden"
       />
       {value && (
         <button

@@ -225,7 +225,8 @@ const en = {
     schoolName: 'School name',
     schoolNamePlaceholder: 'e.g. Turquoise Studio',
     schoolNameAr: 'School name in Arabic',
-    schoolNameArPlaceholder: 'e.g. استوديو تركواز',
+    // No Latin "e.g.": the field is right-to-left, so it would be reordered.
+    schoolNameArPlaceholder: 'استوديو تركواز',
     yourName: 'Your name',
     createSchool: 'Create school',
     creating: 'Creating…',

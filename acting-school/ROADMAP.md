@@ -14,6 +14,7 @@ What the school asked for, in the order we plan to build it. Update this file as
 
 - **Users:** staff only in phase 1. Students get their own section in phase 2 (see "Student section").
 - **Who sees what:** confirmed by the school (2026-11-22) — see "Positions" below. CEO and CFO see everything; Salma (Executive Director) manages everything below them; everyone else sees and does only what their position allows. One person can hold several positions (their permissions add up).
+- **The business:** Turquoise Studio (Turquoise Casting Studio, Giza). Workshops (ورش) with named coaches, international intensives, long cohort programmes (دفعة) ending in a graduation show, and a casting agency (separate phone lines for workshops and casting). The app uses its name, black + turquoise colours and the turquoise "T" (interim drawing until the original logo file arrives).
 - **Languages:** English + Arabic (right-to-left). Arabic uses Western digits.
 - **Budget:** $0. The only paid piece is the AI model: **Claude Haiku**, pay per use (estimated $1–5/month at the school's size). Everything else uses free tools (Google Sheets / Forms / Apps Script, Gmail, wa.me WhatsApp links, Google Drive).
 - **Requests arrive today via:** Google Sheets, WhatsApp, email.

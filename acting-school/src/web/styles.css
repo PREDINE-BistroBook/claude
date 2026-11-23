@@ -32,12 +32,16 @@
   --color-accent-ink: var(--accent-ink);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
+  --color-success-ink: var(--success-ink);
   --color-warning: var(--warning);
   --color-warning-soft: var(--warning-soft);
+  --color-warning-ink: var(--warning-ink);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
+  --color-danger-ink: var(--danger-ink);
   --color-info: var(--info);
   --color-info-soft: var(--info-soft);
+  --color-info-ink: var(--info-ink);
   --color-brand-tile: var(--brand-tile);
   --color-brand-mint: var(--brand-mint);
   --color-brand-turquoise: var(--brand-turquoise);
@@ -57,15 +61,20 @@
   --accent-hover: #085f57;
   --accent-soft: #ddf3ef;
   --accent-ink: #ffffff;
+  /* --<status>-ink is the text on a solid status colour (bg-success text-success-ink …): white here, near-black in dark mode. */
   /* Success leans yellow-green so it never reads as the teal accent. */
   --success: #3d7a0c;
   --success-soft: #ebf5da;
+  --success-ink: #ffffff;
   --warning: #a34b07;
   --warning-soft: #fcefdc;
+  --warning-ink: #ffffff;
   --danger: #b91c1c;
   --danger-soft: #fde8e8;
+  --danger-ink: #ffffff;
   --info: #1d4ed8;
   --info-soft: #e6edfc;
+  --info-ink: #ffffff;
   /* The logo's own colours (black disc, mint → turquoise "T"): the same in both themes. */
   --brand-tile: #000000;
   --brand-mint: #a8f0e8;
@@ -89,12 +98,16 @@
     --accent-ink: #031a17;
     --success: #a5d65a;
     --success-soft: #1f2e12;
+    --success-ink: #031a17;
     --warning: #f5b544;
     --warning-soft: #33260e;
+    --warning-ink: #031a17;
     --danger: #f87171;
     --danger-soft: #3b1717;
+    --danger-ink: #031a17;
     --info: #93b4fd;
     --info-soft: #18233d;
+    --info-ink: #031a17;
     color-scheme: dark;
   }
 }

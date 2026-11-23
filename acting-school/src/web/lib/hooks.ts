@@ -11,10 +11,14 @@ export function useDebounced<T>(value: T, ms = 250): T {
   return v;
 }
 
-/** The school's name in the current language: its Arabic name in Arabic when one is set, else its name (the app's name until it loads). */
+/**
+ * The school's name in the current language: its Arabic name in Arabic when one is set, else its name.
+ * The app's own name until it loads, and before first-run setup (the server's name then is only a placeholder).
+ */
 export function useSchoolName(): string {
-  const { schoolName, schoolNameAr } = useAuth();
+  const { schoolName, schoolNameAr, needsSetup } = useAuth();
   const { t, i18n } = useTranslation();
+  if (needsSetup) return t('common:appName');
   return (i18n.language === 'ar' && schoolNameAr) || schoolName || t('common:appName');
 }
 

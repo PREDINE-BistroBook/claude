@@ -9,8 +9,9 @@ const en = {
     name: 'School name',
     namePlaceholder: 'e.g. Turquoise Studio',
     nameAr: 'Name in Arabic',
-    nameArPlaceholder: 'e.g. استوديو تركواز',
-    nameArHint: 'Shown when the app is in Arabic. Leave blank to use the name above.',
+    // No Latin "e.g.": the field is right-to-left, so it would be reordered.
+    nameArPlaceholder: 'استوديو تركواز',
+    nameArHint: 'Shown when the app is in Arabic. Leave it empty to use the English name.',
   },
   preferences: {
     title: 'Preferences',
@@ -60,7 +61,7 @@ const ar: TranslationOf<typeof en> = {
     namePlaceholder: 'مثال: Turquoise Studio',
     nameAr: 'الاسم بالعربية',
     nameArPlaceholder: 'مثال: استوديو تركواز',
-    nameArHint: 'يظهر عندما يكون التطبيق بالعربية. اتركه فارغًا لاستخدام الاسم أعلاه.',
+    nameArHint: 'يظهر عندما يكون التطبيق بالعربية. اتركه فارغًا لاستخدام الاسم الإنجليزي.',
   },
   preferences: {
     title: 'التفضيلات',

@@ -86,8 +86,9 @@ export function useLeadDuplicates(params: { phone?: string; email?: string; excl
 
 /**
  * School settings (GET /api/settings, readable by everyone signed in): interview
- * criteria, the country code for WhatsApp numbers and the school name for
- * messages. Same key as the schedule and settings screens.
+ * criteria and the country code for WhatsApp numbers. Same key as the schedule
+ * and settings screens. Until it loads, the values are DEFAULT_SETTINGS (check
+ * `ready`); the school's name for messages comes from useAuth() instead.
  */
 export function useAdmissionsSettings(): AppSettings & { ready: boolean } {
   const settings = useQuery({

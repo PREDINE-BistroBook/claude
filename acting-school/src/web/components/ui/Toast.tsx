@@ -38,7 +38,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             key={t.id}
             className={clsx(
               'pointer-events-auto flex max-w-md items-center gap-2.5 rounded-xl px-4 py-3 text-sm font-medium shadow-lg',
-              t.kind === 'success' ? 'bg-ink text-canvas' : 'bg-danger text-white',
+              t.kind === 'success' ? 'bg-ink text-canvas' : 'bg-danger text-danger-ink',
             )}
           >
             {t.kind === 'success' ? <CircleCheck className="size-4 shrink-0" aria-hidden /> : <TriangleAlert className="size-4 shrink-0" aria-hidden />}

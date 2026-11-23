@@ -32,7 +32,8 @@ type Recipient = 'lead' | 'guardian';
 
 function WhatsAppDialog({ onClose, lead }: Props) {
   const { t, i18n } = useTranslation(['admissions', 'common']);
-  const { can, schoolName: authSchool } = useAuth();
+  // The school's names come from /auth/me, which the signed-in shell has already loaded (settings may still be on its way, with a placeholder name).
+  const { can, schoolName, schoolNameAr } = useAuth();
   const settings = useAdmissionsSettings();
   const toast = useToast();
   const log = useLogActivity(lead.id);
@@ -51,11 +52,11 @@ function WhatsAppDialog({ onClose, lead }: Props) {
     return tt(`whatsapp.templates.${template}.text`, {
       name: lead.firstName,
       // An Arabic message names the school in Arabic when it has an Arabic name.
-      school: (lang === 'ar' && settings.schoolNameAr) || settings.schoolName || authSchool,
+      school: (lang === 'ar' && schoolNameAr) || schoolName,
       date: at ? fmt.date(at.date, 'full') : '',
       time: at ? fmt.time(at.time) : '',
     });
-  }, [i18n, lang, template, lead.firstName, settings.schoolName, settings.schoolNameAr, authSchool, interview]);
+  }, [i18n, lang, template, lead.firstName, schoolName, schoolNameAr, interview]);
 
   // Editing the text keeps the edit until another message or language is picked.
   const [edited, setEdited] = useState<{ key: string; text: string } | null>(null);
