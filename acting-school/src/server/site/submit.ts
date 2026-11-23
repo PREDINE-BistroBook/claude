@@ -22,7 +22,7 @@ import { findPublicWorkshop } from '../lib/siteContent';
 import type { SiteCtx } from './context';
 import { HONEYPOT_FIELD, TOKEN_FIELD, formValues, issuesToErrors, zodIssues, type FormState } from './forms';
 import { CASTING_PHOTO_FIELDS, CASTING_TEXT_FIELDS, applyPage, castingClosedPage, castingPage, errorPage, workshopPage, type ErrorPageKind } from './pages';
-import type { Html } from './render';
+import { htmlString, type Html } from './render';
 
 /** The apply form's text fields. */
 export const APPLY_FIELDS = [
@@ -43,12 +43,12 @@ export const APPLY_FIELDS = [
 /** Every page a POST answers is a form response: never cached. */
 function send(c: Context<AppEnv>, page: Html, status: 200 | 400 | 403 | 404 | 410 | 413 | 429) {
   c.header('Cache-Control', 'no-store');
-  return c.html(page, status);
+  return c.html(htmlString(page), status);
 }
 
 export function sendError(c: Context<AppEnv>, ctx: SiteCtx, kind: ErrorPageKind, status: 403 | 404 | 413 | 429 | 500, back?: string) {
   c.header('Cache-Control', 'no-store');
-  return c.html(errorPage(ctx, kind, back), status);
+  return c.html(htmlString(errorPage(ctx, kind, back)), status);
 }
 
 /** 303 See Other to the thank-you page (PRG). */

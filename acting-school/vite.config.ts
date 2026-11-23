@@ -46,7 +46,8 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api\//],
+        // Never the staff app's shell for the API or the public website (/site, /site/…).
+        navigateFallbackDenylist: [/^\/api\//, /^\/site(\/|$)/],
         // Fonts: only the Latin and Arabic files go offline; other scripts load on demand.
         globPatterns: ['**/*.{js,css,html,svg,png}', '**/*-latin-*.woff2', '**/*-arabic-*.woff2'],
         // API responses are private staff data: never cached by the service worker.

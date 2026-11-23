@@ -9,6 +9,8 @@ import { users } from './db/schema';
 import { activeOwnerCount } from './lib/access';
 import { loadConfig } from './nodeConfig';
 import { folderFileStore } from './nodeFileStore';
+import { SITE_BASE } from './site/paths';
+import { apexRedirect, routePublicHost, withUrl } from './site/publicHost';
 
 /**
  * The Node server: the API (app.ts) on a better-sqlite3 file plus, in
@@ -55,9 +57,12 @@ if (fs.existsSync(webRoot)) {
     "base-uri 'self'",
     "form-action 'self'",
   ].join('; ');
+  // The public website (/site, /site/*) is the app's own router, with its own headers (src/server/site/):
+  // never the staff app's shell or headers.
+  const isSite = (p: string) => p === SITE_BASE || p.startsWith(`${SITE_BASE}/`);
   app.use('*', async (c, next) => {
     await next();
-    if (!c.req.path.startsWith('/api/')) {
+    if (!c.req.path.startsWith('/api/') && !isSite(c.req.path)) {
       c.header('Content-Security-Policy', csp);
       c.header('X-Content-Type-Options', 'nosniff');
       c.header('Referrer-Policy', 'same-origin');
@@ -72,12 +77,23 @@ if (fs.existsSync(webRoot)) {
   // A missing hashed asset (an old tab after a deploy) is a 404, not the HTML shell
   // served as JavaScript.
   app.get('/assets/*', (c) => c.text('Not found', 404));
-  // Client-side routes (/students/12 …) all load the app shell.
+  // Client-side routes (/students/12 …) all load the app shell — never /site/…, which the site router answers.
   const shell = fs.readFileSync(path.join(webRoot, 'index.html'), 'utf8');
-  app.get('*', (c) => c.html(shell));
+  app.get('*', (c) => (isSite(c.req.path) ? c.text('Not found', 404) : c.html(shell)));
+}
+
+/**
+ * The studio's public hosts (PUBLIC_SITE_HOSTS), as on Cloudflare (src/worker/routing.ts): www → the
+ * apex, every path /x → the site's /site/x, nothing of the staff app. Behind a reverse proxy, it must
+ * pass the original Host header on.
+ */
+function fetchWithPublicHosts(request: Request, env: unknown): Response | Promise<Response> {
+  const route = routePublicHost(new URL(request.url), config.publicSiteHosts);
+  if (route.kind === 'redirect') return apexRedirect(route.location);
+  return app.fetch(route.kind === 'site' ? withUrl(request, route.url) : request, env);
 }
 
 const port = Number(process.env.PORT ?? 3000);
-serve({ fetch: app.fetch, port }, (info) => {
+serve({ fetch: fetchWithPublicHosts, port }, (info) => {
   console.log(`Acting School API on http://localhost:${info.port} (data: ${config.dataDir})`);
 });

@@ -30,19 +30,12 @@ import { issueFormToken } from '../lib/siteForms';
 import { findPublicFile, findPublicWorkshop, loadPublicCoaches, loadPublicWorkshops } from '../lib/siteContent';
 import { bareSiteCtx, isLocale, langForPath, pathsFor, preferredLang, siteCtx, type SiteCtx } from './context';
 import { emptyForm } from './forms';
+import { SITE_MEDIA_CACHE, SITE_PAGE_CACHE, SITE_SECURITY_HEADERS } from './headers';
 import { applyPage, castingPage, errorPage, homePage, linksPage, thanksPage, workshopPage, workshopsPage } from './pages';
 import { SITE_BASE } from './paths';
-import type { Html } from './render';
+import { htmlString, type Html } from './render';
 import { sendError, submitApply, submitCasting } from './submit';
 
-export const SITE_CSP = "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
-/** Every /site response (also the Worker's own 413 page). */
-export const SITE_SECURITY_HEADERS: Record<string, string> = {
-  'Content-Security-Policy': SITE_CSP,
-  'X-Content-Type-Options': 'nosniff',
-  'Referrer-Policy': 'strict-origin-when-cross-origin',
-};
-const PAGE_CACHE = 'public, max-age=60';
 
 const site = new Hono<AppEnv>();
 
@@ -70,8 +63,8 @@ site.use('*', async (c, next) => {
 });
 
 function page(c: Context<AppEnv>, body: Html, status: 200 = 200) {
-  c.header('Cache-Control', PAGE_CACHE);
-  return c.html(body, status);
+  c.header('Cache-Control', SITE_PAGE_CACHE);
+  return c.html(htmlString(body), status);
 }
 
 /** The 404 page in the language of the path (or the browser's). */
@@ -104,7 +97,7 @@ site.get('/media/:id', async (c) => {
   if (!row || !data) return notFoundPage(c);
   return c.body(data, 200, {
     'Content-Type': row.mime,
-    'Cache-Control': 'public, max-age=3600',
+    'Cache-Control': SITE_MEDIA_CACHE,
     'X-Content-Type-Options': 'nosniff',
     'Content-Disposition': 'inline',
   });
@@ -184,7 +177,7 @@ site.get('/:lang/thanks', (c) => {
   const ctx = langCtx(c);
   if (!ctx) return notFoundPage(c);
   c.header('Cache-Control', 'no-store');
-  return c.html(thanksPage(ctx, c.req.query('k') === 'casting' ? 'casting' : 'apply'));
+  return c.html(htmlString(thanksPage(ctx, c.req.query('k') === 'casting' ? 'casting' : 'apply')));
 });
 
 site.all('*', (c) => notFoundPage(c));
@@ -199,7 +192,7 @@ site.onError((err, c) => {
     body = errorPage(bareSiteCtx(new URL(c.req.url), lang, pathsFor(c)), 'error');
   }
   c.header('Cache-Control', 'no-store');
-  return c.html(body, 500);
+  return c.html(htmlString(body), 500);
 });
 
 export default site;

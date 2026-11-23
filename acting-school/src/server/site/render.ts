@@ -13,6 +13,12 @@ import { INTL_LOCALE, fmt, type SiteStrings } from './i18n';
 
 export type Html = ReturnType<typeof html>;
 
+/** A rendered page as a string (everything here renders synchronously: no async components). */
+export function htmlString(h: Html): string {
+  if (h instanceof Promise) throw new Error('site pages render synchronously');
+  return h.toString();
+}
+
 // ── Icons (lucide, ISC; decorative: every icon sits next to a visible label) ──
 
 const ICONS = {

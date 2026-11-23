@@ -10,14 +10,17 @@
   "compatibility_flags": ["nodejs_compat"],
 
   // The built web app (npm run build → dist/web). Missing paths get index.html
-  // (client-side routes such as /students/12). Only /api/* and /assets/* run
-  // the Worker (src/worker/index.ts: the API, and a 404 for a missing hashed
-  // file). Headers for these files come from src/web/public/_headers.
+  // (client-side routes such as /students/12). The Worker runs first for every
+  // request (src/worker/routing.ts): on the public hosts (PUBLIC_SITE_HOSTS)
+  // it serves the public website at the root; elsewhere /api/* and /site/* go
+  // to the Durable Object and everything else to these assets, as before (a
+  // missing hashed /assets/* file is a 404). Headers for these files come from
+  // src/web/public/_headers.
   "assets": {
     "directory": "./dist/web",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*", "/assets/*"]
+    "run_worker_first": true
   },
 
   // The whole API and its SQLite database live in one Durable Object (src/worker/school.ts).
@@ -33,7 +36,12 @@
   "vars": {
     "SCHOOL_TIME_ZONE": "Africa/Cairo",
     // "true" only on a demo deployment (POST /api/admin/reset wipes everything).
-    "ALLOW_DEMO_RESET": "false"
+    "ALLOW_DEMO_RESET": "false",
+    // The studio's own domain: these hosts serve the public website at their
+    // root (www redirects to the apex) and nothing of the staff app. The staff
+    // app is on staff.turquoisestudio.app. The deployer attaches the domains
+    // (routes with custom_domain) when switching them on.
+    "PUBLIC_SITE_HOSTS": "turquoisestudio.app,www.turquoisestudio.app"
   },
   // Secrets (dashboard → Worker → Settings → Variables and Secrets, or `wrangler secret put`):
   //   ADMIN_TOKEN  bearer token for /api/admin/* (24+ characters), and the setup code first-run setup asks

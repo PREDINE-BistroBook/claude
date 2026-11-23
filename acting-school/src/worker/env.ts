@@ -16,4 +16,10 @@ export interface Env {
   SESSION_DAYS?: string;
   /** "false" to send the session cookie without Secure (never needed on Cloudflare, which always serves HTTPS). */
   COOKIE_SECURE?: string;
+  /**
+   * Hosts that serve the public website at their root, comma-separated
+   * ("turquoisestudio.app,www.turquoisestudio.app"; www redirects to the apex).
+   * Nothing of the staff app answers on them (routing.ts).
+   */
+  PUBLIC_SITE_HOSTS?: string;
 }

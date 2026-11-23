@@ -1,17 +1,20 @@
 /**
- * The Cloudflare Worker ("claude", wrangler.jsonc). Static assets (the built
- * web app in dist/web) are served by Cloudflare without this code, with the
- * SPA fallback to index.html for client-side routes. Only two kinds of request
- * run the Worker (run_worker_first):
- * - /api/* — handed to the school's Durable Object, where the API and its
- *   SQLite database live (school.ts), unless the body is too large (413);
- * - /assets/* — a hashed build file that doesn't exist (an old tab after a
- *   deploy) is a 404, not the HTML shell (which _headers would also mark
- *   cacheable for a year), the same as the Node server.
+ * The Cloudflare Worker ("claude", wrangler.jsonc). It runs first for every
+ * request (run_worker_first: true) so it can tell the hosts apart; where each
+ * request goes is routing.ts:
+ * - the studio's public hosts (PUBLIC_SITE_HOSTS: turquoisestudio.app, www.…)
+ *   get the public website at their root (www → 301 to the apex), served by
+ *   the Durable Object; nothing of the staff app answers there;
+ * - on any other host, /api/* and /site, /site/* go to the school's Durable
+ *   Object (school.ts: the API, the public site's previews and their SQLite
+ *   database), unless the body is too large for the route (413); everything
+ *   else is the built web app (dist/web, static assets with the SPA fallback),
+ *   passed to the ASSETS binding as before, and a missing hashed /assets/*
+ *   file is a 404 rather than the HTML shell.
  */
-import { MAX_JSON_BODY_BYTES } from '../server/middleware/bodyLimit';
-import { MAX_UPLOAD_BYTES } from '../shared/schemas/files';
+import { parsePublicSiteHosts } from '../server/config';
 import type { Env } from './env';
+import { routeRequest } from './routing';
 import { SchoolDO } from './school';
 
 export { SchoolDO };
@@ -19,35 +22,12 @@ export { SchoolDO };
 /** One Durable Object for the whole school. */
 const INSTANCE = 'main';
 
-/**
- * A body that announces more than the API would read is refused here, before
- * it reaches the Durable Object (128 MB of memory for the whole school). Bodies
- * without a Content-Length are cut off by the API itself (middleware/bodyLimit.ts).
- */
-function tooLarge(request: Request, pathname: string): boolean {
-  const declared = request.headers.get('content-length');
-  if (declared === null) return false;
-  const max = pathname === '/api/files' ? MAX_UPLOAD_BYTES + 64 * 1024 : MAX_JSON_BODY_BYTES;
-  return !(Number(declared) <= max);
-}
-
 export default {
-  async fetch(request, env): Promise<Response> {
-    const { pathname } = new URL(request.url);
-    if (pathname === '/api' || pathname.startsWith('/api/')) {
-      if (tooLarge(request, pathname)) {
-        return Response.json(
-          { error: { code: 'payload_too_large', message: 'The request is too large' } },
-          { status: 413, headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } },
-        );
-      }
-      const stub = env.SCHOOL.get(env.SCHOOL.idFromName(INSTANCE));
-      return stub.fetch(request);
-    }
-    const res = await env.ASSETS.fetch(request);
-    if (pathname.startsWith('/assets/') && (res.headers.get('content-type') ?? '').startsWith('text/html')) {
-      return new Response('Not found', { status: 404, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
-    }
-    return res;
+  fetch(request, env): Promise<Response> {
+    return routeRequest(request, {
+      assets: env.ASSETS,
+      school: () => env.SCHOOL.get(env.SCHOOL.idFromName(INSTANCE)),
+      publicSiteHosts: parsePublicSiteHosts(env.PUBLIC_SITE_HOSTS),
+    });
   },
 } satisfies ExportedHandler<Env>;
