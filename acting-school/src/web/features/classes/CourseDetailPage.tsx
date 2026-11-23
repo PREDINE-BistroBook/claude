@@ -219,7 +219,7 @@ function StudentsTab({ course, canWrite }: { course: CourseDetail; canWrite: boo
             icon={Users}
             title={t('students.empty')}
             description={t('students.emptyHint')}
-            action={canWrite && <EmptyAddAction onClick={() => setAdding(true)} />}
+            action={canWrite && <EmptyAddAction label={t('common:add.firstOf.student')} onClick={() => setAdding(true)} />}
           />
         </div>
       ) : (

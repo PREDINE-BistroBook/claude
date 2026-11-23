@@ -1,6 +1,7 @@
 import { parseDate } from '@shared/dates';
 import { OPPORTUNITY_STATUSES, type OpportunityStatus } from '@shared/enums';
 import { OPPORTUNITY_DEADLINE_SOON_DAYS, OPPORTUNITY_MAX_FILES } from '@shared/schemas/opportunities';
+import { isolate } from '../team/utils';
 
 /** Casting › Opportunities (Part K1): the screen's plain logic, unit-tested in tests/unit/opportunities-web.test.ts. */
 
@@ -33,9 +34,60 @@ export function deadlineLook(deadline: string | null, today: string): DeadlineLo
   return days <= OPPORTUNITY_DEADLINE_SOON_DAYS ? { kind: 'soon', days } : { kind: 'open', days };
 }
 
-/** The status buttons a card shows: Interested, Applied, Not for us — all but the one it is in. */
+/** The status buttons a card shows, in one row: Interested, Applied, Not for us — all but the one it is in. */
 export function statusMoves(status: OpportunityStatus): OpportunityStatus[] {
   return (['interested', 'applied', 'dismissed'] as const).filter((s) => s !== status);
+}
+
+/**
+ * The status buttons on an opportunity's own page: the card's, plus "Back to
+ * New" for one that isn't new any more (a wrong tap can be undone; the API
+ * clears who reviewed it).
+ */
+export function detailStatusMoves(status: OpportunityStatus): OpportunityStatus[] {
+  return OPPORTUNITY_STATUSES.filter((s) => s !== status);
+}
+
+/**
+ * What a card shows besides "Open the post" and the status row, so a card
+ * stays short on a phone: "Open the casting" once it has one; "Turn into a
+ * casting" only under Interested and Applied (someone has looked at it). The
+ * opportunity's own page always offers it.
+ */
+export function cardCastingButton(o: { status: OpportunityStatus; castingId: number | null }): 'open' | 'turn' | null {
+  if (o.castingId !== null) return 'open';
+  return o.status === 'interested' || o.status === 'applied' ? 'turn' : null;
+}
+
+/** Turning a New opportunity into a casting also moves it to Interested — the confirm says so. */
+export function turnMovesToInterested(status: OpportunityStatus): boolean {
+  return status === 'new';
+}
+
+/** Where "Turn into a casting" lands: the new casting, scrolled to its Roles block (the next thing to fill in). */
+export function castingRolesPath(castingId: number): string {
+  return `/castings/${castingId}#roles`;
+}
+
+/**
+ * A link pasted without its scheme — "instagram.com/p/abc123", common in
+ * forwarded WhatsApp text — gets "https://" in front, so nobody has to type it
+ * on a phone. Anything with a scheme, or that doesn't look like an address
+ * (no dot before the path, spaces), is left as typed for the form to judge
+ * (the server takes http and https only).
+ */
+export function normalizeLink(value: string): string {
+  const v = value.trim();
+  if (!v || /^[a-z][a-z0-9+.-]*:/i.test(v)) return v;
+  if (v.startsWith('//')) return `https:${v}`;
+  if (/\s/.test(v)) return v;
+  const host = v.split(/[/?#]/)[0]!;
+  return /^[\p{L}\p{N}-]+(\.[\p{L}\p{N}-]+)+$/u.test(host) ? `https://${v}` : v;
+}
+
+/** "Added by {{name}} · {{date}}": the name isolated, so a Latin name in an Arabic line doesn't pull the date's day number next to it. */
+export function addedByArgs(name: string, date: string): { name: string; date: string } {
+  return { name: isolate(name), date };
 }
 
 /** "instagram.com" for a post's address (shown next to "Open the post"); null when it isn't a web address. */

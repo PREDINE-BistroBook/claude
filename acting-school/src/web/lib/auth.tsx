@@ -159,8 +159,12 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   }
 }
 
-/** Renders children only for people whose positions allow the permission; a "no access" message otherwise. */
-export function Guard({ permission, children }: { permission: Permission; children: ReactNode }) {
+/**
+ * Renders children only for people whose positions allow the permission (and
+ * `also`, when the API behind the page needs a second one: adding an enquiry
+ * is admissions.write behind admissions.read); a "no access" message otherwise.
+ */
+export function Guard({ permission, also, children }: { permission: Permission; also?: Permission; children: ReactNode }) {
   const { can } = useAuth();
-  return can(permission) ? <>{children}</> : <NoAccess />;
+  return can(permission) && (!also || can(also)) ? <>{children}</> : <NoAccess />;
 }

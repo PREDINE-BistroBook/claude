@@ -7,6 +7,7 @@ import { todayISO } from '@shared/dates';
 import type { OpportunityStatus } from '@shared/enums';
 import type { OpportunityCounts } from '@shared/schemas/opportunities';
 import { EmptyState, ErrorState, PageHeader, PageLoader, SearchInput } from '@web/components/ui';
+import { wholeListEmpty } from '@web/layout/addActions';
 import { ScreenAddAction, ScreenEmptyAdd } from '@web/layout/ScreenAdd';
 import { useFormat } from '@web/lib/format';
 import { useDebounced } from '@web/lib/hooks';
@@ -68,7 +69,8 @@ export default function OpportunitiesPage() {
         icon={Binoculars}
         title={t(`empty.${status}.title`)}
         description={t(`empty.${status}.hint`)}
-        action={status === 'new' ? <ScreenEmptyAdd screen="casting/opportunities" /> : undefined}
+        // "Add the first opportunity" only when there are none at all: an empty tab next to full ones has the screen's own Add.
+        action={wholeListEmpty(counts.data && Object.values(counts.data)) ? <ScreenEmptyAdd screen="casting/opportunities" /> : undefined}
         className="rounded-2xl border border-dashed border-line-strong"
       />
     );
@@ -90,7 +92,8 @@ export default function OpportunitiesPage() {
 
   return (
     <div>
-      <PageHeader title={t('title')} subtitle={t('subtitle')} actions={<ScreenAddAction screen="casting/opportunities" />} />
+      {/* The explanation under the title is for larger screens: on a phone the list starts higher. */}
+      <PageHeader title={t('title')} subtitle={<span className="max-sm:hidden">{t('subtitle')}</span>} actions={<ScreenAddAction screen="casting/opportunities" />} />
       <StatusTabs value={status} onChange={setStatus} counts={counts.data} />
       <SearchInput value={q} onChange={setQ} placeholder={t('search')} className="mb-4" />
       {body}
@@ -121,7 +124,8 @@ function StatusTabs({ value, onChange, counts }: { value: OpportunityStatus; onC
             )}
           >
             <span className="flex min-w-0 items-center gap-1.5">
-              <Icon className="size-4 shrink-0" aria-hidden />
+              {/* No icon on the narrowest phones: "Interested" and its count need the room. */}
+              <Icon className="size-4 shrink-0 max-[22.5rem]:hidden" aria-hidden />
               <span className="min-w-0">{t(`common:enums.opportunityStatus.${id}`)}</span>
             </span>
             {n !== undefined && (

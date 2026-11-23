@@ -3,13 +3,13 @@ import type { Namespace, TranslationOf } from '../../i18n/types';
 /** Casting › Opportunities (Part K1): castings the team saw elsewhere and added by hand. */
 const en = {
   title: 'Casting opportunities',
-  subtitle: 'Castings the team saw on Instagram, Facebook, WhatsApp groups or websites.',
-  search: 'Search title, where it was seen, roles…',
+  subtitle: 'Casting calls the team saw on Instagram, Facebook, WhatsApp groups or websites.',
+  search: 'Search opportunities',
   count_one: '{{count}} opportunity',
   count_other: '{{count}} opportunities',
   tabsLabel: 'Status',
   empty: {
-    new: { title: 'Nothing new', hint: 'When you see a casting call worth a look, add it here so the team sees it too.' },
+    new: { title: 'No new opportunities', hint: 'When you see a casting call worth a look, add it here so the team sees it too.' },
     interested: { title: 'Nothing marked Interested', hint: 'Tap "Interested" on a new opportunity to keep it here.' },
     applied: { title: 'Nothing applied to yet', hint: 'Tap "Applied" once the team has sent actors.' },
     dismissed: { title: 'Nothing set aside', hint: 'What the team marks "Not for us" waits here.' },
@@ -28,7 +28,7 @@ const en = {
     inDays_other: 'Closes in {{count}} days',
     roles: 'Roles',
     seenOn: 'Seen on {{source}}',
-    addedBy: 'Added by {{name}}',
+    addedBy: 'Added by {{name}} · {{date}}',
     screenshot: 'Screenshot of the post',
   },
   actions: {
@@ -42,7 +42,6 @@ const en = {
     openCasting: 'Open the casting',
     edit: 'Edit',
     delete: 'Delete',
-    details: 'See everything',
   },
   toast: {
     moved: 'Moved to {{status}}',
@@ -54,6 +53,8 @@ const en = {
   confirmCasting: {
     title: 'Turn it into a casting?',
     message: 'A new open casting is made with this title, deadline and notes; the link, the contact and the screenshots go with it.',
+    /** Added to the message for a New one. */
+    movesToInterested: 'The opportunity moves to Interested.',
     yes: 'Make the casting',
   },
   confirmDelete: {
@@ -75,13 +76,13 @@ const en = {
   form: {
     addTitle: 'Add an opportunity',
     editTitle: 'Edit the opportunity',
-    intro: 'Only the title is needed. Add what you know — you can come back to it.',
+    intro: 'Only the title is needed. Start with a screenshot of the post if you have one.',
     title: 'Title',
     titlePlaceholder: 'Feature film — lead actress, 25 to 35',
     source: 'Where you saw it',
     sourcePlaceholder: 'Instagram — Frame Casting',
     link: 'Link to the post',
-    linkHint: 'Copy the address from Instagram, Facebook or the website (starts with https://).',
+    linkHint: 'Copy the address from Instagram, Facebook or the website and paste it here.',
     screenshots: 'Screenshots',
     screenshotsHint: 'From the gallery or the camera — up to 3.',
     addScreenshots: 'Add screenshots',
@@ -112,8 +113,8 @@ const en = {
 
 const ar: TranslationOf<typeof en> = {
   title: 'فرص الكاستينج',
-  subtitle: 'تجارب أداء رآها الفريق على إنستجرام أو فيسبوك أو مجموعات واتساب أو المواقع.',
-  search: 'ابحث في العنوان أو مكان النشر أو الأدوار…',
+  subtitle: 'إعلانات كاستينج رآها الفريق على إنستجرام أو فيسبوك أو مجموعات واتساب أو المواقع.',
+  search: 'ابحث في الفرص',
   count_one: 'فرصة واحدة',
   count_other: '{{count}} فرصة',
   count_zero: 'لا فرص',
@@ -122,7 +123,7 @@ const ar: TranslationOf<typeof en> = {
   count_many: '{{count}} فرصة',
   tabsLabel: 'الحالة',
   empty: {
-    new: { title: 'لا جديد', hint: 'إذا رأيت إعلان تجربة أداء يستحق النظر، أضفه هنا ليراه الفريق أيضًا.' },
+    new: { title: 'لا فرص جديدة', hint: 'إذا رأيت إعلان كاستينج يستحق النظر، أضفه هنا ليراه الفريق أيضًا.' },
     interested: { title: 'لا شيء في «مهتمون»', hint: 'اضغط «مهتمون» على فرصة جديدة لتبقى هنا.' },
     applied: { title: 'لم نتقدّم لشيء بعد', hint: 'اضغط «تقدّمنا» بعد أن يرسل الفريق ممثلين.' },
     dismissed: { title: 'لا شيء مستبعد', hint: 'ما يضعه الفريق في «ليست لنا» ينتظر هنا.' },
@@ -144,11 +145,11 @@ const ar: TranslationOf<typeof en> = {
     inDays_many: 'تنتهي بعد {{count}} يومًا',
     roles: 'الأدوار',
     seenOn: 'شوهدت على {{source}}',
-    addedBy: 'أضافها {{name}}',
-    screenshot: 'صورة من الإعلان',
+    addedBy: 'أضافها {{name}} · {{date}}',
+    screenshot: 'صورة من المنشور',
   },
   actions: {
-    openPost: 'افتح الإعلان',
+    openPost: 'افتح المنشور',
     opensNewTab: '(يفتح في صفحة جديدة)',
     interested: 'مهتمون',
     applied: 'تقدّمنا',
@@ -158,7 +159,6 @@ const ar: TranslationOf<typeof en> = {
     openCasting: 'افتح تجربة الأداء',
     edit: 'تعديل',
     delete: 'حذف',
-    details: 'اعرض كل التفاصيل',
   },
   toast: {
     moved: 'نُقلت إلى «{{status}}»',
@@ -170,6 +170,7 @@ const ar: TranslationOf<typeof en> = {
   confirmCasting: {
     title: 'تحويلها إلى تجربة أداء؟',
     message: 'تُنشأ تجربة أداء مفتوحة بهذا العنوان والموعد والملاحظات، ومعها الرابط ووسيلة التواصل والصور.',
+    movesToInterested: 'وتنتقل الفرصة إلى «مهتمون».',
     yes: 'أنشئ تجربة الأداء',
   },
   confirmDelete: {
@@ -182,7 +183,7 @@ const ar: TranslationOf<typeof en> = {
     contact: 'للتواصل',
     location: 'المكان',
     type: 'نوع العمل',
-    link: 'الإعلان',
+    link: 'المنشور',
     status: 'الحالة',
     screenshots: 'الصور',
     noScreenshots: 'لا صور.',
@@ -191,14 +192,14 @@ const ar: TranslationOf<typeof en> = {
   form: {
     addTitle: 'إضافة فرصة',
     editTitle: 'تعديل الفرصة',
-    intro: 'العنوان وحده يكفي. أضف ما تعرفه — ويمكنك الرجوع إليها لاحقًا.',
+    intro: 'العنوان وحده يكفي. ابدأ بصورة من المنشور إن وُجدت.',
     title: 'العنوان',
     titlePlaceholder: 'فيلم روائي — بطلة من 25 إلى 35 سنة',
     source: 'أين رأيتها',
     sourcePlaceholder: 'إنستجرام — Frame Casting',
-    link: 'رابط الإعلان',
-    linkHint: 'انسخ العنوان من إنستجرام أو فيسبوك أو الموقع (يبدأ بـ ⁦https://⁩).',
-    screenshots: 'صور الإعلان',
+    link: 'رابط المنشور',
+    linkHint: 'انسخ العنوان من إنستجرام أو فيسبوك أو الموقع والصقه هنا.',
+    screenshots: 'صور المنشور',
     screenshotsHint: 'من المعرض أو الكاميرا — حتى 3 صور.',
     addScreenshots: 'إضافة صور',
     removeScreenshot: 'إزالة الصورة {{n}}',

@@ -22,6 +22,7 @@ import {
   StatusBadge,
   Tabs,
 } from '@web/components/ui';
+import { wholeListEmpty } from '@web/layout/addActions';
 import { ScreenAddAction, ScreenEmptyAdd } from '@web/layout/ScreenAdd';
 import { useAuth } from '@web/lib/auth';
 import { fullName, useFormat } from '@web/lib/format';
@@ -100,9 +101,10 @@ export default function LeadsPage() {
         title={t(`list.empty.${tab}.title`)}
         description={t(`list.empty.${tab}.hint`)}
         action={
-          tab === 'open' || tab === 'new'
+          // "Add the first enquiry" only when there are none at all (open + closed); an empty tab next to full ones has the screen's Add.
+          (tab === 'open' || tab === 'new') && wholeListEmpty(counts.data && [counts.data.open, counts.data.closed])
             ? <ScreenEmptyAdd screen="admissions" />
-            : tab !== 'closed' && (
+            : tab !== 'closed' && tab !== 'open' && (
                 <ButtonLink to="/admissions?tab=open" replace>
                   {t('list.seeOpen')}
                 </ButtonLink>

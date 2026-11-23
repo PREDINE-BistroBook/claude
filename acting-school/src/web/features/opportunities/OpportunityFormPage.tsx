@@ -24,6 +24,7 @@ import {
 import { useForm } from '@web/lib/forms';
 import { useOpportunity, useSaveOpportunity } from './api';
 import { ScreenshotsInput } from './components/ScreenshotsInput';
+import { normalizeLink } from './utils';
 
 interface Values extends Record<string, unknown> {
   title: string;
@@ -76,9 +77,10 @@ function focusFirstError() {
 }
 
 /**
- * The "Add opportunity" form, made for a phone: only the title is needed;
- * where it was seen, the link, screenshots from the gallery or the camera,
- * the deadline, the roles, the contact, the two warnings and notes are there
+ * The "Add opportunity" form, made for a phone: only the title is needed.
+ * The screenshot comes right after it — on Instagram it is what the person
+ * has — then where it was seen and the link (one pasted without "https://"
+ * gets it), the deadline, the roles, the contact, the two warnings and notes,
  * for what the person knows. Project type and location wait under "More".
  */
 function OpportunityForm({ opportunity }: { opportunity?: Opportunity }) {
@@ -91,7 +93,10 @@ function OpportunityForm({ opportunity }: { opportunity?: Opportunity }) {
   const back = opportunity ? `/casting/opportunities/${opportunity.id}` : '/casting/opportunities';
 
   const submit = () => {
-    const data = form.validate(opportunityInput);
+    // "instagram.com/p/abc" pasted from WhatsApp: saved as https://instagram.com/p/abc.
+    const link = normalizeLink(v.link);
+    if (link !== v.link) form.set('link', link);
+    const data = form.validate(opportunityInput, { ...v, link });
     if (!data) return focusFirstError();
     save.mutate(data, {
       onSuccess: (saved) => {
@@ -116,6 +121,9 @@ function OpportunityForm({ opportunity }: { opportunity?: Opportunity }) {
         <FormError messageKey={form.formError} />
         <FormSection>
           <TextField label={t('form.title')} required placeholder={t('form.titlePlaceholder')} {...form.bind('title')} error={form.error('title')} dir="auto" />
+          <Field label={t('form.screenshots')} optional htmlFor="screenshots">
+            <ScreenshotsInput value={v.fileIds} onChange={(ids) => form.set('fileIds', ids)} error={form.error('fileIds')} />
+          </Field>
           <TextField label={t('form.source')} optional placeholder={t('form.sourcePlaceholder')} {...form.bind('source')} error={form.error('source')} dir="auto" />
           <TextField
             label={t('form.link')}
@@ -129,11 +137,12 @@ function OpportunityForm({ opportunity }: { opportunity?: Opportunity }) {
             placeholder="https://"
             hint={t('form.linkHint')}
             {...form.bind('link')}
+            onBlur={() => {
+              const link = normalizeLink(v.link);
+              if (link !== v.link) form.set('link', link);
+            }}
             error={form.error('link')}
           />
-          <Field label={t('form.screenshots')} optional htmlFor="screenshots">
-            <ScreenshotsInput value={v.fileIds} onChange={(ids) => form.set('fileIds', ids)} error={form.error('fileIds')} />
-          </Field>
         </FormSection>
 
         <FormSection>

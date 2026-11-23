@@ -4,6 +4,7 @@ import { addDays, weekdayOf } from '../../src/shared/dates';
 import { BUILT_IN_POSITIONS } from '../../src/shared/permissions';
 import { classSessions, enrollments, students, users } from '../../src/server/db/schema';
 import { daysBetween, generateDates, mayMarkAttendance, planRegeneration, sameSchedule } from '../../src/server/lib/classSessions';
+import { enrolChoice } from '../../src/web/features/students/utils';
 import { makeTestContext, type Client, todayISO } from '../helpers';
 
 type Ctx = Awaited<ReturnType<typeof makeTestContext>>;
@@ -540,6 +541,37 @@ describe('enrollments', () => {
     const again = await admin.post(`/api/courses/${c.id}/enrollments`, { studentId: st.id });
     expect(again.status).toBe(409);
     expect(again.body.error.code).toBe('previously_enrolled');
+  });
+
+  it('"+ Add to a workshop" on a student\'s page offers only what the API accepts: Re-enroll for a workshop they left or finished', async () => {
+    // K2-ENROL-1: the dialog used to offer "Enroll" (POST → 409 previously_enrolled) on a workshop the student had left.
+    const [left, finished, fresh] = [await mkCourse(admin, { name: 'Left' }), await mkCourse(admin, { name: 'Finished' }), await mkCourse(admin, { name: 'Fresh' })];
+    const st = mkStudent(t, 'Salma', 'Ali');
+    for (const [c, status] of [[left, 'withdrawn'], [finished, 'completed']] as const) {
+      const e = await admin.post(`/api/courses/${c.id}/enrollments`, { studentId: st.id });
+      expect((await admin.patch(`/api/courses/${c.id}/enrollments/${e.body.id}`, { status })).status).toBe(200);
+    }
+    // What the dialog reads: the student's enrolments and the active workshops.
+    const act = async () => {
+      const student = (await admin.get(`/api/students/${st.id}`)).body;
+      const courses = (await admin.get('/api/courses?status=active')).body.items as { id: number; capacity: number | null; enrolledCount: number }[];
+      return Object.fromEntries(courses.map((c) => [c.id, enrolChoice(c, student.enrollments)]));
+    };
+    const before = await act();
+    expect(before[left.id]).toMatchObject({ kind: 'reenrol', full: false });
+    expect(before[finished.id]).toMatchObject({ kind: 'reenrol', full: false });
+    expect(before[fresh.id]).toEqual({ kind: 'enrol', full: false });
+    // Each button does what the API accepts.
+    for (const c of [left, finished, fresh]) {
+      const choice = before[c.id]!;
+      const res =
+        choice.kind === 'reenrol'
+          ? await admin.patch(`/api/courses/${c.id}/enrollments/${choice.enrollmentId}`, { status: 'enrolled' })
+          : await admin.post(`/api/courses/${c.id}/enrollments`, { studentId: st.id });
+      expect(res.status, c.name).toBeLessThan(300);
+    }
+    const after = await act();
+    expect([after[left.id], after[finished.id], after[fresh.id]]).toEqual([{ kind: 'enrolled' }, { kind: 'enrolled' }, { kind: 'enrolled' }]);
   });
 
   it('enforces capacity on enrol and re-enrol', async () => {

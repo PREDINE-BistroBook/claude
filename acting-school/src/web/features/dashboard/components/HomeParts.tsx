@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { Permission } from '@shared/permissions';
 import type { DashboardData } from '@shared/schemas/dashboard';
 import { ButtonLink, StatCard } from '@web/components/ui';
+import { canAdd } from '@web/layout/addActions';
 import { useAuth } from '@web/lib/auth';
 import { useFormat } from '@web/lib/format';
 import { useCafeStatus } from '../../cafe/api';
@@ -19,9 +20,13 @@ export interface HomeStat {
 
 export interface QuickAction {
   key: string;
+  /** "ns:key" of its words (layout/addActions.ts HOME_QUICK_ACTIONS: the list button's own). */
+  labelKey: string;
   to: string;
   icon: LucideIcon;
   permission: Permission;
+  /** A second permission the page needs as well (Add enquiry: admissions.read). */
+  also?: Permission;
 }
 
 /** Tailwind needs the full class names written out. */
@@ -58,8 +63,11 @@ export function StatGrid({ stats, counts }: { stats: HomeStat[]; counts: Dashboa
   );
 }
 
-/** Half the phone's width each: a long label ("Call someone to the office") takes two lines rather than being cut. */
-const QUICK_BUTTON = 'h-auto min-h-12 w-full whitespace-normal py-2 text-center leading-tight sm:w-auto';
+/**
+ * Half the phone's width each: a long label ("Call someone to the office") takes two lines rather than being cut.
+ * `whitespace-normal!`: the Button's own `whitespace-nowrap` comes later in the stylesheet and would win.
+ */
+const QUICK_BUTTON = 'h-auto min-h-12 w-full whitespace-normal! py-2 text-center leading-tight sm:w-auto';
 
 /**
  * Big buttons for the section's everyday "new …" actions, each only with its
@@ -67,10 +75,10 @@ const QUICK_BUTTON = 'h-auto min-h-12 w-full whitespace-normal py-2 text-center 
  * everyone, while it is switched on).
  */
 export function QuickActions({ actions }: { actions: QuickAction[] }) {
-  const { t } = useTranslation(['dashboard']);
+  const { t } = useTranslation(['dashboard', 'common']);
   const { can } = useAuth();
   const cafeOn = !!useCafeStatus()?.enabled;
-  const allowed = actions.filter((a) => can(a.permission));
+  const allowed = actions.filter((a) => canAdd(a, can));
   if (!allowed.length && !cafeOn) return null;
   return (
     <section aria-labelledby="quick-actions">
@@ -80,7 +88,7 @@ export function QuickActions({ actions }: { actions: QuickAction[] }) {
       <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
         {allowed.map((a) => (
           <ButtonLink key={a.key} to={a.to} icon={a.icon} size="lg" className={QUICK_BUTTON}>
-            {t(`quick.${a.key}`)}
+            {t(a.labelKey)}
           </ButtonLink>
         ))}
         <OrderDrinkButton className={QUICK_BUTTON} />
@@ -100,5 +108,5 @@ export function CardGrid({ children }: { children: ReactNode[] }) {
 export function useAllowedCount(actions: QuickAction[]): number {
   const { can } = useAuth();
   const cafeOn = !!useCafeStatus()?.enabled;
-  return actions.filter((a) => can(a.permission)).length + (cafeOn ? 1 : 0);
+  return actions.filter((a) => canAdd(a, can)).length + (cafeOn ? 1 : 0);
 }

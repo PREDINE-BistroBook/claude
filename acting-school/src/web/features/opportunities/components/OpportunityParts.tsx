@@ -28,10 +28,15 @@ import { useAuth } from '@web/lib/auth';
 import { errorMessageKey } from '@web/lib/forms';
 import { useFormat } from '@web/lib/format';
 import { useMoveOpportunity, useTurnIntoCasting } from '../api';
-import { deadlineLook, linkHost, statusMoves } from '../utils';
+import { cardCastingButton, castingRolesPath, deadlineLook, detailStatusMoves, linkHost, statusMoves, turnMovesToInterested } from '../utils';
 
-/** A button whose words wrap onto a second line rather than run out of a 375 px card (Arabic is longer). */
-const WRAP = 'h-auto min-h-12 w-full whitespace-normal py-2 text-center leading-tight';
+/**
+ * A button whose words wrap onto a second line rather than run out of a 375 px card (Arabic is longer).
+ * `whitespace-normal!`: the Button's own `whitespace-nowrap` comes later in the stylesheet and would win.
+ */
+const WRAP = 'h-auto min-h-12 w-full whitespace-normal! py-2 text-center leading-tight';
+/** A status button in the one row of three: the icon over the word, like the bottom bar, at least 48 px tall. */
+const STATUS_BUTTON = 'h-auto min-h-14 w-full min-w-0 flex-col gap-1 whitespace-normal! px-1 py-1.5 text-center text-sm leading-tight [&>svg]:size-5';
 
 const TYPE_ICONS: Record<OpportunityProjectType, LucideIcon> = {
   film: Film,
@@ -116,11 +121,13 @@ export function MinorsChip() {
 
 /**
  * The buttons under an opportunity: Open the post (everyone who sees it), and
- * with castings.write the status moves (Interested / Applied / Not for us —
- * all but the current one), then "Turn into a casting" — or "Open the
- * casting" once it has one.
+ * with castings.write the status moves in one row (Interested / Applied / Not
+ * for us — all but the current one; on its own page also "Back to New"), then
+ * "Turn into a casting" — or "Open the casting" once it has one. On a card
+ * "Turn into a casting" waits until it is Interested or Applied, so a card
+ * stays short on a phone (`cardCastingButton`); its own page always has it.
  */
-export function OpportunityActions({ opportunity: o, onMoved }: { opportunity: Opportunity; onMoved?: (status: OpportunityStatus) => void }) {
+export function OpportunityActions({ opportunity: o, place, onMoved }: { opportunity: Opportunity; place: 'card' | 'detail'; onMoved?: (status: OpportunityStatus) => void }) {
   const { t } = useTranslation(['opportunities', 'common']);
   const { can } = useAuth();
   const toast = useToast();
@@ -130,7 +137,7 @@ export function OpportunityActions({ opportunity: o, onMoved }: { opportunity: O
   const [confirm, setConfirm] = useState(false);
   const canWrite = can('castings.write');
   const host = linkHost(o.link);
-  const moves = canWrite ? statusMoves(o.status) : [];
+  const moves = canWrite ? (place === 'card' ? statusMoves(o.status) : detailStatusMoves(o.status)) : [];
   const fail = (err: unknown) =>
     toast.error(t(err instanceof ApiError && err.code === OPPORTUNITY_ERROR_CODES.alreadyCasting ? 'opportunities:errors.alreadyCasting' : errorMessageKey(err)));
 
@@ -150,7 +157,8 @@ export function OpportunityActions({ opportunity: o, onMoved }: { opportunity: O
     turn.mutate(o.id, {
       onSuccess: ({ castingId }) => {
         toast.success(t('toast.turned'));
-        navigate(`/castings/${castingId}`);
+        // Straight to the casting's Roles block: the next thing to fill in.
+        navigate(castingRolesPath(castingId));
       },
       onError: (err) => {
         setConfirm(false);
@@ -158,32 +166,34 @@ export function OpportunityActions({ opportunity: o, onMoved }: { opportunity: O
       },
     });
 
+  const casting = place === 'card' ? cardCastingButton(o) : o.castingId !== null ? 'open' : 'turn';
   const castingButton =
-    o.castingId !== null && can('castings.read') ? (
-      <ButtonLink key="casting" to={`/castings/${o.castingId}`} size="lg" icon={Clapperboard} className={WRAP}>
+    casting === 'open' && o.castingId !== null && can('castings.read') ? (
+      <ButtonLink key="casting" to={`/castings/${o.castingId}`} size="lg" icon={Clapperboard} className={WRAP} data-testid="open-casting">
         {t('actions.openCasting')}
       </ButtonLink>
-    ) : canWrite ? (
-      <Button key="casting" size="lg" icon={Clapperboard} onClick={() => setConfirm(true)} className={WRAP}>
+    ) : casting === 'turn' && canWrite ? (
+      <Button key="casting" size="lg" icon={Clapperboard} onClick={() => setConfirm(true)} className={WRAP} data-testid="turn-into-casting">
         {t('actions.toCasting')}
       </Button>
     ) : null;
   const statusButtons = moves.map((s) => {
-      const Icon = STATUS_ICONS[s];
-      return (
-        <Button
-          key={s}
-          size="lg"
-          variant={s === 'dismissed' ? 'ghost' : 'secondary'}
-          icon={Icon}
-          loading={move.isPending && move.variables?.status === s && move.variables.id === o.id}
-          disabled={move.isPending}
-          onClick={() => doMove(s)}
-          className={WRAP}
-        >
-          {t(`actions.${s}`)}
-        </Button>
-      );
+    const Icon = STATUS_ICONS[s];
+    return (
+      <Button
+        key={s}
+        size="lg"
+        icon={Icon}
+        loading={move.isPending && move.variables?.status === s && move.variables.id === o.id}
+        disabled={move.isPending}
+        onClick={() => doMove(s)}
+        // "Not for us" is bordered like the others (it is a button), its words a little quieter.
+        className={clsx(STATUS_BUTTON, s === 'dismissed' && 'text-muted!')}
+        data-testid={`move-${s}`}
+      >
+        {t(s === 'new' ? 'actions.backToNew' : `actions.${s}`)}
+      </Button>
+    );
   });
 
   return (
@@ -200,16 +210,14 @@ export function OpportunityActions({ opportunity: o, onMoved }: { opportunity: O
           <span className="sr-only"> {t('actions.opensNewTab')}</span>
         </a>
       )}
-      {/* Two by two; an odd last one takes the whole row. "Turn into a casting" has a row of its own. */}
-      {statusButtons.length > 0 && (
-        <div className={clsx('grid grid-cols-2 gap-2', statusButtons.length % 2 === 1 && '[&>*:last-child]:col-span-2')}>{statusButtons}</div>
-      )}
+      {/* One row: two or three side by side. "Turn into a casting" has a row of its own. */}
+      {statusButtons.length > 0 && <div className={clsx('grid gap-2', statusButtons.length === 3 ? 'grid-cols-3' : 'grid-cols-2')}>{statusButtons}</div>}
       {castingButton}
       <ConfirmDialog
         open={confirm}
         tone="primary"
         title={t('confirmCasting.title')}
-        message={t('confirmCasting.message')}
+        message={turnMovesToInterested(o.status) ? `${t('confirmCasting.message')} ${t('confirmCasting.movesToInterested')}` : t('confirmCasting.message')}
         confirmLabel={t('confirmCasting.yes')}
         loading={turn.isPending}
         onConfirm={doTurn}
@@ -265,7 +273,7 @@ export function OpportunityCard({ opportunity: o, today }: { opportunity: Opport
         )}
       </div>
       <div className="mt-4">
-        <OpportunityActions opportunity={o} />
+        <OpportunityActions opportunity={o} place="card" />
       </div>
     </article>
   );

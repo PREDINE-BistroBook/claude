@@ -13,10 +13,11 @@ export const castingKeys = {
   detail: (id: number) => ['castings', id] as const,
 };
 
-export function useCastings(filters: { q?: string; status?: CastingStatus }) {
+export function useCastings(filters: { q?: string; status?: CastingStatus }, enabled = true) {
   return useQuery({
     queryKey: castingKeys.list(filters),
     queryFn: () => api.get<ListResponse<CastingListItem>>(`/castings${qs(filters)}`),
+    enabled,
     // Keep the previous rows on screen while a new search loads.
     placeholderData: keepPreviousData,
   });

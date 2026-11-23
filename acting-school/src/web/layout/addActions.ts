@@ -25,7 +25,8 @@ import type { Permission } from '@shared/permissions';
  * - a **list** screen: a labelled "+ Add …" — on phones a fixed button at the
  *   bottom-end above the tab bar, on desktop in the page header
  *   (components/ui/AddAction.tsx ListAddAction), and "Add the first one" inside
- *   its empty state (EmptyAddAction);
+ *   its empty state (EmptyAddAction) — only while the list has nothing at all
+ *   (`wholeListEmpty`): an empty tab next to full ones has the screen's own Add;
  * - a **record** page: each sub-list has its own "+ Add …" at the top of its
  *   block (AddButton), listed here under `subLists`;
  * - a **section home**: quick-action tiles for the most common additions
@@ -49,10 +50,25 @@ export type ScreenKind =
 export interface AddSpec {
   /** "ns:key" of the label ("+ Add student"). */
   labelKey: string;
+  /**
+   * "ns:key" of the empty state's button, "Add the first one" — per screen,
+   * because Arabic needs the noun («أضف أول طالب», «أضف أول فرصة»): a list whose
+   * page shows <ScreenEmptyAdd> has one (the test checks).
+   */
+  firstKey?: string;
   /** The page it opens; omitted when it opens a dialog on the same screen. */
   to?: string;
   /** Who sees it — exactly who the API lets add. Omitted: everyone signed in (e.g. a new message). */
   permission?: Permission;
+  /** A second permission the API needs as well (the enquiries API is behind admissions.read): the Add shows only with both. */
+  also?: Permission;
+  /**
+   * The request the Add ends in, "METHOD /api/path" (":id" for a record's id).
+   * tests/api/add-actions.test.ts sends it as someone holding only `permission`
+   * (never refused) and as someone without it (403): the button and the API
+   * agree, for a dialog as much as for a page.
+   */
+  api: string;
 }
 
 export interface SubListSpec {
@@ -83,28 +99,45 @@ export const SCREENS = {
   '*': { kind: 'page' },
 
   // ── School ──
+  // A week calendar, not a list: its "+ Add a session on Mon 23" sits under the day it starts on (phones; desktop: by the week's heading).
   schedule: {
-    kind: 'list',
-    add: { labelKey: 'common:add.extraSession', permission: 'courses.write' },
+    kind: 'page',
+    subLists: [{ block: 'the day shown (phones) / the week (desktop)', labelKey: 'schedule:addSessionOn', who: 'courses.write' }],
   },
-  admissions: { kind: 'list', add: { labelKey: 'common:add.enquiry', to: '/admissions/new', permission: 'admissions.write' } },
+  admissions: {
+    kind: 'list',
+    add: {
+      labelKey: 'common:add.enquiry',
+      firstKey: 'common:add.firstOf.enquiry',
+      to: '/admissions/new',
+      permission: 'admissions.write',
+      also: 'admissions.read',
+      api: 'POST /api/leads',
+    },
+  },
   'admissions/new': { kind: 'form' },
   'admissions/:id': {
     kind: 'record',
     subLists: [
-      { block: 'contact log (timeline)', labelKey: 'common:add.contact', who: 'admissions.write, while the enquiry is open' },
+      { block: 'contact log (timeline)', labelKey: 'common:add.contact', who: 'admissions.write (any status, as the API)' },
       { block: 'interviews', labelKey: 'common:add.interview', who: 'admissions.write, while the enquiry is open' },
     ],
   },
   'admissions/:id/edit': { kind: 'form' },
-  students: { kind: 'list', add: { labelKey: 'common:add.student', to: '/students/new', permission: 'students.write' } },
+  students: {
+    kind: 'list',
+    add: { labelKey: 'common:add.student', firstKey: 'common:add.firstOf.student', to: '/students/new', permission: 'students.write', api: 'POST /api/students' },
+  },
   'students/new': { kind: 'form' },
   'students/:id': {
     kind: 'record',
     subLists: [{ block: 'workshops (enrolments)', labelKey: 'common:add.toWorkshop', who: 'courses.write' }],
   },
   'students/:id/edit': { kind: 'form' },
-  classes: { kind: 'list', add: { labelKey: 'common:add.workshop', to: '/classes/new', permission: 'courses.write' } },
+  classes: {
+    kind: 'list',
+    add: { labelKey: 'common:add.workshop', firstKey: 'common:add.firstOf.workshop', to: '/classes/new', permission: 'courses.write', api: 'POST /api/courses' },
+  },
   'classes/new': { kind: 'form' },
   'classes/:id': {
     kind: 'record',
@@ -118,11 +151,17 @@ export const SCREENS = {
   'sessions/:id': { kind: 'record', subLists: [] },
 
   // ── Casting ──
-  talent: { kind: 'list', add: { labelKey: 'common:add.talent', to: '/talent/new', permission: 'talent.write' } },
+  talent: {
+    kind: 'list',
+    add: { labelKey: 'common:add.talent', firstKey: 'common:add.firstOf.talent', to: '/talent/new', permission: 'talent.write', api: 'POST /api/talent' },
+  },
   'talent/new': { kind: 'form' },
   'talent/:id': { kind: 'record', subLists: [{ block: 'photos', labelKey: 'common:add.photos', who: 'talent.write' }] },
   'talent/:id/edit': { kind: 'form' },
-  castings: { kind: 'list', add: { labelKey: 'common:add.casting', to: '/castings/new', permission: 'castings.write' } },
+  castings: {
+    kind: 'list',
+    add: { labelKey: 'common:add.casting', firstKey: 'common:add.firstOf.casting', to: '/castings/new', permission: 'castings.write', api: 'POST /api/castings' },
+  },
   'castings/new': { kind: 'form' },
   'castings/:id': {
     kind: 'record',
@@ -140,7 +179,13 @@ export const SCREENS = {
   'casting/applications/:id': { kind: 'record', subLists: [] },
   'casting/opportunities': {
     kind: 'list',
-    add: { labelKey: 'common:add.opportunity', to: '/casting/opportunities/new', permission: 'castings.write' },
+    add: {
+      labelKey: 'common:add.opportunity',
+      firstKey: 'common:add.firstOf.opportunity',
+      to: '/casting/opportunities/new',
+      permission: 'castings.write',
+      api: 'POST /api/opportunities',
+    },
   },
   'casting/opportunities/new': { kind: 'form' },
   'casting/opportunities/:id': { kind: 'record', subLists: [] },
@@ -152,7 +197,10 @@ export const SCREENS = {
 
   // ── Website ──
   'website/pages': { kind: 'form' },
-  'website/coaches': { kind: 'list', add: { labelKey: 'common:add.coach', to: '/website/coaches/new', permission: 'website.manage' } },
+  'website/coaches': {
+    kind: 'list',
+    add: { labelKey: 'common:add.coach', firstKey: 'common:add.firstOf.coach', to: '/website/coaches/new', permission: 'website.manage', api: 'POST /api/site/coaches' },
+  },
   'website/coaches/new': { kind: 'form' },
   'website/coaches/:id': { kind: 'form' },
   'website/workshops': {
@@ -161,21 +209,29 @@ export const SCREENS = {
   },
   'website/workshops/:courseId': { kind: 'form' },
   'website/casting-call': { kind: 'form' },
-  'website/links': { kind: 'list', add: { labelKey: 'common:add.link', permission: 'website.manage' } },
+  // A dialog on the page: the links are part of the site's content.
+  'website/links': {
+    kind: 'list',
+    add: { labelKey: 'common:add.link', firstKey: 'common:add.firstOf.link', permission: 'website.manage', api: 'PUT /api/site/content' },
+  },
 
   // ── Outside the sections ──
-  team: { kind: 'list', add: { labelKey: 'staff:addStaff', to: '/staff/new', permission: 'staff.manage' } },
+  team: { kind: 'list', add: { labelKey: 'staff:addStaff', to: '/staff/new', permission: 'staff.manage', api: 'POST /api/staff' } },
   staff: { kind: 'redirect' },
   'staff/new': { kind: 'form' },
   'staff/:id': { kind: 'form' },
-  positions: { kind: 'list', add: { labelKey: 'common:add.position', to: '/positions/new', permission: 'positions.manage' } },
+  positions: {
+    kind: 'list',
+    add: { labelKey: 'common:add.position', firstKey: 'common:add.firstOf.position', to: '/positions/new', permission: 'positions.manage', api: 'POST /api/positions' },
+  },
   'positions/new': { kind: 'form' },
   'positions/:id': { kind: 'form' },
   settings: {
     kind: 'page',
     subLists: [{ block: 'interview criteria', labelKey: 'common:add.criterion', who: 'settings.manage' }],
   },
-  messages: { kind: 'list', add: { labelKey: 'common:add.message' } },
+  // A dialog: pick someone, then their conversation opens (started on the server).
+  messages: { kind: 'list', add: { labelKey: 'common:add.message', api: 'POST /api/chat/conversations' } },
   'messages/:id': { kind: 'page' },
   cafeteria: { kind: 'page' },
   'cafeteria/board': {
@@ -200,45 +256,69 @@ export function screenAdd(screen: ListScreenWithAdd): AddSpec {
   return (SCREENS[screen] as ScreenSpec).add!;
 }
 
-/** Whether the person may use that screen's Add (no permission named: everyone signed in). */
-export function canAdd(add: AddSpec, can: (p: Permission) => boolean): boolean {
-  return !add.permission || can(add.permission);
+/** Whether the person may use that screen's Add (no permission named: everyone signed in; `also`: that one too). */
+export function canAdd(add: Partial<AddSpec>, can: (p: Permission) => boolean): boolean {
+  return (!add.permission || can(add.permission)) && (!add.also || can(add.also));
 }
+
+/**
+ * Whether a list has nothing at all — every tab's count is known and zero —
+ * so its empty state may say "Add the first one". An empty tab (New, Open…)
+ * while others hold records is not an empty list: there the screen's own
+ * "+ Add …" is already on screen, and "the first one" would be wrong.
+ */
+export function wholeListEmpty(counts: readonly (number | null | undefined)[] | undefined | false): boolean {
+  return !!counts && counts.length > 0 && counts.every((n) => n === 0);
+}
+
+/**
+ * Who owns which corner of a phone screen, above the tab bar (so two floating
+ * buttons never sit on top of each other): a list's fixed "+ Add …" keeps the
+ * bottom-end; the AI pack's "Secretary" (Part F2, not built yet) takes the
+ * bottom-start. tests/unit/add-actions.test.ts holds the spec and the
+ * component to this.
+ */
+export const PHONE_FLOATING_CORNERS = { add: 'bottom-end', secretary: 'bottom-start' } as const;
 
 // ── Section homes ───────────────────────────────────────────────────────────
 
 export interface QuickActionSpec {
-  /** Key in dashboard:quick. */
+  /** Its name (and React key). */
   key: string;
+  /** "ns:key" of the words: the same as the list button that opens the same page ("Add student" on the home and on Students). */
+  labelKey: string;
   to: string;
   icon: LucideIcon;
   permission: Permission;
+  /** A second permission the page (and its API) needs as well — as its list's Add. */
+  also?: Permission;
 }
 
 /**
  * The quick-action tiles of each section home, in order, each shown only with
- * its permission (the page it opens has the same guard): School — New
- * enquiry, New student, New workshop; Casting — New talent, New casting, Add
- * opportunity; Website — Add coach, Add link. "Call to the office" (with
- * staff.summon) and "Order a drink" (the cafeteria, while it is on) follow.
+ * its permission (the page it opens has the same guard) and worded like the
+ * list's own button: School — Add enquiry, Add student, Add workshop; Casting
+ * — Add talent, Add casting, Add opportunity; Website — Add coach, Add link.
+ * "Call to the office" (with staff.summon) and "Order a drink" (the
+ * cafeteria, while it is on) follow.
  */
 export const HOME_QUICK_ACTIONS = {
   school: [
-    { key: 'newEnquiry', to: '/admissions/new', icon: MessageSquarePlus, permission: 'admissions.write' },
-    { key: 'newStudent', to: '/students/new', icon: UserPlus, permission: 'students.write' },
-    { key: 'newWorkshop', to: '/classes/new', icon: GraduationCap, permission: 'courses.write' },
+    { key: 'addEnquiry', labelKey: 'common:add.enquiry', to: '/admissions/new', icon: MessageSquarePlus, permission: 'admissions.write', also: 'admissions.read' },
+    { key: 'addStudent', labelKey: 'common:add.student', to: '/students/new', icon: UserPlus, permission: 'students.write' },
+    { key: 'addWorkshop', labelKey: 'common:add.workshop', to: '/classes/new', icon: GraduationCap, permission: 'courses.write' },
     // For those who may call people to the office: the Team page has the button beside everyone.
-    { key: 'callToOffice', to: '/team', icon: BellRing, permission: 'staff.summon' },
+    { key: 'callToOffice', labelKey: 'dashboard:quick.callToOffice', to: '/team', icon: BellRing, permission: 'staff.summon' },
   ],
   casting: [
-    { key: 'addTalent', to: '/talent/new', icon: UserPlus, permission: 'talent.write' },
-    { key: 'newCasting', to: '/castings/new', icon: Clapperboard, permission: 'castings.write' },
-    { key: 'addOpportunity', to: '/casting/opportunities/new', icon: Binoculars, permission: 'castings.write' },
-    { key: 'callToOffice', to: '/team', icon: BellRing, permission: 'staff.summon' },
+    { key: 'addTalent', labelKey: 'common:add.talent', to: '/talent/new', icon: UserPlus, permission: 'talent.write' },
+    { key: 'addCasting', labelKey: 'common:add.casting', to: '/castings/new', icon: Clapperboard, permission: 'castings.write' },
+    { key: 'addOpportunity', labelKey: 'common:add.opportunity', to: '/casting/opportunities/new', icon: Binoculars, permission: 'castings.write' },
+    { key: 'callToOffice', labelKey: 'dashboard:quick.callToOffice', to: '/team', icon: BellRing, permission: 'staff.summon' },
   ],
   website: [
-    { key: 'addCoach', to: '/website/coaches/new', icon: Presentation, permission: 'website.manage' },
+    { key: 'addCoach', labelKey: 'common:add.coach', to: '/website/coaches/new', icon: Presentation, permission: 'website.manage' },
     // The links page opens its "Add link" form straight away (?add=1).
-    { key: 'addLink', to: '/website/links?add=1', icon: Link2, permission: 'website.manage' },
+    { key: 'addLink', labelKey: 'common:add.link', to: '/website/links?add=1', icon: Link2, permission: 'website.manage' },
   ],
 } as const satisfies Record<'school' | 'casting' | 'website', readonly QuickActionSpec[]>;

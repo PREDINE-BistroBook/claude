@@ -188,7 +188,7 @@ function StudentView({ student: s, del }: { student: StudentDetail; del: ReturnT
           </>
         )}
 
-        <Card title={t('detail.classes')} padded={false} actions={canEnrol && <AddButton label={t('common:add.toWorkshop')} onClick={() => setEnrolling(true)} />}>
+        <Card title={t('detail.classes')} padded={false} actions={canEnrol && <AddButton label={t('common:add.toWorkshop')} onClick={() => setEnrolling(true)} testId="add-to-workshop" />}>
           {s.enrollments.length ? (
             <ul className="divide-y divide-line">
               {s.enrollments.map((e) => (

@@ -4,7 +4,7 @@ import type { ReactElement } from 'react';
 import type { RouteObject } from 'react-router';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { PERMISSIONS, type Permission } from '../../src/shared/permissions';
-import { HOME_QUICK_ACTIONS, SCREENS, canAdd, type ScreenSpec } from '../../src/web/layout/addActions';
+import { HOME_QUICK_ACTIONS, PHONE_FLOATING_CORNERS, SCREENS, canAdd, wholeListEmpty, type ScreenSpec } from '../../src/web/layout/addActions';
 
 /**
  * Part K2: "Add" everywhere. The app's route table against layout/addActions.ts:
@@ -17,6 +17,41 @@ import { HOME_QUICK_ACTIONS, SCREENS, canAdd, type ScreenSpec } from '../../src/
 
 const SRC = path.resolve(__dirname, '../../src/web');
 const read = (rel: string) => fs.readFileSync(path.join(SRC, rel), 'utf8');
+
+/** Source without its comments (block, JSX and line comments; "https://" in a string stays): a commented-out element doesn't count. */
+const stripComments = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`\\])\/\/.*$/gm, '$1');
+
+/** Every .tsx under features/, by its path relative to src/web. */
+const featureFiles = () =>
+  fs
+    .readdirSync(path.join(SRC, 'features'), { recursive: true, encoding: 'utf8' })
+    .filter((f) => f.endsWith('.tsx'))
+    .map((f) => path.join('features', f));
+
+/**
+ * The page file a route renders, read from its feature's routes.tsx: the
+ * component in the route's element (past its guard) and the file its
+ * lazy(() => import('./File')) names — or, for a small wrapper in routes.tsx
+ * itself (the School schedule's), the page that wrapper renders.
+ */
+function pageFileOf(routePath: string): string {
+  const skip = new Set(['Guard', 'RequireSection', 'Navigate', 'MenuGuard', 'NoAccess']);
+  for (const file of featureFiles().filter((f) => f.endsWith('routes.tsx'))) {
+    const src = read(file);
+    const at = src.indexOf(`path: '${routePath}'`);
+    if (at < 0) continue;
+    const lazyFile = (name: string) => src.match(new RegExp(`const ${name} = lazy\\(\\(\\) => import\\('\\./(\\w+)'\\)\\)`))?.[1];
+    const comp = [...src.slice(at).matchAll(/<([A-Z]\w*)/g)].map((m) => m[1]!).find((n) => !skip.has(n))!;
+    let page = lazyFile(comp);
+    if (!page) {
+      const body = src.slice(src.indexOf(`function ${comp}(`));
+      page = lazyFile([...body.matchAll(/<([A-Z]\w*Page)\b/g)].map((m) => m[1]!)[0]!);
+    }
+    expect(page, `${routePath}: its page in ${file}`).toBeTruthy();
+    return path.join(path.dirname(file), `${page}.tsx`);
+  }
+  throw new Error(`no route file has path '${routePath}'`);
+}
 
 // The route modules load the app's i18n set-up through Guard, which touches `document`.
 beforeAll(() => {
@@ -57,6 +92,11 @@ const guardOf = (r: RouteObject): Permission | null => {
   const el = r.element as ReactElement<{ permission?: Permission }> | undefined;
   return el?.props && typeof el.props.permission === 'string' ? el.props.permission : null;
 };
+/** The second permission a <Guard … also="…"> asks for (the API behind the page needs both); null when none. */
+const guardAlsoOf = (r: RouteObject): Permission | null => {
+  const el = r.element as ReactElement<{ permission?: Permission; also?: Permission }> | undefined;
+  return el?.props && typeof el.props.also === 'string' ? el.props.also : null;
+};
 /** "/website/links?add=1" → the route table's "website/links". */
 const routeKey = (to: string) => to.split(/[?#]/)[0]!.replace(/^\//, '');
 
@@ -91,6 +131,9 @@ describe('every route says what can be added on it', () => {
     expect(blocks('admissions/:id')).toEqual(['contact log (timeline)', 'interviews']);
     expect(blocks('talent/:id')).toEqual(['photos']);
     expect(blocks('students/:id')).toEqual(['workshops (enrolments)']);
+    // An enquiry's contact log takes entries whatever its status (the page and POST /api/leads/:id/activities); interviews only while open.
+    expect(screens['admissions/:id']!.subLists![0]!.who).not.toMatch(/while the enquiry is open/);
+    expect(screens['admissions/:id']!.subLists![1]!.who).toMatch(/while the enquiry is open/);
   });
 
   it('an Add that opens a page asks for exactly that page’s permission (so it never shows to someone who would be refused)', async () => {
@@ -104,23 +147,53 @@ describe('every route says what can be added on it', () => {
       const target = byPath.get(routeKey(add.to));
       expect(target, `${screen} → ${add.to}`).toBeTruthy();
       expect(guardOf(target!), `${screen} → ${add.to}`).toBe(add.permission ?? null);
+      expect(guardAlsoOf(target!), `${screen} → ${add.to}`).toBe(add.also ?? null);
     }
   });
 
   it('the section homes’ quick actions: the ones the school asked for, each with the permission of the page it opens', async () => {
     const routes = await appRoutes();
     const byPath = new Map(routes.map((r) => [pathOf(r), r]));
-    expect(HOME_QUICK_ACTIONS.school.map((a) => a.key)).toEqual(['newEnquiry', 'newStudent', 'newWorkshop', 'callToOffice']);
-    expect(HOME_QUICK_ACTIONS.casting.map((a) => a.key)).toEqual(['addTalent', 'newCasting', 'addOpportunity', 'callToOffice']);
+    expect(HOME_QUICK_ACTIONS.school.map((a) => a.key)).toEqual(['addEnquiry', 'addStudent', 'addWorkshop', 'callToOffice']);
+    expect(HOME_QUICK_ACTIONS.casting.map((a) => a.key)).toEqual(['addTalent', 'addCasting', 'addOpportunity', 'callToOffice']);
     expect(HOME_QUICK_ACTIONS.website.map((a) => a.key)).toEqual(['addCoach', 'addLink']);
     for (const a of Object.values(HOME_QUICK_ACTIONS).flat()) {
       const target = byPath.get(routeKey(a.to));
       expect(target, a.to).toBeTruthy();
       const guard = guardOf(target!);
-      // A guarded page: the same permission. The Team page is everyone's (the call button there needs staff.summon).
-      if (guard) expect(a.permission, a.to).toBe(guard);
-      else expect(a.to).toBe('/team');
+      // A guarded page: the same permission(s). The Team page is everyone's (the call button there needs staff.summon).
+      if (guard) {
+        expect(a.permission, a.to).toBe(guard);
+        expect('also' in a ? a.also : null, a.to).toBe(guardAlsoOf(target!));
+      } else expect(a.to).toBe('/team');
     }
+  });
+
+  it('a home tile says exactly what the list’s own button says ("Add student" on the School home and on Students)', () => {
+    const lists = Object.entries(screens).filter(([, s]) => s.add);
+    for (const a of Object.values(HOME_QUICK_ACTIONS).flat()) {
+      if (a.to === '/team') continue; // "Call someone to the office": not an Add.
+      const target = routeKey(a.to);
+      // The list whose Add opens that page — or the list itself, when its Add is a dialog there ("/website/links?add=1").
+      const list = lists.find(([p, s]) => (s.add!.to ? routeKey(s.add!.to) === target : p === target));
+      expect(list, a.to).toBeTruthy();
+      expect(a.labelKey, a.to).toBe(list![1].add!.labelKey);
+      expect(a.permission, a.to).toBe(list![1].add!.permission);
+      expect('also' in a ? a.also : undefined, a.to).toBe(list![1].add!.also);
+    }
+    // The tiles take their words from there: no "New …" copies left in the dashboard's strings.
+    expect(read('features/dashboard/components/HomeParts.tsx')).toContain('{t(a.labelKey)}');
+  });
+
+  it('a Button meant to wrap its words really wraps: whitespace-normal! (the Button\'s own whitespace-nowrap comes later in the CSS)', () => {
+    // Found in the final phone walkthrough: «أعدها إلى «جديدة»» ran out of its third of the row. Only a <Button>/<ButtonLink> class needs the "!".
+    const files = ['features/opportunities/components/OpportunityParts.tsx', 'features/dashboard/components/HomeParts.tsx'];
+    for (const f of files) {
+      const src = read(f);
+      expect(src, f).toContain('whitespace-normal!');
+      expect(src.match(/whitespace-normal(?!!)/g), f).toBeNull();
+    }
+    expect(read('components/ui/Button.tsx')).toContain('whitespace-nowrap');
   });
 
   it('the homes read their quick actions from addActions.ts (one list, not a copy)', () => {
@@ -129,24 +202,66 @@ describe('every route says what can be added on it', () => {
     expect(read('features/website/WebsiteHomePage.tsx')).toContain('HOME_QUICK_ACTIONS.website');
   });
 
-  it('every list screen with an Add really shows it: its page renders <ScreenAddAction screen="…"> (and nothing else does)', () => {
-    const files = fs
-      .readdirSync(path.join(SRC, 'features'), { recursive: true, encoding: 'utf8' })
-      .filter((f) => f.endsWith('.tsx'))
-      .map((f) => read(path.join('features', f)));
-    const used = new Set(files.flatMap((src) => [...src.matchAll(/<ScreenAddAction\s+screen="([^"]+)"/g)].map((m) => m[1]!)));
+  it('every list screen with an Add really shows it: its own page renders <ScreenAddAction screen="…"> as a header’s actions (not commented out), and no other file does', () => {
     const withAdd = Object.entries(screens)
       .filter(([, s]) => s.add)
       .map(([p]) => p);
-    expect(withAdd.filter((p) => !used.has(p))).toEqual([]);
+    expect(withAdd.length).toBeGreaterThan(8);
+    const sources = new Map(featureFiles().map((f) => [f, stripComments(read(f))]));
+    for (const screen of withAdd) {
+      const page = pageFileOf(screen);
+      const element = `<ScreenAddAction screen="${screen}"`;
+      // In its own page, as the actions of a PageHeader (or of the page's own Card): the header button on desktop, the fixed one on phones.
+      expect(sources.get(page), `${screen}: ${element} in ${page}`).toMatch(new RegExp(`actions=\\{<ScreenAddAction\\s+screen="${screen}"`));
+      // Nowhere else: an Add rendered from another screen would show there, under the wrong page.
+      expect([...sources].filter(([f, src]) => f !== page && src.includes(element)).map(([f]) => f), screen).toEqual([]);
+    }
+    // And nothing renders an Add for a screen that has none.
+    const used = new Set([...sources.values()].flatMap((src) => [...src.matchAll(/<Screen(?:Add|EmptyAdd)\w*\s+screen="([^"]+)"/g)].map((m) => m[1]!)));
     expect([...used].filter((p) => !withAdd.includes(p))).toEqual([]);
+  });
+
+  it('a list whose empty state shows "Add the first one" has its own words for it (Arabic names the thing), in its own page', () => {
+    const sources = new Map(featureFiles().map((f) => [f, stripComments(read(f))]));
+    const withEmpty = new Set([...sources.values()].flatMap((src) => [...src.matchAll(/<ScreenEmptyAdd\s+screen="([^"]+)"/g)].map((m) => m[1]!)));
+    expect(withEmpty.size).toBeGreaterThan(6);
+    for (const screen of withEmpty) {
+      expect(screens[screen]?.add?.firstKey, screen).toMatch(/^common:add\.firstOf\./);
+      expect(sources.get(pageFileOf(screen)), screen).toContain(`<ScreenEmptyAdd screen="${screen}"`);
+    }
+  });
+
+  it('"Add the first one" only while the list has nothing at all — not on an empty tab next to full ones', () => {
+    expect(wholeListEmpty([0, 0, 0, 0])).toBe(true);
+    expect(wholeListEmpty([0, 3, 0, 0])).toBe(false);
+    // Not known yet: no button rather than a wrong one.
+    expect(wholeListEmpty(undefined)).toBe(false);
+    expect(wholeListEmpty(false)).toBe(false);
+    expect(wholeListEmpty([])).toBe(false);
+    expect(wholeListEmpty([0, undefined])).toBe(false);
+    // The three lists with tabs ask it with every tab's count (or, for castings, the whole list).
+    expect(read('features/opportunities/OpportunitiesPage.tsx')).toMatch(/wholeListEmpty\(counts\.data && Object\.values\(counts\.data\)\)/);
+    expect(read('features/admissions/LeadsPage.tsx')).toMatch(/wholeListEmpty\(counts\.data && \[counts\.data\.open, counts\.data\.closed\]\)/);
+    expect(read('features/castings/CastingsPage.tsx')).toMatch(/noCastingsAtAll \? <ScreenEmptyAdd screen="castings"/);
+  });
+
+  it('the School schedule is a calendar: no fixed button over its days; "+ Add a session on <day>" in the page, for courses.write (the API’s permission)', () => {
+    expect(screens.schedule!.kind).toBe('page');
+    expect(screens.schedule!.add).toBeUndefined();
+    const src = stripComments(read('features/schedule/SchedulePage.tsx'));
+    expect(src).not.toContain('ScreenAddAction');
+    expect(src).toContain("const canAddSession = showsClasses && can('courses.write');");
+    expect(src).toMatch(/canAddSession && \(\s*<AddButton label=\{t\('addSessionOn'/);
   });
 
   it('canAdd follows the permission; an Add without one (a new message) is everyone’s', () => {
     const can = (held: Permission[]) => (p: Permission) => held.includes(p);
-    expect(canAdd({ labelKey: 'x', permission: 'students.write' }, can(['students.read']))).toBe(false);
-    expect(canAdd({ labelKey: 'x', permission: 'students.write' }, can(['students.write']))).toBe(true);
+    expect(canAdd({ permission: 'students.write' }, can(['students.read']))).toBe(false);
+    expect(canAdd({ permission: 'students.write' }, can(['students.write']))).toBe(true);
     expect(canAdd(SCREENS.messages.add, can([]))).toBe(true);
+    // An enquiry needs admissions.read as well (the enquiries API is behind it).
+    expect(canAdd(SCREENS.admissions.add, can(['admissions.write']))).toBe(false);
+    expect(canAdd(SCREENS.admissions.add, can(['admissions.write', 'admissions.read']))).toBe(true);
   });
 
   it('every Add label exists in English and Arabic', async () => {
@@ -156,14 +271,20 @@ describe('every route says what can be added on it', () => {
       return rest.split('.').reduce<unknown>((o, k) => (o as Record<string, unknown> | undefined)?.[k], namespaces[ns][lang]);
     };
     const keys = [
-      ...Object.values(screens).flatMap((s) => [s.add?.labelKey, ...(s.subLists ?? []).map((b) => b.labelKey)]),
-      'common:add.first',
+      ...Object.values(screens).flatMap((s) => [s.add?.labelKey, s.add?.firstKey, ...(s.subLists ?? []).map((b) => b.labelKey)]),
+      ...Object.values(HOME_QUICK_ACTIONS)
+        .flat()
+        .map((a) => a.labelKey),
     ].filter((k): k is string => !!k);
     for (const k of keys) {
       expect(typeof lookup('en', k), k).toBe('string');
       expect(typeof lookup('ar', k), k).toBe('string');
     }
-    for (const a of Object.values(HOME_QUICK_ACTIONS).flat()) expect(typeof lookup('ar', `dashboard:quick.${a.key}`), a.key).toBe('string');
+    // "Add the first one" in Arabic names the thing («أضف أول طالب»), never the masculine «واحد» that read badly with فرصة / ورشة / موهبة.
+    for (const [key, ar] of Object.entries(namespaces.common.ar.add.firstOf)) {
+      expect(ar, key).toMatch(/^أضف أول \S/);
+      expect(ar, key).not.toContain('واحد');
+    }
   });
 });
 
@@ -178,6 +299,19 @@ describe('the fixed "+ Add …" on phones keeps clear of everything', () => {
     // At least 48 px (h-14 = 56 px), icon and words.
     expect(addAction).toContain('h-14');
     expect(addAction).toContain('icon={Plus}');
+  });
+
+  it('keeps the bottom-end corner; the AI pack’s Secretary (Part F2) is held to the bottom-start, so the two never sit on top of each other', () => {
+    expect(PHONE_FLOATING_CORNERS).toEqual({ add: 'bottom-end', secretary: 'bottom-start' });
+    // The component: bottom, end side (logical: right in English, left in Arabic).
+    expect(addAction).toMatch(/data-add-fab className="[^"]*\bbottom-\[[^"]*\bjustify-end\b/);
+    // The spec says the same in both parts: F2's phone placement is bottom-start, K2 keeps bottom-end and names the Secretary's corner.
+    const spec = fs.readFileSync(path.resolve(__dirname, '../../docs/SECTIONS_AND_WEBSITE.md'), 'utf8');
+    const f2 = spec.slice(spec.indexOf('### F2.'), spec.indexOf('### F3.'));
+    expect(f2).toMatch(/On phones: \*\*bottom-start\*\*/);
+    expect(f2).not.toMatch(/On phones: bottom-end/);
+    const k2 = spec.slice(spec.indexOf('### K2.'), spec.indexOf('### Tests and checks', spec.indexOf('### K2.')));
+    expect(k2).toMatch(/bottom-start[^\n]*Secretary/);
   });
 
   it('gives the page room so the last row scrolls clear of it, lifts toasts above it, and steps aside for a sticky bottom bar', () => {

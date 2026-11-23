@@ -519,7 +519,7 @@ Built together with the radar (Part E) on one shared AI foundation. **Claude Hai
 
 ### F2. Staff "Secretary" (every signed-in worker)
 - **Button:** a floating, labelled button "Secretary" / "السكرتيرة" on every staff screen.
-  - On phones: bottom-end, above the tab bar, at least 48 px.
+  - On phones: **bottom-start**, above the tab bar, at least 48 px. The bottom-end corner belongs to the list screens' fixed "+ Add …" (Part K2), so the two never sit on top of each other (`PHONE_FLOATING_CORNERS` in `layout/addActions.ts`; `tests/unit/add-actions.test.ts` holds this section to it). Decided 2026-11-23 at the Part K review.
   - It opens a chat sheet (the `Modal`, a bottom sheet on phones) with a greeting and three starter suggestions that fit the person's sections, e.g. "Who has a session today?", "Which enquiries need a follow-up?", "How do I add a new student?".
   - It answers in the language the person writes in (Egyptian Arabic welcome).
 - **What it does (v1):**
@@ -1013,12 +1013,12 @@ The radar (Part E) is on hold until the school confirms the AI pack. The **list*
 
 ### K2. A clear "Add" on every screen that has something to add
 One consistent pattern, so nobody has to hunt for it:
-- **List screens:** a labelled primary button, "+ Add …" ("+ Add student", "+ Add workshop", …). On phones it is a **fixed button at the bottom-end, above the tab bar**: at least 48 px, icon plus words, never covering the last row, the chat composer, form action bars or the call-to-the-office banner. On desktop it sits in the page header.
+- **List screens:** a labelled primary button, "+ Add …" ("+ Add student", "+ Add workshop", …). On phones it is a **fixed button at the bottom-end, above the tab bar**: at least 48 px, icon plus words, never covering the last row, the chat composer, form action bars or the call-to-the-office banner. On desktop it sits in the page header. The bottom-start corner is kept for the AI pack's floating Secretary (Part F2), so the two buttons never sit on top of each other.
 - **Empty lists** show the same action inside the empty state ("No students yet — Add the first one").
 - **Inside a record:** each sub-list has its own "+ Add …" at the top of that block. For example: a workshop's sessions, students, and photos & files; a casting's roles, submissions and files; an enquiry's contact log and interviews; a talent's photos; a student's workshops; the website's coaches and links.
-- **Section homes:** quick-action tiles for the most common additions, each shown only with the permission:
-  - School: New enquiry, New student, New workshop;
-  - Casting: New talent, New casting, Add opportunity;
+- **Section homes:** quick-action tiles for the most common additions, each shown only with the permission, worded like the list's own button (decided at the review: "Add student" on the home and on Students):
+  - School: Add enquiry, Add student, Add workshop;
+  - Casting: Add talent, Add casting, Add opportunity;
   - Website: Add coach, Add link.
 - **The work:** audit every list and every record page in the app. Where a create action exists but is hidden, far away or icon-only, bring it into this pattern. Where a create flow is missing but the data model supports it, add it. Report anything that needs a product decision instead of guessing. Candidates to check:
   - adding an extra session to a workshop from the schedule;
@@ -1047,6 +1047,15 @@ One consistent pattern, so nobody has to hunt for it:
   - "Turn into a casting" doesn't create roles from the free-text roles; they are copied into the casting's notes. Should it try?
   - Messages are one-to-one; a group conversation would need a data-model change.
   - The interview criteria's move/remove icons in Settings are still 32 px (outside this part).
+- **After the review (2026-11-23):**
+  - "+ Add to a workshop" on a student's page offers **Re-enroll** for a workshop the student left or finished (as the workshop's own Add student does), never an Enroll the API refuses.
+  - Opportunity cards: Open the post, then one row of status buttons (icon over word); "Turn into a casting" on the card only under Interested and Applied (always on the opportunity's page, which also has "Back to New"). The confirm says a New one moves to Interested; it lands on the casting's Roles block. The form asks for the screenshot right after the title; a link pasted without `https://` gets it. Arabic: opportunities are «إعلانات كاستينج», the post is «المنشور», the advert type «إعلان تجاري».
+  - "Add the first one" only when a list has nothing at all (an empty New / Open tab next to full ones shows no second button), worded per list in Arabic («أضف أول فرصة»).
+  - Section-home tiles use the list buttons' words: Add enquiry, Add student, Add workshop, Add talent, Add casting.
+  - The School schedule's Add is in the page ("+ Add a session on Mon 23" under the week strip), not a fixed button over the days.
+  - The phone's More button shows the counts of the section's pages inside it (the casting team's new opportunities).
+  - Adding an enquiry needs `admissions.read` as well as `admissions.write` (the enquiries API is behind both): the tile, the list's Add and `/admissions/new` ask for both.
+  - On phones the Secretary (Part F2) will sit bottom-start; the bottom-end stays the fixed Add's.
 - **At the merge with Part L:** the video routes (`videos`, `videos/:id`) must be added to `SCREENS`, or the route-table test fails. Suggested: the queue is a list with nothing to add (videos are added from a session's or workshop's "Videos" block); the session page's `subLists` gains "Videos — + Add video (videos.add, class scope)".
 
 ---

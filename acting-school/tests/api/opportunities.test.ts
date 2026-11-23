@@ -363,7 +363,7 @@ describe('Turn into a casting', () => {
 
   it('writes the notes in the language of the person turning it, with the warnings first', () => {
     const o = { details: null, roles: 'أب وأم', link: 'https://example.com', contact: null, source: null, involvesMinors: true, asksForPayment: true };
-    expect(castingNotesFrom(o, 'ar')).toBe('انتبه: الإعلان يطلب من الممثلين مالًا.\nيشارك فيها أطفال أو مراهقون.\nالأدوار: أب وأم\nالرابط: https://example.com');
+    expect(castingNotesFrom(o, 'ar')).toBe('انتبه: المنشور يطلب من الممثلين مالًا.\nيشارك فيها أطفال أو مراهقون.\nالأدوار: أب وأم\nالرابط: https://example.com');
     expect(castingNotesFrom({ ...o, roles: null, link: null, involvesMinors: false, asksForPayment: false }, 'en')).toBeNull();
   });
 });

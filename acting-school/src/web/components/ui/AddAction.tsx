@@ -1,7 +1,6 @@
 import clsx from 'clsx';
 import { Plus } from 'lucide-react';
 import { createPortal } from 'react-dom';
-import { useTranslation } from 'react-i18next';
 import { Button, ButtonLink, type ButtonVariant } from './Button';
 
 /**
@@ -72,8 +71,12 @@ export function ListAddAction(props: AddProps) {
   );
 }
 
-/** Inside an empty list's EmptyState: the same action, worded "Add the first one". */
-export function EmptyAddAction({ to, onClick, disabled, testId }: Omit<AddProps, 'label'>) {
-  const { t } = useTranslation();
-  return <AddButton label={t('common:add.first')} to={to} onClick={onClick} disabled={disabled} variant="primary" testId={testId ?? 'add-first'} />;
+/**
+ * Inside an empty list's EmptyState: the same action, worded "Add the first
+ * one" — `label` is the list's own (common:add.firstOf.*: Arabic names the
+ * thing, «أضف أول طالب»). Only while the list has nothing at all
+ * (layout/addActions.ts wholeListEmpty).
+ */
+export function EmptyAddAction({ label, to, onClick, disabled, testId }: AddProps) {
+  return <AddButton label={label} to={to} onClick={onClick} disabled={disabled} variant="primary" testId={testId ?? 'add-first'} />;
 }

@@ -17,12 +17,17 @@ export function ScreenAddAction({ screen, onClick, disabled }: { screen: ListScr
   return <ListAddAction label={t(add.labelKey)} to={onClick ? undefined : add.to} onClick={onClick} disabled={disabled} testId={`add-${screen.replace(/\W+/g, '-')}`} />;
 }
 
-/** The same Add inside the screen's empty state: "Add the first one". */
+/**
+ * The same Add inside the screen's empty state: "Add the first one" (its
+ * `firstKey`, with the noun in Arabic). Render it only while the list has
+ * nothing at all (wholeListEmpty), never on an empty tab next to full ones.
+ */
 export function ScreenEmptyAdd({ screen, onClick, disabled }: { screen: ListScreenWithAdd; onClick?: () => void; disabled?: boolean }) {
+  const { t } = useTranslation();
   const { can } = useAuth();
   const add = screenAdd(screen);
   if (!canAdd(add, can)) return null;
-  return <EmptyAddAction to={onClick ? undefined : add.to} onClick={onClick} disabled={disabled} />;
+  return <EmptyAddAction label={t(add.firstKey ?? add.labelKey)} to={onClick ? undefined : add.to} onClick={onClick} disabled={disabled} />;
 }
 
 /** Whether the person may use this screen's Add (to word an empty state for them). */

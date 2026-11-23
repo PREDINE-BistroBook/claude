@@ -67,7 +67,8 @@ export function ScreenshotsInput({ value, onChange, error }: { value: string[]; 
       )}
       <input ref={input} type="file" accept={PHOTO_ACCEPT} multiple className="sr-only" onChange={(e) => void pick(e.target.files)} data-testid="screenshot-input" />
       {room > 0 ? (
-        <Button size="lg" icon={ImagePlus} loading={busy} onClick={() => input.current?.click()} className="w-full sm:w-auto">
+        // Full width and 56 px on a phone: on Instagram, a screenshot is often all the person has.
+        <Button size="lg" icon={ImagePlus} loading={busy} onClick={() => input.current?.click()} className="min-h-14 w-full text-base sm:w-auto" data-testid="add-screenshots">
           {busy ? t('form.uploading') : t('form.addScreenshots')}
         </Button>
       ) : (

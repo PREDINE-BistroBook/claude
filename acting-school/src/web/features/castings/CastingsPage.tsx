@@ -17,6 +17,7 @@ import {
   StatusBadge,
   useEnumLabel,
 } from '@web/components/ui';
+import { wholeListEmpty } from '@web/layout/addActions';
 import { ScreenAddAction, ScreenEmptyAdd } from '@web/layout/ScreenAdd';
 import { useAuth } from '@web/lib/auth';
 import { useFormat } from '@web/lib/format';
@@ -91,6 +92,10 @@ export default function CastingsPage() {
   };
 
   const castings = useCastings({ q: q || undefined, status: status === 'all' ? undefined : status });
+  // An empty Open tab: are there any castings at all? Only then does its empty state say "Add the first one".
+  const emptyTab = castings.isSuccess && !castings.isPlaceholderData && !castings.data.items.length && !q;
+  const everything = useCastings({}, emptyTab && status !== 'all');
+  const noCastingsAtAll = emptyTab && (status === 'all' || wholeListEmpty(everything.data && [everything.data.items.length]));
   const items = castings.data?.items ?? [];
   const canWrite = can('castings.write');
 
@@ -120,7 +125,7 @@ export default function CastingsPage() {
         icon={Clapperboard}
         title={emptyTitle}
         description={status === 'open' || status === 'all' ? (canWrite ? t('list.emptyOpenHint') : t('list.emptyHintReadOnly')) : undefined}
-        action={status === 'open' || status === 'all' ? <ScreenEmptyAdd screen="castings" /> : undefined}
+        action={noCastingsAtAll ? <ScreenEmptyAdd screen="castings" /> : undefined}
         className="rounded-2xl border border-dashed border-line-strong"
       />
     );

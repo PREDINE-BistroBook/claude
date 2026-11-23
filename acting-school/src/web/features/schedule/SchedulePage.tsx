@@ -4,8 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 import { addDays, todayISO } from '@shared/dates';
 import type { ScheduleFilter } from '@shared/schemas/schedule';
-import { Button, EmptyState, ErrorState, PageHeader, PageLoader, Segmented, Spinner } from '@web/components/ui';
-import { ScreenAddAction } from '@web/layout/ScreenAdd';
+import { AddButton, Button, EmptyState, ErrorState, PageHeader, PageLoader, Segmented, Spinner } from '@web/components/ui';
 import { useAuth } from '@web/lib/auth';
 import { usePrefetchAdjacentWeeks, useSchedule, useWeekStart } from './api';
 import { AddSessionModal } from './components/AddSessionModal';
@@ -50,13 +49,19 @@ export default function SchedulePage({ kinds: sectionKinds }: { kinds: readonly 
   // The All / Workshops / Interviews switch only makes sense to someone who sees several kinds.
   const canFilter = kinds.length > 1;
   const titleKey = sectionKinds.length === 1 ? sectionKinds[0]! : 'mixed';
-  // "+ Add a session" (an extra session of a workshop) on the School schedule only: the Casting one shows auditions, set inside a casting.
+  // "+ Add a session" (an extra session of a workshop, courses.write — as POST /api/courses/:id/sessions) on the School
+  // schedule only: the Casting one shows auditions, set inside a casting. Not a fixed button: this is a calendar, and on a
+  // small phone a floating button would sit on the week's days. On phones it is under the week strip, saying which day
+  // the form starts on; on desktop in the page header.
   const showsClasses = sectionKinds.includes('class');
+  const canAddSession = showsClasses && can('courses.write');
   const [addingSession, setAddingSession] = useState(false);
   const hintKey = [...sectionKinds].sort().join('_');
 
   const today = todayISO();
   const selected = parseDateParam(params.get('date')) ?? today;
+  // The new session's form starts on the day shown — today for a day already past.
+  const addOn = selected < today ? today : selected;
   const filter = parseFilterParam(params.get('show'), sees);
 
   const { weekStartsOn, ready } = useWeekStart();
@@ -113,6 +118,9 @@ export default function SchedulePage({ kinds: sectionKinds }: { kinds: readonly 
         {/* Phone: day strip + that day's agenda */}
         <div className="space-y-4 lg:hidden">
           <WeekStrip days={week.days} selected={selected} today={today} counts={loadingWeek ? new Map() : counts} onSelect={selectDate} />
+          {canAddSession && (
+            <AddButton label={t('addSessionOn', { date: f.date(addOn, 'weekday') })} onClick={() => setAddingSession(true)} className="w-full" testId="add-session-on-day" />
+          )}
           <DayAgenda date={selected} today={today} events={byDate.get(selected) ?? []} filter={filter} loading={loadingWeek} />
         </div>
         {/* Desktop: the whole week */}
@@ -124,7 +132,18 @@ export default function SchedulePage({ kinds: sectionKinds }: { kinds: readonly 
 
   return (
     <div>
-      <PageHeader title={t(`titles.${titleKey}`)} subtitle={subtitle} actions={showsClasses ? <ScreenAddAction screen="schedule" onClick={() => setAddingSession(true)} /> : undefined} />
+      <PageHeader
+        title={t(`titles.${titleKey}`)}
+        // On a phone the All / Workshops / Interviews switch says the same; without it the day's "+ Add a session" is on the first view.
+        subtitle={subtitle && <span className="max-sm:hidden">{subtitle}</span>}
+        actions={
+          canAddSession && (
+            <span className="hidden lg:contents">
+              <AddButton label={t('common:add.extraSession')} onClick={() => setAddingSession(true)} variant="primary" testId="add-session" />
+            </span>
+          )
+        }
+      />
 
       {canSeeAnything && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -152,7 +171,7 @@ export default function SchedulePage({ kinds: sectionKinds }: { kinds: readonly 
       )}
 
       {body}
-      {showsClasses && <AddSessionModal open={addingSession} onClose={() => setAddingSession(false)} date={selected < today ? today : selected} />}
+      {canAddSession && <AddSessionModal open={addingSession} onClose={() => setAddingSession(false)} date={addOn} />}
     </div>
   );
 }

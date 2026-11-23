@@ -22,6 +22,7 @@ import { errorMessageKey } from '@web/lib/forms';
 import { useFormat } from '@web/lib/format';
 import { useDeleteOpportunity, useOpportunity } from './api';
 import { DeadlineLine, MinorsChip, MoneyFlag, OpportunityActions } from './components/OpportunityParts';
+import { addedByArgs } from './utils';
 
 /** /casting/opportunities/:id — everything about one opportunity: the warnings, the facts, the screenshots, and its buttons. */
 export default function OpportunityPage() {
@@ -106,7 +107,7 @@ export default function OpportunityPage() {
           />
           {o.createdBy && (
             <p className="mt-4 text-xs text-muted">
-              {t('card.addedBy', { name: o.createdBy.name })} · {f.timestamp(o.createdAt)}
+              {t('card.addedBy', addedByArgs(o.createdBy.name, f.timestamp(o.createdAt)))}
             </p>
           )}
         </Card>
@@ -127,7 +128,7 @@ export default function OpportunityPage() {
           )}
         </Card>
 
-        <OpportunityActions opportunity={o} />
+        <OpportunityActions opportunity={o} place="detail" />
       </div>
 
       <PhotoViewer photos={o.files.map((file, i) => ({ fileId: file.fileId, caption: t('form.screenshotAlt', { n: i + 1 }) }))} index={viewing} onIndex={setViewing} onClose={() => setViewing(null)} />

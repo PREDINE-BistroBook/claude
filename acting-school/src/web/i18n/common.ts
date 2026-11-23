@@ -65,8 +65,22 @@ const en = {
    * of a block inside a record, and the section homes' quick actions. layout/addActions.ts names which one each screen uses.
    */
   add: {
-    /** Inside an empty list: "No students yet" — [+ Add the first one]. */
-    first: 'Add the first one',
+    /**
+     * Inside an empty list: "No students yet" — [+ Add the first one]. One per
+     * list, because Arabic needs the noun («أضف أول طالب», «أضف أول ورشة»…).
+     */
+    firstOf: {
+      enquiry: 'Add the first one',
+      student: 'Add the first one',
+      workshop: 'Add the first one',
+      talent: 'Add the first one',
+      casting: 'Add the first one',
+      role: 'Add the first one',
+      opportunity: 'Add the first one',
+      coach: 'Add the first one',
+      link: 'Add the first one',
+      position: 'Add the first one',
+    },
     enquiry: 'Add enquiry',
     student: 'Add student',
     newStudent: 'Add a new student',
@@ -430,7 +444,18 @@ const ar: TranslationOf<typeof en> = {
     youAreIn: 'أنت في: {{section}}',
   },
   add: {
-    first: 'أضف أول واحد',
+    firstOf: {
+      enquiry: 'أضف أول استفسار',
+      student: 'أضف أول طالب',
+      workshop: 'أضف أول ورشة',
+      talent: 'أضف أول موهبة',
+      casting: 'أضف أول تجربة أداء',
+      role: 'أضف أول دور',
+      opportunity: 'أضف أول فرصة',
+      coach: 'أضف أول مدرب',
+      link: 'أضف أول رابط',
+      position: 'أضف أول منصب',
+    },
     enquiry: 'إضافة استفسار',
     student: 'إضافة طالب',
     newStudent: 'إضافة طالب جديد',
@@ -579,7 +604,7 @@ const ar: TranslationOf<typeof en> = {
     opportunityProjectType: {
       film: 'فيلم',
       series: 'مسلسل',
-      ad: 'إعلان',
+      ad: 'إعلان تجاري',
       theatre: 'مسرح',
       music_video: 'فيديو موسيقي',
       online: 'أونلاين',

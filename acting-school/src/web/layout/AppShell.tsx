@@ -29,6 +29,7 @@ import {
   cafeMenuActive,
   cafeMenuHint,
   mobileTabs,
+  moreBadgeCount,
   navItemActive,
   sectionNavItems,
   teamMenuActive,
@@ -167,6 +168,8 @@ export function AppShell() {
   const ownItems: MenuItem[] = section ? [] : cafeHome ? CAFE_HOME_ITEMS : [START_ITEM];
   const tabs = section ? (tabPaths.map((to) => sectionItems.find((i) => i.to === to)).filter(Boolean) as MenuItem[]) : user ? ownItems : [];
   const moreSection = sectionItems.filter((i) => !tabPaths.includes(i.to));
+  // The section's counts hidden in the More sheet show on the More button too.
+  const moreBadge = moreBadgeCount(moreSection, badgeOf);
   const teamActive = teamMenuActive(pathname);
   // The Cafeteria entry in the account / "More" menu: for everyone while it is on — except the Office helper, whose own menu has it.
   const cafeEntry = cafeOn && !cafeHome;
@@ -390,8 +393,9 @@ export function AppShell() {
                 moreActive ? 'font-semibold text-section' : 'text-muted',
               )}
             >
-              <span className={clsx('flex h-7 w-12 items-center justify-center rounded-full', moreActive && 'bg-section-soft')}>
+              <span className={clsx('relative flex h-7 w-12 items-center justify-center rounded-full', moreActive && 'bg-section-soft')}>
                 <Ellipsis className="size-[22px]" aria-hidden />
+                <CountBadge count={moreBadge} className="absolute -top-1.5 -end-1" />
               </span>
               {t('nav.more')}
             </button>

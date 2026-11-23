@@ -277,7 +277,7 @@ const NOTE_LABELS: Record<Locale, { roles: string; link: string; contact: string
     contact: 'للتواصل',
     source: 'شوهدت على',
     minors: 'يشارك فيها أطفال أو مراهقون.',
-    payment: 'انتبه: الإعلان يطلب من الممثلين مالًا.',
+    payment: 'انتبه: المنشور يطلب من الممثلين مالًا.',
   },
 };
 

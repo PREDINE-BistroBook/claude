@@ -206,6 +206,18 @@ const PHONE_PRIORITY = {
 } as const;
 
 /**
+ * The count on the phone's "More" button: the section's pages that are in the
+ * More sheet rather than the bar (Opportunities for the casting team, …) add
+ * up, so "3 new opportunities" shows from every screen, not only once More is
+ * open. The sheet's other entries (Administration, the Cafeteria, Team,
+ * Profile) don't count: an owner's or the director's More never lights up for
+ * a cafeteria order (they get no order alerts — Part J).
+ */
+export function moreBadgeCount<T>(moreSectionItems: readonly T[], badgeOf: (item: T) => number): number {
+  return moreSectionItems.reduce((n, item) => n + Math.max(0, badgeOf(item)), 0);
+}
+
+/**
  * Phone bottom bar for a section: its Home, then up to three of its
  * destinations, then "More" (added by AppShell). Each section has a priority
  * list that fits the person's work; when some of those are closed to them, the
