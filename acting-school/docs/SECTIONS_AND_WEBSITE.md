@@ -559,3 +559,121 @@ Built together with the radar (Part E) on one shared AI foundation. **Claude Hai
   - no-key fallback;
   - log purge.
 - **Never call the real API in tests.**
+
+### Deploy gate for the AI pack (decided 2026-11-23)
+**Nothing that costs money goes live until the school says so.** Everything in Parts E and F is built and tested now, but stays **switched off** in the deployment:
+- a var `AI_PACK_ENABLED` (`"false"` in both wrangler configs; unset = false on Node) hides every AI screen, button and nav item;
+- it also disables `/api/radar/*`, `/api/secretary/*` and the website chat page (404) and skips the nightly radar run.
+
+With it `"true"`, each feature still needs its own Settings switch, and AI needs the key. The cron trigger may stay in the config; `scheduled()` returns at once while the gate is off.
+
+---
+
+## Part G — Team pack: pictures & files, internal chat, "call to the office", notifications
+
+Asked by the school on 2026-11-23:
+- "workers should be able to put pictures etc": profile photos, pictures and files in the chat, photos on students and workshops, files on castings — all of it;
+- the CEO, CFO and Executive Directors get a button beside every employee they see to **send them an internal chat** or **call them to the office**;
+- **everyone can message everyone**;
+- only those managers can call someone to the office;
+- no COO position.
+
+Free to run (no paid services). Built in its own migration, after the website's.
+
+### G1. Pictures and files
+- **Uploads in general:** `POST /api/files` (existing) accepts images (JPEG/PNG/WebP, resized on the phone with `uploadImage`; HEIC is turned into JPEG on the phone where the browser can) and documents (PDF; Word `.docx`, Excel `.xlsx`, PowerPoint `.pptx`). Each upload is checked by magic bytes and stays ≤ 8 MB.
+  - `GET /api/files/:id` serves images `inline` and everything else as `attachment` with the original file name.
+  - It never serves SVG or HTML inline; `nosniff` always.
+  - File ids are random UUIDs (unguessable). A file is only ever handed to people who can see the record it belongs to; document this "capability" rule in `CLAUDE.md`.
+- **Profile photo for every worker:** `users.photo_file_id`.
+  - Anyone sets their own on Profile; `staff.manage` can set anyone's on the staff page.
+  - Shown by `Avatar` everywhere a staff member appears: staff list, Team directory, chat, the workshop's coach, an enquiry's assignee, the schedule.
+- **Student photo:** the `students.photo_file_id` column already exists. Make sure the student form and detail page let `students.write` add or change it, and that lists show it.
+- **Workshop photos & files:** `course_files` (id, `course_id` FK cascade, `file_id` FK files, `kind` `photo` | `document`, `caption` ≤ 200, `uploaded_by_id`, `created_at`).
+  - A "Photos & files" tab on the workshop page: a grid of photos (tap to view full screen) and a list of documents (tap to download).
+  - Visible to whoever can see the workshop (same class scope as the rest of the workshop). Adding needs `courses.write` **or** being the workshop's coach, so coaches can add rehearsal photos. Deleting needs `courses.write` or being the uploader.
+- **Casting files:** `casting_files` (id, `casting_id` FK cascade, `file_id`, `kind`, `caption`, `uploaded_by_id`, `created_at`). A "Files" section on the casting page; `castings.read` to see, `castings.write` to add or delete.
+- **Deleting a file record** deletes the stored file when nothing else references it. Use a small `releaseFile(db, files, fileId)` helper that checks every referencing table. Add it to `lib/fileStore.ts` or nearby and use it in the new deletes.
+
+### G2. Team directory
+- **New page `/team`** ("Team" / "الفريق"), available to **every** signed-in worker from the account / "More" menu in every section. It lists active staff: photo, name and positions.
+  - For non-owners, owner accounts appear with their name and photo but **no positions**; the owner-hiding rule for positions stays.
+  - Each row has a **"Message"** button. With `staff.summon`, it also has **"Call to the office"**.
+- **Where else the buttons appear:** the same buttons sit beside each person on the staff list and staff detail page, the coach on a workshop page, and an enquiry's assignee. Use one `PersonActions` component.
+- **Owners in chat (a deliberate exception):** owners are visible here and can be messaged, as a name and photo only. The owner-hiding rule in `CLAUDE.md` still applies to everything about positions and access; write this exception into `CLAUDE.md`.
+
+### G3. Internal chat
+- **Data:**
+  - `conversations` (id, `pair_key` unique for direct chats as `"<minUserId>:<maxUserId>"`, `last_message_at`, `created_at`);
+  - `conversation_members` (`conversation_id`, `user_id`, `last_read_message_id`, unique pair);
+  - `messages` (id, `conversation_id`, `sender_id`, `body` ≤ 4000, `created_at`, `deleted_at`);
+  - `message_attachments` (`message_id`, `file_id`, `kind`).
+  - Direct (one-to-one) chats only in v1.
+- **API (`/api/chat`, any active signed-in staff):**
+  - `GET /conversations`: mine, newest first, with the other person, the last message preview and the unread count.
+  - `POST /conversations` `{ userId }`: open or create the direct chat; the other person must be an active staff member.
+  - `GET /conversations/:id/messages?after=<id>&before=<id>`: paged, members only (anyone else gets 404).
+  - `POST /conversations/:id/messages` `{ body?, fileIds?[] }`: at least one of them; up to 5 attachments, each a file the sender uploaded in the last hour that isn't attached elsewhere.
+  - `POST /conversations/:id/read` `{ messageId }`.
+  - `DELETE /messages/:id`: the sender only, within 15 minutes; the message shows as "deleted".
+  - `GET /unread`: the total, for the badge.
+  - Rate limit 60 messages a minute per person.
+- **UI:**
+  - A **"Messages"** icon with an unread badge in the header of every section.
+  - `/messages` lists the conversations. `/messages/:id` is the conversation: bubbles, dates, "Seen", attachments (photos inline and tappable, documents as download chips), an input with a camera/gallery button and a file button.
+  - Phone first, RTL-correct (my bubbles on the end side), works in Arabic and English.
+- **Freshness:**
+  - the unread badge polls every 20 s while the app is visible;
+  - an open conversation polls every 4 s (`after=<last id>`);
+  - polling stops when the tab is hidden;
+  - push notifications (G5) cover the app being closed.
+
+### G4. "Call to the office"
+- **New permission `staff.summon`** ("Call someone to the office"). Built-in for `executive_director` through `BUILT_IN_GRANTS` **version 3** (the website uses version 2). Owners have it by definition. EN and AR labels.
+- **Data:** `summons` (id, `from_user_id`, `to_user_id`, `note` ≤ 200, `status` `pending` | `on_my_way` | `cant_now` | `cancelled`, `created_at`, `answered_at`).
+  - One pending summons per pair at a time.
+  - A pending one older than 2 hours counts as expired.
+  - At most 20 an hour per sender.
+- **API:**
+  - `POST /api/summons` `{ userId, note? }` (`staff.summon`).
+  - `GET /api/summons/incoming`: my pending ones.
+  - `POST /api/summons/:id/answer` `{ status: 'on_my_way' | 'cant_now' }` (recipient only).
+  - `POST /api/summons/:id/cancel` (sender only).
+  - `GET /api/summons/sent?status=` (sender).
+- **The recipient sees:**
+  - a push notification "Dalia is calling you to the office" (G5), with the note;
+  - in the app, within about 20 s through the same poll as the unread badge, a **full-width, can't-miss banner** at the top of every screen with the caller's photo and name, the note, and two big buttons, **"On my way"** and **"Can't come now"**;
+  - a short vibration where the browser allows.
+- **The sender sees** the answer as a toast and on the person's row ("On my way ✓ 10:42").
+- **Who sees the button:** "Call to the office" only shows for people with `staff.summon` (the CEO, CFO and Executive Directors as built in). It never offers to call yourself.
+
+### G5. Notifications (the in-app bar, and push to the phone)
+- **In-app notification bar (#89):**
+  - `notifications` (id, `user_id`, `kind` `message` | `summon` | `summon_answer`, `title`, `body`, `link`, `created_at`, `read_at`);
+  - a bell with an unread count in the header, and a sheet listing them (tap → go to the link and mark it read);
+  - `GET /api/notifications`, `POST /api/notifications/read` `{ ids | all }`.
+  - New messages create one notification per conversation, updated rather than piled up.
+- **Web Push (free):**
+  - VAPID keys: the public key as var `VAPID_PUBLIC_KEY`, the private key as secret `VAPID_PRIVATE_KEY` (the operator generates the pair at deploy; on Node, env vars), with subject `mailto:` from settings or `https://turquoisestudio.app`.
+  - Without the keys, push is simply off and the in-app bar still works.
+  - `push_subscriptions` (id, `user_id`, `endpoint` unique, `p256dh`, `auth`, `user_agent` short, `created_at`, `last_success_at`, `failures`).
+  - Profile has **"Turn on notifications on this phone"**, which explains plainly that **on iPhone the app must first be added to the Home Screen (Share → Add to Home Screen) and opened from there**, and asks permission only from that button tap. `POST /api/push/subscribe` and `DELETE /api/push/subscribe`.
+  - **Sending:**
+    - Implement RFC 8291 (aes128gcm message encryption) and RFC 8292 (VAPID JWT, ES256) with WebCrypto in `src/server/lib/push/`, with **no Node-only crypto** (it runs in the Durable Object). Test it against the RFC 8291 test vectors.
+    - Send after the database transaction (`ctx.waitUntil` on Workers where available; on Node, fire and forget with errors logged).
+    - Delete a subscription on 404/410; count other failures and drop it after 10.
+    - Payload: `{ title, body, link, kind }`, ≤ 3 KB, no message text beyond a 100-character preview.
+  - **Service worker:** add the push and notificationclick handlers to the staff app's service worker (vite-plugin-pwa: an `importScripts` file in `src/web/public/`, or the injectManifest strategy — keep the precache and the update behaviour exactly as they are, `skipWaiting` and `clientsClaim` included).
+    - On push: show the notification. A summons notification has `requireInteraction: true` and vibration; message notifications are tagged per conversation so they replace each other.
+    - On click: focus an open app window and navigate to the link, or open one.
+- **Push goes out for:** a new message to the other member (not to the sender), a summons to the recipient, and a summons answer to the sender.
+
+### Tests (Part G)
+- **API tests:**
+  - chat membership (outsiders 404), owner messaging allowed, attachments only your own fresh uploads, delete window, unread counts, rate limit;
+  - summons: permission, one pending per pair, answer and cancel rules, expiry;
+  - notifications; push subscribe/unsubscribe;
+  - files: type and magic-bytes checks, attachment disposition, `releaseFile` keeping shared files;
+  - the workshop files scope (a coach sees only their own workshops' files), casting files permissions.
+- **Unit tests:** the push crypto against the RFC 8291 vectors, the VAPID JWT structure, `PersonActions` visibility rules.
+- **`cf:smoke`:** a chat round trip with a photo, a summons answered, notifications.
