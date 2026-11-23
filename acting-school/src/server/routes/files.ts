@@ -2,64 +2,78 @@ import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { randomUUID } from 'node:crypto';
-import { MAX_UPLOAD_BYTES, type UploadedFile } from '../../shared/schemas/files';
+import { FILE_ERROR_CODES, MAX_UPLOAD_BYTES, UPLOADS_PER_HOUR, type UploadedFile } from '../../shared/schemas/files';
 import { files } from '../db/schema';
 import type { AppEnv } from '../env';
 import { ApiError, notFound } from '../lib/errors';
+import { deleteStoredFiles, fileInUse, sweepUnusedUploads, takeUnusedFiles } from '../lib/fileRefs';
+import { contentDisposition, downloadName, sniffFile } from '../lib/fileTypes';
+import { hitRateLimit, HOUR_MS } from '../lib/rateLimit';
 import { currentUser, requireAuth } from '../middleware/auth';
 
 /**
- * Image uploads (headshots, student photos). Files are private: served only to
- * signed-in staff. The type is decided from the file's first bytes, not from
- * what the browser claims. The bytes go to the app's FileStore (a folder on
- * the Node server, the Durable Object's SQLite or R2 on Cloudflare).
+ * Uploads: images (headshots, student and profile photos, workshop photos,
+ * chat pictures) and documents (PDF, Word, Excel, PowerPoint — workshop and
+ * casting files, chat attachments). Files are private: served only to
+ * signed-in staff, and a file id is only ever handed to people who can see the
+ * record it belongs to (ids are random UUIDs, so an id works as the key — the
+ * "capability" rule in CLAUDE.md). The type is decided from the file's bytes
+ * (lib/fileTypes.ts), not from what the browser claims; images are served
+ * inline, everything else as a download, always with nosniff. The bytes go to
+ * the app's FileStore (a folder on the Node server, the Durable Object's
+ * SQLite or R2 on Cloudflare).
+ *
+ * Uploads come first and are attached afterwards (a chat message, a photo, a
+ * workshop file). One that's never attached — a mis-picked file removed
+ * before sending — is deleted by its uploader (DELETE /:id, the app does it
+ * when the file is removed), or swept a day later (sweepUnusedUploads, run as
+ * new uploads come in). Each person uploads at most UPLOADS_PER_HOUR an hour.
  */
 const router = new Hono<AppEnv>();
 router.use(requireAuth);
 
-function sniffImage(buf: Uint8Array): { mime: string; ext: string } | null {
-  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return { mime: 'image/jpeg', ext: 'jpg' };
-  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return { mime: 'image/png', ext: 'png' };
-  if (
-    buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
-    buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50
-  )
-    return { mime: 'image/webp', ext: 'webp' };
-  return null;
-}
+const tooLarge = () => new ApiError(413, FILE_ERROR_CODES.tooLarge, 'File is too large (max 8 MB)');
 
 router.post(
   '/',
   bodyLimit({
     maxSize: MAX_UPLOAD_BYTES + 64 * 1024,
     onError: () => {
-      throw new ApiError(413, 'too_large', 'Image is too large (max 8 MB)');
+      throw tooLarge();
     },
   }),
   async (c) => {
+    const me = currentUser(c).id;
+    const db = c.get('db');
+    const now = Date.now();
+    // Before reading the body: the school's one Durable Object holds every upload.
+    if (hitRateLimit(db, `upload:user:${me}`, UPLOADS_PER_HOUR, HOUR_MS, now)) {
+      throw new ApiError(429, FILE_ERROR_CODES.tooManyUploads, 'Too many uploads this hour. Try again later.');
+    }
+    await sweepUnusedUploads(db, c.get('files'), now);
     const form = await c.req.formData().catch(() => null);
     const file = form?.get('file');
-    if (!file || typeof file === 'string') throw new ApiError(400, 'bad_request', 'Send the image in a "file" field');
-    if (file.size > MAX_UPLOAD_BYTES) throw new ApiError(413, 'too_large', 'Image is too large (max 8 MB)');
+    if (!file || typeof file === 'string') throw new ApiError(400, 'bad_request', 'Send the file in a "file" field');
+    if (file.size > MAX_UPLOAD_BYTES) throw tooLarge();
     const buf = new Uint8Array(await file.arrayBuffer());
-    const kind = sniffImage(buf);
-    if (!kind) throw new ApiError(415, 'unsupported_type', 'Only JPEG, PNG or WebP images');
+    const type = sniffFile(buf);
+    if (!type) throw new ApiError(415, FILE_ERROR_CODES.unsupportedType, 'Only JPEG, PNG or WebP images, or PDF, Word, Excel or PowerPoint files');
 
     const id = randomUUID();
-    const storageKey = `${id}.${kind.ext}`;
-    await c.get('files').put(storageKey, buf, kind.mime);
-    c.get('db')
-      .insert(files)
-      .values({ id, originalName: file.name?.slice(0, 200) || null, mime: kind.mime, size: buf.byteLength, storageKey, uploadedBy: currentUser(c).id })
-      .run();
-    const res: UploadedFile = { id, mime: kind.mime, size: buf.byteLength };
+    const storageKey = `${id}.${type.ext}`;
+    const name = file.name ? downloadName(file.name, type.mime).slice(0, 200) : null;
+    await c.get('files').put(storageKey, buf, type.mime);
+    db.insert(files).values({ id, originalName: name, mime: type.mime, size: buf.byteLength, storageKey, uploadedBy: me }).run();
+    const res: UploadedFile = { id, mime: type.mime, size: buf.byteLength, kind: type.kind, name };
     return c.json(res, 201);
   },
 );
 
+const FILE_ID = /^[0-9a-f-]{36}$/;
+
 router.get('/:id', async (c) => {
   const id = c.req.param('id');
-  if (!/^[0-9a-f-]{36}$/.test(id)) throw notFound();
+  if (!FILE_ID.test(id)) throw notFound();
   const row = c.get('db').select().from(files).where(eq(files.id, id)).get();
   if (!row) throw notFound();
   const data = await c.get('files').get(row.storageKey);
@@ -68,8 +82,33 @@ router.get('/:id', async (c) => {
     'Content-Type': row.mime,
     'Cache-Control': 'private, max-age=31536000, immutable',
     'X-Content-Type-Options': 'nosniff',
-    'Content-Disposition': 'inline',
+    // Images inline; documents (and anything unexpected) only as a download, never as a page.
+    'Content-Disposition': contentDisposition(row.mime, row.originalName),
   });
+});
+
+/**
+ * DELETE /api/files/:id: take back an upload you haven't attached anywhere
+ * (removed from a message before sending, a photo replaced before saving).
+ * Only the uploader (anyone else: 404, as for a missing file), and only while
+ * nothing uses it (409 file_in_use: attached files go when their record does).
+ * 204.
+ */
+router.delete('/:id', async (c) => {
+  const id = c.req.param('id');
+  if (!FILE_ID.test(id)) throw notFound();
+  const me = currentUser(c).id;
+  const db = c.get('db');
+  const outcome = db.transaction((tx) => {
+    const row = tx.select({ uploadedBy: files.uploadedBy }).from(files).where(eq(files.id, id)).get();
+    if (!row || row.uploadedBy !== me) return 'missing' as const;
+    if (fileInUse(tx, id)) return 'in_use' as const;
+    return takeUnusedFiles(tx, [id]);
+  });
+  if (outcome === 'missing') throw notFound();
+  if (outcome === 'in_use') throw new ApiError(409, FILE_ERROR_CODES.inUse, 'This file is attached somewhere; it goes when that is deleted');
+  await deleteStoredFiles(c.get('files'), outcome);
+  return c.body(null, 204);
 });
 
 export default router;

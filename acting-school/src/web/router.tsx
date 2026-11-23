@@ -3,6 +3,7 @@ import { createBrowserRouter } from 'react-router';
 import { admissionsRoutes } from './features/admissions/routes';
 import { applicationsRoutes } from './features/applications/routes';
 import { castingsRoutes } from './features/castings/routes';
+import { chatRoutes } from './features/chat/routes';
 import { classesRoutes } from './features/classes/routes';
 import { dashboardRoutes } from './features/dashboard/routes';
 import { positionsRoutes } from './features/positions/routes';
@@ -11,6 +12,7 @@ import { settingsRoutes } from './features/settings/routes';
 import { staffRoutes } from './features/staff/routes';
 import { studentsRoutes } from './features/students/routes';
 import { talentRoutes } from './features/talent/routes';
+import { teamRoutes } from './features/team/routes';
 import { websiteRoutes } from './features/website/routes';
 import { AppShell } from './layout/AppShell';
 import { RequireAuth } from './lib/auth';
@@ -48,6 +50,8 @@ export const router = createBrowserRouter([
       ...staffRoutes,
       ...positionsRoutes,
       ...settingsRoutes,
+      ...teamRoutes,
+      ...chatRoutes,
       { path: 'profile', element: <ProfilePage /> },
       { path: '*', element: <NotFoundPage /> },
     ],

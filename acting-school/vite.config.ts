@@ -52,6 +52,8 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,png}', '**/*-latin-*.woff2', '**/*-arabic-*.woff2'],
         // API responses are private staff data: never cached by the service worker.
         runtimeCaching: [],
+        // Push notifications (Team pack): the push and notificationclick handlers, in src/web/public/push-sw.js.
+        importScripts: ['/push-sw.js'],
       },
     }),
   ],

@@ -33,6 +33,7 @@ const en = {
     newStudent: 'New student',
     addTalent: 'New talent',
     newCasting: 'New casting',
+    callToOffice: 'Call someone to the office',
   },
   today: {
     title: 'Today’s sessions',
@@ -111,6 +112,7 @@ const ar: TranslationOf<typeof en> = {
     newStudent: 'طالب جديد',
     addTalent: 'موهبة جديدة',
     newCasting: 'تجربة أداء جديدة',
+    callToOffice: 'استدعاء شخص إلى المكتب',
   },
   today: {
     title: 'حصص اليوم',

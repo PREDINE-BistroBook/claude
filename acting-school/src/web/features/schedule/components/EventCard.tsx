@@ -6,6 +6,7 @@ import type { AuditionEvent, ClassEvent, InterviewEvent, ScheduleEvent } from '@
 import { DataLine, StatusBadge } from '@web/components/ui';
 import { courseColor } from '@web/lib/colors';
 import { useFormat } from '@web/lib/format';
+import { PersonAvatar } from '../../team/components/PersonAvatar';
 import { DataText } from './DataText';
 
 /** On the accent-tinted audition card an accent badge would vanish: outline every badge in its own colour. */
@@ -71,10 +72,18 @@ function ClassCard({ event: e, density }: { event: ClassEvent; density: Density 
           </span>
           {cancelled && <StatusBadge group="sessionStatus" value="cancelled" className="shrink-0" />}
         </span>
-        {place && <DataLine parts={place} className="mt-0.5 text-sm text-muted" />}
-        <span className="mt-1.5 flex items-center gap-1.5 text-xs text-muted">
-          <Users className="size-3.5" aria-hidden />
-          {t('event.enrolled', { count: e.enrolledCount })}
+        {e.room && <DataText className="mt-0.5 text-sm text-muted">{e.room}</DataText>}
+        <span className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+          {e.teacherName && (
+            <span className="inline-flex min-w-0 items-center gap-1.5">
+              <PersonAvatar userId={e.teacherId} name={e.teacherName} size="xs" />
+              <bdi className="truncate">{e.teacherName}</bdi>
+            </span>
+          )}
+          <span className="inline-flex items-center gap-1.5">
+            <Users className="size-3.5" aria-hidden />
+            {t('event.enrolled', { count: e.enrolledCount })}
+          </span>
         </span>
       </span>
     </Link>

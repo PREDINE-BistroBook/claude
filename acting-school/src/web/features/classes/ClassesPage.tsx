@@ -10,6 +10,7 @@ import { useAuth } from '@web/lib/auth';
 import { courseColor } from '@web/lib/colors';
 import { useFormat } from '@web/lib/format';
 import { useCourses, useWeekStart } from './api';
+import { PersonAvatar } from '../team/components/PersonAvatar';
 import { ColorDot } from './components/CourseColor';
 import { scheduleLines } from './utils';
 
@@ -176,7 +177,11 @@ function CourseCard({ course: c }: { course: CourseListItem }) {
         </div>
         <div className="flex items-start gap-2">
           <dt className="sr-only">{t('fields.teacher')}</dt>
-          <UserRound className="mt-0.5 size-4 shrink-0 text-muted" aria-hidden />
+          {c.teacherName ? (
+            <PersonAvatar userId={c.teacherId} name={c.teacherName} size="xs" className="mt-px" />
+          ) : (
+            <UserRound className="mt-0.5 size-4 shrink-0 text-muted" aria-hidden />
+          )}
           <dd className={clsx('min-w-0 truncate', c.teacherName ? 'text-ink' : 'text-muted')}>{c.teacherName ?? t('list.noTeacher')}</dd>
         </div>
         {c.room && (

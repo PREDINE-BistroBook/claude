@@ -21,6 +21,7 @@ import type { SessionUser } from '../../shared/schemas/auth';
 import { schoolToday } from '../lib/clock';
 import { hasPermission, maySeeStudent, redactContact, withoutContact } from '../lib/access';
 import { ApiError, conflict, notFound } from '../lib/errors';
+import { IMAGE_MIME_TYPES } from '../lib/images';
 import { contains } from '../lib/sqlLimits';
 import { body, paramId, query } from '../lib/validate';
 import { currentUser, requireAuth, requirePermission } from '../middleware/auth';
@@ -416,8 +417,9 @@ router.post('/:id/photos', canWrite, async (c) => {
   const input = await body(c, talentPhotoInput);
 
   const created = db.transaction((tx) => {
-    const file = tx.select({ id: files.id }).from(files).where(eq(files.id, input.fileId)).get();
-    if (!file) throw fieldError('fileId', 'talent:errors.fileNotFound');
+    // An uploaded image (uploads can also be documents).
+    const file = tx.select({ mime: files.mime }).from(files).where(eq(files.id, input.fileId)).get();
+    if (!file || !IMAGE_MIME_TYPES.includes(file.mime)) throw fieldError('fileId', 'talent:errors.fileNotFound');
     const dup = tx
       .select({ id: talentPhotos.id })
       .from(talentPhotos)

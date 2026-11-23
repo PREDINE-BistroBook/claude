@@ -19,6 +19,7 @@ import { courseScope, hasPermission, ownCourseIds, redactContact, seesAllClasses
 import { reopenLeadsOfStudent } from '../lib/admissions';
 import { ApiError, notFound } from '../lib/errors';
 import { phoneSearchDigits, withPhoneDigits } from '../lib/phone';
+import { IMAGE_MIME_TYPES } from '../lib/images';
 import { contains } from '../lib/sqlLimits';
 import { getSettings } from '../lib/settings';
 import { body, paramId, query } from '../lib/validate';
@@ -72,11 +73,11 @@ function toStudent(r: StudentRow, user: SessionUser): Student {
   );
 }
 
-/** A photo id must name an uploaded file; otherwise a field-level 400 on photoFileId. */
+/** A photo id must name an uploaded image (uploads can also be documents); otherwise a field-level 400 on photoFileId. */
 function assertPhotoExists(db: DB, fileId: string | null | undefined) {
   if (!fileId) return;
-  const found = db.select({ id: files.id }).from(files).where(eq(files.id, fileId)).get();
-  if (!found) {
+  const found = db.select({ mime: files.mime }).from(files).where(eq(files.id, fileId)).get();
+  if (!found || !IMAGE_MIME_TYPES.includes(found.mime)) {
     throw new ApiError(400, 'validation', 'Some fields are missing or invalid', [
       { path: ['photoFileId'], code: 'custom', message: 'students:errors.photoNotFound' },
     ]);

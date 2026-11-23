@@ -1,4 +1,4 @@
-import { Globe, GraduationCap, Inbox, LayoutDashboard, MessageSquarePlus, Sparkles, UserPlus, Users } from 'lucide-react';
+import { BellRing, Globe, GraduationCap, Inbox, LayoutDashboard, MessageSquarePlus, Sparkles, UserPlus, Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { todayISO } from '@shared/dates';
 import { EmptyState, ErrorState, PageLoader } from '@web/components/ui';
@@ -20,6 +20,8 @@ const STATS: HomeStat[] = [
 const ACTIONS: QuickAction[] = [
   { key: 'newEnquiry', to: '/admissions/new', icon: MessageSquarePlus, permission: 'admissions.write' },
   { key: 'newStudent', to: '/students/new', icon: UserPlus, permission: 'students.write' },
+  // For those who may call people to the office: the Team page has the button beside everyone.
+  { key: 'callToOffice', to: '/team', icon: BellRing, permission: 'staff.summon' },
 ];
 
 /**

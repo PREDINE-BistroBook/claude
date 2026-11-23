@@ -90,6 +90,19 @@ describe('npm run seed', () => {
     expect(count(`select count(*) as n from leads where source = 'website' and status = 'new' and created_by_id is null`)).toBe(2);
     expect(count(`select count(*) as n from positions where key = 'executive_director' and permissions like '%website.manage%'`)).toBe(1);
 
+    // The team pack: everyone active has a profile photo; workshop and casting files (photos and PDFs);
+    // three conversations (photo and document attachments, unread messages); one answered call to the office.
+    expect(count('select count(*) as n from users where active = 1 and photo_file_id is null')).toBe(0);
+    expect(count(`select count(*) as n from course_files where kind = 'photo'`)).toBeGreaterThanOrEqual(2);
+    expect(count(`select count(*) as n from course_files cf join files f on f.id = cf.file_id where cf.kind = 'document' and f.mime = 'application/pdf'`)).toBeGreaterThanOrEqual(2);
+    expect(count('select count(distinct kind) as n from casting_files')).toBe(2);
+    expect(count('select count(*) as n from conversations where last_message_at is not null')).toBe(3);
+    expect(count('select count(distinct kind) as n from message_attachments')).toBe(2);
+    expect(count('select count(*) as n from messages')).toBeGreaterThanOrEqual(7);
+    expect(count(`select count(*) as n from summons where status = 'on_my_way' and answered_at is not null`)).toBe(1);
+    expect(count(`select count(distinct kind) as n from notifications`)).toBe(3);
+    expect(count(`select count(*) as n from positions where key = 'executive_director' and permissions like '%staff.summon%'`)).toBe(1);
+
     const again = seed();
     expect(again.status).toBe(1);
     expect(again.stderr).toContain('--reset');

@@ -1,15 +1,20 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { KeyRound, Lock } from 'lucide-react';
 import { useEffect, useRef, type SelectHTMLAttributes } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import { LOCALES, type Locale } from '@shared/enums';
 import { staffCreateInput, staffUpdateInput, type StaffMember, type StaffUpdateInput } from '@shared/schemas/staff';
-import { Button, Field, FormError, Modal, Select, Switch, TextField, useToast } from '@web/components/ui';
-import { useAuth } from '@web/lib/auth';
+import { Avatar, Button, Field, FormError, Modal, PhotoInput, Select, Switch, TextField, useToast } from '@web/components/ui';
+import { api } from '@web/lib/api';
+import { discardUpload } from '@web/lib/files';
+import { ME_KEY, useAuth } from '@web/lib/auth';
 import { useFormat } from '@web/lib/format';
 import { useForm } from '@web/lib/forms';
 import { usePositions } from '../../positions/api';
-import { staffErrorKey, useCreateStaff, useSchoolSettings, useUpdateStaff } from '../api';
+import { teamErrorKey, teamKeys } from '../../team/api';
+import { PersonActions } from '../../team/components/PersonActions';
+import { staffErrorKey, staffKeys, useCreateStaff, useSchoolSettings, useUpdateStaff } from '../api';
 import { PositionChips, PositionPicker, TempPasswordInput } from './bits';
 
 const sameIds = (a: readonly number[], b: readonly number[]) => a.length === b.length && [...a].sort().join() === [...b].sort().join();
@@ -197,6 +202,9 @@ export function EditStaffModal({ member, onClose }: { member: StaffMember | null
     >
       {member && (
         <div className="grid gap-5">
+          <StaffPhoto member={member} readOnly={readOnly} isSelf={isSelf} />
+          {/* "Message" / "Call to the office" (not for yourself, not for inactive accounts). */}
+          <PersonActions userId={member.id} />
           {readOnly && (
             <div className="flex items-start gap-2 rounded-xl bg-surface-2 px-3.5 py-3 text-sm text-muted">
               <Lock className="mt-0.5 size-4 shrink-0" aria-hidden />
@@ -219,6 +227,37 @@ export function EditStaffModal({ member, onClose }: { member: StaffMember | null
         </div>
       )}
     </Modal>
+  );
+}
+
+/** The person's profile photo: saved as soon as it's chosen (PUT /api/staff/:id/photo, staff.manage). */
+function StaffPhoto({ member, readOnly, isSelf }: { member: StaffMember; readOnly: boolean; isSelf: boolean }) {
+  const { t } = useTranslation(['team', 'staff', 'common']);
+  const toast = useToast();
+  const qc = useQueryClient();
+  const save = useMutation({
+    mutationFn: (fileId: string | null) => api.put<StaffMember>(`/staff/${member.id}/photo`, { fileId }),
+    onSuccess: async (_saved, fileId) => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: staffKeys.all }),
+        qc.invalidateQueries({ queryKey: teamKeys.team }),
+        isSelf ? qc.invalidateQueries({ queryKey: ME_KEY }) : Promise.resolve(),
+      ]);
+      toast.success(t(fileId ? 'photo.saved' : 'photo.removed'));
+    },
+    onError: (err, fileId) => {
+      // The new photo wasn't saved: don't leave the upload behind.
+      discardUpload(fileId);
+      toast.error(t(staffErrorKey(err) ?? teamErrorKey(err)));
+    },
+  });
+  if (readOnly) return <Avatar name={member.name} fileId={member.photoFileId} size="xl" />;
+  return (
+    <div className="grid gap-2">
+      <h3 className="text-sm font-semibold text-ink">{t('photo.title')}</h3>
+      <PhotoInput value={member.photoFileId} name={member.name} onChange={(id) => save.mutate(id)} busy={save.isPending} />
+      <p className="text-xs text-muted">{t('photo.staffDescription')}</p>
+    </div>
   );
 }
 

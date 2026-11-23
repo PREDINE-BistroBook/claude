@@ -156,7 +156,7 @@ export function loadUserAccess(db: Pick<DB, 'select'>, userId: number): UserAcce
 
 /** The SessionUser shape for a user row (one extra query for the positions). */
 export function toSessionUser(db: Pick<DB, 'select'>, u: typeof users.$inferSelect): SessionUser {
-  return { id: u.id, email: u.email, name: u.name, phone: u.phone, locale: u.locale, ...loadUserAccess(db, u.id) };
+  return { id: u.id, email: u.email, name: u.name, phone: u.phone, locale: u.locale, photoFileId: u.photoFileId, ...loadUserAccess(db, u.id) };
 }
 
 /** Owners may do anything; everyone else may only touch what they could do themselves. */

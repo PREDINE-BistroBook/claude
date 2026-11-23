@@ -22,4 +22,8 @@ export interface Env {
    * Nothing of the staff app answers on them (routing.ts).
    */
   PUBLIC_SITE_HOSTS?: string;
+  /** Web Push: the VAPID public key (base64url; a var, added by the operator at deploy — `npm run vapid-keys`). Push is off without it. */
+  VAPID_PUBLIC_KEY?: string;
+  /** Secret: the VAPID private key (base64url) that goes with VAPID_PUBLIC_KEY. */
+  VAPID_PRIVATE_KEY?: string;
 }

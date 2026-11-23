@@ -39,6 +39,8 @@ export interface StaffMember {
   active: boolean;
   lastLoginAt: number | null;
   createdAt: number;
+  /** Profile photo; set with PUT /api/staff/:id/photo (staff.manage, same reach rules as editing). */
+  photoFileId: string | null;
   positions: PositionSummary[];
   /** Holds an owner position. Only owners ever see such accounts. */
   isOwner: boolean;
@@ -59,6 +61,7 @@ export interface StaffDirectoryEntry {
   id: number;
   name: string;
   active: boolean;
+  photoFileId: string | null;
   positions: PositionSummary[];
   /**
    * Holds a coaching position (one that marks attendance for the classes its

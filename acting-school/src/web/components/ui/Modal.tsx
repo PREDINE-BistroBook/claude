@@ -70,7 +70,12 @@ export function Modal({
               <h2 className="text-lg font-semibold">{title}</h2>
               {description && <p className="mt-0.5 text-sm text-muted">{description}</p>}
             </div>
-            <button type="button" onClick={onClose} aria-label={t('common:actions.close')} className="-m-1.5 rounded-lg p-1.5 text-muted hover:bg-surface-2 hover:text-ink">
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label={t('common:actions.close')}
+              className="-my-2 -me-2 inline-flex size-12 shrink-0 items-center justify-center rounded-xl text-muted hover:bg-surface-2 hover:text-ink"
+            >
               <X className="size-5" aria-hidden />
             </button>
           </header>

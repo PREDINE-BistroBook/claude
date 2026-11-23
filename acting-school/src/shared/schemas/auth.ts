@@ -59,6 +59,8 @@ export interface SessionUser {
   name: string;
   phone: string | null;
   locale: Locale;
+  /** Profile photo (GET /api/files/:id); change it with PUT /api/auth/photo. */
+  photoFileId: string | null;
   /** Sorted like the positions list (sortOrder, then name). */
   positions: PositionSummary[];
   /** Holds at least one owner position (CEO, CFO): every permission, sees owner accounts. */

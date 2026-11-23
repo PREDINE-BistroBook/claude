@@ -6,6 +6,7 @@ import type { MeResponse, SessionUser } from '@shared/schemas/auth';
 import { currentLanguage, setLanguage } from '../i18n';
 import { ErrorState, NoAccess, SplashScreen } from '../components/ui/States';
 import { api, ApiError, setForbiddenHandler, setUnauthorizedHandler } from './api';
+import { stopPushOnThisBrowser } from './push';
 
 interface AuthState {
   user: SessionUser | null;
@@ -80,6 +81,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [qc]);
 
   const signOut = useCallback(async () => {
+    // First, while still signed in: this browser stops getting this person's notifications.
+    await stopPushOnThisBrowser();
     await api.post('/auth/logout').catch(() => undefined);
     // Mark the person as gone at once (RequireAuth then sends the screen to /login), drop every
     // cached answer about them, then re-read /auth/me for the school name and setup state.

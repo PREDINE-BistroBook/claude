@@ -38,7 +38,7 @@ describe('GET /api/staff', () => {
     for (const s of res.body.items) {
       expect(s.passwordHash).toBeUndefined();
       expect(Object.keys(s).sort()).toEqual(
-        ['active', 'createdAt', 'email', 'id', 'isOwner', 'lastLoginAt', 'locale', 'manageable', 'name', 'phone', 'positions'].sort(),
+        ['active', 'createdAt', 'email', 'id', 'isOwner', 'lastLoginAt', 'locale', 'manageable', 'name', 'phone', 'photoFileId', 'positions'].sort(),
       );
     }
     const me = res.body.items.find((s: any) => s.id === owner.user.id);
@@ -70,7 +70,7 @@ describe('GET /api/staff/directory', () => {
     const res = await me.get('/api/staff/directory');
     expect(res.status).toBe(200);
     expect(res.body.items.map((s: any) => s.name)).toEqual(['Amal', 'Mid', 'zed']);
-    for (const s of res.body.items) expect(Object.keys(s).sort()).toEqual(['active', 'coach', 'id', 'name', 'positions']);
+    for (const s of res.body.items) expect(Object.keys(s).sort()).toEqual(['active', 'coach', 'id', 'name', 'photoFileId', 'positions']);
     expect(res.body.items[2]).toMatchObject({ active: false, coach: true });
     expect(keysOf(res.body.items[2])).toEqual(['acting_coach']);
     expect(res.body.items[0]).toMatchObject({ coach: false });

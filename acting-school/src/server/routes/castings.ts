@@ -12,9 +12,10 @@ import {
 } from '../../shared/schemas/castings';
 import type { ListResponse } from '../../shared/schemas/common';
 import type { DB } from '../db/database';
-import { castingRoles, castings, submissions } from '../db/schema';
+import { castingFiles, castingRoles, castings, submissions } from '../db/schema';
 import type { AppEnv } from '../env';
 import { ApiError, notFound } from '../lib/errors';
+import { releaseFiles } from '../lib/fileRefs';
 import { contains } from '../lib/sqlLimits';
 import { body, paramId, query } from '../lib/validate';
 import { currentUser, requireAuth, requirePermission } from '../middleware/auth';
@@ -199,11 +200,14 @@ router.patch('/:id', canWrite, async (c) => {
 
 // ── Delete ──────────────────────────────────────────────────────────────────
 
-router.delete('/:id', canWrite, (c) => {
+router.delete('/:id', canWrite, async (c) => {
   const id = paramId(c);
-  // Roles and their submissions go with it (ON DELETE CASCADE).
-  const deleted = c.get('db').delete(castings).where(eq(castings.id, id)).returning({ id: castings.id }).get();
+  const db = c.get('db');
+  const fileIds = db.select({ fileId: castingFiles.fileId }).from(castingFiles).where(eq(castingFiles.castingId, id)).all().map((r) => r.fileId);
+  // Roles and their submissions go with it (ON DELETE CASCADE), and its files (their stored files too, unless used elsewhere).
+  const deleted = db.delete(castings).where(eq(castings.id, id)).returning({ id: castings.id }).get();
   if (!deleted) throw notFound('Casting not found');
+  await releaseFiles(db, c.get('files'), fileIds);
   return c.body(null, 204);
 });
 

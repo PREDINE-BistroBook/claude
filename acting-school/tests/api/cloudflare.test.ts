@@ -44,7 +44,7 @@ describe('Durable Object limits in the test database', () => {
   });
 
   it('multi-row inserts are split by the table width', () => {
-    expect(rowsPerInsert(users)).toBe(Math.floor(100 / 10));
+    expect(rowsPerInsert(users)).toBe(Math.floor(100 / 11));
     const batches = insertBatches(fileChunks, Array.from({ length: 70 }, (_, i) => i));
     expect(batches.map((b) => b.length)).toEqual([33, 33, 4]);
   });

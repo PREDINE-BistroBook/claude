@@ -2,7 +2,7 @@
 
 Internal staff app for an acting school that is also a talent agency. Works in the browser on desktop and phone (installable to the home screen), in English and Arabic.
 
-**Status:** phase 1 built — sign-in and first-run setup, staff accounts and settings, students, workshops (weekly schedule, sessions, attendance), talent roster with headshots, castings with roles and submissions, the combined schedule and the home dashboard, in English and Arabic (right-to-left). Phase 2, step 1 built — editable positions and permissions. Phase 2, step 2 built — admissions: enquiries from every source with follow-up reminders, pre-written WhatsApp messages (wa.me links, English or Arabic), interviews scored on the criteria in Settings, decisions and enrolment into a workshop, with interviews on the schedule and follow-ups on the home screen. Phase 2, step 3 (in progress) — the app is split into three sections, **School**, **Casting** and **Website**, switched with tabs at the top, and the studio has a **public website** run from the Website section: workshops with an apply form, a casting call with photos, about & coaches, and a link-in-bio page. Its forms feed Admissions (enquiries with source "website") and Casting › Applications. The rest of phase 2 is in `ROADMAP.md`.
+**Status:** phase 1 built — sign-in and first-run setup, staff accounts and settings, students, workshops (weekly schedule, sessions, attendance), talent roster with headshots, castings with roles and submissions, the combined schedule and the home dashboard, in English and Arabic (right-to-left). Phase 2, step 1 built — editable positions and permissions. Phase 2, step 2 built — admissions: enquiries from every source with follow-up reminders, pre-written WhatsApp messages (wa.me links, English or Arabic), interviews scored on the criteria in Settings, decisions and enrolment into a workshop, with interviews on the schedule and follow-ups on the home screen. Phase 2, step 3 (in progress) — the app is split into three sections, **School**, **Casting** and **Website**, switched with tabs at the top, and the studio has a **public website** run from the Website section: workshops with an apply form, a casting call with photos, about & coaches, and a link-in-bio page. Its forms feed Admissions (enquiries with source "website") and Casting › Applications. The team pack built — profile photos, pictures and files on workshops, castings and in chat, one-to-one messages between all staff, "call to the office", and alerts (in the app, and pushed to phones once the VAPID keys are set). The rest of phase 2 is in `ROADMAP.md`.
 
 ## Run it
 
@@ -44,6 +44,8 @@ The app also runs on Cloudflare as **one Worker named `claude`**: the built web 
 | `ALLOW_DEMO_RESET` | `vars` | `"false"`. `"true"` only on a demo deployment (enables the reset below). |
 | `PUBLIC_SITE_HOSTS` | `vars` (both wrangler configs) | `"turquoisestudio.app,www.turquoisestudio.app"`: the hosts that serve the public website at their root (the first is the one `www` redirects to). Everywhere else the website is under `/site`. Unset on Node unless you set it. |
 | `SESSION_DAYS`, `COOKIE_SECURE` | optional vars | as on Node (cookies are `Secure`, named `__Host-as_session`, by default on Cloudflare). |
+| `VAPID_PUBLIC_KEY` | `vars` in `wrangler.jsonc` **and** `wrangler.embedded.jsonc` (added by the operator at deploy) | Web Push to phones (new messages, "call to the office"). See "Phone alerts (VAPID keys)" below. |
+| `VAPID_PRIVATE_KEY` | Secret | The other half of that pair. Without both keys push is simply off; the in-app Alerts bell works either way. |
 
 **Set `ADMIN_TOKEN` before (or right after) the first deploy.** The Worker is public on its workers.dev address as soon as a push lands, and an empty school offers first-run setup — so on Cloudflare the setup screen asks for a **setup code**: the `ADMIN_TOKEN`. Without it nobody (an attacker polling for a fresh deployment included) can create the first owner account. The same holds after a demo reset. Either open the app and enter the code on the setup screen, or load the demo with `seed-demo` below (it creates the owner itself). On Node, setup stays open (the server isn't public until you put it somewhere); `REQUIRE_SETUP_CODE=true` turns the code on there too.
 
@@ -84,6 +86,19 @@ npm run cf:smoke -- --embedded  # the same against the bundled variant (wrangler
 
 `cf:dev` creates a gitignored `.dev.vars` with a throwaway `ADMIN_TOKEN` and `ALLOW_DEMO_RESET=true` (see `.dev.vars.example`), so the seed command above works against `http://localhost:8787` (and that token is the local setup code).
 
+### Phone alerts (VAPID keys)
+
+Push notifications to phones are free (they go through the browsers' own push services: Apple, Google, Mozilla), but the server needs one key pair, the **VAPID keys**, to sign them. Without them everything else works and the in-app **Alerts** bell still lists every message and call; phones just don't buzz.
+
+1. **Make the pair once**, on any computer with this repository: `npm run vapid-keys`. It prints two lines, `VAPID_PUBLIC_KEY=…` and `VAPID_PRIVATE_KEY=…` (base64url, P-256). Nothing is stored or sent anywhere.
+2. **Cloudflare:**
+   - the **public** key goes in `vars` in `wrangler.jsonc` *and* `wrangler.embedded.jsonc` (keep the two files in step; the key isn't secret, so committing it is fine). Don't add it only in the dashboard: every `wrangler deploy` (each Workers Builds push runs one) replaces the dashboard's plain vars with the ones in the file;
+   - the **private** key is a **secret** named `VAPID_PRIVATE_KEY`: dashboard → the Worker → Settings → Variables and Secrets → Add → type *Secret* (or `wrangler secret put VAPID_PRIVATE_KEY` from the operator's own session). Secrets survive deploys. Never commit it or paste it into chat.
+3. **Node:** set both as environment variables (`VAPID_PUBLIC_KEY=… VAPID_PRIVATE_KEY=… npm start`). **Locally in workerd:** put both lines in `.dev.vars`.
+4. **Check:** sign in, open **Profile › Alerts on this phone**. With the keys it offers "Turn on alerts on this phone" (and "Send me a test" once on); without them it says phone alerts aren't set up on this server. If only one key is set, or the pair is not valid, the server logs one line saying so (never the key) and push stays off.
+
+The pushes are signed as the studio: the website's contact email (`mailto:`) when one is set, otherwise `https://turquoisestudio.app`. **Keep the same pair for good:** a new pair (for example after the private key leaked) works at once, but every phone has to turn alerts on again. On iPhone, alerts only work once the app has been added to the Home Screen (Share → Add to Home Screen) and opened from there; the Profile card explains this step by step.
+
 ## Sections
 
 The staff app has three sections, switched with the tabs under the header (on phones) or at the top of the page (desktop). Each has its own colour, home page and menu; Staff, Positions and Settings sit under "Administration" in every section, and the profile is always in the menu.
@@ -112,6 +127,17 @@ Server-rendered pages in English and Arabic (no JavaScript, no prices — worksh
 
 Enquiries become ordinary leads (source "website": Admissions › filter by source); an enquiry from a phone that already has an open lead adds a note to that lead instead of a duplicate. Casting applications wait in Casting › Applications until someone adds them to the roster (that creates the talent profile with their photos) or declines them. The forms are protected without anything for the visitor to solve: an Origin check, a hidden trap field, a signed form token (at least 3 seconds, at most 24 hours old), body limits (64 KB for enquiries; 20 MB for the casting form, each photo at most 6 MB and a real JPEG/PNG/WebP) and rate limits — enquiries 5 an hour per address and 300 a day in total, casting applications 3 an hour per address, 100 a day and 300 MB of photos a day in total. Only the website's own pictures (main photo, shown coaches, shown workshops' covers) are public at `/site/media/:id`; applicants' photos never are.
 
+## The team pack
+
+Every worker can **put pictures and files** in the app and **message** every colleague; the CEO, CFO and Executive Directors can also **call someone to the office**.
+
+- **Pictures and files.** Uploads are JPEG/PNG/WebP photos (shrunk on the phone) or PDF, Word, Excel and PowerPoint files (`.docx`/`.xlsx`/`.pptx`), up to 8 MB, recognised from the file itself, never from its name. Photos open in the app; documents download under their own name. Everyone has a profile photo (their own on Profile; anyone's with *Manage staff*). A workshop has "Photos & files" (whoever sees the workshop sees them; its coach or anyone who can edit workshops adds them), a casting has "Files" (*See castings* / *Work on castings*). A file is deleted when the last thing using it goes.
+- **Team and messages.** `/team` lists everyone active with photo and positions (owners appear as name and photo only to non-owners) and a **Message** button. Chats are one-to-one; photos and files can be attached; a message can be deleted by its sender in the first 15 minutes; at most 60 messages a minute per person.
+- **Call to the office** (permission *Call someone to the office*, `staff.summon`: owners and the Executive Director out of the box). The person gets a can't-miss banner (and a push notification) and answers **On my way** or **Can't come now**; the caller sees the answer. One open call per person at a time, a call expires after two hours, at most 20 an hour.
+- **Notifications.** The **Alerts** bell lists new messages (one per conversation), calls and answers. With the VAPID keys set ("Phone alerts (VAPID keys)" above), they also reach phones as push notifications — free, through the browsers' own push services. On iPhone the app must be added to the Home Screen and opened from there first.
+- **Where it is in the app.** **Messages** (with its unread count) and the **Alerts** bell sit at the top of every screen (in the sidebar on a computer); **Team** is in the account menu (“More” on a phone). Message / Call to the office buttons also sit beside people on the staff list and a staff member's details, a workshop's coach and an enquiry's assignee (and Call to the office at the top of a conversation). A call to the office shows as a big banner at the top of every screen within about 20 seconds; **Profile › Alerts on this phone** turns on push for that phone (the service worker's push handlers are in `src/web/public/push-sw.js`).
+- **There is no COO position.** The school asked for the button for "the CFO, COO and Executive Directors"; the studio has no COO, so out of the box the CEO, the CFO and the Executive Director can call people to the office. To give it to someone else, give one of their positions *Call someone to the office* on the Positions screen.
+
 ## Positions
 
 Access comes from **positions**. A person can hold several; their permissions add up (e.g. Acting coach + Finance). Owners (CEO, CFO) can change everything on the Positions screen; the Executive Director can manage staff and positions too, but only within her own access. The built-in positions as confirmed by the school:
@@ -119,7 +145,7 @@ Access comes from **positions**. A person can hold several; their permissions ad
 | Position | Can see / do |
 |---|---|
 | **CEO**, **CFO** (owner positions) | Everything, including staff accounts, positions, all money, and permissions added later. Owner accounts and owner positions are invisible to everyone else. |
-| **Executive Director** | Everything except money totals (payment status only): staff accounts and positions (never beyond her own access, never owners), settings, students with contacts, all workshops, attendance, actors, castings, sending actors to clients, admissions (enquiries, interviews, decisions, enrolling) and the public website. |
+| **Executive Director** | Everything except money totals (payment status only): staff accounts and positions (never beyond her own access, never owners), settings, students with contacts, all workshops, attendance, actors, castings, sending actors to clients, admissions (enquiries, interviews, decisions, enrolling), the public website, and calling people to the office. |
 | **Head of Casting** | Actor database with contacts, castings, sending actors to clients; sees students and all workshops (names, no student contacts). |
 | **Casting team** | Adds and updates actors (with contacts), builds shortlists. Can't send to clients. Sees students (no contacts). |
 | **Video editor** | Students, workshops and actors — names and photos only: no contact details, no money. |

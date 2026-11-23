@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import admissions from '../../src/web/features/admissions/i18n';
 import applications from '../../src/web/features/applications/i18n';
 import castings from '../../src/web/features/castings/i18n';
+import chat from '../../src/web/features/chat/i18n';
 import classes from '../../src/web/features/classes/i18n';
 import dashboard from '../../src/web/features/dashboard/i18n';
 import positions from '../../src/web/features/positions/i18n';
@@ -10,10 +11,11 @@ import settings from '../../src/web/features/settings/i18n';
 import staff from '../../src/web/features/staff/i18n';
 import students from '../../src/web/features/students/i18n';
 import talent from '../../src/web/features/talent/i18n';
+import team from '../../src/web/features/team/i18n';
 import website from '../../src/web/features/website/i18n';
 import common from '../../src/web/i18n/common';
 
-const namespaces = { common, students, classes, talent, castings, schedule, dashboard, staff, positions, settings, admissions, applications, website };
+const namespaces = { common, students, classes, talent, castings, schedule, dashboard, staff, positions, settings, admissions, applications, website, team, chat };
 const PLURAL = /_(zero|one|two|few|many|other)$/;
 const AR_FORMS = ['zero', 'one', 'two', 'few', 'many', 'other'];
 
