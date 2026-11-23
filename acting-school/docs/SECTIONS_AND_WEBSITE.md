@@ -42,7 +42,9 @@ Design rule for everything here: **made for older, non-technical people.**
   - Anything else (`/profile`, `/staff`, `/positions`, `/settings`) returns `null` and keeps the last remembered section.
 - **`NavItem` in `src/web/layout/nav.ts`** gets `section: 'school' | 'casting' | 'website' | 'admin'`, which replaces `group`. Admin items (Staff, Positions, Settings) appear in every section, under an "Administration" heading at the end of the sidebar and in the phone "More" sheet. Profile stays where it is today.
 - **Section homes:** `/school`, `/casting`, `/website`.
-  - `/` redirects to the remembered section's home if the person can still see it, otherwise to the first visible section.
+  - `/` redirects to the remembered section's home if the person can still see it, otherwise to the first visible section — except that someone whose School is only the student list (`students.read` without `courses.read` or `admissions.read`) and who sees Casting starts in Casting (the casting team: `defaultSection`). The remembered section is kept per signed-in person.
+  - After sign-in, a `?next=` page the person can't open (a section they don't see, a menu page their positions don't open — on a shared phone, the last person's page) becomes `/`, never a "No access" screen (`landingAfterSignIn`).
+  - `/schedule` is the School schedule; an old link that was after auditions (`?show=auditions`, or anyone who sees auditions but no workshops or interviews) goes on to `/casting/schedule`, the date kept.
   - If the person sees **no** section, `/` shows a small home: greeting, profile link and a "nothing assigned yet" note.
   - Every existing deep link (`/students/12`, `/classes/3`, …) keeps working.
 
@@ -178,16 +180,16 @@ Design rule for everything here: **made for older, non-technical people.**
   - `POST /api/site/workshops/order` reorders.
 - **`GET /api/site/summary`** (`website.manage`):
   - `{ newWebsiteLeads, newCastingApplications, castingCallOpen, visibleWorkshops, visibleCoaches }`;
-  - the public URLs to show and copy: `{ home, workshops, castingCall, links }` for `en` and `ar`, built from the request's own origin.
+  - the public URLs to show and copy: `{ home, workshops, castingCall, links }` for `en` and `ar` — on the first `PUBLIC_SITE_HOSTS` entry without `/site` when the studio's domain is configured (`https://turquoisestudio.app/ar/links`), otherwise built from the request's own origin (`…/site/ar/links`).
 - **`/api/casting-applications`:**
   - `GET` (`talent.read`): `?status=` and `?q=` (name/phone/city search via `contains()` and `phone_digits`), newest first, answering `{ items }`. Each item: id, names, gender, age, city, status, createdAt, first photo file id, minor flag.
   - `GET /:id` (`talent.read`): everything, with photos as `[{ fileId }]`. Contact fields are redacted without `talent.contact`.
   - `PATCH /:id` (`talent.write`): `{ status: 'reviewing' | 'declined' | 'new' }`. Sets `reviewed_by_id` / `reviewed_at`.
   - `POST /:id/accept` (`talent.write`):
-    - in one transaction: create a `talent` row from the application (names, gender, date_of_birth, phone through `withPhoneDigits`, email, city, height_cm, languages, skills, plus notes with experience/message/links/guardian info), create `talent_photos` for its photos reusing the same file ids, then set status `accepted`, `talent_id` and the reviewer;
+    - in one transaction: create a `talent` row from the application (names, gender, date_of_birth, phone through `withPhoneDigits`, email, city, height_cm, languages, skills, plus notes with the experience, the message and the guardian's name and consent — **not** the guardian's phone or the raw links, which are contact fields and stay on the application behind `talent.contact`; an Instagram link fills `instagram`, the first other link `showreel_url`), create `talent_photos` for its photos reusing the same file ids, then set status `accepted`, `talent_id` and the reviewer;
     - answers 201 `{ talentId }`;
-    - 409 if already accepted.
-  - `DELETE /:id` (`talent.write`): deletes the application and its photos' files (files deleted after the transaction). Files already linked to a talent profile are kept. Answers 204.
+    - 409 if already accepted and its talent profile still exists. If that profile was deleted since (`talent_id` back to null), the application is open again: it can be accepted once more, or its status changed.
+  - `DELETE /:id` (`talent.write`): deletes the application and its photos' files (files deleted after the transaction). Files already linked to a talent profile are kept; they are deleted when that profile (or that photo) is deleted and nothing else uses them, so an applicant's photos can always be removed for good. Answers 204.
 - **Website enquiries:** the leads they create are ordinary leads, so Admissions shows them as it does today.
   - Make sure the Admissions list can filter by source (add `?source=` to `GET /api/leads` plus a filter in the UI if it isn't there).
   - The `website` source already exists in `LEAD_SOURCES`.
@@ -197,6 +199,7 @@ Design rule for everything here: **made for older, non-technical people.**
   - `siteContent.heroFileId`, or
   - the `photo_file_id` of a **visible** coach, or
   - the `cover_file_id` of a workshop that **appears on the site**.
+- A file can only be given one of those three roles if it is an uploaded image that is neither a casting application's photo nor a student's or talent's photo (the Website screens upload their own images), so holding `website.manage` alone never publishes someone's profile photo.
 - Only those are served by `GET /site/media/:id`:
   - image mime types only;
   - `Cache-Control: public, max-age=3600`;
@@ -282,7 +285,7 @@ Design rule for everything here: **made for older, non-technical people.**
   - **On a non-public host,** `/site/*` keeps working as today, for previews.
   - **`run_worker_first`:** with static assets, a path on a public host must reach the Worker before assets. So `wrangler.jsonc` uses `"run_worker_first": true`, and the Worker passes staff-host asset requests to `env.ASSETS` exactly as before; the embedded variant already runs the Worker first.
   - **Tests:** cover the public-host routing (Worker-level unit tests in `tests/unit/`, using a fake ASSETS and DO stub) and the link building in `paths.ts`.
-  - **Custom domains in the configs:** the deployer adds `routes` with `custom_domain: true` when switching the domain on. Builders don't add `routes`.
+  - **Custom domains in the configs:** the deployer adds `routes` with `custom_domain: true` when switching the domain on (done: both configs carry them). Builders don't add `routes`. Local runs (`cf:dev`, `cf:smoke`) pass `--infer-origin-from-routes=false` so wrangler doesn't rewrite every request's host to the first route.
 
 ### Pages (`:lang` is `en` or `ar`)
 - **`GET /site`:** redirects (302) to `/site/ar` if `Accept-Language` prefers Arabic, otherwise `/site/en`.
@@ -298,7 +301,7 @@ Design rule for everything here: **made for older, non-technical people.**
   - Fields: first name, last name, phone (WhatsApp), email (optional), date of birth, experience (none / some / a lot), how you heard (Instagram / friend / other), message, privacy consent checkbox. When under 18 (worked out from date of birth against the school's today): guardian name, guardian phone, guardian consent.
   - Creates a **lead**: source `website`, `sourceDetail` set to the workshop title or "general", `preferredCourseId`, notes from the message, guardian fields, status `new`, the usual `created` activity.
   - **Refactor lead creation** from `routes/leads.ts` into a shared `createLead(...)` in `lib/admissions.ts`, so both use one path.
-  - **If an open lead with the same phone already exists:** add a note activity "Applied again on the website: …" to it instead of creating a duplicate.
+  - **If an open lead with the same phone already exists and it is the same person** (same first name; then the same date of birth when both have one, else family names that agree): add a note activity "Applied again on the website: …" (with the date of birth and email) to it instead of creating a duplicate, and make its follow-up due today so staff see it. **Someone else on that phone** (a parent's second child) becomes a lead of their own, with "Same phone as enquiry #N (name)" in its notes.
 - **`GET` and `POST /site/:lang/casting-call`:**
   - **When open:** intro, "what we're looking for", then the form: first/last name, gender, date of birth, phone, email, city, height (cm), languages, skills, experience, up to 3 links (Instagram/showreel, https only), message, **1–3 photos** (the first is the headshot, required), guardian block when under 18, privacy consent.
   - **When closed:** "There's no open casting call right now. Follow us on Instagram" + Instagram link. A `POST` answers that page with 410.
@@ -308,7 +311,7 @@ Design rule for everything here: **made for older, non-technical people.**
   - "Casting call" when open;
   - WhatsApp workshops, WhatsApp casting, Instagram;
   - then the visible custom links.
-- **`GET /site/:lang/thanks?k=apply|casting`:** a thank-you page with a WhatsApp button. Forms use POST → 303 redirect → GET (PRG).
+- **`GET /site/:lang/thanks?k=apply|casting`:** a thank-you page with a WhatsApp button. Forms use POST → 303 redirect → GET (PRG); the redirect ends in `#thanks` (an anchor on that page), not the form's `#apply`.
 - **`GET /site/media/:id`:** see "Files that become public".
 - **Unknown `/site/...`:** a friendly 404 page in the right language.
 
@@ -328,7 +331,10 @@ Design rule for everything here: **made for older, non-technical people.**
   - `link rel=alternate hreflang` for en/ar, canonical, `theme-color`.
   - The brand SVG as a data: URI favicon.
 - **Forms:**
-  - `<label for>` on every input; `autocomplete` (`given-name`, `family-name`, `tel`, `email`, `bday`); `inputmode="tel"`; `required` markers.
+  - `<label for>` on every input; `autocomplete` (`given-name`, `family-name`, `tel`, `email`, `bday-day` / `bday-month` / `bday-year`); `inputmode="tel"`; `required` markers.
+  - Date of birth is three plain lists (day, month by name, year) under one legend, joined on the server — not a calendar picker, which is hard to take back to a birth year on a phone.
+  - Numbers typed with Arabic-Indic digits (١٧٠) are accepted. Links may be written as an Instagram name (`@name`) or without `https://`; they are stored as https links.
+  - An error page's "Back to the form" link must be a real navigation (`?again=1#apply`): two of the forms post to their own address.
   - On a validation error: re-render with an error summary at the top (links to the fields), messages next to fields, and the values kept (except photos, which must be chosen again; say so).
   - A short privacy note under each form: what's stored and why, and that the studio will contact them on WhatsApp or by phone.
 
@@ -342,16 +348,22 @@ Design rule for everything here: **made for older, non-technical people.**
   - if an `Origin` header is present, it must match the request host; otherwise 403;
   - **honeypot:** a text field named `website`, hidden with CSS and `aria-hidden`/`tabindex=-1`. If it is filled, pretend success (303 to thanks) and store nothing;
   - **form token:** a hidden field holding `<issuedAt>.<hmac-sha256(siteFormSecret, issuedAt + form kind)>`. Reject when it is missing, invalid, older than 24 h, or younger than 3 s by re-rendering with a friendly "please try again", without storing. Compare in constant time.
-- **Rate limits (`rate_limits`)**, checked **before** any parsing of photos and before writing:
-  - apply: 5 per hour per client address, 300 per day school-wide;
-  - casting: 3 per hour per address, 100 per day school-wide, plus 300 MB of photos per day school-wide;
+- **Rate limits (`rate_limits`)**, checked **before a byte of the body is read** (with or without a `Content-Length`) and before writing. Two things are limited (amended after the launch review, 2026-11-23):
+  - **attempts** — every POST of one client address, whatever becomes of it: apply 20 per hour, casting 12 per hour. Counted before reading. Generous on purpose: a form that comes back with a mistake must not lock an honest applicant out;
+  - **what is stored** — apply: 5 per hour per client address, 300 per day school-wide; casting: 3 per hour per address, 100 per day school-wide, plus 300 MB of photos **kept** per day school-wide. These are looked at before reading (already full → 429) but **counted only at the write**, by what is actually stored (the photos' real sizes). A request that stores nothing — no token, a validation error, a declared length with no body, a dropped connection — uses up none of the school-wide allowance. A filled honeypot counts against its own address only;
+  - the per-address key is the IPv4 address, or the **/64** of an IPv6 address (one line or phone holds a whole /64);
   - when hit: a friendly 429 page in the right language.
   - The client address comes from the existing `clientIp` dependency (CF-Connecting-IP / socket).
+  - A flood from many addresses at once is bounded only per address: that is for a Cloudflare rate-limiting rule on POSTs to the public hosts (an operator setting), not for the app.
 - **Body caps:**
   - apply forms 64 KB;
   - casting form 20 MB total, each photo ≤ 6 MB, at most 3;
   - photos must be real JPEG/PNG/WebP, checked by magic bytes; otherwise a friendly error asking for a JPG or PNG;
-  - the Worker's `tooLarge()` refuses a larger `Content-Length` before the DO, and the app enforces the same caps on bodies without a length.
+  - the Worker's `tooLarge()` refuses a larger `Content-Length` before the DO, and the app enforces the same caps on bodies without a length;
+  - text fields are bounded too: no field over 4,000 characters and no more than 64 KB of text in all reaches validation or is echoed back (the casting form's 20 MB are for its photos), and a form with far more multipart parts than ours is refused unparsed;
+  - **casting uploads in flight:** the bodies being received or handled at one moment may add up to 40 MB (two full-size applications, or several ordinary ones) — the Durable Object has 128 MB for the whole school. Beyond that the visitor gets a "please try again in a minute" page (429, `Retry-After`), before anything is read or counted. A body that takes longer than 2 minutes to arrive (30 s for the enquiry form) is given up.
+- **One answer names every problem:** the fields, the guardian block (when the date of birth says under 18) and the photos (count, size, type) are all checked before a form is sent back, because each round costs the applicant their chosen photos.
+- **Redirects never leave the site:** the trailing-slash redirect is built from the still percent-encoded path, so `/%5Cevil.example/` or `/%09/evil.example/` cannot become a `Location` a browser reads as another host.
 - **Validation:**
   - zod schemas in `src/shared/schemas/site.ts`;
   - text lengths capped;

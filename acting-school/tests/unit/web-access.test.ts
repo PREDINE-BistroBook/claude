@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BUILT_IN_POSITIONS, PERMISSIONS, type Permission } from '../../src/shared/permissions';
 import { NAV_ITEMS, mobileTabs, navItemOpen } from '../../src/web/layout/nav';
 import { heldByOthersBeyondReach } from '../../src/web/features/positions/utils';
-import { parseFilterParam } from '../../src/web/features/schedule/utils';
+import { legacyScheduleRedirect, parseFilterParam } from '../../src/web/features/schedule/utils';
 
 /** `can` for a set of permissions, as useAuth().can answers it. */
 const canWith = (perms: readonly Permission[]) => (p: Permission) => perms.includes(p);
@@ -35,6 +35,30 @@ describe('schedule filter follows what the person can see', () => {
   });
   it('neither', () => {
     expect(parseFilterParam('classes', { classes: false, auditions: false, interviews: false })).toBe('all');
+  });
+});
+
+describe('old /schedule links that were after auditions go on to the Casting schedule', () => {
+  const to = (key: string, query: string) => legacyScheduleRedirect(new URLSearchParams(query), canWith(builtIn(key)));
+
+  it('the casting team (auditions, but nothing the School schedule shows): always, the date kept', () => {
+    expect(to('casting_team', '')).toBe('/casting/schedule');
+    expect(to('casting_team', 'show=auditions&date=2026-11-24')).toBe('/casting/schedule?date=2026-11-24');
+    expect(to('casting_team', 'date=2026-13-45')).toBe('/casting/schedule');
+  });
+
+  it('someone who sees both: only when the link asked for auditions', () => {
+    expect(to('executive_director', 'show=auditions')).toBe('/casting/schedule');
+    expect(to('head_of_casting', 'show=auditions&date=2026-12-01')).toBe('/casting/schedule?date=2026-12-01');
+    expect(to('executive_director', '')).toBeNull();
+    expect(to('executive_director', 'show=interviews')).toBeNull();
+    expect(to('head_of_casting', 'date=2026-12-01')).toBeNull();
+  });
+
+  it('nobody is sent to a schedule they can’t open', () => {
+    expect(to('acting_coach', 'show=auditions')).toBeNull();
+    expect(to('finance', '')).toBeNull();
+    expect(legacyScheduleRedirect(new URLSearchParams('show=auditions'), canWith([]))).toBeNull();
   });
 });
 

@@ -19,7 +19,7 @@ import { MAX_JSON_BODY_BYTES } from '../server/middleware/bodyLimit';
 import { bareSiteCtx, langForPath } from '../server/site/context';
 import { SITE_SECURITY_HEADERS } from '../server/site/headers';
 import { errorPage } from '../server/site/pages';
-import { SITE_BASE, publicHostSitePaths, sitePaths } from '../server/site/paths';
+import { SITE_BASE, backToForm, publicHostSitePaths, sitePaths } from '../server/site/paths';
 import { apexRedirect, routePublicHost, withUrl } from '../server/site/publicHost';
 import { htmlString } from '../server/site/render';
 import { MAX_UPLOAD_BYTES } from '../shared/schemas/files';
@@ -44,7 +44,9 @@ const isApiPath = (p: string) => p === '/api' || p.startsWith('/api/');
 
 /**
  * The largest body each route reads (the app enforces the same on bodies
- * without a Content-Length): uploads 8 MB (+ multipart overhead), the casting
+ * without a Content-Length, and for the public forms checks its rate limits
+ * before reading either kind; casting uploads are also capped in flight —
+ * src/server/site/submit.ts): uploads 8 MB (+ multipart overhead), the casting
  * form 20 MB, the other public forms 64 KB, the JSON API 1 MB.
  */
 export function maxBodyBytes(appPath: string): number {
@@ -70,7 +72,8 @@ function apiTooLarge(): Response {
 function siteTooLarge(url: URL, appPath: string, publicHost: boolean): Response {
   const lang = langForPath(appPath, null);
   const paths = publicHost ? publicHostSitePaths : sitePaths;
-  const back = /^\/site\/[^/]+\/casting-call$/.test(appPath) ? `${(publicHost ? appPath.slice(SITE_BASE.length) : appPath)}#apply` : undefined;
+  // "?again=1": the form posts to its own address, so a link differing only by "#apply" would be a jump within this error page (paths.ts backToForm).
+  const back = /^\/site\/[^/]+\/casting-call$/.test(appPath) ? backToForm(publicHost ? appPath.slice(SITE_BASE.length) : appPath) : undefined;
   const body = htmlString(errorPage(bareSiteCtx(url, lang, paths), 'tooLarge', back));
   return new Response(body, { status: 413, headers: { 'Content-Type': 'text/html; charset=UTF-8', ...SITE_SECURITY_HEADERS, 'Cache-Control': 'no-store' } });
 }

@@ -81,7 +81,7 @@ export default function WebsiteHomePage() {
           )}
           <div className="rounded-2xl border border-line bg-surface p-4 sm:col-span-2">
             <div className="mb-3 flex items-center justify-between gap-3">
-              <Link to="/website/casting-call" className="flex min-h-11 min-w-0 items-center gap-2 font-semibold text-ink hover:underline">
+              <Link to="/website/casting-call" className="flex min-h-12 min-w-0 items-center gap-2 font-semibold text-ink hover:underline">
                 <Megaphone className="size-5 shrink-0 text-muted" aria-hidden />
                 {t('home.castingCall')}
                 <ChevronRight className="size-4 shrink-0 text-muted rtl:-scale-x-100" aria-hidden />
@@ -109,7 +109,7 @@ export default function WebsiteHomePage() {
                 { value: 'en', label: <span lang="en">{t('bilingual.en')}</span> },
                 { value: 'ar', label: <span lang="ar">{t('bilingual.ar')}</span> },
               ]}
-              className="[&_button]:min-h-11 [&_button]:px-5 [&_button]:text-base"
+              className="[&_button]:min-h-12 [&_button]:px-5 [&_button]:text-base"
             />
           </div>
           <ul className="divide-y divide-line">

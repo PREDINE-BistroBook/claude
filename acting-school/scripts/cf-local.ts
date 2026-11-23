@@ -59,11 +59,25 @@ export interface WranglerDev {
   stop(): Promise<void>;
 }
 
-/** Start `wrangler dev --local` on `port` and wait until /api/health answers. */
-export async function startWranglerDev(opts: { port: number; persistTo?: string; quiet?: boolean; timeoutMs?: number; config?: string }): Promise<WranglerDev> {
-  const args = ['wrangler', 'dev', '--local', '--port', String(opts.port), '--ip', '127.0.0.1', '--show-interactive-dev-session=false'];
+/**
+ * The `npx` arguments of every local `wrangler dev` (cf:dev and cf:smoke).
+ * `--infer-origin-from-routes=false` matters: the wrangler configs carry the
+ * studio's custom domains (`routes`), and by default local wrangler presents
+ * every request to the Worker as the first route's host
+ * (staff.turquoisestudio.app) whatever Host header was sent — the Worker's
+ * own host routing (public hosts → the website) would never run, and the app
+ * would write links to the live staff host.
+ */
+export function wranglerDevArgs(opts: { port: number; config?: string; persistTo?: string; extra?: readonly string[] }): string[] {
+  const args = ['wrangler', 'dev', '--local', '--port', String(opts.port), '--infer-origin-from-routes=false'];
   if (opts.config) args.push('-c', opts.config);
   if (opts.persistTo) args.push('--persist-to', opts.persistTo);
+  return [...args, ...(opts.extra ?? [])];
+}
+
+/** Start `wrangler dev --local` on `port` and wait until /api/health answers. */
+export async function startWranglerDev(opts: { port: number; persistTo?: string; quiet?: boolean; timeoutMs?: number; config?: string }): Promise<WranglerDev> {
+  const args = wranglerDevArgs({ port: opts.port, config: opts.config, persistTo: opts.persistTo, extra: ['--ip', '127.0.0.1', '--show-interactive-dev-session=false'] });
   const child = spawn('npx', args, { cwd: ROOT, env: wranglerEnv(), stdio: ['ignore', 'pipe', 'pipe'], detached: true });
   let output = '';
   const onData = (chunk: Buffer) => {

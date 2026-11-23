@@ -6,15 +6,18 @@
  */
 import { html, raw } from 'hono/html';
 import type { z } from 'zod';
-import { addDays } from '../../shared/dates';
+import type { Locale } from '../../shared/enums';
 import type { SiteCtx } from './context';
-import { fieldMessage, type SiteStrings } from './i18n';
+import { INTL_LOCALE, fieldMessage, type SiteStrings } from './i18n';
 import { icon, type Html } from './render';
 
 /** Name of the hidden honeypot field: filled → a bot (pretend success, store nothing). */
 export const HONEYPOT_FIELD = 'website';
 /** Name of the hidden signed form token (lib/siteForms.ts). */
 export const TOKEN_FIELD = 'formToken';
+
+/** The date of birth's three choices (submit.ts joins them into `dateOfBirth`). */
+export const DOB_PART_FIELDS = ['dobDay', 'dobMonth', 'dobYear'] as const;
 
 export interface FormState {
   /** What was sent, to fill the fields again. */
@@ -171,9 +174,44 @@ ${errorLine(name, err)}
 </div>`;
 }
 
-/** Date-of-birth input limits: ages 0–100 on the school's today (the server checks 5–100). */
-export function dobLimits(today: string): { min: string; max: string } {
-  return { min: addDays(today, -Math.round(100.5 * 365.25)), max: today };
+const monthNames = new Map<string, string[]>();
+/** January … December in the page's language. */
+function months(lang: Locale): string[] {
+  let names = monthNames.get(lang);
+  if (!names) {
+    const f = new Intl.DateTimeFormat(INTL_LOCALE[lang], { month: 'long', timeZone: 'UTC' });
+    names = Array.from({ length: 12 }, (_, m) => f.format(new Date(Date.UTC(2024, m, 15))));
+    monthNames.set(lang, names);
+  }
+  return names;
+}
+
+/**
+ * Date of birth as three plain lists — day, month by name, year — under one
+ * legend. A phone's calendar picker opens on today's month and makes people
+ * hunt for a way back to 1985 or 2016; three lists need no explaining. The
+ * day list carries the id the error summary links to.
+ */
+export function dobField(ctx: SiteCtx, state: FormState, label: string): Html {
+  const name = 'dateOfBirth';
+  const err = state.errors[name];
+  const f = ctx.t.form;
+  const thisYear = Number(ctx.today.slice(0, 4)) || new Date().getUTCFullYear();
+  const [dayName, monthName, yearName] = DOB_PART_FIELDS;
+  const picked = (part: string, value: number) => (Number(state.values[part]) === value ? raw(' selected') : '');
+  const list = (part: string, id: string, placeholder: string, autocomplete: string, options: readonly (readonly [number, string])[]) =>
+    html`<select id="${id}" name="${part}" aria-label="${placeholder}" autocomplete="${autocomplete}" required${err ? raw(' aria-invalid="true"') : ''}><option value="">${placeholder}</option>${options.map(
+      ([value, text]) => html`<option value="${value}"${picked(part, value)}>${text}</option>`,
+    )}</select>`;
+  return html`<fieldset class="field${err ? ' has-error' : ''}"${describedBy(name, false, !!err)}>
+<legend class="legend">${labelText(ctx, label, true)}</legend>
+<div class="dob">
+${list(dayName, fid(name), f.dobDay, 'bday-day', Array.from({ length: 31 }, (_, i) => [i + 1, String(i + 1)] as const))}
+${list(monthName, fid(monthName), f.dobMonth, 'bday-month', months(ctx.lang).map((m, i) => [i + 1, m] as const))}
+${list(yearName, fid(yearName), f.dobYear, 'bday-year', Array.from({ length: 102 }, (_, i) => [thisYear - i, String(thisYear - i)] as const))}
+</div>
+${errorLine(name, err)}
+</fieldset>`;
 }
 
 /** The hidden token and the honeypot (hidden with CSS, out of the tab order, hidden from screen readers). */
@@ -181,6 +219,9 @@ export function hiddenFields(ctx: SiteCtx, token: string): Html {
   return html`<input type="hidden" name="${TOKEN_FIELD}" value="${token}">
 <div class="hp" aria-hidden="true"><label for="${fid(HONEYPOT_FIELD)}">${ctx.t.form.honeypot}</label><input id="${fid(HONEYPOT_FIELD)}" name="${HONEYPOT_FIELD}" type="text" tabindex="-1" autocomplete="off" value=""></div>`;
 }
+
+/** "First name: Please fill this in." — and no colon after a label that is a question ("How did you hear about us? Please choose one."). */
+const labelled = (label: string, message: string) => (/[?؟]$/.test(label.trim()) ? `${label} ${message}` : `${label}: ${message}`);
 
 /** The error summary at the top of a form: each message links to its field. */
 export function errorSummary(ctx: SiteCtx, state: FormState, labels: Record<string, string>): Html | '' {
@@ -190,7 +231,7 @@ export function errorSummary(ctx: SiteCtx, state: FormState, labels: Record<stri
 <h2>${icon('alert')}${ctx.t.errors.summaryTitle}</h2>
 ${state.formError ? html`<p>${state.formError}</p>` : ''}
 ${items.length
-  ? html`<p>${ctx.t.errors.summaryIntro}</p><ul>${items.map(([name, message]) => html`<li><a href="#${fid(name)}">${labels[name] ?? name}: ${message}</a></li>`)}</ul>`
+  ? html`<p>${ctx.t.errors.summaryIntro}</p><ul>${items.map(([name, message]) => html`<li><a href="#${fid(name)}">${labelled(labels[name] ?? name, message)}</a></li>`)}</ul>`
   : ''}
 ${state.photosAgain ? html`<p class="note">${icon('camera')} ${ctx.t.form.photosAgain}</p>` : ''}
 </div>`;

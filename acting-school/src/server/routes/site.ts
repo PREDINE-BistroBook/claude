@@ -30,7 +30,7 @@ import { currentUser, requireAuth, requirePermission, userCan } from '../middlew
  *   GET/PUT /api/site/content            the site content object (settings 'site')
  *   /api/site/coaches                    coaches shown on the site (list, create, read, edit, delete, order)
  *   /api/site/workshops                  which active/upcoming workshops the site shows, with public texts
- *   GET /api/site/summary                the Website home: counts and the public URLs
+ *   GET /api/site/summary                the Website home: counts and the public URLs (the studio's domain when configured)
  * Images named here (hero, coach photos, workshop covers) become public while
  * they're on the site (lib/siteContent.ts isPublicFile); a casting
  * application's photo can't be used. Coaches' staff links follow the staff
@@ -187,12 +187,14 @@ router.patch('/coaches/:id', async (c) => {
   db.transaction((tx) => {
     const existing = findCoach(tx, id);
     const patch = Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined)) as Partial<typeof siteCoaches.$inferInsert>;
-    if (patch.userId === null && existing.userId !== null && !me.isOwner) {
-      // Linked to an owner account the caller can't see (it reads as no link): sending the form back
-      // as it was must not unlink it.
-      if (loadCoaches(tx, me, eq(siteCoaches.id, id))[0]?.userId === null) delete patch.userId;
-    }
-    if (patch.userId && patch.userId !== existing.userId) assertLinkable(tx, me, patch.userId);
+    // Linked to an owner account the caller can't see (it reads as no link)?
+    const hiddenLink = !me.isOwner && existing.userId !== null && loadCoaches(tx, me, eq(siteCoaches.id, id))[0]?.userId === null;
+    // Sending the form back as it was (no link) must not unlink it.
+    if (patch.userId === null && hiddenLink) delete patch.userId;
+    // An unchanged visible link is left alone (the form always sends it back, even once that account was
+    // deactivated). A hidden one is checked like any other id, so naming the owner behind it answers
+    // exactly like a missing id — never "yes, that's the one".
+    if (patch.userId && (patch.userId !== existing.userId || hiddenLink)) assertLinkable(tx, me, patch.userId);
     if (patch.photoFileId && patch.photoFileId !== existing.photoFileId) assertSiteImage(tx, patch.photoFileId, ['photoFileId']);
     const nameEn = patch.nameEn ?? existing.nameEn;
     const nameAr = patch.nameAr ?? existing.nameAr;
@@ -320,7 +322,8 @@ router.get('/summary', (c) => {
     castingCallOpen: getSiteContent(db).castingCall.open,
     visibleWorkshops: n(db.select({ n: counted }).from(siteWorkshops).innerJoin(courses, eq(courses.id, siteWorkshops.courseId)).where(workshopOnSite(today))),
     visibleCoaches: n(db.select({ n: counted }).from(siteCoaches).where(eq(siteCoaches.visible, true))),
-    urls: siteUrls(new URL(c.req.url).origin),
+    // The studio's own domain when configured (PUBLIC_SITE_HOSTS), else this host's /site previews.
+    urls: siteUrls(new URL(c.req.url).origin, c.get('config').publicSiteHosts),
   };
   return c.json(res);
 });

@@ -1,10 +1,11 @@
 import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Navigate, useNavigate, useSearchParams } from 'react-router';
+import { Navigate, useSearchParams } from 'react-router';
 import { loginInput } from '@shared/schemas/auth';
 import { Button } from '../components/ui/Button';
 import { Field, TextField } from '../components/ui/Field';
 import { FormError, SplashScreen } from '../components/ui/States';
+import { landingAfterSignIn } from '../layout/nav';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useForm } from '../lib/forms';
@@ -19,8 +20,7 @@ function safeNext(next: string | null): string {
 
 export default function LoginPage() {
   const { t } = useTranslation();
-  const { user, loading, needsSetup, refresh } = useAuth();
-  const navigate = useNavigate();
+  const { user, can, loading, needsSetup, refresh } = useAuth();
   const [params] = useSearchParams();
   const form = useForm({ email: '', password: '' });
   const school = useSchoolName();
@@ -28,16 +28,17 @@ export default function LoginPage() {
 
   const login = useMutation({
     mutationFn: (data: { email: string; password: string }) => api.post('/auth/login', data),
-    onSuccess: async () => {
-      await refresh();
-      navigate(safeNext(params.get('next')), { replace: true });
-    },
+    // Once /auth/me is re-read this page renders with the person and sends them on (below) —
+    // with *their* permissions, which a redirect from here (still the signed-out render) wouldn't have.
+    onSuccess: refresh,
     onError: form.setServerError,
   });
 
   if (loading) return <SplashScreen />;
   if (needsSetup) return <Navigate to="/setup" replace />;
-  if (user) return <Navigate to={safeNext(params.get('next'))} replace />;
+  // Back to where the screen was — unless that page isn't this person's to open (someone else was
+  // signed in here before): then their own start, not a "No access" screen.
+  if (user) return <Navigate to={landingAfterSignIn(safeNext(params.get('next')), can)} replace />;
 
   return (
     <AuthLayout title={t('auth.signInTitle')} subtitle={t('auth.signInSubtitle')} school={school}>

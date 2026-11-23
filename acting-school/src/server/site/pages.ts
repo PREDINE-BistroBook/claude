@@ -8,7 +8,7 @@ import { SITE_EXPERIENCE_LEVELS, SITE_HEARD_FROM } from '../../shared/schemas/si
 import type { PublicCoach, PublicWorkshop } from '../lib/siteContent';
 import { contactBlock, feesButton, pageHead, pick, waButton, waHref, whatsappNumber, workshopCard, workshopFacts } from './components';
 import type { SiteCtx } from './context';
-import { checkbox, dobLimits, errorSummary, fileField, hiddenFields, radios, textArea, textField, type FormState } from './forms';
+import { DOB_PART_FIELDS, checkbox, dobField, errorSummary, fileField, hiddenFields, radios, textArea, textField, type FormState } from './forms';
 import { fmt } from './i18n';
 import { layout } from './layout';
 import type { SiteThanksKind } from './paths';
@@ -94,7 +94,7 @@ ${c.photoFileId ? html`<img src="${ctx.paths.media(c.photoFileId)}" alt="${name}
 }
 
 function base(ctx: SiteCtx) {
-  return { lang: ctx.lang, t: ctx.t, paths: ctx.paths, origin: ctx.origin, studioName: ctx.studioName, content: ctx.content };
+  return { lang: ctx.lang, t: ctx.t, paths: ctx.paths, origin: ctx.origin, canonicalOrigin: ctx.canonicalOrigin, studioName: ctx.studioName, content: ctx.content };
 }
 
 // ── Workshops ───────────────────────────────────────────────────────────────
@@ -150,7 +150,7 @@ export function applyPage(ctx: SiteCtx, form: { state: FormState; token: string 
   const { t, paths, lang } = ctx;
   const body = html`<div class="wrap narrow">
 ${pageHead(t.apply.title, t.apply.intro)}
-<section class="form-card" id="apply">${applyForm(ctx, paths.apply(lang), form.state, form.token)}</section>
+<section class="form-card" id="apply">${applyForm(ctx, paths.apply(lang), form.state, form.token, 'h2')}</section>
 </div>`;
   return layout({
     ...base(ctx),
@@ -181,10 +181,9 @@ export function applyLabels(ctx: SiteCtx): Record<string, string> {
   };
 }
 
-function applyForm(ctx: SiteCtx, action: string, state: FormState, token: string): Html {
+function applyForm(ctx: SiteCtx, action: string, state: FormState, token: string, guardianHeading: 'h2' | 'h3' = 'h3'): Html {
   const { t } = ctx;
   const f = t.form;
-  const dob = dobLimits(ctx.today);
   return html`${errorSummary(ctx, state, applyLabels(ctx))}
 <form method="post" action="${action}#apply" accept-charset="utf-8">
 ${hiddenFields(ctx, token)}
@@ -192,21 +191,22 @@ ${textField(ctx, state, 'firstName', f.firstName, { required: true, autocomplete
 ${textField(ctx, state, 'lastName', f.lastName, { required: true, autocomplete: 'family-name', maxlength: 100 })}
 ${textField(ctx, state, 'phone', f.phone, { type: 'tel', required: true, autocomplete: 'tel', inputmode: 'tel', hint: f.phoneHint, dir: 'ltr', maxlength: 50 })}
 ${textField(ctx, state, 'email', f.email, { type: 'email', autocomplete: 'email', inputmode: 'email', dir: 'ltr', maxlength: 254 })}
-${textField(ctx, state, 'dateOfBirth', f.dateOfBirth, { type: 'date', required: true, autocomplete: 'bday', min: dob.min, max: dob.max })}
+${dobField(ctx, state, f.dateOfBirth)}
 ${radios(ctx, state, 'experience', f.experience, SITE_EXPERIENCE_LEVELS.map((v) => [v, t.experience[v]] as const))}
 ${radios(ctx, state, 'heardFrom', f.heardFrom, SITE_HEARD_FROM.map((v) => [v, t.heardFrom[v]] as const))}
 ${textArea(ctx, state, 'message', f.message, { hint: f.messageHint, maxlength: 2000 })}
-${guardianGroup(ctx, state)}
+${guardianGroup(ctx, state, guardianHeading)}
 ${checkbox(ctx, state, 'privacyConsent', f.privacyConsent, true)}
 <button class="btn btn-primary" type="submit">${f.send}${icon('arrow')}</button>
 <p class="privacy">${f.privacyApply}</p>
 </form>`;
 }
 
-function guardianGroup(ctx: SiteCtx, state: FormState): Html {
+/** `heading`: h2 where the form has no heading of its own above it (the "Ask us" page), so no level is skipped. */
+function guardianGroup(ctx: SiteCtx, state: FormState, heading: 'h2' | 'h3' = 'h3'): Html {
   const f = ctx.t.form;
   return html`<div class="group">
-<h3>${f.guardianTitle}</h3>
+${heading === 'h2' ? html`<h2>${f.guardianTitle}</h2>` : html`<h3>${f.guardianTitle}</h3>`}
 <p class="hint">${f.guardianIntro}</p>
 ${textField(ctx, state, 'guardianName', f.guardianName, { autocomplete: 'off', maxlength: 200, noMarker: true })}
 ${textField(ctx, state, 'guardianPhone', f.guardianPhone, { type: 'tel', autocomplete: 'off', inputmode: 'tel', dir: 'ltr', maxlength: 50, noMarker: true })}
@@ -222,6 +222,7 @@ export const CASTING_TEXT_FIELDS = [
   'lastName',
   'gender',
   'dateOfBirth',
+  ...DOB_PART_FIELDS,
   'phone',
   'email',
   'city',
@@ -272,7 +273,6 @@ export function castingPage(ctx: SiteCtx, form: { state: FormState; token: strin
   const lookingFor = pick(ctx, content.castingCall.lookingFor);
   const f = t.form;
   const state = form.state;
-  const dob = dobLimits(ctx.today);
   const body = html`<div class="wrap narrow">
 ${pageHead(t.casting.title)}
 ${intro ? paragraphs(intro, 'lead') : ''}
@@ -286,7 +286,7 @@ ${hiddenFields(ctx, form.token)}
 ${textField(ctx, state, 'firstName', f.firstName, { required: true, autocomplete: 'given-name', maxlength: 100 })}
 ${textField(ctx, state, 'lastName', f.lastName, { required: true, autocomplete: 'family-name', maxlength: 100 })}
 ${radios(ctx, state, 'gender', f.gender, GENDERS.map((g) => [g, t.genders[g]] as const))}
-${textField(ctx, state, 'dateOfBirth', f.dateOfBirth, { type: 'date', required: true, autocomplete: 'bday', min: dob.min, max: dob.max })}
+${dobField(ctx, state, f.dateOfBirth)}
 ${textField(ctx, state, 'phone', f.phone, { type: 'tel', required: true, autocomplete: 'tel', inputmode: 'tel', hint: f.phoneHint, dir: 'ltr', maxlength: 50 })}
 ${textField(ctx, state, 'email', f.email, { type: 'email', autocomplete: 'email', inputmode: 'email', dir: 'ltr', maxlength: 254 })}
 ${textField(ctx, state, 'city', f.city, { autocomplete: 'address-level2', maxlength: 100 })}
@@ -383,7 +383,8 @@ export function thanksPage(ctx: SiteCtx, kind: SiteThanksKind): Html {
   const { t, paths, lang } = ctx;
   const casting = kind === 'casting';
   const wa = waHref(ctx, casting ? 'casting' : 'workshops', fmt(casting ? t.whatsapp.afterCasting : t.whatsapp.afterApply, { name: ctx.studioName }));
-  const body = html`<div class="wrap narrow center pad">
+  // id="thanks": the forms redirect to …/thanks?k=…#thanks, so the page opens on its message.
+  const body = html`<div class="wrap narrow center pad" id="thanks">
 <div class="ok">${icon('check')}</div>
 <h1>${casting ? t.thanks.castingTitle : t.thanks.applyTitle}</h1>
 <p class="lead">${casting ? t.thanks.castingText : t.thanks.applyText}</p>
@@ -402,7 +403,7 @@ ${waButton(wa, t.thanks.whatsapp)}
   });
 }
 
-export type ErrorPageKind = 'notFound' | 'tooMany' | 'tooLarge' | 'forbidden' | 'error';
+export type ErrorPageKind = 'notFound' | 'tooMany' | 'busy' | 'tooLarge' | 'forbidden' | 'error';
 
 /** A friendly error page in the page's language, with WhatsApp and a way home. */
 export function errorPage(ctx: SiteCtx, kind: ErrorPageKind, back?: string): Html {
@@ -410,6 +411,7 @@ export function errorPage(ctx: SiteCtx, kind: ErrorPageKind, back?: string): Htm
   const text = {
     notFound: [t.pages.notFoundTitle, t.pages.notFoundText],
     tooMany: [t.pages.tooManyTitle, t.pages.tooManyText],
+    busy: [t.pages.busyTitle, t.pages.busyText],
     tooLarge: [t.pages.tooLargeTitle, t.pages.tooLargeText],
     forbidden: [t.pages.forbiddenTitle, t.pages.forbiddenText],
     error: [t.pages.errorTitle, t.pages.errorText],
@@ -426,5 +428,6 @@ ${waButton(wa, t.home.whatsapp)}
 <a class="btn btn-line" href="${paths.home(lang)}">${t.pages.home}</a>
 </div>
 </div>`;
-  return layout({ ...base(ctx), title: title(ctx, text[0]), description: text[1], alternates: null, noindex: true, body });
+  // No alternates (an error page has no address of its own), but the language switch still leads somewhere: the other language's home.
+  return layout({ ...base(ctx), title: title(ctx, text[0]), description: text[1], alternates: null, switchTo: both((l) => paths.home(l)), noindex: true, body });
 }

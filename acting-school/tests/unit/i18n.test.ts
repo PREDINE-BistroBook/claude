@@ -12,6 +12,7 @@ import students from '../../src/web/features/students/i18n';
 import talent from '../../src/web/features/talent/i18n';
 import website from '../../src/web/features/website/i18n';
 import common from '../../src/web/i18n/common';
+import { SITE_STRINGS } from '../../src/server/site/i18n';
 
 const namespaces = { common, students, classes, talent, castings, schedule, dashboard, staff, positions, settings, admissions, applications, website };
 const PLURAL = /_(zero|one|two|few|many|other)$/;
@@ -81,5 +82,30 @@ describe('permission labels', () => {
     // Every permission is in exactly one group, and every group has a label.
     expect(PERMISSION_GROUPS.flatMap((g) => g.permissions).sort()).toEqual([...PERMISSIONS].sort());
     for (const g of PERMISSION_GROUPS) expect([en[`groups.${g.id}`], ar[`groups.${g.id}`]].every(Boolean)).toBe(true);
+  });
+});
+
+describe('Arabic text that carries Latin fragments and numbers', () => {
+  const sets: [string, Record<string, string>][] = [
+    ...Object.entries(namespaces).map(([name, ns]) => [name, flatten(ns.ar as Record<string, unknown>)] as [string, Record<string, string>]),
+    ['the public site', flatten(SITE_STRINGS.ar as unknown as Record<string, unknown>)],
+  ];
+
+  it('"https://" inside an Arabic sentence is isolated (U+2066 … U+2069), or it is drawn as "//:https"', () => {
+    const scrambled = sets.flatMap(([name, strings]) =>
+      Object.entries(strings)
+        // A string that is only a link (a placeholder) has no Arabic around it to reorder it.
+        .filter(([, v]) => /https?:\/\//.test(v) && /[\u0600-\u06FF]/.test(v) && !/\u2066https?:\/\/[^\u2069]*\u2069/.test(v))
+        .map(([k]) => `${name}: ${k}`),
+    );
+    expect(scrambled).toEqual([]);
+    // The strings this was found in do carry the isolates.
+    expect(website.ar.studio.mapUrlHint).toContain('\u2066https://\u2069');
+    expect(common.ar.errors.invalidUrl).toContain('\u2066https://\u2069');
+  });
+
+  it('digits are Western everywhere (as dates, times and phone numbers are): no ١٢٣ next to 123', () => {
+    const mixed = sets.flatMap(([name, strings]) => Object.entries(strings).filter(([, v]) => /[٠-٩۰-۹]/.test(v)).map(([k]) => `${name}: ${k}`));
+    expect(mixed).toEqual([]);
   });
 });

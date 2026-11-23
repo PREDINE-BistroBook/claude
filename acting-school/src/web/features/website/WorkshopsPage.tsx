@@ -25,7 +25,7 @@ export default function WorkshopsPage() {
   const move = (index: number, delta: -1 | 1) =>
     order.mutate(
       moveItem(items, index, delta).map((w) => w.courseId),
-      { onError: (err) => toast.error(t(errorMessageKey(err))) },
+      { onSuccess: () => toast.success(t('move.saved')), onError: (err) => toast.error(t(errorMessageKey(err))) },
     );
 
   return (

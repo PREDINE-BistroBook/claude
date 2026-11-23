@@ -63,6 +63,7 @@ export default defineConfig({
     port: Number(process.env.WEB_PORT ?? 5173),
     strictPort: true,
     // API_PORT lets several copies run side by side (default API on :3000).
-    proxy: { '/api': `http://localhost:${process.env.API_PORT ?? 3000}` },
+    // /site too: the public website is rendered by the API server, never by the staff app's shell.
+    proxy: Object.fromEntries(['/api', '/site'].map((path) => [path, `http://localhost:${process.env.API_PORT ?? 3000}`])),
   },
 });

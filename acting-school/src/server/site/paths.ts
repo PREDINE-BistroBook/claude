@@ -66,3 +66,11 @@ export function sitePathsFor(url: string | URL, publicHosts: readonly string[]):
   const host = (typeof url === 'string' ? new URL(url) : url).hostname;
   return isPublicSiteHost(host, publicHosts) ? publicHostSitePaths : sitePaths;
 }
+
+/**
+ * The link back to a form from an error page, given the form page's path.
+ * "?again=1" matters: when a form posts to its own address (the general form
+ * and the casting call), a link that differs only by "#apply" is a jump within
+ * the error page itself — the browser makes no request and the button seems dead.
+ */
+export const backToForm = (formPagePath: string) => `${formPagePath}?again=1#apply`;

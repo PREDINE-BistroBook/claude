@@ -1,6 +1,6 @@
 import clsx from 'clsx';
 import { X } from 'lucide-react';
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from './Button';
 
@@ -28,6 +28,9 @@ export function Modal({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const { t } = useTranslation();
+  // The dialog is named by its title (and described by its description) for screen readers.
+  const titleId = useId();
+  const descriptionId = useId();
 
   useEffect(() => {
     const d = ref.current;
@@ -48,6 +51,8 @@ export function Modal({
   return (
     <dialog
       ref={ref}
+      aria-labelledby={open ? titleId : undefined}
+      aria-describedby={open && description ? descriptionId : undefined}
       onCancel={(e) => {
         e.preventDefault();
         onClose();
@@ -67,10 +72,21 @@ export function Modal({
         <div className="flex max-h-[inherit] flex-col sm:max-h-[85dvh]">
           <header className="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
             <div className="min-w-0">
-              <h2 className="text-lg font-semibold">{title}</h2>
-              {description && <p className="mt-0.5 text-sm text-muted">{description}</p>}
+              <h2 id={titleId} className="text-lg font-semibold">
+                {title}
+              </h2>
+              {description && (
+                <p id={descriptionId} className="mt-0.5 text-sm text-muted">
+                  {description}
+                </p>
+              )}
             </div>
-            <button type="button" onClick={onClose} aria-label={t('common:actions.close')} className="-m-1.5 rounded-lg p-1.5 text-muted hover:bg-surface-2 hover:text-ink">
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label={t('common:actions.close')}
+              className="-m-2.5 inline-flex size-12 shrink-0 items-center justify-center rounded-xl text-muted hover:bg-surface-2 hover:text-ink"
+            >
               <X className="size-5" aria-hidden />
             </button>
           </header>
@@ -110,10 +126,11 @@ export function ConfirmDialog({
       title={title ?? t('common:confirm.deleteTitle')}
       footer={
         <>
-          <Button onClick={onCancel} disabled={loading}>
+          {/* 48 px: these confirm something destructive, for people who must not mis-tap. */}
+          <Button size="lg" onClick={onCancel} disabled={loading}>
             {t('common:actions.cancel')}
           </Button>
-          <Button variant={tone === 'danger' ? 'danger' : 'primary'} onClick={onConfirm} loading={loading}>
+          <Button size="lg" variant={tone === 'danger' ? 'danger' : 'primary'} onClick={onConfirm} loading={loading}>
             {confirmLabel ?? t('common:actions.delete')}
           </Button>
         </>

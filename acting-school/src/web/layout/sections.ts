@@ -76,16 +76,37 @@ export function sectionForPath(pathname: string): SectionKey | null {
 }
 
 /**
+ * Where someone starts when nothing is remembered ("/" on a first visit, and
+ * the menu shown on profile / admin pages then): their first section in tab
+ * order — School, Casting, Website — with one exception. Someone whose School
+ * is only the student list (students.read without courses.read or
+ * admissions.read) and who sees Casting starts in Casting: for the casting
+ * team, School is one card and their work is all under Casting.
+ */
+export function defaultSection(visible: readonly Section[], can: (p: Permission) => boolean): SectionKey | null {
+  const keys = visible.map((s) => s.key);
+  if (keys.includes('school') && keys.includes('casting') && !can('courses.read') && !can('admissions.read')) return 'casting';
+  return keys[0] ?? null;
+}
+
+/** Where "/" goes: the remembered section when the person still sees it, else their default one; null when they see none. */
+export function startSection(visible: readonly Section[], can: (p: Permission) => boolean, remembered: SectionKey | null): SectionKey | null {
+  if (remembered && visible.some((s) => s.key === remembered)) return remembered;
+  return defaultSection(visible, can);
+}
+
+/**
  * The section the person is in: the path's own section when they can see it,
  * otherwise (admin pages, profile, a link to a section they can't open) the one
- * they were last in, otherwise their first section; null when they see none.
+ * they were last in, otherwise their default section (with `can`: defaultSection;
+ * without: the first); null when they see none.
  */
-export function currentSection(pathname: string, visible: readonly Section[], remembered: SectionKey | null): SectionKey | null {
+export function currentSection(pathname: string, visible: readonly Section[], remembered: SectionKey | null, can?: (p: Permission) => boolean): SectionKey | null {
   const keys = visible.map((s) => s.key);
   const own = sectionForPath(pathname);
   if (own && keys.includes(own)) return own;
   if (remembered && keys.includes(remembered)) return remembered;
-  return keys[0] ?? null;
+  return can ? defaultSection(visible, can) : (keys[0] ?? null);
 }
 
 // ── Memory: the last section, and the last page visited in each ────────────
@@ -93,9 +114,10 @@ export function currentSection(pathname: string, visible: readonly Section[], re
 // windows, blocked storage and the test runner have none — memory still works).
 
 const SECTION_STORAGE_KEY = 'section';
+const SECTION_USER_STORAGE_KEY = 'sectionUser';
 const ROUTES_STORAGE_KEY = 'sectionRoutes';
 
-let memorySection: SectionKey | null = null;
+let memorySection: { key: SectionKey; user: number | null } | null = null;
 let memoryRoutes: { user: number | null; routes: Partial<Record<SectionKey, string>> } = { user: null, routes: {} };
 
 function storage(): Storage | null {
@@ -106,23 +128,37 @@ function storage(): Storage | null {
   }
 }
 
-export function rememberSection(key: SectionKey): void {
-  memorySection = key;
+/** Remember the section someone is in — with who they are, so the next person to sign in on a shared phone or computer starts in their own. */
+export function rememberSection(key: SectionKey, userId: number | null = null): void {
+  memorySection = { key, user: userId };
   try {
-    storage()?.setItem(SECTION_STORAGE_KEY, key);
+    const store = storage();
+    store?.setItem(SECTION_STORAGE_KEY, key);
+    if (userId === null) store?.removeItem(SECTION_USER_STORAGE_KEY);
+    else store?.setItem(SECTION_USER_STORAGE_KEY, String(userId));
   } catch {
     // Storage full or blocked: memory is enough for this visit.
   }
 }
 
-export function rememberedSection(): SectionKey | null {
+/**
+ * The remembered section. With `userId` (the signed-in person): only when it
+ * was remembered for them, or for nobody in particular — someone else's
+ * section is not theirs to inherit.
+ */
+export function rememberedSection(userId: number | null = null): SectionKey | null {
+  const mine = (owner: number | null) => userId === null || owner === null || owner === userId;
   try {
-    const stored = storage()?.getItem(SECTION_STORAGE_KEY);
-    if (isSectionKey(stored)) return stored;
+    const store = storage();
+    const stored = store?.getItem(SECTION_STORAGE_KEY);
+    if (isSectionKey(stored)) {
+      const owner = Number(store?.getItem(SECTION_USER_STORAGE_KEY) ?? NaN);
+      return mine(Number.isInteger(owner) ? owner : null) ? stored : null;
+    }
   } catch {
     // Fall back to memory.
   }
-  return memorySection;
+  return memorySection && mine(memorySection.user) ? memorySection.key : null;
 }
 
 /** A path (with its query) is safe to send someone back to when it is an in-app path inside that section. */

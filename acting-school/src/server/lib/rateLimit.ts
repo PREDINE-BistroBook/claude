@@ -21,13 +21,25 @@ export interface RateLimitHit {
   limit: number;
   windowMs: number;
   cost?: number;
+  /**
+   * Only look: the request is refused when `cost` more would go over the limit,
+   * but nothing is added to this counter either way (whatever it guards is
+   * counted later, where the thing is actually stored).
+   */
+  peek?: boolean;
+}
+
+/** How much of `key`'s limit is used in its current window (0 when there is no row or its window is over). Reads only. */
+export function rateLimitUsed(db: Pick<DB, 'select'>, key: string, windowMs: number, now: number): number {
+  const row = db.select().from(rateLimits).where(eq(rateLimits.key, key)).get();
+  return !row || row.windowStart <= now - windowMs ? 0 : row.count;
 }
 
 /**
  * Check several counters together, in one transaction: if any would go over
  * its limit, nothing is counted and the answer is true (refuse the request);
- * otherwise every counter is incremented and the answer is false (go ahead).
- * `now` is epoch ms (Date.now()).
+ * otherwise every counter (except the `peek` ones) is incremented and the
+ * answer is false (go ahead). `now` is epoch ms (Date.now()).
  */
 export function hitRateLimits(db: DB, hits: readonly RateLimitHit[], now: number): boolean {
   for (const h of hits) {
@@ -41,10 +53,11 @@ export function hitRateLimits(db: DB, hits: readonly RateLimitHit[], now: number
       const fresh = !row || row.windowStart <= now - h.windowMs;
       const cost = h.cost ?? 1;
       const used = fresh ? 0 : row.count;
-      return { key: h.key, fresh, count: used + cost, over: used + cost > h.limit };
+      return { key: h.key, fresh, count: used + cost, over: used + cost > h.limit, peek: !!h.peek };
     });
     if (plans.some((p) => p.over)) return true;
     for (const p of plans) {
+      if (p.peek) continue;
       if (p.fresh) {
         tx.insert(rateLimits)
           .values({ key: p.key, count: p.count, windowStart: now })

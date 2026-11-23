@@ -841,23 +841,23 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
 
   const leadSpec: LeadSpec[] = [
     // New
-    { first: 'نور', last: 'خالد', phone: '0100 765 4321', gender: 'female', age: 24, md: '02-02', city: 'Cairo', source: 'whatsapp', interest: 'Evening classes after work — screen acting.', daysAgo: 0, followUp: 0 },
+    { first: 'نور', last: 'خالد', phone: '0100 765 4321', gender: 'female', age: 24, md: '02-02', city: 'Cairo', source: 'whatsapp', interest: 'Evening workshops after work — screen acting.', daysAgo: 0, followUp: 0 },
     { first: 'Omar', last: 'Farouk', phone: '+20 111 222 3344', email: 'omar.farouk@example.com', gender: 'male', age: 20, md: '06-15', source: 'instagram', sourceDetail: 'Reel: Screen Acting showcase', interest: 'Saw the showcase reel. Wants to try acting for the first time.', daysAgo: 1 },
     // Already a student (Tariq came to the open day): the form and the enrol step warn about the duplicate.
     { first: 'Tariq', last: 'Saleh', phone: '01223030318', email: 'tariq.saleh@example.com', gender: 'male', age: 23, md: '07-14', source: 'google_form', sourceDetail: 'Open-day sign-up form', interest: 'Screen Acting I next term.', daysAgo: 2, followUp: -1, byOwner: true },
     // Contacted
     {
       first: 'مريم', last: 'سامي', phone: '+20 106 555 1234', gender: 'female', age: 19, md: '09-09', city: 'Giza', source: 'phone_call', interest: 'Theatre and voice.', daysAgo: 6,
-      steps: [{ do: 'contact', daysAgo: 6, type: 'call', body: 'Asked about prices and times. Sent the class schedule on WhatsApp.', followUp: -2 }],
+      steps: [{ do: 'contact', daysAgo: 6, type: 'call', body: 'Asked about fees and times. Sent the workshop schedule on WhatsApp.', followUp: -2 }],
     },
     {
       first: 'حسن', last: 'عبد الله', phone: '+20 109 444 2211', gender: 'male', age: 10, md: '03-03', city: 'Cairo', guardian: ['عبد الله حسن', '+20 109 444 2200'], source: 'facebook', sourceDetail: 'Ad: Kids Drama autumn', preferred: 'kids', daysAgo: 4,
-      steps: [{ do: 'contact', daysAgo: 4, type: 'whatsapp', body: 'Spoke with his father. They want to visit a Saturday class first.', followUp: 0 }],
+      steps: [{ do: 'contact', daysAgo: 4, type: 'whatsapp', body: 'Spoke with his father. They want to visit a Saturday workshop first.', followUp: 0 }],
     },
     {
       first: 'Lucy', last: 'Hart', phone: '+44 7700 900555', email: 'lucy.hart@example.com', gender: 'female', age: 22, md: '05-21', city: 'Cairo', source: 'email', interest: 'Improvisation; has done some school theatre.', experience: 'School plays in London, two years of youth theatre.', daysAgo: 10,
       steps: [
-        { do: 'contact', daysAgo: 9, type: 'email', body: 'Replied with the improv class details and invited her for an interview.' },
+        { do: 'contact', daysAgo: 9, type: 'email', body: 'Replied with the improv workshop details and invited her for an interview.' },
         { do: 'interview', daysAgo: 8, at: [-5, '18:00'], room: 'Studio B', outcome: { daysAgo: 5, status: 'no_show' } },
         { do: 'contact', daysAgo: 4, type: 'whatsapp', body: 'Apologised — exam week. Wants a new date after her exams.', followUp: 2 },
       ],
@@ -940,7 +940,7 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
       steps: [
         {
           do: 'interview', daysAgo: 16, at: [-12, '18:00'], room: 'Studio B',
-          outcome: { daysAgo: 12, status: 'done', scores: { presence: 2, voice: 2, body: 3, emotion: 2, imagination: 3, listening: 2, commitment: 2 }, notes: 'Looking for a weekend hobby class; not ready for the term commitment.', recommendation: 'decline' },
+          outcome: { daysAgo: 12, status: 'done', scores: { presence: 2, voice: 2, body: 3, emotion: 2, imagination: 3, listening: 2, commitment: 2 }, notes: 'Looking for a weekend hobby workshop; not ready for the term commitment.', recommendation: 'decline' },
         },
         { do: 'status', daysAgo: 11, status: 'declined' },
       ],
@@ -1096,14 +1096,14 @@ const DEMO_WORKSHOP_TEXTS: Record<
   { titleAr: string; descriptionEn: string; descriptionAr: string; visible: boolean; accepting: boolean }
 > = {
   'Screen Acting I': {
-    titleAr: 'التمثيل أمام الكاميرا ١',
+    titleAr: 'التمثيل أمام الكاميرا 1',
     descriptionEn: 'Acting for the camera from the first day: eyelines, continuity and playing small.\n\nEvery student leaves with two filmed scenes for their showreel.',
     descriptionAr: 'التمثيل أمام الكاميرا من أول يوم: اتجاه النظر، والراكور، والأداء الهادئ.\n\nكل طالب يخرج بمشهدين مصوَّرين لملف أعماله.',
     visible: true,
     accepting: true,
   },
   'Kids Drama (8–12)': {
-    titleAr: 'دراما الأطفال (٨–١٢)',
+    titleAr: 'دراما الأطفال (8–12)',
     descriptionEn: 'Games, storytelling and a short play at the end of the term. Parents are welcome at the last session.',
     descriptionAr: 'ألعاب وحكايات ومسرحية قصيرة في نهاية الدورة. أولياء الأمور مدعوون لحضور الحصة الأخيرة.',
     visible: true,
@@ -1163,7 +1163,7 @@ export async function seedDemoWebsite(opts: SeedDemoWebsiteOptions): Promise<See
     about: {
       en:
         'Turquoise Studio is an acting school and casting studio in Mohandessin, Giza. We run small, practical workshops for beginners, teenagers and working actors: acting for the camera, voice, improvisation and audition technique, led by coaches who work in film, TV and theatre.\n\n' +
-        'Our casting team puts actors forward for films, series and commercials, so students can take what they learn straight to real auditions. Come and visit, watch a class, and find the workshop that fits you.',
+        'Our casting team puts actors forward for films, series and commercials, so students can take what they learn straight to real auditions. Come and visit, watch a session, and find the workshop that fits you.',
       ar:
         'استوديو تركواز مدرسة تمثيل واستوديو كاستينج في المهندسين بالجيزة. نقدّم ورشًا عملية بمجموعات صغيرة للمبتدئين والمراهقين والممثلين المحترفين: التمثيل أمام الكاميرا، والصوت والإلقاء، والارتجال، وتقنيات تجارب الأداء، مع مدربين يعملون في السينما والتلفزيون والمسرح.\n\n' +
         'يرشّح فريق الكاستينج لدينا الممثلين لأفلام ومسلسلات وإعلانات، فينقل الطلاب ما يتعلمونه مباشرة إلى تجارب أداء حقيقية. زورونا، واحضروا حصة، واختاروا الورشة التي تناسبكم.',
@@ -1184,12 +1184,12 @@ export async function seedDemoWebsite(opts: SeedDemoWebsiteOptions): Promise<See
       },
       lookingFor: {
         en: 'Men and women of all ages, especially 18 to 35.\n\nChildren aged 8 to 14, with a parent’s consent.\n\nPeople who speak English or French as well as Arabic.',
-        ar: 'رجال وسيدات من كل الأعمار، خاصة من ١٨ إلى ٣٥ سنة.\n\nأطفال من ٨ إلى ١٤ سنة، بموافقة وليّ الأمر.\n\nمن يتحدثون الإنجليزية أو الفرنسية إلى جانب العربية.',
+        ar: 'رجال وسيدات من كل الأعمار، خاصة من 18 إلى 35 سنة.\n\nأطفال من 8 إلى 14 سنة، بموافقة وليّ الأمر.\n\nمن يتحدثون الإنجليزية أو الفرنسية إلى جانب العربية.',
       },
     },
     links: [
       { id: null, label: { en: 'Find us on Google Maps', ar: 'موقعنا على خرائط جوجل' }, url: 'https://maps.google.com/?q=Mohandessin%2C%20Giza', visible: true },
-      { id: null, label: { en: 'Student showreel 2026', ar: 'فيديو أعمال الطلاب ٢٠٢٦' }, url: 'https://vimeo.com/stageleft/turquoise-showreel', visible: true },
+      { id: null, label: { en: 'Student showreel 2026', ar: 'فيديو أعمال الطلاب 2026' }, url: 'https://vimeo.com/stageleft/turquoise-showreel', visible: true },
       { id: null, label: { en: 'Parents: kids workshop questions', ar: 'لأولياء الأمور: أسئلة ورشة الأطفال' }, url: 'https://example.com/turquoise/kids-faq', visible: false },
     ],
   };
@@ -1235,8 +1235,8 @@ export async function seedDemoWebsite(opts: SeedDemoWebsiteOptions): Promise<See
       nameAr: 'دانيال برايس',
       titleEn: 'Improvisation and kids drama coach',
       titleAr: 'مدرب الارتجال ودراما الأطفال',
-      bioEn: 'Daniel trained in London and has led improvisation groups in Cairo since 2018. Children love his Saturday drama class.',
-      bioAr: 'تدرّب دانيال في لندن ويقود مجموعات الارتجال في القاهرة منذ ٢٠١٨. الأطفال يحبون حصة الدراما التي يقدّمها يوم السبت.',
+      bioEn: 'Daniel trained in London and has led improvisation groups in Cairo since 2018. Children love his Saturday drama workshop.',
+      bioAr: 'تدرّب دانيال في لندن ويقود مجموعات الارتجال في القاهرة منذ 2018. الأطفال يحبون حصة الدراما التي يقدّمها يوم السبت.',
       gender: 'male' as Gender,
       hair: 'Brown',
       visible: true,
@@ -1357,7 +1357,7 @@ export async function seedDemoWebsite(opts: SeedDemoWebsiteOptions): Promise<See
       daysAgo: 0,
     },
     {
-      form: { firstName: 'يوسف', lastName: 'عمرو', phone: '0111 555 7011', dateOfBirth: dobFor(16, '08-01'), experience: 'none', heardFrom: 'friend', message: 'ابني عنده ١٦ سنة ويحب التمثيل. أي ورشة تناسبه؟', guardianName: 'عمرو حسين', guardianPhone: '0111 555 7012', guardianConsent: 'on', locale: 'ar' },
+      form: { firstName: 'يوسف', lastName: 'عمرو', phone: '0111 555 7011', dateOfBirth: dobFor(16, '08-01'), experience: 'none', heardFrom: 'friend', message: 'ابني عنده 16 سنة ويحب التمثيل. أي ورشة تناسبه؟', guardianName: 'عمرو حسين', guardianPhone: '0111 555 7012', guardianConsent: 'on', locale: 'ar' },
       courseId: null,
       daysAgo: 1,
     },

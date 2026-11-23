@@ -1,6 +1,6 @@
 import { count, eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
-import { castingApplicationPhotos, castingApplications, files, talent, talentPhotos } from '../../src/server/db/schema';
+import { castingApplicationPhotos, castingApplications, files, students, talent, talentPhotos } from '../../src/server/db/schema';
 import { createCastingApplication, type CastingPhotoUpload } from '../../src/server/lib/castingApplications';
 import { ApiError } from '../../src/server/lib/errors';
 import type { FileStore } from '../../src/server/lib/fileStore';
@@ -316,8 +316,10 @@ describe('POST /api/casting-applications/:id/accept', () => {
     // What talent has no field for travels in the notes.
     expect(profile.notes).toContain('Experience: Theatre club, two short films.');
     expect(profile.notes).toContain('Message: Free on weekends.');
-    expect(profile.notes).toContain('https://www.instagram.com/nadia.acts/');
-    expect(profile.notes).toContain('Guardian: Mona Fahmy, 0100 555 7099 (consent given)');
+    // …but never the guardian's phone or the raw links: on the application those need talent.contact, a talent's notes don't.
+    expect(profile.notes).toContain('Guardian: Mona Fahmy (consent given)');
+    expect(profile.notes).not.toContain('0100 555 7099');
+    expect(profile.notes).not.toContain('https://');
 
     const detail = (await team.get<CastingApplicationDetail>(`/api/casting-applications/${id}`)).body;
     expect(detail).toMatchObject({ status: 'accepted', talentId, reviewedById: team.user.id });
@@ -331,6 +333,61 @@ describe('POST /api/casting-applications/:id/accept', () => {
     expect(t.db.select({ n: count() }).from(talentPhotos).get()!.n).toBe(2);
 
     expect((await team.post('/api/casting-applications/99999/accept')).status).toBe(404);
+  });
+
+  it('the guardian’s phone and the links stay behind talent.contact after "Add to roster"', async () => {
+    const t = await makeTestContext();
+    const { id } = await apply(t, {
+      dateOfBirth: dob(12),
+      guardianName: 'Mona Fahmy',
+      guardianPhone: '0100 555 7099',
+      guardianConsent: 'on',
+      links: 'https://www.instagram.com/nadia.acts/ https://vimeo.com/nadia/reel https://example.org/third-link',
+    });
+    const team = await t.as('casting_team');
+    const editor = await t.as('video_editor');
+    const { talentId } = (await team.post<{ talentId: number }>(`/api/casting-applications/${id}/accept`)).body;
+    const seen = JSON.stringify((await editor.get(`/api/talent/${talentId}`)).body);
+    expect(seen).toContain('"contactHidden":true');
+    expect(seen).not.toContain('0100 555 7099');
+    expect(seen).not.toContain('third-link');
+    expect(JSON.stringify((await editor.get('/api/talent')).body)).not.toContain('0100 555 7099');
+    // Someone who may add to the roster but not see contact details doesn't learn them by accepting either.
+    const other = await apply(t, { phone: '0100 000 0044', dateOfBirth: dob(11), guardianName: 'Adel', guardianPhone: '0111 444 3322', guardianConsent: 'on' });
+    const limited = await t.as({ permissions: ['talent.read', 'talent.write'] });
+    const made = await limited.post<{ talentId: number }>(`/api/casting-applications/${other.id}/accept`);
+    expect(made.status).toBe(201);
+    expect(JSON.stringify((await limited.get(`/api/talent/${made.body.talentId}`)).body)).not.toContain('0111 444 3322');
+    // With talent.contact they are still on the application.
+    expect((await team.get<CastingApplicationDetail>(`/api/casting-applications/${id}`)).body).toMatchObject({ guardianPhone: '0100 555 7099', links: expect.arrayContaining(['https://example.org/third-link']) });
+  });
+
+  it('an accepted application whose talent profile was deleted is open again: it can be added once more, or declined', async () => {
+    const t = await makeTestContext();
+    const { id } = await apply(t, {}, [{ data: JPEG }, { data: PNG_1PX }]);
+    const sibling = await apply(t, { phone: '0100 000 0077' });
+    const photos = photoKeys(t, id);
+    const team = await t.as('casting_team');
+    const first = (await team.post<{ talentId: number }>(`/api/casting-applications/${id}/accept`)).body.talentId;
+    expect((await team.delete(`/api/talent/${first}`)).status).toBe(204);
+    expect((await team.get<CastingApplicationDetail>(`/api/casting-applications/${id}`)).body).toMatchObject({ status: 'accepted', talentId: null });
+    // Its photos are still the application's.
+    for (const p of photos) expect(t.db.select().from(files).where(eq(files.id, p.id)).get()).toBeTruthy();
+
+    const again = await team.post<{ talentId: number }>(`/api/casting-applications/${id}/accept`);
+    expect(again.status).toBe(201);
+    expect(again.body.talentId).not.toBe(first);
+    const profile = (await team.get<TalentDetail>(`/api/talent/${again.body.talentId}`)).body;
+    expect(profile.photos.map((p) => p.fileId)).toEqual(photos.map((p) => p.id));
+    // With its profile back it is closed again.
+    expect((await team.post(`/api/casting-applications/${id}/accept`)).status).toBe(409);
+
+    // The other way out: decline it.
+    const second = (await team.post<{ talentId: number }>(`/api/casting-applications/${sibling.id}/accept`)).body.talentId;
+    await team.delete(`/api/talent/${second}`);
+    const declined = await team.patch<CastingApplicationDetail>(`/api/casting-applications/${sibling.id}`, { status: 'declined' });
+    expect(declined.status).toBe(200);
+    expect(declined.body).toMatchObject({ status: 'declined', talentId: null });
   });
 
   it('a declined application can still be added; one without links gets no Instagram or showreel', async () => {
@@ -383,6 +440,68 @@ describe('DELETE /api/casting-applications/:id', () => {
     const profile = (await team.get<TalentDetail>(`/api/talent/${talentId}`)).body;
     expect(profile.photos.map((p) => p.fileId)).toEqual(photos.map((p) => p.id));
     expect(profile.headshotFileId).toBe(photos[0]!.id);
+  });
+});
+
+describe('an applicant’s photos can be deleted for good, whichever order staff press the buttons in', () => {
+  const setup = async () => {
+    const t = await makeTestContext();
+    const { id } = await apply(t, { dateOfBirth: dob(13), guardianName: 'Mona', guardianPhone: '0100 555 7099', guardianConsent: 'on' }, [{ data: PNG_1PX }, { data: JPEG }]);
+    const photos = photoKeys(t, id);
+    const head = await t.as('head_of_casting');
+    const { talentId } = (await head.post<{ talentId: number }>(`/api/casting-applications/${id}/accept`)).body;
+    return { t, id, photos, head, talentId };
+  };
+  const gone = async (t: Ctx, photos: { id: string; storageKey: string }[]) => {
+    expect(fileCount(t)).toBe(0);
+    for (const p of photos) expect(await t.files.get(p.storageKey)).toBeNull();
+    const coach = await t.as('acting_coach');
+    for (const p of photos) expect((await coach.get(`/api/files/${p.id}`)).status).toBe(404);
+  };
+
+  it('the application first, then the talent profile', async () => {
+    const { t, id, photos, head, talentId } = await setup();
+    expect((await head.delete(`/api/casting-applications/${id}`)).status).toBe(204);
+    expect(fileCount(t)).toBe(2);
+    expect((await head.delete(`/api/talent/${talentId}`)).status).toBe(204);
+    await gone(t, photos);
+  });
+
+  it('the talent profile first, then the application', async () => {
+    const { t, id, photos, head, talentId } = await setup();
+    expect((await head.delete(`/api/talent/${talentId}`)).status).toBe(204);
+    // Still the application's photos.
+    expect(fileCount(t)).toBe(2);
+    expect((await head.delete(`/api/casting-applications/${id}`)).status).toBe(204);
+    await gone(t, photos);
+  });
+
+  it('the talent’s photos one by one, after the application is gone', async () => {
+    const { t, id, photos, head, talentId } = await setup();
+    await head.delete(`/api/casting-applications/${id}`);
+    const profile = (await head.get<TalentDetail>(`/api/talent/${talentId}`)).body;
+    for (const p of profile.photos) expect((await head.delete(`/api/talent/${talentId}/photos/${p.id}`)).status).toBe(204);
+    await gone(t, photos);
+    expect((await head.get<TalentDetail>(`/api/talent/${talentId}`)).body).toMatchObject({ headshotFileId: null, photos: [] });
+  });
+
+  it('a file something else still uses survives: a student’s photo, another profile’s photo, a photo still on its application', async () => {
+    const { t, photos, head, talentId } = await setup();
+    const owner = await t.as('ceo');
+    // The first photo is also a student's photo; the second is also in another talent's gallery.
+    t.db.insert(students).values({ firstName: 'Nadia', lastName: 'Fahmy', photoFileId: photos[0]!.id }).run();
+    const other = (await owner.post('/api/talent', { firstName: 'Twin', lastName: 'Fahmy' })).body.id as number;
+    expect((await owner.post(`/api/talent/${other}/photos`, { fileId: photos[1]!.id })).status).toBe(201);
+    expect((await head.delete(`/api/talent/${talentId}`)).status).toBe(204);
+    // Both files remain (the application still has them too).
+    expect(fileCount(t)).toBe(2);
+    await head.delete(`/api/casting-applications/${t.db.select().from(castingApplications).get()!.id}`);
+    expect(fileCount(t)).toBe(2);
+    for (const p of photos) expect(await t.files.get(p.storageKey)).not.toBeNull();
+    // The last user of the second file goes: so does the file. The student's photo stays.
+    expect((await owner.delete(`/api/talent/${other}`)).status).toBe(204);
+    expect(t.db.select().from(files).all().map((f) => f.id)).toEqual([photos[0]!.id]);
+    expect(await t.files.get(photos[1]!.storageKey)).toBeNull();
   });
 });
 

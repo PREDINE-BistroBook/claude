@@ -13,6 +13,22 @@ export function parseDateParam(value: string | null): string | null {
   return value && isValidDate(value) ? value : null;
 }
 
+/**
+ * /schedule used to be everyone's schedule, auditions included; it is now the
+ * School's (workshops and interviews) and auditions live at /casting/schedule.
+ * An old link, bookmark or open tab that was after auditions is sent there:
+ * "?show=auditions", or someone who sees auditions but nothing the School
+ * schedule shows (the casting team — it used to be their first tab). Returns
+ * the address to go to (the date kept), or null to stay.
+ */
+export function legacyScheduleRedirect(params: URLSearchParams, can: (p: Permission) => boolean): string | null {
+  if (!can('castings.read')) return null;
+  const seesSchoolKinds = can('courses.read') || can('admissions.read');
+  if (params.get('show') !== 'auditions' && seesSchoolKinds) return null;
+  const date = parseDateParam(params.get('date'));
+  return date ? `/casting/schedule?date=${date}` : '/casting/schedule';
+}
+
 /** Which kinds of events the person's positions let them see (classes: courses.read, auditions: castings.read, interviews: admissions.read). */
 export interface VisibleKinds {
   classes: boolean;

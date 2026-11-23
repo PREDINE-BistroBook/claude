@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ageOn } from '../dates';
+import { ageOn, isValidDate } from '../dates';
 import { LOCALES, type CourseLevel, type Locale } from '../enums';
 import { MAX_PHONE_DIGITS, MIN_PHONE_DIGITS, phoneDigits } from '../phone';
 import type { ScheduleSlot } from './courses';
@@ -113,7 +113,8 @@ export const siteLinkInput = z
  * ≤ 4000 characters per language, tagline ≤ 160, address ≤ 300, casting-call
  * texts ≤ 2000, link labels ≤ 60, at most 20 links (in order). Phones are
  * normalised; links and the map link must be https. `heroFileId` must be an
- * uploaded image (POST /api/files) that isn't a casting application's photo.
+ * uploaded image (POST /api/files) that isn't a casting application's photo
+ * or a student's or talent's photo.
  */
 export const siteContent = z.object({
   tagline: bilingual(160),
@@ -318,7 +319,7 @@ export interface SiteSummary {
   /** Workshops appearing on the site now. */
   visibleWorkshops: number;
   visibleCoaches: number;
-  /** Built from the request's own origin, e.g. https://…/site/en/workshops. */
+  /** On the studio's own domain when PUBLIC_SITE_HOSTS is set (https://turquoisestudio.app/en/workshops), else the request's origin + /site/…. */
   urls: Record<Locale, SiteUrls>;
 }
 
@@ -362,23 +363,55 @@ export const optSitePhone = optPhoneText(50).refine((v) => v == null || (phoneDi
   message: 'site:errors.invalidPhone',
 });
 
-/** Shared by both public forms: age 5–100 on `today`; under 18 → guardian name, phone and consent. */
+/** What the guardian rules look at. */
+export interface GuardianFields {
+  dateOfBirth: string;
+  guardianName?: string | null;
+  guardianPhone?: string | null;
+  guardianConsent: boolean;
+}
+
+/**
+ * Both public forms' age rules as issues: age 5–100 on `today`; under 18 → the
+ * guardian's name, phone and consent. Nothing for a date that isn't one (the
+ * date check says so).
+ */
+export function guardianProblems(v: GuardianFields, today: string): { path: string[]; message: string }[] {
+  const age = ageOn(v.dateOfBirth, today);
+  if (age === null) return [];
+  if (age < SITE_MIN_AGE || age > SITE_MAX_AGE) return [{ path: ['dateOfBirth'], message: 'site:errors.ageRange' }];
+  if (age >= SITE_ADULT_AGE) return [];
+  const out: { path: string[]; message: string }[] = [];
+  if (!v.guardianName) out.push({ path: ['guardianName'], message: 'errors.required' });
+  if (!v.guardianPhone) out.push({ path: ['guardianPhone'], message: 'errors.required' });
+  if (!v.guardianConsent) out.push({ path: ['guardianConsent'], message: 'site:errors.guardianConsent' });
+  return out;
+}
+
+/** The same rules as a zod refinement (it only runs once every field is valid on its own). */
 export function guardianRules(today: string) {
-  return (
-    v: { dateOfBirth: string; guardianName?: string | null; guardianPhone?: string | null; guardianConsent: boolean },
-    ctx: z.RefinementCtx,
-  ) => {
-    const age = ageOn(v.dateOfBirth, today);
-    if (age === null) return;
-    if (age < SITE_MIN_AGE || age > SITE_MAX_AGE) {
-      ctx.addIssue({ code: 'custom', path: ['dateOfBirth'], message: 'site:errors.ageRange' });
-      return;
-    }
-    if (age >= SITE_ADULT_AGE) return;
-    if (!v.guardianName) ctx.addIssue({ code: 'custom', path: ['guardianName'], message: 'errors.required' });
-    if (!v.guardianPhone) ctx.addIssue({ code: 'custom', path: ['guardianPhone'], message: 'errors.required' });
-    if (!v.guardianConsent) ctx.addIssue({ code: 'custom', path: ['guardianConsent'], message: 'site:errors.guardianConsent' });
+  return (v: GuardianFields, ctx: z.RefinementCtx) => {
+    for (const p of guardianProblems(v, today)) ctx.addIssue({ code: 'custom', path: p.path, message: p.message });
   };
+}
+
+/**
+ * The guardian rules on a form's raw values, for the answer to a form that has
+ * other mistakes too: zod skips them while any field is invalid, and a parent
+ * should hear about the missing guardian block in the same round, not the next.
+ */
+export function guardianProblemsInForm(values: Record<string, string | undefined>, today: string): { path: string[]; message: string }[] {
+  const dob = (values.dateOfBirth ?? '').trim();
+  if (!isValidDate(dob)) return [];
+  return guardianProblems(
+    {
+      dateOfBirth: dob,
+      guardianName: values.guardianName?.trim() || null,
+      guardianPhone: values.guardianPhone?.trim() || null,
+      guardianConsent: formBool.parse(values.guardianConsent),
+    },
+    today,
+  );
 }
 
 /** Is someone born on `dob` under 18 on `today`? */

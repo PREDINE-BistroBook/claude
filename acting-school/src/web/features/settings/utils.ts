@@ -45,3 +45,14 @@ export function fromDrafts(drafts: readonly CriterionDraft[]): InterviewCriterio
     return { key, label: d.label.trim(), labelAr: d.labelAr.trim() || null };
   });
 }
+
+/**
+ * A criterion's name in the screen's language (the other one when that is
+ * empty; '' when both are): what the "Move up" / "Remove" buttons are read out
+ * with — the Arabic name on an Arabic screen, not the English one.
+ */
+export function criterionName(c: Pick<CriterionDraft, 'label' | 'labelAr'>, language: string | undefined): string {
+  const en = c.label.trim();
+  const ar = c.labelAr.trim();
+  return language?.startsWith('ar') ? ar || en : en || ar;
+}

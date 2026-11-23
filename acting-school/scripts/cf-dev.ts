@@ -13,7 +13,7 @@
  * Local only — see scripts/cf-local.ts.
  */
 import { spawn } from 'node:child_process';
-import { ensureDevVars, ensureWebBuild, ROOT, wranglerEnv } from './cf-local';
+import { ensureDevVars, ensureWebBuild, ROOT, wranglerDevArgs, wranglerEnv } from './cf-local';
 
 const argv = process.argv.slice(2);
 const portArg = argv.indexOf('--port');
@@ -22,6 +22,6 @@ const passThrough = argv.filter((a, i) => a !== '--build' && (portArg < 0 || (i 
 
 ensureDevVars();
 ensureWebBuild(argv.includes('--build'));
-const child = spawn('npx', ['wrangler', 'dev', '--local', '--port', String(port), ...passThrough], { cwd: ROOT, env: wranglerEnv(), stdio: 'inherit' });
+const child = spawn('npx', wranglerDevArgs({ port, extra: passThrough }), { cwd: ROOT, env: wranglerEnv(), stdio: 'inherit' });
 for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => child.kill(signal));
 child.on('exit', (code) => process.exit(code ?? 0));

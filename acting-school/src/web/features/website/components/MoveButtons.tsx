@@ -21,15 +21,18 @@ export function MoveButtons({
   disabled?: boolean;
 }) {
   const { t } = useTranslation('website');
+  // Two equal columns on phones (the buttons may shrink to their half: a row of two never pushes out of
+  // its card at 360–375 px); side by side at their own width from sm up. `px-3!`: Button's lg padding
+  // (px-5) comes later in the stylesheet, so a plain px-3 would lose to it.
   return (
-    <div className="flex gap-2">
+    <div className="grid grid-cols-2 gap-2 sm:flex">
       <Button
         size="lg"
         variant="secondary"
         icon={ArrowUp}
         disabled={disabled || index <= 0}
         onClick={() => onMove(-1)}
-        className="flex-1 px-3 sm:flex-none"
+        className="min-w-0 px-3! sm:flex-none"
       >
         {t('move.up')}
         <span className="sr-only">: {name}</span>
@@ -40,7 +43,7 @@ export function MoveButtons({
         icon={ArrowDown}
         disabled={disabled || index >= count - 1}
         onClick={() => onMove(1)}
-        className="flex-1 px-3 sm:flex-none"
+        className="min-w-0 px-3! sm:flex-none"
       >
         {t('move.down')}
         <span className="sr-only">: {name}</span>

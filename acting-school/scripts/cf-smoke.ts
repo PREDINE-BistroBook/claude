@@ -1,7 +1,9 @@
 /**
  * End-to-end check of the Cloudflare build in real workerd:
  *
- *   npm run cf:smoke                 (port 8790; `-- --port N`, `-- --no-build`)
+ *   npm run cf:smoke                 (port 8790; `-- --port N`, `-- --no-build`,
+ *                                     `-- --state-dir <folder>` for the throwaway state,
+ *                                     `-- --embedded` for the bundled-assets variant)
  *
  * Builds the web app, starts `wrangler dev --local` on a fresh, throwaway
  * state folder, seeds the demo through POST /api/admin/seed-demo, then drives
@@ -18,7 +20,11 @@
  * refused (413) and the session cookie is __Host- prefixed. The public
  * website (/site): every page in both languages with its headers, one
  * enquiry and one casting application with a photo through the real forms,
- * accept → talent, and /site/media serving only public images.
+ * accept → talent, and /site/media serving only public images. The studio's
+ * own domain: `Host: turquoisestudio.app` gets the site at the root and none
+ * of the staff app (wrangler is started with --infer-origin-from-routes=false,
+ * scripts/cf-local.ts, so the Host header really reaches the Worker), and the
+ * staff app hands out links on that domain.
  * Exit code 1 on the first failure. Local only (scripts/cf-local.ts).
  */
 import { spawnSync } from 'node:child_process';
@@ -285,6 +291,10 @@ export async function runApiSmoke(base: string, opts: { adminToken: string; pass
   expectStatus(await head.get(`/api/talent?q=${encodeURIComponent('Smoke Actor')}`), 200, 'talent search');
   expectStatus(await head.patch(`/api/talent/${actor.id}/photos/${photo.id}`, { caption: 'Renamed' }), 200, 'patch photo');
   expectStatus(await head.delete(`/api/talent/${actor.id}/photos/${photo.id}`), 204, 'delete photo');
+  // A photo's file goes with its last user (lib/fileRefs.ts)…
+  expectStatus(await head.get(`/api/files/${smallId}`), 404, 'the deleted photo’s file is gone');
+  // …and stays while something else uses it: the big one is also in a seeded talent's gallery (it must survive the restart below).
+  expectStatus(await head.post(`/api/talent/${talentList[0].id}/photos`, { fileId: bigId }), 201, 'the big photo in a second gallery');
 
   step('castings: roles, submissions (duplicate → 409), deletes');
   const casting = expectStatus(await head.post('/api/castings', { title: 'Smoke commercial', production: 'Smoke Films' }), 201, 'create casting').body;
@@ -500,12 +510,25 @@ async function siteChecks(base: string, opts: { password: string }) {
   }).toString();
   const applied = await page(`${workshopHref}/apply`, { method: 'POST', body: applyBody, headers: { 'content-type': 'application/x-www-form-urlencoded', origin: base } });
   checks++;
-  if (applied.status !== 303 || applied.headers.get('location') !== '/site/en/thanks?k=apply') throw new Error(`enquiry: ${applied.status} ${applied.headers.get('location')} ${applied.text.slice(0, 300)}`);
+  if (applied.status !== 303 || applied.headers.get('location') !== '/site/en/thanks?k=apply#thanks') throw new Error(`enquiry: ${applied.status} ${applied.headers.get('location')} ${applied.text.slice(0, 300)}`);
   siteHeaders(applied.headers, 'the form redirect', 'no-store');
   const forged = await page('/site/en/apply', { method: 'POST', body: applyBody.replace(/formToken=[^&]+/, 'formToken=1.abc'), headers: { 'content-type': 'application/x-www-form-urlencoded' } });
   check(forged.status === 400 && forged.text.includes('id="errors"'), `a forged token re-renders the form (${forged.status})`);
   const foreign = await page('/site/en/apply', { method: 'POST', body: applyBody, headers: { 'content-type': 'application/x-www-form-urlencoded', origin: 'https://evil.example' } });
   check(foreign.status === 403, `another site's Origin is refused (${foreign.status})`);
+  // A body without a Content-Length (streamed) takes the same path inside the Durable Object: limits first, then a capped read.
+  const streamed = await page('/site/en/apply', {
+    method: 'POST',
+    body: new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(applyBody.replace(/formToken=[^&]+/, 'formToken=1.abc')));
+        controller.close();
+      },
+    }),
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    duplex: 'half',
+  } as RequestInit);
+  check(streamed.status === 400 && streamed.text.includes('id="errors"'), `a streamed enquiry (no Content-Length) is read and answered (${streamed.status})`);
   const bigForm = await page('/site/en/apply', { method: 'POST', body: `message=${'x'.repeat(70 * 1024)}`, headers: { 'content-type': 'application/x-www-form-urlencoded' } });
   check(bigForm.status === 413 && bigForm.text.includes('<html lang="en"'), `a 70 KB enquiry is refused by the Worker with the site's page (${bigForm.status})`);
   const director = new Client(base);
@@ -539,7 +562,7 @@ async function siteChecks(base: string, opts: { password: string }) {
   form.append('photo1', new Blob([headshot], { type: 'image/png' }), 'headshot.png');
   const cast = await page('/site/ar/casting-call', { method: 'POST', body: form, headers: { origin: base } });
   checks++;
-  if (cast.status !== 303 || cast.headers.get('location') !== '/site/ar/thanks?k=casting') throw new Error(`casting application: ${cast.status} ${cast.headers.get('location')} ${cast.text.slice(0, 300)}`);
+  if (cast.status !== 303 || cast.headers.get('location') !== '/site/ar/thanks?k=casting#thanks') throw new Error(`casting application: ${cast.status} ${cast.headers.get('location')} ${cast.text.slice(0, 300)}`);
   const head = new Client(base);
   expectStatus(await head.post('/api/auth/login', { email: 'head@demo.school', password: opts.password }), 200, 'head of casting signs in');
   const apps = expectStatus(await head.get(`/api/casting-applications?q=${encodeURIComponent(`Actor${stamp}`)}`), 200, 'applications search').body.items;
@@ -572,11 +595,13 @@ async function siteChecks(base: string, opts: { password: string }) {
 }
 
 /**
- * The studio's own domain (PUBLIC_SITE_HOSTS in wrangler.jsonc): wrangler dev passes the Host header
- * through, so the Worker's host routing (src/worker/routing.ts) runs for real here. On a public host
- * the site answers at the root with bare links and nothing of the staff app does; www → the apex.
+ * The studio's own domain (PUBLIC_SITE_HOSTS in wrangler.jsonc). wrangler dev passes the Host header
+ * through only because scripts/cf-local.ts starts it with --infer-origin-from-routes=false (the configs
+ * carry `routes`, and wrangler would otherwise present every request as the first route's host), so the
+ * Worker's host routing (src/worker/routing.ts) runs for real here. On a public host the site answers
+ * at the root with bare links and nothing of the staff app does; www → the apex.
  */
-async function publicHostChecks(base: string) {
+async function publicHostChecks(base: string, opts: { password: string }) {
   step('studio domain: turquoisestudio.app serves the site at the root, www → apex, no staff app there');
   const { hostname, port } = new URL(base);
   const get = (p: string, host: string) =>
@@ -591,6 +616,9 @@ async function publicHostChecks(base: string) {
       req.end();
     });
   const root = await get('/', 'turquoisestudio.app');
+  if (root.status === 200 && root.body.includes('<div id="root">')) {
+    throw new Error('The Worker did not see "Host: turquoisestudio.app": wrangler dev is rewriting the host (is --infer-origin-from-routes=false still passed in scripts/cf-local.ts?)');
+  }
   check(root.status === 302 && root.headers.location === '/ar', `apex / → /ar (${root.status} ${root.headers.location})`);
   const home = await get('/en/workshops', 'turquoisestudio.app');
   check(home.status === 200 && home.body.includes('href="/en/casting-call"') && !home.body.includes('href="/site/'), `bare links on the public host (${home.status})`);
@@ -603,6 +631,14 @@ async function publicHostChecks(base: string) {
   check(www.status === 301 && /^https?:\/\/turquoisestudio\.app\/ar\/links\?from=ig$/.test(String(www.headers.location)), `www → apex (${www.status} ${www.headers.location})`);
   const staff = await get('/students/1', `${hostname}:${port}`);
   check(staff.status === 200 && staff.body.includes('<div id="root">'), 'the staff host still serves the staff app');
+  // The staff app hands out the studio's own addresses (Website home, the link for the Instagram bio), and a
+  // /site preview names that domain as the page's real address.
+  const director = new Client(base);
+  expectStatus(await director.post('/api/auth/login', { email: 'director@demo.school', password: opts.password }), 200, 'director signs in');
+  const urls = expectStatus(await director.get('/api/site/summary'), 200, 'site summary').body.urls;
+  check(urls.ar.links === 'https://turquoisestudio.app/ar/links' && urls.en.home === 'https://turquoisestudio.app/en', `public links are on the studio's domain (${urls.ar.links})`);
+  const preview = await get('/site/en', `${hostname}:${port}`);
+  check(preview.body.includes('<link rel="canonical" href="https://turquoisestudio.app/en">'), 'a /site preview is canonical on the studio’s domain');
 }
 
 async function main() {
@@ -616,7 +652,11 @@ async function main() {
   const embedded = argv.includes('--embedded');
   const config = embedded ? 'wrangler.embedded.jsonc' : undefined;
   if (embedded && spawnSync('npx', ['tsx', 'scripts/embed-assets.ts'], { stdio: 'inherit' }).status !== 0) throw new Error('embed-assets failed');
-  const persistTo = fs.mkdtempSync(path.join(os.tmpdir(), 'acting-school-cf-smoke-'));
+  // Throwaway state: a new folder under the system's temporary folder, or under `--state-dir <folder>`.
+  const stateArg = argv.indexOf('--state-dir');
+  const stateRoot = stateArg >= 0 ? path.resolve(argv[stateArg + 1]!) : os.tmpdir();
+  fs.mkdirSync(stateRoot, { recursive: true });
+  const persistTo = fs.mkdtempSync(path.join(stateRoot, 'acting-school-cf-smoke-'));
   const password = `smoke-${randomBytes(9).toString('base64url')}`;
   let dev = await startWranglerDev({ port, persistTo, quiet: !argv.includes('--verbose'), config });
   try {
@@ -631,7 +671,7 @@ async function main() {
     const state = await runApiSmoke(dev.url, { adminToken: vars.ADMIN_TOKEN, password });
     await staticChecks(dev.url);
     await siteChecks(dev.url, { password });
-    await publicHostChecks(dev.url);
+    await publicHostChecks(dev.url, { password });
 
     await dev.stop();
     dev = await startWranglerDev({ port, persistTo, quiet: !argv.includes('--verbose'), config });

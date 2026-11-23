@@ -364,22 +364,65 @@ export function createLead(db: Pick<DB, 'insert'>, values: NewLead): number {
     .get().id;
 }
 
+/** What the website needs to know about an open lead with the same phone: is it the same person? */
+export interface OpenLeadMatch {
+  id: number;
+  firstName: string;
+  lastName: string;
+  dateOfBirth: string | null;
+  nextFollowUpOn: string | null;
+}
+
 /**
- * The most recently updated open lead with this phone (compared as
- * international digits, so "010…" matches "+20 10…"), or null. SQL narrows by
- * the last 7 digits of the stored phone_digits; the exact match runs here.
+ * The open leads with this phone (compared as international digits, so "010…"
+ * matches "+20 10…"), most recently updated first. SQL narrows by the last 7
+ * digits of the stored phone_digits; the exact match runs here.
  */
-export function findOpenLeadByPhone(db: Pick<DB, 'select'>, phone: string, countryCode: string): { id: number } | null {
+export function findOpenLeadsByPhone(db: Pick<DB, 'select'>, phone: string, countryCode: string): OpenLeadMatch[] {
   const intl = internationalPhone(phone, countryCode);
-  if (!intl) return null;
-  const match = db
-    .select({ id: leads.id, phone: leads.phone })
+  if (!intl) return [];
+  return db
+    .select({ id: leads.id, phone: leads.phone, firstName: leads.firstName, lastName: leads.lastName, dateOfBirth: leads.dateOfBirth, nextFollowUpOn: leads.nextFollowUpOn })
     .from(leads)
     .where(and(leadIsOpen, sql`${leads.phoneDigits} like ${`%${intl.slice(-7)}`}`))
     .orderBy(desc(leads.updatedAt), desc(leads.id))
     .all()
-    .find((l) => internationalPhone(l.phone, countryCode) === intl);
+    .filter((l) => internationalPhone(l.phone, countryCode) === intl)
+    .map(({ phone: _phone, ...l }) => l);
+}
+
+/** The most recently updated open lead with this phone, or null. */
+export function findOpenLeadByPhone(db: Pick<DB, 'select'>, phone: string, countryCode: string): { id: number } | null {
+  const match = findOpenLeadsByPhone(db, phone, countryCode)[0];
   return match ? { id: match.id } : null;
+}
+
+/** A name for comparing: case, extra spaces, Arabic vowel marks and the usual spelling variants (أ/إ/آ → ا, ى → ي, ة → ه) don't count. */
+function nameKey(name: string | null | undefined): string {
+  return (name ?? '')
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+    .replace(/[أإآٱ]/g, 'ا')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Is a new enquiry from the same phone about the person an open lead is
+ * already for? A parent's phone serves several children, so the phone alone
+ * says nothing. The same first name, and then: the same date of birth when
+ * both have one (a different one is someone else); otherwise family names that
+ * agree ("M" for "Mostafa" counts — staff shorten them).
+ */
+export function sameLeadPerson(lead: Pick<OpenLeadMatch, 'firstName' | 'lastName' | 'dateOfBirth'>, person: { firstName: string; lastName: string; dateOfBirth: string | null }): boolean {
+  if (nameKey(lead.firstName) !== nameKey(person.firstName)) return false;
+  if (lead.dateOfBirth && person.dateOfBirth) return lead.dateOfBirth === person.dateOfBirth;
+  const a = nameKey(lead.lastName).replace(/\.$/, '');
+  const b = nameKey(person.lastName).replace(/\.$/, '');
+  return !a || !b || a.startsWith(b) || b.startsWith(a);
 }
 
 /** How the website form's answers read in a lead (staff-facing text). */
@@ -396,9 +439,14 @@ export const WEBSITE_GENERAL_ENQUIRY = 'general';
  * applications (else 404); null for the general form ("Not sure which
  * workshop? Ask us"). `today`: the school's (schoolToday(c)).
  *
- * If an open lead with the same phone already exists, no duplicate is made: a
- * note "Applied again on the website: …" is added to that lead instead
- * (`created: false`).
+ * The same phone again:
+ * - **the same person** as an open lead (sameLeadPerson): no duplicate — a
+ *   note "Applied again on the website: …" (with the date of birth and email
+ *   given this time) is added to that lead and its follow-up becomes due
+ *   today, so it shows up for staff (`created: false`);
+ * - **someone else** (a parent enquiring for a second child, a family sharing
+ *   one phone): a lead of their own, like any other, whose notes name the
+ *   other open enquiry with that phone.
  */
 export function createWebsiteLead(db: DB, input: SiteApplyInput, opts: { courseId: number | null; today: string }): { leadId: number; created: boolean } {
   let detail = WEBSITE_GENERAL_ENQUIRY;
@@ -416,13 +464,26 @@ export function createWebsiteLead(db: DB, input: SiteApplyInput, opts: { courseI
   ].filter((l): l is string => !!l);
 
   return db.transaction((tx) => {
-    const existing = findOpenLeadByPhone(tx, input.phone, countryCode);
+    const samePhone = findOpenLeadsByPhone(tx, input.phone, countryCode);
+    const existing = samePhone.find((l) => sameLeadPerson(l, input));
     if (existing) {
-      const body = [`Applied again on the website: ${detail}`, `${input.firstName} ${input.lastName}`, input.message, ...facts].filter(Boolean).join('\n');
+      const body = [
+        `Applied again on the website: ${detail}`,
+        `${input.firstName} ${input.lastName}`,
+        input.message,
+        `Date of birth: ${input.dateOfBirth}`,
+        input.email ? `Email: ${input.email}` : null,
+        ...facts,
+      ]
+        .filter(Boolean)
+        .join('\n');
       tx.insert(leadActivities).values({ leadId: existing.id, type: 'note', body, meta: null, createdById: null }).run();
-      tx.update(leads).set({ updatedAt: Date.now() }).where(eq(leads.id, existing.id)).run();
+      // Due today (unless it already is, or was earlier): the lead comes up under "Follow-up due" and on the School home.
+      const due = existing.nextFollowUpOn !== null && existing.nextFollowUpOn <= opts.today ? existing.nextFollowUpOn : opts.today;
+      tx.update(leads).set({ nextFollowUpOn: due, updatedAt: Date.now() }).where(eq(leads.id, existing.id)).run();
       return { leadId: existing.id, created: false };
     }
+    const others = samePhone.slice(0, 3).map((l) => `Same phone as enquiry #${l.id} (${`${l.firstName} ${l.lastName}`.trim()})`);
     const leadId = createLead(tx, {
       firstName: input.firstName,
       lastName: input.lastName,
@@ -438,9 +499,10 @@ export function createWebsiteLead(db: DB, input: SiteApplyInput, opts: { courseI
       status: 'new',
       assignedToId: null,
       createdById: null,
-      notes: [input.message, facts.join('\n')].filter(Boolean).join('\n\n'),
+      notes: [input.message, [...facts, ...others].join('\n')].filter(Boolean).join('\n\n'),
     });
-    tx.insert(leadActivities).values({ leadId, type: 'note', body: `Applied on the website: ${detail}`, meta: null, createdById: null }).run();
+    const applied = [`Applied on the website: ${detail}`, ...others].join('\n');
+    tx.insert(leadActivities).values({ leadId, type: 'note', body: applied, meta: null, createdById: null }).run();
     return { leadId, created: true };
   });
 }

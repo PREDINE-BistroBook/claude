@@ -6,6 +6,7 @@ import {
   ChevronRight,
   ExternalLink,
   Eye,
+  Info,
   Lock,
   Mail,
   MessageCircle,
@@ -73,7 +74,7 @@ export default function ApplicationDetailPage() {
 function BackLink() {
   const { t } = useTranslation(['applications', 'common']);
   return (
-    <Link to={LIST} className="mb-3 inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-muted hover:text-ink">
+    <Link to={LIST} className="-ms-2 mb-2 inline-flex min-h-12 items-center gap-1.5 rounded-xl px-2 text-sm font-medium text-muted hover:bg-surface-2 hover:text-ink">
       <ArrowLeft className="size-4 rtl:-scale-x-100" aria-hidden />
       {t('detail.back')}
     </Link>
@@ -92,7 +93,13 @@ function ApplicationView({ application: a, del }: { application: CastingApplicat
   const accept = useAcceptApplication(a.id);
   const setStatus = useSetApplicationStatus(a.id);
   const [confirm, setConfirm] = useState<'accept' | 'delete' | null>(null);
-  const actions = applicationActions(a.status, can('talent.write'));
+  // Added to the roster, but that talent profile was deleted since: the application is open again.
+  const profileGone = a.status === 'accepted' && a.talentId === null;
+  const actions = applicationActions(a.status, can('talent.write'), profileGone);
+  // The parent's or guardian's phone lives only here (never in the talent profile's notes).
+  const keepsGuardian = a.talentId !== null && (a.minor || !!a.guardianName);
+  // Two to a row on phones: the label may wrap instead of filling the button edge to edge.
+  const half = 'min-w-0 px-3! whitespace-normal! leading-tight';
   const showContact = can('talent.contact') && !a.contactHidden;
 
   const onAccept = () =>
@@ -136,25 +143,25 @@ function ApplicationView({ application: a, del }: { application: CastingApplicat
         );
       case 'reviewing':
         return (
-          <Button key={action} size="lg" icon={Eye} onClick={() => onStatus('reviewing')} loading={setStatus.isPending && setStatus.variables === 'reviewing'} disabled={busy}>
+          <Button key={action} size="lg" icon={Eye} onClick={() => onStatus('reviewing')} loading={setStatus.isPending && setStatus.variables === 'reviewing'} disabled={busy} className={half}>
             {t('actions.reviewing')}
           </Button>
         );
       case 'new':
         return (
-          <Button key={action} size="lg" icon={Undo2} onClick={() => onStatus('new')} loading={setStatus.isPending && setStatus.variables === 'new'} disabled={busy}>
+          <Button key={action} size="lg" icon={Undo2} onClick={() => onStatus('new')} loading={setStatus.isPending && setStatus.variables === 'new'} disabled={busy} className={half}>
             {t('actions.new')}
           </Button>
         );
       case 'decline':
         return (
-          <Button key={action} size="lg" icon={Ban} onClick={() => onStatus('declined')} loading={setStatus.isPending && setStatus.variables === 'declined'} disabled={busy}>
+          <Button key={action} size="lg" icon={Ban} onClick={() => onStatus('declined')} loading={setStatus.isPending && setStatus.variables === 'declined'} disabled={busy} className={half}>
             {t('actions.decline')}
           </Button>
         );
       case 'delete':
         return (
-          <Button key={action} size="lg" variant="danger-ghost" icon={Trash2} onClick={() => setConfirm('delete')} disabled={busy}>
+          <Button key={action} size="lg" variant="danger-ghost" icon={Trash2} onClick={() => setConfirm('delete')} disabled={busy} className={half}>
             {t('actions.delete')}
           </Button>
         );
@@ -213,6 +220,12 @@ function ApplicationView({ application: a, del }: { application: CastingApplicat
           </ButtonLink>
         </div>
       )}
+      {profileGone && (
+        <p className="mb-5 flex items-start gap-2 rounded-2xl border border-warning/30 bg-warning-soft p-4 text-sm font-medium text-ink">
+          <Info className="mt-0.5 size-5 shrink-0 text-warning" aria-hidden />
+          {t('detail.profileGone')}
+        </p>
+      )}
       {actions.length > 0 && (
         <section aria-label={t('actions.title')} className="mb-5 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
           {actions.map(button)}
@@ -270,7 +283,12 @@ function ApplicationView({ application: a, del }: { application: CastingApplicat
       <ConfirmDialog
         open={confirm === 'delete'}
         title={t('actions.deleteTitle')}
-        message={t('actions.deleteMessage')}
+        message={
+          <>
+            {t('actions.deleteMessage')}
+            {keepsGuardian && <span className="mt-2 block font-medium text-ink">{t('actions.deleteGuardianNote')}</span>}
+          </>
+        }
         loading={del.isPending}
         onConfirm={onDelete}
         onCancel={() => setConfirm(null)}

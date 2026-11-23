@@ -46,11 +46,11 @@ export function PhotoInput({
       <Avatar name={name || '?'} fileId={value} size="xl" shape={shape} />
       <div className="flex flex-col items-start gap-2">
         <input ref={input} type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" className="sr-only" onChange={(e) => pick(e.target.files?.[0])} />
-        <Button icon={Camera} size="sm" loading={busy} onClick={() => input.current?.click()}>
+        <Button icon={Camera} size="lg" className="px-4" loading={busy} onClick={() => input.current?.click()}>
           {value ? t('common:actions.changePhoto') : t('common:actions.addPhoto')}
         </Button>
         {value && (
-          <Button icon={Trash2} size="sm" variant="danger-ghost" onClick={() => onChange(null)} disabled={busy}>
+          <Button icon={Trash2} size="lg" className="px-4" variant="danger-ghost" onClick={() => onChange(null)} disabled={busy}>
             {t('common:actions.removePhoto')}
           </Button>
         )}

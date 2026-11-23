@@ -11,6 +11,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useOnline, useSchoolName } from '../lib/hooks';
 import { useApplicationCounts } from '../features/applications/api';
+import { legacyScheduleRedirect } from '../features/schedule/utils';
 import { usePositionNames } from '../lib/positions';
 import { useFormat } from '../lib/format';
 import { adminNavItems, mobileTabs, navItemActive, sectionNavItems, type NavItem } from './nav';
@@ -55,18 +56,20 @@ export function AppShell() {
   const userId = user?.id ?? null;
 
   const visible = useMemo(() => visibleSections(can), [can]);
-  const section = currentSection(pathname, visible, rememberedSection());
+  const section = currentSection(pathname, visible, rememberedSection(userId), can);
   const sectionLabel = section ? t(sectionByKey(section).labelKey) : null;
   const homeHref = section ? sectionByKey(section).home : '/';
 
   // Remember the section, and the page within it, so "/" and the section's tab bring the person back.
   useEffect(() => {
     const own = sectionForPath(pathname);
+    // An old /schedule link on its way to the Casting schedule is not a School page to come back to.
+    if (pathname === '/schedule' && legacyScheduleRedirect(new URLSearchParams(search), can)) return;
     if (own && visible.some((s) => s.key === own)) {
-      rememberSection(own);
+      rememberSection(own, userId);
       rememberRoute(own, pathname + search, userId);
     }
-  }, [pathname, search, visible, userId]);
+  }, [pathname, search, visible, userId, can]);
 
   useEffect(() => {
     setMoreOpen(false);
@@ -183,7 +186,7 @@ export function AppShell() {
         <div className="flex h-14 items-center justify-between gap-3 px-4">
           <Link
             to={homeHref}
-            className="flex min-w-0 items-center gap-2.5"
+            className="flex min-h-12 min-w-0 items-center gap-2.5"
             aria-label={sectionLabel ? `${school} · ${t('sections.youAreIn', { section: sectionLabel })}` : undefined}
           >
             <BrandMark className="size-9 shrink-0" />

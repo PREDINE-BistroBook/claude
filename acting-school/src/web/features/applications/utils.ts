@@ -12,10 +12,12 @@ export type ApplicationAction = 'accept' | 'reviewing' | 'new' | 'decline' | 'de
 /**
  * The buttons an application's page offers, mirroring the API: everything
  * needs talent.write; an application already added to the roster can only be
- * deleted (its status can't change: 409); a declined one can still be added
+ * deleted (its status can't change: 409) — unless its talent profile was
+ * deleted since (`profileGone`: accepted with no talentId), which opens it
+ * again: add once more, decline or delete; a declined one can still be added
  * or looked at again.
  */
-export function applicationActions(status: CastingApplicationStatus, canWrite: boolean): ApplicationAction[] {
+export function applicationActions(status: CastingApplicationStatus, canWrite: boolean, profileGone = false): ApplicationAction[] {
   if (!canWrite) return [];
   switch (status) {
     case 'new':
@@ -25,6 +27,6 @@ export function applicationActions(status: CastingApplicationStatus, canWrite: b
     case 'declined':
       return ['accept', 'reviewing', 'delete'];
     case 'accepted':
-      return ['delete'];
+      return profileGone ? ['accept', 'decline', 'delete'] : ['delete'];
   }
 }

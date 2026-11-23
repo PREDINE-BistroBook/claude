@@ -189,6 +189,10 @@ describe('talent CRUD', () => {
     const created = await createTalent(agent);
     const fileId = await uploadPng(agent);
     await agent.post(`/api/talent/${created.id}/photos`, { fileId });
+    // A second photo is a student's photo too.
+    const shared = await uploadPng(agent);
+    await agent.post(`/api/talent/${created.id}/photos`, { fileId: shared });
+    t.db.insert(students).values({ firstName: 'Same', lastName: 'Person', photoFileId: shared }).run();
     const casting = t.db.insert(castings).values({ title: 'Ad' }).returning().get()!;
     const role = t.db.insert(castingRoles).values({ castingId: casting.id, name: 'Lead' }).returning().get()!;
     t.db.insert(submissions).values({ roleId: role.id, talentId: created.id }).run();
@@ -199,9 +203,10 @@ describe('talent CRUD', () => {
     expect((await agent.get(`/api/talent/${created.id}`)).status).toBe(404);
     expect(t.db.select().from(talentPhotos).all()).toEqual([]);
     expect(t.db.select().from(submissions).all()).toEqual([]);
-    // The image itself is kept (it may be a student's photo too).
-    const got = await agent.raw(`/api/files/${fileId}`, { headers: { cookie: agent.cookie! } });
-    expect(got.status).toBe(200);
+    // The profile's own image goes with it (nothing could remove it afterwards); one a student also uses is kept.
+    const file = (id: string) => agent.raw(`/api/files/${id}`, { headers: { cookie: agent.cookie! } });
+    expect((await file(fileId)).status).toBe(404);
+    expect((await file(shared)).status).toBe(200);
   });
 
   it('answers 404 for unknown or malformed ids', async () => {
