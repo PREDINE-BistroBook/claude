@@ -13,7 +13,9 @@ export function List({ children, className }: { children: ReactNode; className?:
  * One row: leading (avatar/icon), title + subtitle, trailing (badge/meta).
  * Pass `to` to make the whole row a link (adds a chevron), or `onClick`.
  * A plain-string title (user data, usually) is wrapped in BidiText so a Latin
- * name in the Arabic UI is cut at its own end.
+ * name in the Arabic UI is cut at its own end. `aside` is a button of the
+ * row's own (outside the link), e.g. an enquiry's "Follow-up": under the row
+ * on phones, so the name keeps its room, beside it from sm up.
  */
 export function ListRow({
   to,
@@ -22,6 +24,7 @@ export function ListRow({
   title,
   subtitle,
   trailing,
+  aside,
   className,
 }: {
   to?: string;
@@ -30,6 +33,7 @@ export function ListRow({
   title: ReactNode;
   subtitle?: ReactNode;
   trailing?: ReactNode;
+  aside?: ReactNode;
   className?: string;
 }) {
   const inner = (
@@ -43,9 +47,9 @@ export function ListRow({
       {(to || onClick) && <ChevronRight className="size-4 shrink-0 text-muted rtl:-scale-x-100" aria-hidden />}
     </>
   );
-  const cls = clsx('flex items-center gap-3 px-4 py-3 sm:px-5', (to || onClick) && 'transition-colors hover:bg-surface-2', className);
+  const cls = clsx('flex items-center gap-3 px-4 py-3 sm:px-5', (to || onClick) && 'transition-colors hover:bg-surface-2', aside && 'min-w-0 flex-1', className);
   return (
-    <li>
+    <li className={clsx(aside && 'flex flex-col sm:flex-row sm:items-stretch')}>
       {to ? (
         <Link to={to} className={cls}>
           {inner}
@@ -57,6 +61,7 @@ export function ListRow({
       ) : (
         <div className={cls}>{inner}</div>
       )}
+      {aside && <div className="flex shrink-0 items-center justify-end border-t border-line/60 px-2 sm:border-s sm:border-t-0 sm:border-line sm:px-1">{aside}</div>}
     </li>
   );
 }

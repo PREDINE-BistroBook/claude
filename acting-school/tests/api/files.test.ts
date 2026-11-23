@@ -5,6 +5,8 @@ import * as schema from '../../src/server/db/schema';
 import {
   castingApplicationPhotos,
   castingFiles,
+  castingOpportunities,
+  castingOpportunityFiles,
   courseFiles,
   files,
   messageAttachments,
@@ -87,6 +89,7 @@ async function referenceCases(t: Ctx, owner: SignedIn): Promise<Record<string, R
   const coachId = t.db.insert(siteCoaches).values({ nameEn: 'Reference coach' }).returning({ id: siteCoaches.id }).get().id;
   t.db.insert(siteWorkshops).values({ courseId, visible: true }).run();
   const otherApplication = await newApplication(t, '0100 000 0001');
+  const opportunityId = t.db.insert(castingOpportunities).values({ title: 'Reference opportunity' }).returning({ id: castingOpportunities.id }).get().id;
   const me = owner.user.id;
   for (const id of [courseId, studentId, talentId, castingId, conversationId, messageId]) expect(id).toBeGreaterThan(0);
   return {
@@ -125,6 +128,10 @@ async function referenceCases(t: Ctx, owner: SignedIn): Promise<Record<string, R
     'casting_files.file_id': {
       point: (f) => t.db.insert(castingFiles).values({ castingId, fileId: f, kind: 'photo', uploadedById: me }).run(),
       clear: (f) => t.db.delete(castingFiles).where(eq(castingFiles.fileId, f)).run(),
+    },
+    'casting_opportunity_files.file_id': {
+      point: (f) => t.db.insert(castingOpportunityFiles).values({ opportunityId, fileId: f }).run(),
+      clear: (f) => t.db.delete(castingOpportunityFiles).where(eq(castingOpportunityFiles.fileId, f)).run(),
     },
     'message_attachments.file_id': {
       point: (f) => t.db.insert(messageAttachments).values({ messageId, fileId: f, kind: 'photo' }).run(),

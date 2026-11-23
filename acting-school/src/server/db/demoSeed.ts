@@ -64,6 +64,7 @@ import type { DB } from './database';
 import {
   cafeOrders,
   castingApplications,
+  castingOpportunities,
   conversations,
   courses,
   enrollments,
@@ -96,6 +97,28 @@ export const DEMO_LOGINS: SeedDemoResult['logins'] = [
   { username: 'reception', email: 'reception@demo.school', position: 'Reception', name: 'Nour Hassan' },
   { username: 'helper', email: 'helper@demo.school', position: 'Office helper', name: 'Sayed Ramadan' },
 ];
+
+/**
+ * A seeded moment that must fall on the school's today — the coffee "delivered
+ * 68 minutes ago", a video "approved this morning", an enquiry from today:
+ * `minutes` before `now`, unless the seed runs so soon after the school's
+ * midnight (`dayStart`) that it would land on yesterday (between 00:00 and
+ * about 01:16 Cairo time for "75 minutes ago" — which broke cf:smoke's "one
+ * delivered today"). Then the moments of the group, up to `longest` minutes
+ * ago, are squeezed in the same order between the school's midnight + 1 minute
+ * (half the time since midnight in its first two minutes) and now: on today,
+ * never in the future, in order.
+ */
+export function onSchoolToday(now: number, dayStart: number, minutes: number, longest = minutes): number {
+  const lo = dayStart + Math.min(60_000, Math.max(0, now - dayStart) / 2);
+  if (now - longest * 60_000 >= lo) return now - minutes * 60_000;
+  return Math.round(now - (longest > 0 ? minutes / longest : 0) * (now - lo));
+}
+
+/** `minutes` ago, kept on the school's today in `timeZone` (onSchoolToday). */
+export function schoolTodayAgo(timeZone: string, minutes: number, longest = minutes, now = Date.now()): number {
+  return onSchoolToday(now, epochAt(timeZone, todayIn(timeZone, new Date(now))), minutes, longest);
+}
 
 export interface SeedDemoOptions {
   /** An empty database (no staff yet): the caller checks. */
@@ -1007,7 +1030,8 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
 
   /** When a step happened: that day at 10:00 (never in the future), plus a minute per entry so the timeline keeps its order. */
   let tick = 0;
-  const stampAt = (daysAgo: number) => Math.min(epochAt(timeZone, addDays(today, -daysAgo), '10:00') + tick++ * 60_000, Date.now() - 60_000);
+  const stampAt = (daysAgo: number) =>
+    Math.min(epochAt(timeZone, addDays(today, -daysAgo), '10:00') + tick++ * 60_000, daysAgo === 0 ? schoolTodayAgo(timeZone, 1) : Date.now() - 60_000);
   const lastActivityId = (leadId: number) =>
     db.select({ id: max(leadActivities.id) }).from(leadActivities).where(eq(leadActivities.leadId, leadId)).get()?.id ?? 0;
   /** Run one step of a lead's story, then date the timeline entries it wrote. */
@@ -1114,9 +1138,113 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
 
   await seedVideos();
 
-  // ── 10. The public website ─────────────────────────────────────────────────
+  // ── 10. Casting opportunities the team saw this week (one asks the actors for money) ──
+
+  await seedOpportunities();
+
+  // ── 11. The public website ─────────────────────────────────────────────────
 
   await seedDemoWebsite({ db, files: opts.files, timeZone, today });
+
+  /**
+   * Casting › Opportunities (Part K1): five posts the casting team saw on
+   * Instagram, Facebook, a WhatsApp group and a theatre's website, in English
+   * and Arabic — three still new (one of them asks the actors for money, so it
+   * carries the red warning), one the team is interested in (its deadline has
+   * passed) and one they applied to. Two have screenshots. No amounts anywhere
+   * (no prices in the demo).
+   */
+  async function seedOpportunities() {
+    const tarek = await login('casting');
+    async function screenshot(person: number, gender: Gender, hair: string, name: string, variant: number): Promise<string> {
+      const form = new FormData();
+      form.append('file', new Blob([renderPortrait(lookFor(person, gender, { hair, variant }))], { type: 'image/png' }), name);
+      return (await tarek.post<{ id: string }>('/files', form)).id;
+    }
+    const spec: { hoursAgo: number; input: Record<string, unknown>; shots?: [number, Gender, string][] }[] = [
+      {
+        hoursAgo: 3,
+        input: {
+          title: 'Feature film — lead actress, 25 to 35',
+          projectType: 'film',
+          roles: 'Lead actress (25–35), her younger brother (18–22)',
+          location: 'Cairo',
+          deadline: addDays(today, 2),
+          contact: 'WhatsApp +20 100 123 4567',
+          link: 'https://www.instagram.com/p/demo-frame-casting/',
+          source: 'Instagram — Frame Casting',
+          details: 'Independent feature, shooting in the spring. Send a self-tape and two photos.',
+        },
+        shots: [[420, 'female', 'Black']],
+      },
+      {
+        hoursAgo: 20,
+        input: {
+          title: 'إعلان تلفزيوني لشركة عصائر',
+          projectType: 'ad',
+          roles: 'عائلة: أب وأم وطفلان (من 8 إلى 12 سنة)',
+          location: 'الشيخ زايد',
+          deadline: addDays(today, 9),
+          contact: 'casting@juice-ad.example',
+          link: 'https://www.facebook.com/groups/demo-casting-masr/posts/1',
+          source: 'فيسبوك — مجموعة كاستينج مصر',
+          involvesMinors: true,
+          details: 'تصوير يوم واحد في استوديو. يرجى إرسال صور حديثة للعائلة كاملة.',
+        },
+        shots: [
+          [421, 'male', 'Black'],
+          [422, 'female', 'Dark brown'],
+        ],
+      },
+      {
+        hoursAgo: 30,
+        input: {
+          title: 'Web series: “new faces wanted”',
+          projectType: 'online',
+          roles: 'All ages, no experience needed',
+          contact: 'A WhatsApp number only, no company name',
+          source: 'WhatsApp group — Actors Egypt',
+          asksForPayment: true,
+          details: 'They ask every actor to pay a “registration fee” before the audition. Probably not a real casting.',
+        },
+      },
+      {
+        hoursAgo: 96,
+        input: {
+          title: 'مسرحية «الليلة الكبيرة» — تجارب أداء',
+          projectType: 'theatre',
+          roles: 'مغنون وممثلون (من 18 إلى 40 سنة)',
+          location: 'مسرح الجمهورية، وسط البلد',
+          deadline: addDays(today, -3),
+          link: 'https://example.org/demo-theatre/auditions',
+          source: 'موقع مسرح الجمهورية',
+          status: 'interested',
+        },
+      },
+      {
+        hoursAgo: 72,
+        input: {
+          title: 'Music video — dancers and extras',
+          projectType: 'music_video',
+          roles: 'Dancers (18–30), 20 extras',
+          location: 'Downtown Cairo',
+          deadline: addDays(today, 5),
+          contact: '@mv.casting.cairo',
+          link: 'https://www.instagram.com/p/demo-mv-casting/',
+          source: 'Instagram — @mv.casting.cairo',
+          status: 'applied',
+        },
+      },
+    ];
+    let shot = 0;
+    for (const o of spec) {
+      const fileIds: string[] = [];
+      for (const [person, gender, hair] of o.shots ?? []) fileIds.push(await screenshot(person, gender, hair, `screenshot-${++shot}.png`, shot));
+      const created = await tarek.post<{ id: number }>('/opportunities', { ...o.input, fileIds });
+      const at = Date.now() - o.hoursAgo * 3_600_000;
+      db.update(castingOpportunities).set({ createdAt: at, updatedAt: at }).where(eq(castingOpportunities.id, created.id)).run();
+    }
+  }
 
   /**
    * The cafeteria as a working morning: the usual menu ("Add the usual
@@ -1179,11 +1307,16 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
       ],
     });
 
-    db.update(cafeOrders).set({ createdAt: ago(75), onTheWayAt: ago(72), deliveredAt: ago(68) }).where(eq(cafeOrders.id, coffee.id)).run();
-    db.update(notifications).set({ createdAt: ago(75), readAt: ago(72) }).where(and(eq(notifications.kind, 'cafe_order'), eq(notifications.link, cafeBoardLink(coffee.id)))).run();
-    db.update(notifications).set({ createdAt: ago(68) }).where(and(eq(notifications.kind, 'cafe_status'), eq(notifications.link, cafeOrderLink(coffee.id)))).run();
-    db.update(cafeOrders).set({ createdAt: ago(4) }).where(eq(cafeOrders.id, teas.id)).run();
-    db.update(notifications).set({ createdAt: ago(4) }).where(and(eq(notifications.kind, 'cafe_order'), eq(notifications.link, cafeBoardLink(teas.id)))).run();
+    // This morning's: always on the school's today, even when the seed runs just after midnight (schoolTodayAgo) —
+    // the board's "delivered today" and cf:smoke count on it.
+    const coffeeAt = (minutes: number) => schoolTodayAgo(timeZone, minutes, 75);
+    const [ordered, onTheWay, broughtAt] = [coffeeAt(75), coffeeAt(72), coffeeAt(68)];
+    db.update(cafeOrders).set({ createdAt: ordered, onTheWayAt: onTheWay, deliveredAt: broughtAt }).where(eq(cafeOrders.id, coffee.id)).run();
+    db.update(notifications).set({ createdAt: ordered, readAt: onTheWay }).where(and(eq(notifications.kind, 'cafe_order'), eq(notifications.link, cafeBoardLink(coffee.id)))).run();
+    db.update(notifications).set({ createdAt: broughtAt }).where(and(eq(notifications.kind, 'cafe_status'), eq(notifications.link, cafeOrderLink(coffee.id)))).run();
+    const teasAt = schoolTodayAgo(timeZone, 4);
+    db.update(cafeOrders).set({ createdAt: teasAt }).where(eq(cafeOrders.id, teas.id)).run();
+    db.update(notifications).set({ createdAt: teasAt }).where(and(eq(notifications.kind, 'cafe_order'), eq(notifications.link, cafeBoardLink(teas.id)))).run();
   }
 
   /**
@@ -1217,6 +1350,8 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
       body?: unknown;
       /** Minutes ago, to backdate the step and its history entry. */
       at: number;
+      /** It happened today ("approved this morning"): kept on the school's today even just after midnight (schoolTodayAgo). */
+      today?: boolean;
     }
     interface VideoSpec {
       by: ReturnType<typeof as>;
@@ -1229,6 +1364,8 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
       /** Days from today; default tomorrow from when it was added (left to the API when the video is added today). */
       dueIn?: number;
       addedAgo: number;
+      /** Added today ("this morning"): kept on the school's today even just after midnight (schoolTodayAgo). */
+      addedToday?: boolean;
       steps: Step[];
       /** Alerts still unread in the bell (the newest step's), the rest long read. */
       unread?: boolean;
@@ -1258,6 +1395,7 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
         notes: 'Just the second half (from 0:35:00). Light cut, no music.',
         students: ['ethan', 'rami', 'hana', 'oliver'],
         addedAgo: 50,
+        addedToday: true,
         steps: [],
         unread: true,
       },
@@ -1350,7 +1488,8 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
         steps: [
           { by: hany, path: 'take', at: 2 * DAY + 60 },
           { by: hany, path: 'submit', body: { editedLink: 'https://youtu.be/demo-eyelines', notes: null }, at: DAY },
-          { by: daniel, path: 'approve', at: 70 },
+          // This morning: the coach's "approved this week" counts on it whatever the hour the seed runs.
+          { by: daniel, path: 'approve', at: 70, today: true },
         ],
         unread: true,
       },
@@ -1402,8 +1541,8 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
       });
       for (const step of v.steps) await step.by.post(`/videos/${created.id}/${step.path}`, step.body);
       // Backdate: the video, each history entry (in the order they were written), and the alerts.
-      const at = (minutes: number) => ago(minutes);
-      const stamps = [v.addedAgo, ...v.steps.map((st) => st.at)].map(at);
+      const at = (minutes: number, onToday?: boolean) => (onToday ? schoolTodayAgo(timeZone, minutes) : ago(minutes));
+      const stamps = [at(v.addedAgo, v.addedToday), ...v.steps.map((st) => at(st.at, st.today))];
       const events = db.select({ id: videoEvents.id }).from(videoEvents).where(eq(videoEvents.videoId, created.id)).orderBy(asc(videoEvents.id)).all();
       events.forEach((e, i) => db.update(videoEvents).set({ createdAt: stamps[i] ?? Date.now() }).where(eq(videoEvents.id, e.id)).run());
       const stampOf = (path: string) => {
@@ -1634,8 +1773,9 @@ export async function seedDemoWebsite(opts: SeedDemoWebsiteOptions): Promise<See
     const hadBirthday = m < tm || (m === tm && d <= td);
     return `${ty - age - (hadBirthday ? 0 : 1)}-${md}`;
   };
-  /** "That day at 11:00" (never in the future). */
-  const stamp = (daysAgo: number, time = '11:00') => Math.min(epochAt(timeZone, addDays(today, -daysAgo), time), Date.now() - 60_000);
+  /** "That day at 11:00" (never in the future; today's never on yesterday, even just after midnight: schoolTodayAgo). */
+  const stamp = (daysAgo: number, time = '11:00') =>
+    Math.min(epochAt(timeZone, addDays(today, -daysAgo), time), daysAgo === 0 ? schoolTodayAgo(timeZone, 1) : Date.now() - 60_000);
 
   // ── Studio info, casting call, links ──
   const content: SiteContentParsed = {

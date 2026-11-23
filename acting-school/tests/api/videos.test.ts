@@ -21,6 +21,7 @@ import {
   PERMISSION_GROUPS,
   SECTION_PERMISSIONS,
   videosAreHome,
+  worksOnVideos,
 } from '../../src/shared/permissions';
 import type { ChatUnreadResponse } from '../../src/shared/schemas/chat';
 import type { CourseDetail } from '../../src/shared/schemas/courses';
@@ -121,25 +122,27 @@ describe('the videos permissions and the Video reviewer position', () => {
     expect(BUILT_IN_POSITIONS.at(-1)!.key).toBe('video_reviewer');
   });
 
-  it('who holds what out of the box: coaches and the director add, the editor edits, the director reads, only the reviewer (and owners) review', () => {
+  it('who holds what out of the box: coaches and the director add, the editor edits, the director reads, the reviewer reviews — the director also holds edit and review (VID-PERM-3)', () => {
     const holds = (key: string) => builtIn(key).permissions as readonly string[];
     for (const p of BUILT_IN_POSITIONS) {
       const held = p.permissions as readonly string[];
       expect(held.includes('videos.add'), p.key).toBe(p.isOwner || p.key === 'acting_coach' || p.key === 'executive_director');
-      expect(held.includes('videos.edit'), p.key).toBe(p.isOwner || p.key === 'video_editor');
-      expect(held.includes('videos.review'), p.key).toBe(p.isOwner || p.key === 'video_reviewer');
+      // The director manages the team: she keeps reach over the editor's and the reviewer's accounts (v6).
+      expect(held.includes('videos.edit'), p.key).toBe(p.isOwner || p.key === 'video_editor' || p.key === 'executive_director');
+      expect(held.includes('videos.review'), p.key).toBe(p.isOwner || p.key === 'video_reviewer' || p.key === 'executive_director');
       expect(held.includes('videos.read'), p.key).toBe(p.isOwner || p.key === 'executive_director' || p.key === 'video_reviewer');
     }
     expect(holds('video_editor')).toEqual(['students.read', 'courses.read', 'classes.all', 'talent.read', 'videos.edit']);
   });
 
-  it('BUILT_IN_GRANTS v5 gives the released positions their videos permissions; the earlier grants are untouched', () => {
-    expect(LATEST_BUILT_IN_GRANTS_VERSION).toBe(5);
-    expect(BUILT_IN_GRANTS.map((g) => g.version)).toEqual([1, 2, 3, 4, 5]);
-    expect(BUILT_IN_GRANTS.at(-1)).toEqual({ version: 5, grants: { acting_coach: ['videos.add'], executive_director: ['videos.add', 'videos.read'], video_editor: ['videos.edit'] } });
+  it('BUILT_IN_GRANTS v5 gives the released positions their videos permissions, v6 the director edit + review; the earlier grants are untouched', () => {
+    expect(LATEST_BUILT_IN_GRANTS_VERSION).toBe(6);
+    expect(BUILT_IN_GRANTS.map((g) => g.version)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(BUILT_IN_GRANTS[4]).toEqual({ version: 5, grants: { acting_coach: ['videos.add'], executive_director: ['videos.add', 'videos.read'], video_editor: ['videos.edit'] } });
+    expect(BUILT_IN_GRANTS[5]).toEqual({ version: 6, grants: { executive_director: ['videos.edit', 'videos.review'] } });
     expect(BUILT_IN_GRANTS.slice(0, 4).flatMap((g) => Object.values(g.grants).flat()).filter((p) => p.startsWith('videos.'))).toEqual([]);
-    // The Video reviewer is new: it comes whole, with no grant.
-    expect(BUILT_IN_GRANTS.flatMap((g) => Object.values(g.grants).flat())).not.toContain('videos.review');
+    // The Video reviewer is new: it comes whole, with no grant; videos.review is granted only to the director (v6).
+    expect(BUILT_IN_GRANTS.slice(0, 5).flatMap((g) => Object.values(g.grants).flat())).not.toContain('videos.review');
   });
 
   it('the queue is home for someone whose only work is editing videos; not for the Video editor position (it also sees workshops and actors)', () => {
@@ -194,7 +197,7 @@ describe('the videos permissions and the Video reviewer position', () => {
   const allPositions = (db: DB) => db.select().from(positions).all();
   const byKey = (db: DB, key: string) => allPositions(db).find((p) => p.key === key);
 
-  it('the live database at the next start: the three tables, the Video reviewer once, the v5 grants once — nobody’s positions change', () => {
+  it('the live database at the next start: the three tables, the Video reviewer once, the v5 and v6 grants once — nobody’s positions change', () => {
     const { sqlite, db } = liveDatabaseToday();
     const tables = () => sqlite.prepare(`select count(*) as n from sqlite_master where type = 'table' and name in ('videos', 'video_students', 'video_events')`).get();
     expect(tables()).toEqual({ n: 0 });
@@ -204,13 +207,17 @@ describe('the videos permissions and the Video reviewer position', () => {
 
     initDb(db);
     expect(tables()).toEqual({ n: 3 });
+    // The release's other add-only migration (Part K, found by its tag, after this one) comes with it.
+    const tags = bundle.journal.entries.map((e) => e.tag);
+    expect(tags.findIndex((tag) => tag.endsWith('_opportunities'))).toBeGreaterThan(tags.findIndex((tag) => tag.endsWith('_videos')));
+    expect(sqlite.prepare(`select count(*) as n from sqlite_master where type = 'table' and name in ('casting_opportunities', 'casting_opportunity_files')`).get()).toEqual({ n: 2 });
     expect(allPositions(db).map((p) => p.key)).toEqual([...before.map((p) => p.key), 'video_reviewer']);
     expect(byKey(db, 'video_reviewer')).toMatchObject({ name: 'Video reviewer', nameAr: 'مراجع الفيديو', isOwner: false, permissions: ['videos.read', 'videos.review'], sortOrder: 100 });
-    const gained: Record<string, string[]> = { executive_director: ['videos.add', 'videos.read'], acting_coach: ['videos.add'], video_editor: ['videos.edit'] };
+    const gained: Record<string, string[]> = { executive_director: ['videos.add', 'videos.read', 'videos.edit', 'videos.review'], acting_coach: ['videos.add'], video_editor: ['videos.edit'] };
     expect(allPositions(db).slice(0, 10)).toEqual(
       before.map((p) => (p.key && gained[p.key] ? { ...p, permissions: [...p.permissions, ...gained[p.key]!], updatedAt: expect.any(Number) } : p)),
     );
-    expect(builtInGrantsVersion(db)).toBe(5);
+    expect(builtInGrantsVersion(db)).toBe(6);
     // Moaty keeps his two positions: the Video reviewer is given by an owner, on top (Team → Moaty).
     expect(db.select().from(userPositions).all()).toEqual(holdersBefore);
 
@@ -225,21 +232,30 @@ describe('the videos permissions and the Video reviewer position', () => {
     expect(byKey(db, 'acting_coach')!.permissions).not.toContain('videos.add');
   });
 
-  it('a new school has the Video reviewer; an owner gives it to Moaty on top of his positions — the director can’t (she doesn’t review)', async () => {
+  it('a new school has the Video reviewer; an owner — or the director, who manages the team (VID-PERM-3) — gives it to Moaty on top of his positions', async () => {
     const t = await makeTestContext();
     const owner = await t.as('owner');
     const director = await t.as('executive_director');
     const moaty = await t.createUser(['acting_coach', 'finance'], { name: 'Moaty', username: 'moaty' });
+    const ali = await t.createUser('video_editor', { name: 'Ali El Gohary', username: 'ali' });
     const list = (await owner.get<{ items: Position[] }>('/api/positions')).body.items;
     expect(list.at(-1)).toMatchObject({ key: 'video_reviewer', name: 'Video reviewer', nameAr: 'مراجع الفيديو', permissions: ['videos.read', 'videos.review'], editable: true, assignable: true });
     const reviewerPosition = t.positionId('video_reviewer');
-    // The director holds neither videos.review nor videos.edit: the Video reviewer and the Video editor are out of her reach.
+    // The director holds videos.edit and videos.review (grant v6): the Video reviewer and the Video editor are within her reach.
     const hers = (await director.get<{ items: Position[] }>('/api/positions')).body.items;
-    expect(hers.find((p) => p.key === 'video_reviewer')).toMatchObject({ assignable: false, editable: false });
-    expect(hers.find((p) => p.key === 'video_editor')).toMatchObject({ assignable: false, editable: false });
+    expect(hers.find((p) => p.key === 'video_reviewer')).toMatchObject({ assignable: true, editable: true });
+    expect(hers.find((p) => p.key === 'video_editor')).toMatchObject({ assignable: true, editable: true });
+    // She manages the editor's account (reset his password, switch it off and on) and Moaty's, now a reviewer.
+    expect((await director.get(`/api/staff/${ali.id}`)).body.manageable).toBe(true);
+    expect((await director.patch(`/api/staff/${ali.id}`, { password: 'temporary-1' })).status).toBe(200);
+    // Moaty also holds Finance (payments.manage, not hers): an owner gives him the position on top of his two.
     const positionIds = [t.positionId('acting_coach'), t.positionId('finance'), reviewerPosition];
     expect((await director.patch(`/api/staff/${moaty.id}`, { positionIds })).status).toBe(403);
     expect((await owner.patch(`/api/staff/${moaty.id}`, { positionIds })).status).toBe(200);
+    // A reviewer within her reach (a coach who checks edits): she gives the position herself.
+    const coach = await t.createUser('acting_coach', { name: 'Layla' });
+    expect((await director.patch(`/api/staff/${coach.id}`, { positionIds: [t.positionId('acting_coach'), reviewerPosition] })).status).toBe(200);
+    expect((await director.get(`/api/staff/${coach.id}`)).body.manageable).toBe(true);
     const me = (await (await t.login('moaty')).get('/api/auth/me')).body.user;
     expect(me.permissions).toEqual(expect.arrayContaining(['videos.add', 'videos.review', 'videos.read', 'payments.manage']));
     expect(me.permissions).not.toContain('videos.edit');
@@ -278,8 +294,10 @@ describe('access to /api/videos', () => {
     const readOnly = await s.t.as('video_reviewer');
     expect((await add(readOnly, { sessionId: s.session.id })).status).toBe(403);
     expect((await add(s.director, { sessionId: s.session.id })).status).toBe(201);
-    // Coaches and the director neither edit nor decide.
-    for (const c of [s.coach, s.director]) {
+    // Coaches and someone who only sees the pipeline and adds (the director's v5 videos permissions) neither edit nor decide.
+    // (The director herself holds videos.edit and videos.review since v6 — VID-PERM-3, below.)
+    const viewer = await s.t.as({ permissions: ['videos.read', 'videos.add', 'courses.read', 'classes.all', 'students.read'] });
+    for (const c of [s.coach, viewer]) {
       expect((await step(c, v.id, 'take')).status).toBe(403);
       expect((await step(c, v.id, 'submit', { editedLink: EDIT })).status).toBe(403);
       expect((await step(c, v.id, 'approve')).status).toBe(403);
@@ -541,10 +559,11 @@ describe('the status machine: every move is from the status it was read in', () 
     expect((await s.coach.patch(`/api/videos/${v.id}`, { rawLink: 'file:///etc/passwd' })).status).toBe(400);
     expect((await s.reviewer.patch(`/api/videos/${v.id}`, { title: 'By Moaty' })).status).toBe(200);
     expect((await s.owner.patch(`/api/videos/${v.id}`, { title: 'By the CEO' })).status).toBe(200);
-    // Another coach who sees the workshop (classes.all), the director, the editor: not theirs to change.
+    // Another coach who sees the workshop (classes.all), someone who only sees the pipeline, the editor: not theirs to change.
     const seesAll = await s.t.as(['acting_coach', 'finance'], { name: 'Daniel' });
+    const viewer = await s.t.as({ permissions: ['videos.read', 'videos.add', 'courses.read', 'classes.all'] });
     expect((await seesAll.patch(`/api/videos/${v.id}`, { title: 'X' })).status).toBe(403);
-    expect((await s.director.patch(`/api/videos/${v.id}`, { title: 'X' })).status).toBe(403);
+    expect((await viewer.patch(`/api/videos/${v.id}`, { title: 'X' })).status).toBe(403);
     expect((await s.editor.patch(`/api/videos/${v.id}`, { title: 'X' })).status).toBe(403);
     expect((await seesAll.delete(`/api/videos/${v.id}`)).status).toBe(403);
 
@@ -838,6 +857,103 @@ describe('when the editor no longer edits, or one person holds both positions', 
   });
 });
 
+// ── VID-PERM-3: whoever manages the team keeps reach, but works no queue ─────
+
+describe('VID-PERM-3: the director keeps reach over the editor and the reviewer, and is never alerted or counted as one', () => {
+  const builtIn = (key: string) => BUILT_IN_POSITIONS.find((p) => p.key === key)!.permissions as readonly (typeof PERMISSIONS)[number][];
+
+  it('one rule (worksOnVideos): holds the permission and does not manage the team — Ali and Moaty yes; Salma, owners, any staff.manage holder no', () => {
+    expect(worksOnVideos(builtIn('video_editor'), 'videos.edit')).toBe(true);
+    expect(worksOnVideos([...builtIn('acting_coach'), ...builtIn('finance'), ...builtIn('video_reviewer')], 'videos.review')).toBe(true);
+    expect(worksOnVideos(builtIn('video_editor'), 'videos.review')).toBe(false);
+    // The director holds both (grant v6) and staff.manage.
+    expect(builtIn('executive_director')).toEqual(expect.arrayContaining(['videos.edit', 'videos.review', 'staff.manage']));
+    expect(worksOnVideos(builtIn('executive_director'), 'videos.edit')).toBe(false);
+    expect(worksOnVideos(builtIn('executive_director'), 'videos.review')).toBe(false);
+    // Owners hold every permission, staff.manage included: never.
+    expect(worksOnVideos([...PERMISSIONS], 'videos.edit')).toBe(false);
+    expect(worksOnVideos([...PERMISSIONS], 'videos.review')).toBe(false);
+    expect(worksOnVideos(['videos.edit', 'staff.manage'], 'videos.edit')).toBe(false);
+    // The web passes useAuth().can: the same answer.
+    expect(worksOnVideos((p) => builtIn('video_editor').includes(p), 'videos.edit')).toBe(true);
+    expect(worksOnVideos((p) => builtIn('executive_director').includes(p), 'videos.review')).toBe(false);
+  });
+
+  it('Salma gets no alert at any step — Ali and Moaty do, owners never — nor does someone else who manages the team', async () => {
+    const s = await school();
+    const manager = await s.t.as({ permissions: ['videos.edit', 'videos.review', 'staff.manage', 'courses.read', 'classes.all'] }, { name: 'Team manager' });
+    const v = await newVideo(s);
+    expect(alertedIds(s.t, v.id, 'video_new')).toEqual([s.editor.user.id]);
+    await step(s.editor, v.id, 'take');
+    expect((await step(s.editor, v.id, 'submit', { editedLink: EDIT })).body.told.map((p) => p.id)).toEqual([s.reviewer.user.id]);
+    expect(alertedIds(s.t, v.id, 'video_review')).toEqual([s.reviewer.user.id]);
+    await step(s.reviewer, v.id, 'request-changes', { note: 'Louder' });
+    expect(alertedIds(s.t, v.id, 'video_changes')).toEqual([s.editor.user.id]);
+    await step(s.editor, v.id, 'take');
+    await step(s.editor, v.id, 'submit', { editedLink: EDIT });
+    await step(s.reviewer, v.id, 'approve');
+    await step(s.reviewer, v.id, 'reopen', { note: 'Title card' });
+    expect(alertedIds(s.t, v.id, 'video_changes')).toEqual([s.editor.user.id]);
+    for (const c of [s.director, s.owner, manager]) expect((await bell(c)).items.filter((n) => n.kind.startsWith('video_')), c.user.name).toEqual([]);
+  });
+
+  it('Salma may still take, hand in, approve, send back and reopen if she chooses; her own edit sent back goes to the working editors', async () => {
+    const s = await school();
+    const v = await newVideo(s);
+    // She takes it and hands it in: Moaty is told, not her.
+    expect((await step(s.director, v.id, 'take')).status).toBe(200);
+    const sent = await step(s.director, v.id, 'submit', { editedLink: EDIT });
+    expect(sent.status).toBe(200);
+    expect(sent.body.told.map((p) => p.id)).toEqual([s.reviewer.user.id]);
+    // Nobody checks their own edit: Moaty does.
+    expect((await step(s.director, v.id, 'approve')).body.error.code).toBe('own_edit');
+    // Sent back: she is never alerted as an editor, so the working editors are (Ali) — and either of them may fix it.
+    const back = await step(s.reviewer, v.id, 'request-changes', { note: 'Shorter' });
+    expect(back.body.told.map((p) => p.id)).toEqual([s.editor.user.id]);
+    expect(alertedIds(s.t, v.id, 'video_changes')).toEqual([s.editor.user.id]);
+    expect((await bell(s.director)).items.filter((n) => n.kind.startsWith('video_'))).toEqual([]);
+    expect((await step(s.editor, v.id, 'take')).status).toBe(200);
+
+    // On Ali's edit she decides like a reviewer: approve (the coach is told), reopen (Ali is told).
+    const w = await newVideo(s);
+    await step(s.editor, w.id, 'take');
+    await step(s.editor, w.id, 'submit', { editedLink: EDIT });
+    const approved = await step(s.director, w.id, 'approve');
+    expect(approved.status).toBe(200);
+    expect(approved.body.told.map((p) => p.id)).toEqual([s.coach.user.id]);
+    const reopened = await step(s.director, w.id, 'reopen', { note: 'Wrong music' });
+    expect(reopened.status).toBe(200);
+    expect(reopened.body.told.map((p) => p.id)).toEqual([s.editor.user.id]);
+    // And she changes a new video like a reviewer, and comments.
+    const x = await newVideo(s);
+    expect((await s.director.patch(`/api/videos/${x.id}`, { title: 'Renamed by Salma' })).status).toBe(200);
+    expect((await step(s.director, x.id, 'comments', { note: 'Thanks Layla' })).status).toBe(201);
+  });
+
+  it('the poll counts the same way: no "to edit" / "to check" for Salma; "who checks edits" counts Moaty only — 0 without him, and she may give the position', async () => {
+    const s = await school();
+    await newVideo(s);
+    const w = await newVideo(s);
+    await step(s.editor, w.id, 'take');
+    await step(s.editor, w.id, 'submit', { editedLink: EDIT });
+    expect(await poll(s.editor)).toMatchObject({ toEdit: 1, toCheck: null, reviewers: 1 });
+    expect(await poll(s.reviewer)).toMatchObject({ toCheck: 1, toEdit: null });
+    expect(await poll(s.director)).toMatchObject({ toEdit: null, dueToday: null, late: null, toCheck: null, reviewers: 1 });
+    expect(await poll(s.owner)).toMatchObject({ toEdit: null, toCheck: null, reviewers: 1 });
+    // Without Moaty's Video reviewer position nobody checks — Salma holding videos.review doesn't count.
+    await moveToPositions(s, s.reviewer.user.id, ['acting_coach', 'finance']);
+    expect((await poll(s.editor))!.reviewers).toBe(0);
+    expect((await poll(s.director))!.reviewers).toBe(0);
+    const sent = await newVideo(s);
+    await step(s.editor, sent.id, 'take');
+    expect((await step(s.editor, sent.id, 'submit', { editedLink: EDIT })).body.told).toEqual([]);
+    // She manages the team and holds the reviewer's permissions: she can give Moaty the position back herself (finance aside).
+    const layla = await s.t.createUser('acting_coach', { name: 'Layla Two' });
+    expect((await s.director.patch(`/api/staff/${layla.id}`, { positionIds: [s.t.positionId('acting_coach'), s.t.positionId('video_reviewer')] })).status).toBe(200);
+    expect((await poll(s.editor))!.reviewers).toBe(1);
+  });
+});
+
 // ── Comments ────────────────────────────────────────────────────────────────
 
 describe('comments in the history', () => {
@@ -854,9 +970,10 @@ describe('comments in the history', () => {
       expect(res.status, note).toBe(201);
       expect(res.body as unknown as VideoEvent).toMatchObject({ type: 'comment', note, link: null, by: { id: client.user.id } });
     }
-    // The director (videos.read: seeing only) and another coach who sees every workshop are not part of this video.
+    // Someone who only sees the pipeline (videos.read) and another coach who sees every workshop are not part of this video.
     const seesAll = await s.t.as(['acting_coach', 'finance']);
-    expect((await step(s.director, v.id, 'comments', { note: 'Hello' })).status).toBe(403);
+    const viewer = await s.t.as({ permissions: ['videos.read', 'courses.read', 'classes.all'] });
+    expect((await step(viewer, v.id, 'comments', { note: 'Hello' })).status).toBe(403);
     expect((await step(seesAll, v.id, 'comments', { note: 'Hello' })).status).toBe(403);
     expect((await step(s.coach, v.id, 'comments', { note: '' })).status).toBe(400);
     expect((await step(s.coach, v.id, 'comments', { note: 'x'.repeat(1001) })).status).toBe(400);

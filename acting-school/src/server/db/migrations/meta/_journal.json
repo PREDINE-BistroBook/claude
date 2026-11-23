@@ -71,6 +71,13 @@
       "when": 1795467414017,
       "tag": "0009_videos",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1795475857571,
+      "tag": "0010_opportunities",
+      "breakpoints": true
     }
   ]
 }

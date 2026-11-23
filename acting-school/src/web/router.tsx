@@ -7,6 +7,7 @@ import { castingsRoutes } from './features/castings/routes';
 import { chatRoutes } from './features/chat/routes';
 import { classesRoutes } from './features/classes/routes';
 import { dashboardRoutes } from './features/dashboard/routes';
+import { opportunitiesRoutes } from './features/opportunities/routes';
 import { positionsRoutes } from './features/positions/routes';
 import { scheduleRoutes } from './features/schedule/routes';
 import { settingsRoutes } from './features/settings/routes';
@@ -48,6 +49,7 @@ export const router = createBrowserRouter([
       ...talentRoutes,
       ...castingsRoutes,
       ...applicationsRoutes,
+      ...opportunitiesRoutes,
       ...websiteRoutes,
       ...staffRoutes,
       ...positionsRoutes,

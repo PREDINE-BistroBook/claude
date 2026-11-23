@@ -101,13 +101,18 @@ export const PERMISSIONS = [
   /**
    * The editor's queue: take a video ("Start editing" / "Start fixing") and
    * hand in the edited link ("Done"). Sees every video. Alerted about new
-   * videos unless an owner. The Video editor's (BUILT_IN_GRANTS v5).
+   * videos unless they manage the team (worksOnVideos: never owners, never
+   * the director). The Video editor's (BUILT_IN_GRANTS v5); the Executive
+   * Director's since v6 (VID-PERM-3), so she keeps reach over his account.
    */
   'videos.edit',
   /**
    * Check finished edits: "Approved" or "Needs changes" (with a note), and
    * reopen an approved video. Sees every video. Alerted about every finished
-   * edit unless an owner. Only through the Video reviewer position (and owners).
+   * edit unless they manage the team (worksOnVideos: never owners, never the
+   * director). Through the Video reviewer position; the Executive Director's
+   * since BUILT_IN_GRANTS v6 (VID-PERM-3), so she keeps reach over the
+   * reviewer's account.
    */
   'videos.review',
 ] as const;
@@ -204,19 +209,45 @@ export function videosAreHome(held: readonly Permission[]): boolean {
   return !opensAnySection(others);
 }
 
+/**
+ * Who works as the video editor (`'videos.edit'`) or the video reviewer
+ * (`'videos.review'`) — the operator's decision VID-PERM-3: a holder of that
+ * permission who does **not** manage the team (`staff.manage`). Only they are
+ * alerted as editors or reviewers (a new video, "needs changes" and a reopen →
+ * the editors; a finished edit → the reviewers), counted in the poll's "to
+ * edit" / "to check" (the Videos badge, the School home's cards, the phone-
+ * alerts prompt on the queue) and counted as "someone checks finished edits".
+ * Whoever manages the team — the owners, who hold every permission and so
+ * staff.manage too ("never owners" stays true), and the Executive Director,
+ * who holds staff.manage and, since BUILT_IN_GRANTS v6, videos.edit and
+ * videos.review so that she keeps reach over the editor's and the reviewer's
+ * accounts — may still take, hand in, approve or send back if they choose
+ * (videoActions), but is never alerted or counted as one. The one rule for
+ * the server's alerts and counts (lib/videos.ts) and the web; whether the
+ * account is active is the server's to add. `held`: the permissions, or a
+ * `can` function (the web's useAuth().can).
+ */
+export function worksOnVideos(held: readonly Permission[] | ((p: Permission) => boolean), work: 'videos.edit' | 'videos.review'): boolean {
+  const holds = typeof held === 'function' ? held : (p: Permission) => held.includes(p);
+  return holds(work) && !holds('staff.manage');
+}
+
 // ── Built-in positions ──────────────────────────────────────────────────────
 
 /**
- * The Executive Director: everything except money amounts, the owners'
- * monthly cafeteria page, and the editor's and reviewer's work in the video
- * pipeline (website.manage since BUILT_IN_GRANTS v2, staff.summon since v3,
- * cafeteria.serve since v4 — so she can create the Office helper's account
- * and give him the position; she works in the sections, so she gets no order
- * alerts from it: servesFromBoard —, videos.add and videos.read since v5: she
- * adds class videos and sees the pipeline, and is never alerted as an editor
- * or a reviewer).
+ * The Executive Director: everything except money amounts and the owners'
+ * monthly cafeteria page (website.manage since BUILT_IN_GRANTS v2,
+ * staff.summon since v3, cafeteria.serve since v4 — so she can create the
+ * Office helper's account and give him the position; she works in the
+ * sections, so she gets no order alerts from it: servesFromBoard —,
+ * videos.add and videos.read since v5: she adds class videos and sees the
+ * pipeline —, videos.edit and videos.review since v6 (VID-PERM-3): she manages
+ * the team, so she keeps reach over the video editor's and the reviewer's
+ * accounts — "nobody gives or edits access beyond their own" —; as she holds
+ * staff.manage she is never alerted or counted as an editor or a reviewer:
+ * worksOnVideos).
  */
-const EXECUTIVE_DIRECTOR_PERMISSIONS = PERMISSIONS.filter((p) => !(['payments.manage', 'cafeteria.report', 'videos.edit', 'videos.review'] as Permission[]).includes(p));
+const EXECUTIVE_DIRECTOR_PERMISSIONS = PERMISSIONS.filter((p) => !(['payments.manage', 'cafeteria.report'] as Permission[]).includes(p));
 
 /**
  * The school's positions (confirmed 2026-11-22; Reception and Office helper
@@ -313,6 +344,10 @@ export const BUILT_IN_GRANTS: readonly { version: number; grants: Partial<Record
   // The video pipeline (Part L): coaches and the director add class videos, the editor works through the queue, the
   // director sees the pipeline. Checking edits comes with the new Video reviewer position (no grant needed).
   { version: 5, grants: { acting_coach: ['videos.add'], executive_director: ['videos.add', 'videos.read'], video_editor: ['videos.edit'] } },
+  // VID-PERM-3 (the operator's decision): the director manages the team, so she keeps reach over the video editor's and
+  // the reviewer's accounts (nobody edits an account that can do more than they can). She holds staff.manage, so she is
+  // never alerted or counted as an editor or a reviewer (worksOnVideos) — she may still take, hand in or decide.
+  { version: 6, grants: { executive_director: ['videos.edit', 'videos.review'] } },
 ];
 
 /** Settings key holding the last BUILT_IN_GRANTS version applied to this database. */

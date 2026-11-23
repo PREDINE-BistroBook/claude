@@ -519,7 +519,7 @@ Built together with the radar (Part E) on one shared AI foundation. **Claude Hai
 
 ### F2. Staff "Secretary" (every signed-in worker)
 - **Button:** a floating, labelled button "Secretary" / "السكرتيرة" on every staff screen.
-  - On phones: bottom-end, above the tab bar, at least 48 px.
+  - On phones: **bottom-start**, above the tab bar, at least 48 px. The bottom-end corner belongs to the list screens' fixed "+ Add …" (Part K2), so the two never sit on top of each other (`PHONE_FLOATING_CORNERS` in `layout/addActions.ts`; `tests/unit/add-actions.test.ts` holds this section to it). Decided 2026-11-23 at the Part K review.
   - It opens a chat sheet (the `Modal`, a bottom sheet on phones) with a greeting and three starter suggestions that fit the person's sections, e.g. "Who has a session today?", "Which enquiries need a follow-up?", "How do I add a new student?".
   - It answers in the language the person writes in (Egyptian Arabic welcome).
 - **What it does (v1):**
@@ -1013,12 +1013,12 @@ The radar (Part E) is on hold until the school confirms the AI pack. The **list*
 
 ### K2. A clear "Add" on every screen that has something to add
 One consistent pattern, so nobody has to hunt for it:
-- **List screens:** a labelled primary button, "+ Add …" ("+ Add student", "+ Add workshop", …). On phones it is a **fixed button at the bottom-end, above the tab bar**: at least 48 px, icon plus words, never covering the last row, the chat composer, form action bars or the call-to-the-office banner. On desktop it sits in the page header.
+- **List screens:** a labelled primary button, "+ Add …" ("+ Add student", "+ Add workshop", …). On phones it is a **fixed button at the bottom-end, above the tab bar**: at least 48 px, icon plus words, never covering the last row, the chat composer, form action bars or the call-to-the-office banner. On desktop it sits in the page header. The bottom-start corner is kept for the AI pack's floating Secretary (Part F2), so the two buttons never sit on top of each other.
 - **Empty lists** show the same action inside the empty state ("No students yet — Add the first one").
 - **Inside a record:** each sub-list has its own "+ Add …" at the top of that block. For example: a workshop's sessions, students, and photos & files; a casting's roles, submissions and files; an enquiry's contact log and interviews; a talent's photos; a student's workshops; the website's coaches and links.
-- **Section homes:** quick-action tiles for the most common additions, each shown only with the permission:
-  - School: New enquiry, New student, New workshop;
-  - Casting: New talent, New casting, Add opportunity;
+- **Section homes:** quick-action tiles for the most common additions, each shown only with the permission, worded like the list's own button (decided at the review: "Add student" on the home and on Students):
+  - School: Add enquiry, Add student, Add workshop;
+  - Casting: Add talent, Add casting, Add opportunity;
   - Website: Add coach, Add link.
 - **The work:** audit every list and every record page in the app. Where a create action exists but is hidden, far away or icon-only, bring it into this pattern. Where a create flow is missing but the data model supports it, add it. Report anything that needs a product decision instead of guessing. Candidates to check:
   - adding an extra session to a workshop from the schedule;
@@ -1034,6 +1034,29 @@ One consistent pattern, so nobody has to hunt for it:
 - **A unit test over the route table** that fails when a list route has no registered "add" action or an explicit "nothing to add here" mark.
 - **`cf:smoke`:** an opportunity from add to casting.
 - **Phone walkthrough** at 375 px in English and Arabic, checking that the fixed Add button never covers content or other fixed bars.
+
+### Built (2026-11-23) — and what waits for the school
+- **K1** as above, plus: a new opportunity turned into a casting moves to *Interested* (someone has looked at it); its screenshots are copied into the casting's files; the casting's notes carry the roles, link, contact and where it was seen, written in the language of the person who turned it. Migration `0009_opportunities` (add-only, two tables).
+- **K2**: one component (`components/ui/AddAction.tsx`), one table of what every screen adds (`layout/addActions.ts`, checked against the route table by `tests/unit/add-actions.test.ts`). Built from the candidates: an extra session from the School schedule (pick the workshop, then the workshop's own session form); enrolling a student from the student's page ("+ Add to a workshop"); a **new** student from a workshop's "Add student" (created, then enrolled there); "Set follow-up" on each open enquiry in the list; "+ Add a place" and "+ Add item" at the top of their blocks on the cafeteria's Menu page; adding a custom position already existed and now follows the pattern. Also "+ Log a contact" / "+ Add interview" at the top of an enquiry's blocks, "+ Add talent" at the top of each role's submissions, 48 px everywhere.
+- **Needs a product decision (not built):**
+  - Coaches have no Add for students or sessions on their own workshops (they hold neither `students.write` nor `courses.write`). Should a coach add a student to their own workshop, or an extra session?
+  - Reception has no permissions yet, so no Add anywhere. Should Reception add enquiries (`admissions.write`)?
+  - Workshops on the website: someone with only `website.manage` can't create a school workshop. The list says where workshops are added; a "+ Add workshop" there would need `courses.write` too.
+  - The Casting schedule has nothing to add: an audition belongs to a talent's submission on a role. Booking one from the schedule would need a three-step picker (casting, role, talent).
+  - Casting applications only come from the website form. A walk-in is added as talent. Should the team hand-enter applications too?
+  - "Turn into a casting" doesn't create roles from the free-text roles; they are copied into the casting's notes. Should it try?
+  - Messages are one-to-one; a group conversation would need a data-model change.
+  - The interview criteria's move/remove icons in Settings are still 32 px (outside this part).
+- **After the review (2026-11-23):**
+  - "+ Add to a workshop" on a student's page offers **Re-enroll** for a workshop the student left or finished (as the workshop's own Add student does), never an Enroll the API refuses.
+  - Opportunity cards: Open the post, then one row of status buttons (icon over word); "Turn into a casting" on the card only under Interested and Applied (always on the opportunity's page, which also has "Back to New"). The confirm says a New one moves to Interested; it lands on the casting's Roles block. The form asks for the screenshot right after the title; a link pasted without `https://` gets it. Arabic: opportunities are «إعلانات كاستينج», the post is «المنشور», the advert type «إعلان تجاري».
+  - "Add the first one" only when a list has nothing at all (an empty New / Open tab next to full ones shows no second button), worded per list in Arabic («أضف أول فرصة»).
+  - Section-home tiles use the list buttons' words: Add enquiry, Add student, Add workshop, Add talent, Add casting.
+  - The School schedule's Add is in the page ("+ Add a session on Mon 23" under the week strip), not a fixed button over the days.
+  - The phone's More button shows the counts of the section's pages inside it (the casting team's new opportunities).
+  - Adding an enquiry needs `admissions.read` as well as `admissions.write` (the enquiries API is behind both): the tile, the list's Add and `/admissions/new` ask for both.
+  - On phones the Secretary (Part F2) will sit bottom-start; the bottom-end stays the fixed Add's.
+- **At the merge with Part L:** the video routes (`videos`, `videos/:id`) must be added to `SCREENS`, or the route-table test fails. Suggested: the queue is a list with nothing to add (videos are added from a session's or workshop's "Videos" block); the session page's `subLists` gains "Videos — + Add video (videos.add, class scope)".
 
 ---
 
@@ -1051,12 +1074,14 @@ This is the roadmap's "Editors' queue" (step 11), built now in its first form. *
 - **`videos.edit`** — "Edit videos (the editor's queue)". Built in for `video_editor`.
 - **`videos.review`** — "Check finished edits". Held through a new built-in position, **Video reviewer** / «مراجع الفيديو», which holds `videos.review` and `videos.read`. Moaty is given it on top of his two positions.
 - **`videos.read`** — see the pipeline (read-only). The Executive Director gets it built in. Owners hold everything.
-- **Who is alerted** (like the cafeteria's rule, never the owners unless they act):
-  - a finished edit → every active holder of `videos.review` **who is not an owner**;
-  - "needs changes" → the editor who did it (or every holder of `videos.edit` if unassigned);
-  - "approved" → the coach who added the video;
-  - a new video → every active holder of `videos.edit` who is not an owner.
-- **Existing database:** the new position appears once (`ensureBuiltInPositions`). The grants are applied once.
+- **The Executive Director keeps reach over the video team (VID-PERM-3, the operator's decision):** Salma manages the team, so she must keep reach over the video editor's and the reviewer's accounts ("nobody edits an account that can do more than they can"). The built-in `executive_director` also holds **`videos.edit`** and **`videos.review`** — in `BUILT_IN_POSITIONS` and through `BUILT_IN_GRANTS` **v6** (`{ executive_director: ['videos.edit', 'videos.review'] }`). She may take, hand in, approve, send back or reopen a video if she chooses (never her own edit), and give the Video reviewer position to someone within her reach.
+- **Who is alerted** (like the cafeteria's rule): only the **working** editors and reviewers — active holders of the permission who do **not** hold `staff.manage` (`worksOnVideos` in `shared/permissions.ts`, the one rule for the server's alerts, the poll's counts and the web). Owners hold `staff.manage`, so "never the owners" stays true; Salma holds it, so she is never alerted as an editor or a reviewer; Ali and Moaty don't, so they are:
+  - a finished edit → every working reviewer;
+  - "needs changes" / reopen → the editor who did it while they are a working editor (else — unassigned, switched off, position taken away, or someone who manages the team did the edit — every working editor);
+  - "approved" → the coach who added the video (owners too, when they added it: it is something they did);
+  - a new video → every working editor.
+  - The same rule for the poll: "to edit" / "to check" (the Videos badge, the School home's cards) only for working editors / reviewers, and the "nobody checks finished edits yet" warning counts the working reviewers.
+- **Existing database:** the new position appears once (`ensureBuiltInPositions`). The grants (v5, v6) are applied once.
 
 ### Data (one add-only migration)
 - **`videos`:**
@@ -1091,11 +1116,12 @@ This is the roadmap's "Editors' queue" (step 11), built now in its first form. *
   - notes for the editor;
   - the due date (tomorrow).
 
-  The block lists the session's videos with their status in words.
+  The block lists the session's videos with their status in words. Its **"+ Add video"** is Part K's shared block Add (`AddButton`, at the top of the block, 48 px), shown exactly as the API takes it: `videos.add` + `courses.read`, on a session or workshop the person can open (its class scope — the same `courseScope` as `POST /api/videos`): `canAddVideoHere`. The session page brings the same button to its top (the same sheet).
 - **Video queue** (`/videos`, School section; menu entry "Videos" / «الفيديوهات» with a count badge):
   - **The editor sees:** tabs "To edit" (new + changes requested, due first, overdue in red, changes requested on top with the reviewer's note shown), "Editing" (his), "Waiting for check", and "Approved".
   - **The reviewer sees:** "To check" first (each card shows the edited link as a big **"Watch the edit"** button, the editor's notes, and two big buttons, **Approved ✓** and **Needs changes**), then the rest.
   - **Coaches** see the videos they added and their status.
+  - **No "+ Add" on the queue** (`SCREENS.videos` is a list with a "nothing to add here" reason): a video belongs to the class it was filmed in, and the session's page (or the workshop's Videos tab) knows the workshop, the date and the students — `POST /api/videos` takes a session or a workshop, nothing else. An Add on the queue would first have to ask "which class?", and its fixed button would sit over the editor's and the reviewer's step buttons (for the director and owners, who also add). A coach whose list is empty is told where to add, with **Open the schedule**. Nothing fixed floats over the queue's cards or the video page's step buttons (`tests/unit/add-actions.test.ts`).
 - **Video page** (`/videos/:id`): everything above, the students (links to their pages), both links as "Open raw footage" / "Watch the edit", the history timeline, the next-step button for the viewer's role, and comments.
 - **Section homes:** a School home card for each role:
   - editor: "N videos to edit (M due today)";
@@ -1116,8 +1142,8 @@ This is the roadmap's "Editors' queue" (step 11), built now in its first form. *
   - students' names follow the existing student scope rules.
 
 ### Tests
-- **API:** permissions; class scope for coaches; the status machine (every allowed and refused move, double taps); link validation (http/https only); who is alerted at each step (never owners); the history; counts in the poll.
-- **Positions:** the Video reviewer position and the grants on an upgraded database.
+- **API:** permissions; class scope for coaches; the status machine (every allowed and refused move, double taps); link validation (http/https only); who is alerted at each step (never owners, never Salma — the working editors and reviewers only, VID-PERM-3; Salma may still take, submit and decide); the history; counts in the poll (the same rule).
+- **Positions:** the Video reviewer position and the grants (v5, v6) on an upgraded database; the director reaches the Video editor and Video reviewer positions and their holders' accounts.
 - **Tools:** clear-demo and wipe coverage.
 - **Unit:** the queue's ordering (changes requested first, then due date) and which buttons each role sees.
 - **`cf:smoke`:** add → take → submit → changes requested → submit → approved.

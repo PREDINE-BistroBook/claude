@@ -8,6 +8,7 @@ import castings from '../features/castings/i18n';
 import chat from '../features/chat/i18n';
 import classes from '../features/classes/i18n';
 import dashboard from '../features/dashboard/i18n';
+import opportunities from '../features/opportunities/i18n';
 import positions from '../features/positions/i18n';
 import schedule from '../features/schedule/i18n';
 import settings from '../features/settings/i18n';
@@ -34,6 +35,7 @@ export const namespaces = {
   settings,
   admissions,
   applications,
+  opportunities,
   website,
   team,
   chat,

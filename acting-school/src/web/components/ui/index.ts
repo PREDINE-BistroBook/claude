@@ -2,6 +2,7 @@
  * The UI kit. Import from '@web/components/ui'. Everything is RTL-safe and
  * works in light/dark mode; prefer these over hand-rolled markup.
  */
+export { AddButton, EmptyAddAction, ListAddAction } from './AddAction';
 export { Avatar } from './Avatar';
 export { Badge, type Tone } from './Badge';
 export { BidiText, DataLine } from './BidiText';

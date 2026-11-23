@@ -1,12 +1,13 @@
 import clsx from 'clsx';
-import { ChevronRight, CircleCheck, CircleSlash, Clock, Contact, UserPlus, X } from 'lucide-react';
+import { ChevronRight, CircleCheck, CircleSlash, Clock, Contact, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation } from 'react-router';
 import type { StaffMember } from '@shared/schemas/staff';
 import type { SummonsView } from '@shared/schemas/summons';
 import type { TeamMember } from '@shared/schemas/team';
-import { Avatar, Badge, ButtonLink, EmptyState, ErrorState, PageHeader, PageLoader, SearchInput, Tabs } from '@web/components/ui';
+import { Avatar, Badge, EmptyState, ErrorState, PageHeader, PageLoader, SearchInput, Tabs } from '@web/components/ui';
+import { ScreenAddAction } from '@web/layout/ScreenAdd';
 import { useAuth } from '@web/lib/auth';
 import { useFormat } from '@web/lib/format';
 import { useStaffList } from '../staff/api';
@@ -108,13 +109,7 @@ export default function TeamPage() {
             {team.isSuccess && items.length > 0 && <span className="block">{t('count', { count: items.length })}</span>}
           </>
         }
-        actions={
-          manage ? (
-            <ButtonLink to="/staff/new" variant="primary" size="lg" icon={UserPlus}>
-              {t('staff:addStaff')}
-            </ButtonLink>
-          ) : undefined
-        }
+        actions={<ScreenAddAction screen="team" />}
       />
       {!rowWithCall && call.data && <SummonsOutcome summons={call.data} me={user?.id ?? null} />}
       {manage && (

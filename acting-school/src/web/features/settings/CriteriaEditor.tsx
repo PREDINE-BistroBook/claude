@@ -1,7 +1,8 @@
-import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { MAX_INTERVIEW_CRITERIA } from '@shared/schemas/settings';
-import { Button, IconButton, TextField } from '@web/components/ui';
+import { AddButton, IconButton, TextField } from '@web/components/ui';
+import { useFocusNewRow } from '@web/lib/focusNewRow';
 import { criterionName } from './utils';
 
 /** A criterion being edited. `key` is '' for one added in this session (generated from the label on save). */
@@ -37,11 +38,16 @@ export function CriteriaEditor({
     onChange(next);
   };
   const add = () => onChange([...value, { rowId: `new-${Date.now()}-${value.length}`, key: '', label: '', labelAr: '' }]);
+  const listRef = useFocusNewRow<HTMLOListElement>(value.length);
 
   return (
     <div className="grid gap-3">
+      {/* "+ Add criterion" at the top of the block (Part K2); the new row opens at the end with the cursor in it. */}
+      <div>
+        <AddButton label={t('common:add.criterion')} onClick={add} disabled={value.length >= MAX_INTERVIEW_CRITERIA} className="max-sm:w-full" />
+      </div>
       {value.length ? (
-        <ol className="grid gap-3">
+        <ol ref={listRef} className="grid gap-3">
           {value.map((c, i) => {
             // The name the move / remove buttons are read out with: in the screen's language.
             const name = criterionName(c, i18n.language) || t('criteria.untitled', { n: i + 1 });
@@ -101,11 +107,6 @@ export function CriteriaEditor({
       ) : (
         <p className="rounded-xl border border-dashed border-line-strong px-4 py-3 text-sm text-muted">{t('criteria.empty')}</p>
       )}
-      <div>
-        <Button icon={Plus} onClick={add} disabled={value.length >= MAX_INTERVIEW_CRITERIA}>
-          {t('criteria.add')}
-        </Button>
-      </div>
     </div>
   );
 }

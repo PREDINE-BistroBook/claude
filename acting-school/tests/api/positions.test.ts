@@ -9,10 +9,11 @@ import { makeTestContext } from '../helpers';
 type Ctx = Awaited<ReturnType<typeof makeTestContext>>;
 const byKey = (items: Position[], key: string) => items.find((p) => p.key === key)!;
 /**
- * The Executive Director's built-in list: everything but money amounts, the owners' monthly cafeteria page (she serves
- * the cafeteria since grant v4) and the editor's and reviewer's work on videos (she adds and sees them since grant v5).
+ * The Executive Director's built-in list: everything but money amounts and the owners' monthly cafeteria page (she
+ * serves the cafeteria since grant v4; she adds and sees videos since v5, and holds the editor's and the reviewer's
+ * permissions since v6 — VID-PERM-3: she manages the team, so their accounts stay within her reach).
  */
-const ALL_BUT_MONEY = PERMISSIONS.filter((p) => !['payments.manage', 'cafeteria.report', 'videos.edit', 'videos.review'].includes(p));
+const ALL_BUT_MONEY = PERMISSIONS.filter((p) => !['payments.manage', 'cafeteria.report'].includes(p));
 const POSITION_KEYS = ['id', 'key', 'name', 'nameAr', 'isOwner', 'permissions', 'sortOrder', 'holderCount', 'editable', 'assignable', 'createdAt', 'updatedAt'].sort();
 const holders = (t: Ctx, positionId: number) =>
   t.db.select().from(userPositions).where(eq(userPositions.positionId, positionId)).all().length;
@@ -91,10 +92,11 @@ describe('GET /api/positions', () => {
     expect(res.body.items.every((p) => !p.isOwner)).toBe(true);
     expect(byKey(res.body.items, 'acting_coach')).toMatchObject({ holderCount: 2, editable: true, assignable: true });
     expect(byKey(res.body.items, 'executive_director')).toMatchObject({ holderCount: 1, editable: true, assignable: true });
-    // Finance allows payments.manage, which she doesn't hold; the Video editor and the Video reviewer the editor's and the reviewer's work (Part L).
+    // Finance allows payments.manage, which she doesn't hold. The Video editor and the Video reviewer are within her
+    // reach (she holds videos.edit and videos.review since grant v6, VID-PERM-3: she manages the team).
     expect(byKey(res.body.items, 'finance')).toMatchObject({ editable: false, assignable: false });
-    expect(byKey(res.body.items, 'video_editor')).toMatchObject({ editable: false, assignable: false });
-    expect(byKey(res.body.items, 'video_reviewer')).toMatchObject({ editable: false, assignable: false });
+    expect(byKey(res.body.items, 'video_editor')).toMatchObject({ editable: true, assignable: true });
+    expect(byKey(res.body.items, 'video_reviewer')).toMatchObject({ editable: true, assignable: true });
   });
 
   it('needs staff.manage or positions.manage; editable/assignable follow which one', async () => {

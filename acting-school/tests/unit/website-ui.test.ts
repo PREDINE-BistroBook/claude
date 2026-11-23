@@ -15,6 +15,7 @@ import { applicationsRoutes } from '../../src/web/features/applications/routes';
 import { applicationActions, parseApplicationStatus } from '../../src/web/features/applications/utils';
 import { castingsRoutes } from '../../src/web/features/castings/routes';
 import { dashboardRoutes } from '../../src/web/features/dashboard/routes';
+import { opportunitiesRoutes } from '../../src/web/features/opportunities/routes';
 import { scheduleRoutes } from '../../src/web/features/schedule/routes';
 import { criterionName } from '../../src/web/features/settings/utils';
 import { talentRoutes } from '../../src/web/features/talent/routes';
@@ -209,7 +210,7 @@ describe('casting applications', () => {
 });
 
 describe('menus lead to real pages', () => {
-  const paths = [...dashboardRoutes, ...scheduleRoutes, ...talentRoutes, ...castingsRoutes, ...applicationsRoutes, ...websiteRoutes].map((r) => `/${r.path ?? ''}`);
+  const paths = [...dashboardRoutes, ...scheduleRoutes, ...talentRoutes, ...castingsRoutes, ...applicationsRoutes, ...opportunitiesRoutes, ...websiteRoutes].map((r) => `/${r.path ?? ''}`);
 
   it('every Casting and Website menu entry has a route (no "Not found" from the menu)', () => {
     const missing = NAV_ITEMS.filter((i) => i.section === 'website' || i.section === 'casting')

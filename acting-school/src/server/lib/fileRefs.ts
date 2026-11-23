@@ -23,6 +23,7 @@ import type { DB } from '../db/database';
 import {
   castingApplicationPhotos,
   castingFiles,
+  castingOpportunityFiles,
   courseFiles,
   files,
   messageAttachments,
@@ -56,12 +57,13 @@ export const FILE_REFERENCES: readonly { table: SQLiteTable; column: SQLiteColum
   { table: castingApplicationPhotos, column: castingApplicationPhotos.fileId },
   { table: courseFiles, column: courseFiles.fileId },
   { table: castingFiles, column: castingFiles.fileId },
+  { table: castingOpportunityFiles, column: castingOpportunityFiles.fileId },
   { table: messageAttachments, column: messageAttachments.fileId },
 ];
 
 type Reader = Pick<DB, 'select' | 'get'>;
 
-/** Is anything pointing at this file (FILE_REFERENCES, or the site's hero photo in settings)? One statement, 10 parameters. */
+/** Is anything pointing at this file (FILE_REFERENCES, or the site's hero photo in settings)? One statement, one parameter per FILE_REFERENCES entry. */
 export function fileInUse(db: Reader, fileId: string): boolean {
   const checks: SQL[] = FILE_REFERENCES.map(({ table, column }) => sql`exists (select 1 from ${table} where ${column} = ${fileId})`);
   const row = db.get<{ used: number }>(sql`select (${sql.join(checks, sql` or `)}) as used`);
@@ -72,8 +74,8 @@ export function fileInUse(db: Reader, fileId: string): boolean {
 /**
  * Is this file used by something other than the public website: someone's
  * photo (a team member's, a student's, a talent's headshot or gallery photo),
- * a casting application's photo, a workshop's or a casting's file, a chat
- * attachment? Such a file is private to the people who may see that record,
+ * a casting application's photo, a workshop's or a casting's file, a casting
+ * opportunity's screenshot, a chat attachment? Such a file is private to the people who may see that record,
  * so it can't be made a site image (assertSiteImage in lib/siteContent.ts) —
  * the same list of places as fileInUse, minus the site's own. One statement.
  */

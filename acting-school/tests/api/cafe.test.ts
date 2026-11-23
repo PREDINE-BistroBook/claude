@@ -169,14 +169,18 @@ describe('Reception and Office helper: two more built-in positions', () => {
     expect(byKey(db, 'reception')).toMatchObject({ name: 'Reception', nameAr: 'الاستقبال', isOwner: false, permissions: [], sortOrder: 80 });
     expect(byKey(db, 'office_helper')).toMatchObject({ name: 'Office helper', nameAr: 'عامل المكتب', isOwner: false, permissions: ['cafeteria.serve'], sortOrder: 90 });
     // The eight it had are exactly as they were — except that the director gained cafeteria.serve (grant v4, D2) and
-    // nothing else of the cafeteria (not the monthly page); the later grant (v5, the video pipeline) adds the videos
-    // permissions of the director, the coaches and the editor — and so is who holds what.
+    // nothing else of the cafeteria (not the monthly page); the later grants (v5, the video pipeline; v6, VID-PERM-3) add
+    // the videos permissions of the director, the coaches and the editor — and so is who holds what.
     const director = before.find((p) => p.key === 'executive_director')!;
-    const gained: Record<string, string[]> = { executive_director: ['cafeteria.serve', 'videos.add', 'videos.read'], acting_coach: ['videos.add'], video_editor: ['videos.edit'] };
+    const gained: Record<string, string[]> = {
+      executive_director: ['cafeteria.serve', 'videos.add', 'videos.read', 'videos.edit', 'videos.review'],
+      acting_coach: ['videos.add'],
+      video_editor: ['videos.edit'],
+    };
     expect(allPositions(db).slice(0, 8)).toEqual(
       before.map((p) => (p.key && gained[p.key] ? { ...p, permissions: [...p.permissions, ...gained[p.key]!], updatedAt: expect.any(Number) } : p)),
     );
-    expect(byKey(db, 'executive_director')!.permissions).toEqual([...director.permissions, 'cafeteria.serve', 'videos.add', 'videos.read']);
+    expect(byKey(db, 'executive_director')!.permissions).toEqual([...director.permissions, 'cafeteria.serve', 'videos.add', 'videos.read', 'videos.edit', 'videos.review']);
     expect(byKey(db, 'executive_director')!.permissions).not.toContain('cafeteria.report');
     expect(db.select().from(userPositions).all()).toEqual(holdersBefore);
     expect(builtInGrantsVersion(db)).toBe(LATEST_BUILT_IN_GRANTS_VERSION);

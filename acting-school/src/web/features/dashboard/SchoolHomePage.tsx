@@ -1,7 +1,8 @@
-import { BellRing, Globe, GraduationCap, Inbox, LayoutDashboard, MessageSquarePlus, Sparkles, UserPlus, Users } from 'lucide-react';
+import { Globe, GraduationCap, Inbox, LayoutDashboard, Sparkles, Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { todayISO } from '@shared/dates';
 import { EmptyState, ErrorState, PageLoader } from '@web/components/ui';
+import { HOME_QUICK_ACTIONS } from '@web/layout/addActions';
 import { SectionHomeHeader } from '@web/layout/SectionHomeHeader';
 import { useAuth } from '@web/lib/auth';
 import { VideoHomeCards, videoHomeCardKinds } from '../videos/components/VideoHomeCards';
@@ -19,12 +20,8 @@ const STATS: HomeStat[] = [
   { key: 'activeCourses', to: '/classes', icon: GraduationCap },
 ];
 
-const ACTIONS: QuickAction[] = [
-  { key: 'newEnquiry', to: '/admissions/new', icon: MessageSquarePlus, permission: 'admissions.write' },
-  { key: 'newStudent', to: '/students/new', icon: UserPlus, permission: 'students.write' },
-  // For those who may call people to the office: the Team page has the button beside everyone.
-  { key: 'callToOffice', to: '/team', icon: BellRing, permission: 'staff.summon' },
-];
+/** New enquiry, New student, New workshop, then Call to the office (layout/addActions.ts). */
+const ACTIONS: QuickAction[] = [...HOME_QUICK_ACTIONS.school];
 
 /**
  * /school — the School section's home: the video cards for whoever edits,

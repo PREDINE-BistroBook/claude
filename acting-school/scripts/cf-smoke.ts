@@ -357,6 +357,35 @@ export async function runApiSmoke(base: string, opts: { adminToken: string; pass
   expectStatus(await head.delete(`/api/talent/${actor.id}`), 204, 'delete talent');
   expectStatus(await head.delete(`/api/talent/${actor.id}`), 404, 'delete talent again');
 
+  step('casting opportunities: the demo’s five, one added with a screenshot, a bad link refused, turned into a casting, freed on delete');
+  {
+    const demo = expectStatus(await head.get('/api/opportunities'), 200, 'opportunities list').body.items as { asksForPayment: boolean; files: unknown[] }[];
+    check(demo.length === 5 && demo.filter((o) => o.asksForPayment).length === 1, 'the demo has five opportunities, one asking for money');
+    const before = expectStatus(await head.get('/api/opportunities/counts'), 200, 'opportunity counts').body as Record<string, number>;
+    expectStatus(await coach.get('/api/opportunities'), 403, 'a coach can’t see opportunities');
+    const badLink = expectStatus(await head.post('/api/opportunities', { title: 'Bad link', link: 'javascript:alert(1)' }), 400, 'a javascript: link is refused');
+    check(badLink.body.error.issues[0].path[0] === 'link', 'the bad link is named');
+    const shot = await upload(head, noisePng(64), 'post-screenshot.png');
+    const opp = expectStatus(
+      await head.post('/api/opportunities', { title: 'Smoke series — the grandmother', projectType: 'series', deadline: today, link: 'https://example.com/post', contact: 'WhatsApp 0100', fileIds: [shot] }),
+      201,
+      'add an opportunity with a screenshot',
+    ).body;
+    check(opp.files.length === 1 && opp.files[0].fileId === shot && opp.status === 'new', 'the opportunity holds its screenshot');
+    check(expectStatus(await head.get('/api/opportunities/counts'), 200, 'counts after').body.new === before.new + 1, 'the new count went up');
+    const dash = expectStatus(await head.get('/api/dashboard'), 200, 'dashboard').body;
+    check(dash.counts.newOpportunities === before.new + 1, 'the dashboard counts it');
+    const turned = expectStatus(await head.post(`/api/opportunities/${opp.id}/to-casting`), 201, 'turn it into a casting').body;
+    const made = expectStatus(await head.get(`/api/castings/${turned.castingId}`), 200, 'the new casting').body;
+    check(made.title === opp.title && made.type === 'tv' && made.submissionDeadline === today && made.description.includes('https://example.com/post'), 'the casting is prefilled');
+    expectStatus(await head.post(`/api/opportunities/${opp.id}/to-casting`), 409, 'only once');
+    check(expectStatus(await head.get(`/api/opportunities/${opp.id}`), 200, 'opportunity after').body.castingId === turned.castingId, 'linked to its casting');
+    expectStatus(await head.delete(`/api/opportunities/${opp.id}`), 204, 'delete the opportunity');
+    expectStatus(await head.get(`/api/files/${shot}`), 200, 'its screenshot stays: the casting uses it');
+    expectStatus(await head.delete(`/api/castings/${turned.castingId}`), 204, 'delete that casting');
+    expectStatus(await head.get(`/api/files/${shot}`), 404, 'now the screenshot is gone');
+  }
+
   step('admissions: Arabic digits, duplicates, interview, enrol');
   const lead = expectStatus(
     await director.post('/api/leads', { firstName: 'Smoke', lastName: 'Lead', phone: '٠١٠٩٨٧٦٥٤٣٢', source: 'whatsapp' }),
@@ -651,7 +680,7 @@ export async function runApiSmoke(base: string, opts: { adminToken: string; pass
     'the waiting order was closed with the switch',
   );
 
-  step('videos: add → take → submit → changes requested → submit → approved; who was alerted at each step (never the owners)');
+  step('videos: add → take → submit → changes requested → submit → approved; who was alerted at each step (never the owners or the director)');
   {
     const editor = clients['editor@demo.school']!;
     const reviewer = clients['coach2@demo.school']!;
@@ -667,7 +696,10 @@ export async function runApiSmoke(base: string, opts: { adminToken: string; pass
     const editorMe = expectStatus(await editor.get('/api/auth/me'), 200, 'editor me').body.user;
     check(editorMe.permissions.includes('videos.edit') && !editorMe.permissions.includes('videos.review'), 'the editor edits, and does not review');
     const directorPerms = expectStatus(await director.get('/api/auth/me'), 200, 'director me').body.user.permissions as string[];
-    check(directorPerms.includes('videos.add') && directorPerms.includes('videos.read') && !directorPerms.includes('videos.edit') && !directorPerms.includes('videos.review'), 'the director adds and sees videos (grant v5)');
+    check(
+      ['videos.add', 'videos.read', 'videos.edit', 'videos.review'].every((p) => directorPerms.includes(p)),
+      'the director adds and sees videos (grant v5) and holds the editor’s and the reviewer’s permissions (grant v6: she keeps reach over the video team)',
+    );
     const demoQueue = expectStatus(await editor.get('/api/videos'), 200, 'the editor’s queue').body.items as { status: string }[];
     check(['new', 'editing', 'in_review', 'changes_requested', 'approved'].every((st) => demoQueue.some((v) => v.status === st)), 'the demo has videos in every state');
 
@@ -703,6 +735,8 @@ export async function runApiSmoke(base: string, opts: { adminToken: string; pass
     await nobodyElse(added.id, 'video_review', [reviewer]);
     check((expectStatus(await reviewer.get('/api/chat/unread'), 200, 'reviewer poll').body.videos.toCheck as number) >= 1, 'the reviewer’s count');
     check(expectStatus(await owner.get('/api/chat/unread'), 200, 'owner poll').body.videos.toCheck === null, 'owners get no reviewer’s count');
+    const directorPoll = expectStatus(await director.get('/api/chat/unread'), 200, 'director poll').body.videos;
+    check(directorPoll.toCheck === null && directorPoll.toEdit === null && directorPoll.reviewers === 1, 'the director (manages the team) gets no editor’s or reviewer’s count, and is not counted as a reviewer');
 
     expectStatus(await reviewer.post(`/api/videos/${added.id}/request-changes`, {}), 400, 'changes need a note');
     check(expectStatus(await reviewer.post(`/api/videos/${added.id}/request-changes`, { note: 'Music too loud' }), 200, 'needs changes').body.status === 'changes_requested', 'sent back');
@@ -719,7 +753,8 @@ export async function runApiSmoke(base: string, opts: { adminToken: string; pass
     const history = expectStatus(await director.get(`/api/videos/${added.id}`), 200, 'the director reads the video').body.events.map((e: { type: string }) => e.type);
     check(history.join() === 'added,taken,submitted,changes_requested,taken,submitted,approved', `the history (${history.join()})`);
     check(expectStatus(await coach.post(`/api/videos/${added.id}/comments`, { note: 'Thank you!' }), 201, 'the coach comments').body.type === 'comment', 'a comment');
-    expectStatus(await director.post(`/api/videos/${added.id}/comments`, { note: 'Hello' }), 403, 'the director only reads');
+    // The director holds the editor's and the reviewer's permissions (grant v6): she may join in, without their alerts.
+    expectStatus(await director.post(`/api/videos/${added.id}/comments`, { note: 'Well done' }), 201, 'the director may comment');
     expectStatus(await clients['casting@demo.school']!.get('/api/videos'), 403, 'the casting team has no videos');
   }
 

@@ -14,6 +14,8 @@ export interface DashboardData {
     activeCourses?: number;
     activeTalent?: number;
     openCastings?: number;
+    /** (castings.read) Casting opportunities with status 'new' (Casting › Opportunities). */
+    newOpportunities?: number;
     /** (admissions.read) Leads not yet enrolled/declined/lost. */
     openLeads?: number;
     /** (admissions.read) Leads created since the start of this week (settings.weekStartsOn). */

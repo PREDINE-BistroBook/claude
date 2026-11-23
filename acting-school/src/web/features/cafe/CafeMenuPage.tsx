@@ -1,10 +1,11 @@
 import clsx from 'clsx';
-import { ArrowUpDown, Check, MapPin, Pencil, Plus, Sparkles, Trash2, UtensilsCrossed } from 'lucide-react';
+import { ArrowUpDown, Check, MapPin, Pencil, Sparkles, Trash2, UtensilsCrossed } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CAFE_CATEGORIES, type CafeCategory } from '@shared/enums';
 import { MAX_CAFE_ITEM_NAME, MAX_CAFE_ITEMS, MAX_CAFE_PLACE, MAX_CAFE_PLACES, cafeItemInput, cafePlacesInput, type CafeItem, type CafePlace } from '@shared/schemas/cafe';
-import { Button, Card, ConfirmDialog, EmptyState, ErrorState, FormActions, Input, Modal, PageHeader, PageLoader, Select, Switch, useToast } from '@web/components/ui';
+import { AddButton, Button, Card, ConfirmDialog, EmptyState, ErrorState, FormActions, Input, Modal, PageHeader, PageLoader, Select, Switch, useToast } from '@web/components/ui';
+import { useFocusNewRow } from '@web/lib/focusNewRow';
 import { MoveButtons } from '../website/components/MoveButtons';
 import { isolate } from '../team/utils';
 import { cafeErrorKey, useCafeMenu, useMenuEditor } from './api';
@@ -80,17 +81,13 @@ function MenuEditor() {
               >
                 {t('menu.addUsual')}
               </Button>
-              <Button size="lg" icon={Plus} onClick={() => setEditing('new')}>
-                {t('menu.add')}
-              </Button>
+              <AddButton label={t('common:add.menuItem')} onClick={() => setEditing('new')} />
             </div>
           }
         />
       ) : (
         <>
-          <Button variant="primary" size="lg" icon={Plus} onClick={() => setEditing('new')} disabled={items.length >= MAX_CAFE_ITEMS} className="w-full sm:w-auto">
-            {t('menu.add')}
-          </Button>
+          <AddButton variant="primary" label={t('common:add.menuItem')} onClick={() => setEditing('new')} disabled={items.length >= MAX_CAFE_ITEMS} className="w-full sm:w-auto" />
           {menuGroups(items).map((group) => (
             <section key={group.category} aria-labelledby={`cafe-group-${group.category}`}>
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -325,6 +322,7 @@ function PlacesEditor({ places }: { places: CafePlace[] }) {
   // Both names as they are stored (a place typed in one language has the same text in both, until the other is added).
   const [rows, setRows] = useState<PlaceDraft[]>(() => places.map((p, i) => ({ rowId: i, en: p.en, ar: p.ar })));
   const [nextId, setNextId] = useState(places.length);
+  const placesRef = useFocusNewRow<HTMLUListElement>(rows.length);
   const [touched, setTouched] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
   const [removing, setRemoving] = useState<PlaceDraft | null>(null);
@@ -375,10 +373,21 @@ function PlacesEditor({ places }: { places: CafePlace[] }) {
         </span>
       }
       description={t('menu.placesHint')}
+      // "+ Add a place" at the top of the block (Part K2); the new row opens at the end with the cursor in it.
+      actions={
+        <AddButton
+          label={t('common:add.place')}
+          disabled={rows.length >= MAX_CAFE_PLACES}
+          onClick={() => {
+            change([...rows, { rowId: nextId, en: '', ar: '' }]);
+            setNextId(nextId + 1);
+          }}
+        />
+      }
     >
       {rows.length === 0 && <p className="mb-3 text-sm text-muted">{t('menu.noPlaces')}</p>}
       {rows.length > 0 && <p className="mb-3 text-sm text-muted">{t('menu.nameHint')}</p>}
-      <ul className="grid gap-3">
+      <ul ref={placesRef} className="grid gap-3">
         {rows.map((row, i) => {
           const name = nameOf(row, i);
           const problem = showErrors ? errors.get(i) : undefined;
@@ -410,18 +419,6 @@ function PlacesEditor({ places }: { places: CafePlace[] }) {
           );
         })}
       </ul>
-      <Button
-        size="lg"
-        icon={Plus}
-        disabled={rows.length >= MAX_CAFE_PLACES}
-        className="mt-4 w-full sm:w-auto"
-        onClick={() => {
-          change([...rows, { rowId: nextId, en: '', ar: '' }]);
-          setNextId(nextId + 1);
-        }}
-      >
-        {t('menu.addPlace')}
-      </Button>
       {touched && (
         <FormActions className="mt-4 items-center justify-between">
           <p className="text-sm font-semibold text-warning">{t('menu.placesUnsaved')}</p>

@@ -1,12 +1,13 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
-import { Ban, CheckCheck, ChevronLeft, ChevronRight, Clapperboard, Info, Pencil, RotateCcw, StickyNote, Users } from 'lucide-react';
+import { Ban, CheckCheck, ChevronLeft, ChevronRight, Info, Pencil, RotateCcw, StickyNote, Users } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router';
 import { ATTENDANCE_STATUSES, type AttendanceStatus } from '@shared/enums';
 import type { CourseDetail, SessionDetail } from '@shared/schemas/courses';
 import {
+  AddButton,
   Avatar,
   Badge,
   Button,
@@ -34,6 +35,7 @@ import { CourseTile } from './components/CourseColor';
 import { InfoGrid } from './components/InfoGrid';
 import { SessionFormModal } from './components/SessionFormModal';
 import { VideosBlock } from '../videos/components/VideosBlock';
+import { canAddVideoHere } from '../videos/utils';
 
 export default function SessionPage() {
   const { t } = useTranslation('classes');
@@ -50,6 +52,7 @@ export default function SessionPage() {
   const [confirmCancel, setConfirmCancel] = useState(false);
   // "+ Add video" at the top: right after class the coach needn't scroll past the whole attendance list to the Videos block.
   const [addingVideo, setAddingVideo] = useState(false);
+  const canAddVideo = canAddVideoHere(can);
 
   const setStatus = useMutation({
     mutationFn: (status: 'scheduled' | 'cancelled') => api.patch(`/sessions/${id}`, { status }),
@@ -95,13 +98,10 @@ export default function SessionPage() {
           </span>
         }
         actions={
-          (canWrite || can('videos.add')) && (
+          (canWrite || canAddVideo) && (
             <>
-              {can('videos.add') && (
-                <Button variant="primary" size="lg" icon={Clapperboard} onClick={() => setAddingVideo(true)}>
-                  {tv('actions.add')}
-                </Button>
-              )}
+              {/* The Videos block's own "+ Add video" (the same sheet), brought up here: the shared AddButton, same rule. */}
+              {canAddVideo && <AddButton variant="primary" label={tv('actions.add')} onClick={() => setAddingVideo(true)} testId="add-video-top" />}
               {canWrite && (
                 <>
                   <Button icon={Pencil} onClick={() => setEditing(true)} disabled={!c}>

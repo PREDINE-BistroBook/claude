@@ -26,13 +26,11 @@ const en = {
     newLeadsThisWeek: 'New this week',
     newWebsiteLeads: 'New website enquiries',
     newCastingApplications: 'New casting applications',
+    newOpportunities: 'New opportunities',
   },
+  /** The tiles' "+ Add …" words are the list buttons' own (common:add.*, layout/addActions.ts HOME_QUICK_ACTIONS). */
   quick: {
     label: 'Quick actions',
-    newEnquiry: 'New enquiry',
-    newStudent: 'New student',
-    addTalent: 'New talent',
-    newCasting: 'New casting',
     callToOffice: 'Call someone to the office',
   },
   today: {
@@ -104,13 +102,10 @@ const ar: TranslationOf<typeof en> = {
     newLeadsThisWeek: 'جديدة هذا الأسبوع',
     newWebsiteLeads: 'استفسارات جديدة من الموقع',
     newCastingApplications: 'طلبات انضمام جديدة',
+    newOpportunities: 'فرص جديدة',
   },
   quick: {
     label: 'إجراءات سريعة',
-    newEnquiry: 'استفسار جديد',
-    newStudent: 'طالب جديد',
-    addTalent: 'موهبة جديدة',
-    newCasting: 'تجربة أداء جديدة',
     callToOffice: 'استدعاء شخص إلى المكتب',
   },
   today: {

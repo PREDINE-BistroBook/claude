@@ -19,7 +19,8 @@ export const admissionsRoutes: RouteObject[] = [
   {
     path: 'admissions/new',
     element: (
-      <Guard permission="admissions.write">
+      // The enquiries API is behind admissions.read as well (routes/leads.ts): writing alone would be refused on Save.
+      <Guard permission="admissions.write" also="admissions.read">
         <NewLeadPage />
       </Guard>
     ),
@@ -35,7 +36,7 @@ export const admissionsRoutes: RouteObject[] = [
   {
     path: 'admissions/:id/edit',
     element: (
-      <Guard permission="admissions.write">
+      <Guard permission="admissions.write" also="admissions.read">
         <EditLeadPage />
       </Guard>
     ),

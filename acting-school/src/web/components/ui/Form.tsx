@@ -25,6 +25,7 @@ export function FormGrid({ cols = 2, children, className }: { cols?: 1 | 2 | 3; 
 export function FormActions({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <div
+      data-sticky-bottom
       className={clsx(
         'sticky bottom-[calc(4.25rem+1px+env(safe-area-inset-bottom))] z-10 -mx-4 flex justify-end gap-2 border-t border-line bg-canvas/95 px-4 py-3 backdrop-blur',
         'lg:static lg:mx-0 lg:border-0 lg:bg-transparent lg:px-0 lg:py-0 lg:backdrop-blur-none',

@@ -86,7 +86,7 @@ export function Gallery({ talent, name, canWrite }: { talent: TalentDetail; name
         canWrite && (
           <>
             <input ref={input} type="file" accept={ACCEPT} multiple className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => void upload(e.target.files)} />
-            <Button icon={ImagePlus} size="sm" loading={busy} onClick={() => input.current?.click()} className="max-sm:h-10">
+            <Button icon={ImagePlus} size="lg" loading={busy} onClick={() => input.current?.click()}>
               {t('detail.addPhotos')}
             </Button>
           </>
@@ -110,7 +110,7 @@ export function Gallery({ talent, name, canWrite }: { talent: TalentDetail; name
           className="py-8"
           action={
             canWrite && !busy ? (
-              <Button icon={ImagePlus} onClick={() => input.current?.click()}>
+              <Button icon={ImagePlus} size="lg" variant="primary" onClick={() => input.current?.click()}>
                 {t('detail.addPhotos')}
               </Button>
             ) : undefined

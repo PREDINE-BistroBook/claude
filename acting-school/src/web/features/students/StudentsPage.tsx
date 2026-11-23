@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { GraduationCap, Plus, SearchX, Users } from 'lucide-react';
+import { GraduationCap, SearchX, Users } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
@@ -8,7 +8,6 @@ import type { StudentListItem } from '@shared/schemas/students';
 import {
   Avatar,
   Button,
-  ButtonLink,
   EmptyState,
   ErrorState,
   List,
@@ -19,6 +18,7 @@ import {
   Segmented,
   StatusBadge,
 } from '@web/components/ui';
+import { ScreenAddAction, ScreenEmptyAdd } from '@web/layout/ScreenAdd';
 import { useAuth } from '@web/lib/auth';
 import { ageOn, fullName } from '@web/lib/format';
 import { useDebounced } from '@web/lib/hooks';
@@ -86,11 +86,6 @@ export default function StudentsPage() {
   const filtered = !!q || !!status;
   const canWrite = can('students.write');
 
-  const newButton = canWrite ? (
-    <ButtonLink to="/students/new" variant="primary" icon={Plus}>
-      {t('newStudent')}
-    </ButtonLink>
-  ) : null;
 
   let body;
   if (students.isPending) body = <PageLoader />;
@@ -101,7 +96,7 @@ export default function StudentsPage() {
         icon={Users}
         title={t('list.emptyTitle')}
         description={canWrite ? t('list.emptyHint') : t('list.emptyHintReadOnly')}
-        action={newButton}
+        action={<ScreenEmptyAdd screen="students" />}
         className="rounded-2xl border border-dashed border-line-strong"
       />
     );
@@ -130,7 +125,7 @@ export default function StudentsPage() {
 
   return (
     <div>
-      <PageHeader title={t('title')} actions={newButton} />
+      <PageHeader title={t('title')} actions={<ScreenAddAction screen="students" />} />
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <SearchInput value={text} onChange={setText} placeholder={t(can('students.contact') ? 'list.searchPlaceholder' : 'list.searchNamePlaceholder')} className="w-full md:max-w-sm" />
         <Segmented<StatusFilter>

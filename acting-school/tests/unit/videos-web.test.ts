@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { VideoStatus } from '../../src/shared/enums';
-import { BUILT_IN_POSITIONS, PERMISSIONS, videosAreHome, type Permission } from '../../src/shared/permissions';
+import { BUILT_IN_POSITIONS, PERMISSIONS, videosAreHome, worksOnVideos, type Permission } from '../../src/shared/permissions';
 import { seesAllVideos, usesVideos, videoActions, videoLinkHost, type Video, type VideoActions, type VideoViewer } from '../../src/shared/schemas/videos';
 import { NAV_ITEMS, landingAfterSignIn, mobileTabs, videosFirst } from '../../src/web/layout/nav';
 import { sectionForPath, visibleSections } from '../../src/web/layout/sections';
@@ -105,7 +105,10 @@ describe('which buttons each role sees (videoActions — the rule the API enforc
     editor: { id: EDITOR, isOwner: false, permissions: builtIn('video_editor') },
     otherEditor: { id: OTHER_EDITOR, isOwner: false, permissions: builtIn('video_editor') },
     reviewer: { id: REVIEWER, isOwner: false, permissions: MOATY },
+    // Since grant v6 (VID-PERM-3) the director holds videos.edit and videos.review: she may act, like an owner (never alerted as one).
     director: { id: 40, isOwner: false, permissions: builtIn('executive_director') },
+    // Someone who only sees the pipeline.
+    viewer: { id: 45, isOwner: false, permissions: ['videos.read', 'courses.read'] },
     owner: { id: 50, isOwner: true, permissions: [...PERMISSIONS] },
   };
   const on = (a: VideoActions) => (Object.keys(a) as (keyof VideoActions)[]).filter((k) => a[k]).sort();
@@ -119,7 +122,8 @@ describe('which buttons each role sees (videoActions — the rule the API enforc
     expect(on(videoActions(v, viewers.otherCoach!))).toEqual([]);
     expect(on(videoActions(v, viewers.editor!))).toEqual(['comment', 'take']);
     expect(on(videoActions(v, viewers.reviewer!))).toEqual(['comment', 'edit', 'remove']);
-    expect(on(videoActions(v, viewers.director!))).toEqual([]);
+    expect(on(videoActions(v, viewers.viewer!))).toEqual([]);
+    expect(on(videoActions(v, viewers.director!))).toEqual(['comment', 'edit', 'remove', 'take']);
     expect(on(videoActions(v, viewers.owner!))).toEqual(['comment', 'edit', 'remove', 'take']);
   });
 
@@ -140,7 +144,10 @@ describe('which buttons each role sees (videoActions — the rule the API enforc
     expect(on(videoActions(at('in_review', viewers.owner!.id), viewers.owner!))).toEqual(['approve', 'comment', 'requestChanges']);
     expect(on(videoActions(at('in_review'), viewers.editor!))).toEqual(['comment']);
     expect(on(videoActions(at('in_review'), viewers.coach!))).toEqual(['comment']);
-    expect(on(videoActions(at('in_review'), viewers.director!))).toEqual([]);
+    expect(on(videoActions(at('in_review'), viewers.viewer!))).toEqual([]);
+    expect(on(videoActions(at('in_review'), viewers.director!))).toEqual(['approve', 'comment', 'requestChanges']);
+    // Her own edit, like anyone who is not an owner: another reviewer checks it.
+    expect(on(videoActions(at('in_review', viewers.director!.id), viewers.director!))).toEqual(['comment']);
   });
 
   it('changes requested: the editor sees "Start fixing" (take); approved: the reviewer can reopen', () => {
@@ -171,7 +178,10 @@ describe('the queue: tabs for each role and their order', () => {
     expect(queueTabs(videoRoles(canWith(MOATY)))).toEqual(['toCheck', 'withEditor', 'approved']);
     expect(queueTabs(videoRoles(canWith(builtIn('video_reviewer'))))).toEqual(['toCheck', 'withEditor', 'approved']);
     expect(queueTabs(videoRoles(canWith([...PERMISSIONS])))).toEqual(['toCheck', 'toEdit', 'editing', 'approved']);
-    expect(queueTabs(videoRoles(canWith(builtIn('executive_director'))))).toEqual(['withEditor', 'waiting', 'approved']);
+    // The director holds edit and review since grant v6 (VID-PERM-3): her queue is the owners' — she may act if she chooses.
+    expect(queueTabs(videoRoles(canWith(builtIn('executive_director'))))).toEqual(['toCheck', 'toEdit', 'editing', 'approved']);
+    // Someone who only sees the pipeline.
+    expect(queueTabs(videoRoles(canWith(['videos.read', 'videos.add'])))).toEqual(['withEditor', 'waiting', 'approved']);
     expect(queueTabs(videoRoles(canWith(builtIn('acting_coach'))))).toEqual(['mine', 'approved']);
     expect(queueIsMine(videoRoles(canWith(builtIn('acting_coach'))))).toBe(true);
     expect(queueIsMine(videoRoles(canWith(MOATY)))).toBe(false);
@@ -237,10 +247,11 @@ describe('the queue: tabs for each role and their order', () => {
     expect(videoHomeCardKinds(counts({ addedByMe: 3, addedOpen: 0, approvedThisWeek: 2 }))).toEqual(['coach']);
   });
 
-  it('nobody checks finished edits yet: the owners are told to give the Video reviewer position, the director to ask an owner; nobody else here', () => {
+  it('nobody checks finished edits yet: the owners and the director (grant v6) are told to give the Video reviewer position, another team manager to ask an owner; nobody else here', () => {
     const none = counts({ reviewers: 0 });
     expect(reviewerNotice(none, canWith([...PERMISSIONS]))).toBe('give');
-    expect(reviewerNotice(none, canWith(builtIn('executive_director')))).toBe('ask');
+    expect(reviewerNotice(none, canWith(builtIn('executive_director')))).toBe('give');
+    expect(reviewerNotice(none, canWith(['staff.manage', 'courses.read', 'videos.read']))).toBe('ask');
     expect(reviewerNotice(counts({ toEdit: 1, reviewers: 0 }), canWith(builtIn('video_editor')))).toBeNull();
     expect(reviewerNotice(counts({ reviewers: 1 }), canWith([...PERMISSIONS]))).toBeNull();
     expect(reviewerNotice(counts({ reviewers: null }), canWith([...PERMISSIONS]))).toBeNull();
@@ -317,7 +328,10 @@ describe('where the queue lives: School, the menu entry, the editor’s start an
     expect(mobileTabs('school', canWith(builtIn('executive_director')))).toEqual(['/school', '/admissions', '/students', '/classes']);
     expect(mobileTabs('school', canWith([...PERMISSIONS]))).toEqual(['/school', '/admissions', '/students', '/classes']);
     expect(videosFirst(canWith(builtIn('video_editor')))).toBe(true);
+    expect(videosFirst(canWith(MOATY))).toBe(true);
     expect(videosFirst(canWith(builtIn('executive_director')))).toBe(false);
+    // Whoever manages the team is not a working editor (worksOnVideos), admissions or not.
+    expect(videosFirst(canWith(['videos.edit', 'videos.review', 'staff.manage', 'courses.read']))).toBe(false);
   });
 
   it('after sign-in, a link to the queue is kept for whoever may open it, else "/"', () => {
@@ -329,6 +343,34 @@ describe('where the queue lives: School, the menu entry, the editor’s start an
 });
 
 // ── The add form ────────────────────────────────────────────────────────────
+
+describe('VID-PERM-3 on screen: the working editor and reviewer (worksOnVideos), the same rule as the server', () => {
+  it('the phone-alerts prompt and the queue’s words follow the rule — never for the director or owners, who still see the buttons', () => {
+    const queue = fs.readFileSync(path.resolve(__dirname, '../../src/web/features/videos/VideosPage.tsx'), 'utf8');
+    expect(queue).toContain("const editorAtWork = worksOnVideos(can, 'videos.edit');");
+    expect(queue).toContain("const reviewerAtWork = worksOnVideos(can, 'videos.review');");
+    expect(queue).toMatch(/\{\(editorAtWork \|\| reviewerAtWork\) && \(\s*<PushCard/);
+    expect(queue).not.toMatch(/roles\.(edit|review)\) && !isOwner/);
+    // The rule itself: Ali and Moaty work the queue; the director and owners don't.
+    expect(worksOnVideos(canWith(builtIn('video_editor')), 'videos.edit')).toBe(true);
+    expect(worksOnVideos(canWith(MOATY), 'videos.review')).toBe(true);
+    expect(worksOnVideos(canWith(builtIn('executive_director')), 'videos.edit')).toBe(false);
+    expect(worksOnVideos(canWith(builtIn('executive_director')), 'videos.review')).toBe(false);
+    expect(worksOnVideos(canWith([...PERMISSIONS]), 'videos.review')).toBe(false);
+    // …while the buttons come from videoActions: the director may take or decide.
+    const salma: VideoViewer = { id: 77, isOwner: false, permissions: builtIn('executive_director') };
+    expect(videoActions({ status: 'new', addedBy: { id: 10 }, editor: null, editorCanEdit: false }, salma).take).toBe(true);
+    expect(videoActions({ status: 'in_review', addedBy: { id: 10 }, editor: { id: 5 }, editorCanEdit: true }, salma).approve).toBe(true);
+  });
+
+  it('a team manager’s "Editing" tab shows everyone’s, like the owners’; a working editor’s only his own', () => {
+    const mineV = video({ status: 'editing', editor: person(1) });
+    const theirs = video({ status: 'editing', editor: person(2) });
+    expect(tabVideos([mineV, theirs], 'editing', 1).map((v) => v.id)).toEqual([mineV.id]);
+    expect(tabVideos([mineV, theirs], 'editing', 1, true).map((v) => v.id)).toEqual([mineV.id, theirs.id]);
+    expect(fs.readFileSync(path.resolve(__dirname, '../../src/web/features/videos/VideosPage.tsx'), 'utf8')).toContain('const seesAllEditing = !!user?.isOwner || !editorAtWork;');
+  });
+});
 
 describe('the add form', () => {
   it('offers "<workshop> — 23/11/2026" as the title: digits, the same for an Arabic or an English reader, never a month name that the text direction scrambles', () => {

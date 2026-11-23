@@ -1,18 +1,22 @@
-import { Clapperboard, Plus } from 'lucide-react';
+import { Clapperboard } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { todayISO } from '@shared/dates';
 import { usesVideos } from '@shared/schemas/videos';
-import { Button, Card, EmptyState, ErrorState, Spinner } from '@web/components/ui';
+import { AddButton, Card, EmptyState, ErrorState, Spinner } from '@web/components/ui';
 import { useAuth } from '@web/lib/auth';
 import { useVideos } from '../api';
+import { canAddVideoHere } from '../utils';
 import { AddVideoModal, type VideoFormStudent } from './AddVideoModal';
 import { VideoRow } from './VideoParts';
 
 /**
  * The "Videos" block on a session's page (and on a workshop's): its videos with
- * their status in words, and "+ Add video" for whoever adds class videos
- * (videos.add). Shown to anyone who uses the video pipeline at all.
+ * their status in words, and "+ Add video" at the top of the block — the shared
+ * AddButton (Part K2: a block's own Add, 48 px, icon and words) — for whoever
+ * may add a video here as the API checks it (canAddVideoHere: videos.add +
+ * courses.read, on a session or workshop the person can open, i.e. its class
+ * scope). Shown to anyone who uses the video pipeline at all.
  */
 export function VideosBlock({
   course,
@@ -40,7 +44,7 @@ export function VideosBlock({
   const show = !!user && usesVideos(user);
   const list = useVideos(session ? { sessionId: session.id } : { courseId: course.id }, show);
   if (!show) return null;
-  const canAdd = can('videos.add');
+  const canAdd = canAddVideoHere(can);
   const today = todayISO();
 
   return (
@@ -53,13 +57,7 @@ export function VideosBlock({
             {t('block.title')}
           </span>
         }
-        actions={
-          canAdd && (
-            <Button variant="primary" size="lg" icon={Plus} onClick={() => setAdding(true)}>
-              {t('actions.add')}
-            </Button>
-          )
-        }
+        actions={canAdd && <AddButton label={t('actions.add')} onClick={() => setAdding(true)} testId="add-video" />}
       >
         {list.isPending ? (
           <div className="flex justify-center py-8">

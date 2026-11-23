@@ -46,6 +46,17 @@ const en = {
     created: 'Student added',
     saved: 'Changes saved',
   },
+  /** "+ Add to a workshop" on a student's page (courses.write), and a new student added from a workshop. */
+  enrol: {
+    title: 'Add {{name}} to a workshop',
+    hint: 'Tap "Enroll" next to a workshop ("Re-enroll" if the student was in it before). You can add more than one.',
+    none: 'No active workshops',
+    enrolIn: 'Enroll in {{name}}',
+    reenrolIn: 'Enroll again in {{name}}',
+    full: 'Full',
+    fromWorkshop: 'After saving, the student is enrolled in {{name}}.',
+    enrolledIn: 'Added and enrolled in {{name}}',
+  },
   detail: {
     joined: 'Joined {{date}}',
     addToTalent: 'Add to talent roster',
@@ -140,6 +151,16 @@ const ar: TranslationOf<typeof en> = {
     notesPlaceholder: 'الأهداف، الأوقات المتاحة، ملاحظات صحية، وكل ما ينبغي أن يعرفه الفريق…',
     created: 'تمت إضافة الطالب',
     saved: 'تم حفظ التغييرات',
+  },
+  enrol: {
+    title: 'إضافة {{name}} إلى ورشة',
+    hint: 'اضغط «تسجيل» بجانب الورشة («إعادة التسجيل» إن كان الطالب فيها من قبل). يمكنك إضافة أكثر من ورشة.',
+    none: 'لا ورش نشطة',
+    enrolIn: 'التسجيل في {{name}}',
+    reenrolIn: 'إعادة التسجيل في {{name}}',
+    full: 'مكتملة',
+    fromWorkshop: 'بعد الحفظ يُسجَّل الطالب في {{name}}.',
+    enrolledIn: 'أُضيف وسُجّل في {{name}}',
   },
   detail: {
     joined: 'انضم في {{date}}',

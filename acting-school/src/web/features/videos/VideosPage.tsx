@@ -4,13 +4,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 import { todayISO } from '@shared/dates';
-import { EmptyState, ErrorState, PageHeader, PageLoader, Tabs } from '@web/components/ui';
+import { worksOnVideos } from '@shared/permissions';
+import { ButtonLink, EmptyState, ErrorState, PageHeader, PageLoader, Tabs } from '@web/components/ui';
 import { useAuth } from '@web/lib/auth';
 import { PushCard } from '../team/components/PushCard';
 import { useVideoCounts, useVideos } from './api';
 import { ReviewerNotice } from './components/VideoHomeCards';
 import { VideoCard } from './components/VideoParts';
-import { QUEUE_MOVE_REST_MS, afterStep, firstTab, pinnedVideos, queueIsMine, queueResting, queueTabs, reviewerNotice, tabCounts, tabVideos, videoRoles, type QueueTab } from './utils';
+import { QUEUE_MOVE_REST_MS, afterStep, canAddVideoHere, firstTab, pinnedVideos, queueIsMine, queueResting, queueTabs, reviewerNotice, tabCounts, tabVideos, videoRoles, type QueueTab } from './utils';
 
 const EMPTY_ICON: Record<QueueTab, LucideIcon> = {
   toCheck: ScanEye,
@@ -55,13 +56,18 @@ export default function VideosPage() {
   const [params, setParams] = useSearchParams();
   const [chosen, setChosen] = useState<QueueTab | null>(null);
   const me = user?.id ?? 0;
-  const isOwner = !!user?.isOwner;
+  // The working editor and reviewer (worksOnVideos: never someone who manages the team — owners, the director —, who
+  // may still do a step but are not alerted as one): their own words and the phone-alerts prompt. Whoever manages the
+  // team sees everyone's "Editing", as owners do; a working editor sees his own.
+  const editorAtWork = worksOnVideos(can, 'videos.edit');
+  const reviewerAtWork = worksOnVideos(can, 'videos.review');
+  const seesAllEditing = !!user?.isOwner || !editorAtWork;
   const items = useMemo(() => list.data?.items ?? [], [list.data]);
-  const tabCount = useMemo(() => tabCounts(items, tabs, me, isOwner), [items, tabs, me, isOwner]);
+  const tabCount = useMemo(() => tabCounts(items, tabs, me, seesAllEditing), [items, tabs, me, seesAllEditing]);
   const fromUrl = params.get('tab') as QueueTab | null;
   const tab: QueueTab = chosen ?? (fromUrl && tabs.includes(fromUrl) ? fromUrl : firstTab(tabs, tabCount));
   const today = todayISO();
-  const subtitle = isOwner ? 'subtitle.viewer' : roles.edit ? 'subtitle.editor' : roles.review ? 'subtitle.reviewer' : mine ? 'subtitle.coach' : 'subtitle.viewer';
+  const subtitle = editorAtWork ? 'subtitle.editor' : reviewerAtWork ? 'subtitle.reviewer' : mine ? 'subtitle.coach' : 'subtitle.viewer';
   const tabsRef = useRef<HTMLDivElement>(null);
 
   // The cards in place after a tap: which tab, which ids in which order, since when.
@@ -76,7 +82,7 @@ export default function VideosPage() {
     return () => clearTimeout(id);
   }, [rest]);
   const resting = queueResting(rest?.at ?? null, Date.now());
-  const sorted = tabVideos(items, tab, me, isOwner);
+  const sorted = tabVideos(items, tab, me, seesAllEditing);
   const shown = resting && rest!.tab === tab ? pinnedVideos(items, rest!.ids) : sorted;
 
   const openTab = (next: QueueTab) => {
@@ -90,7 +96,7 @@ export default function VideosPage() {
       tab,
       tabs,
       result.id,
-      tabVideos(items, 'editing', me, isOwner).map((v) => v.id),
+      tabVideos(items, 'editing', me, seesAllEditing).map((v) => v.id),
     );
     if (next.pinned) {
       openTab(next.tab);
@@ -117,11 +123,11 @@ export default function VideosPage() {
         <div className="grid gap-4">
           {notice && <ReviewerNotice kind={notice} />}
           {/* The editor and the reviewer are alerted on their phones: offer to switch that on here. */}
-          {(roles.edit || roles.review) && !isOwner && (
+          {(editorAtWork || reviewerAtWork) && (
             <PushCard
               prompt={{
                 title: t('push.title'),
-                description: t(roles.review ? 'push.reviewer' : 'push.editor'),
+                description: t(reviewerAtWork ? 'push.reviewer' : 'push.editor'),
               }}
             />
           )}
@@ -151,6 +157,15 @@ export default function VideosPage() {
                 icon={EMPTY_ICON[tab]}
                 title={t(`empty.${tab}`)}
                 description={EMPTY_HINT[tab] ? t(EMPTY_HINT[tab]!) : undefined}
+                // Nothing to add on the queue itself (layout/addActions.ts, SCREENS.videos): the coach's way to the class it was filmed in.
+                action={
+                  tab === 'mine' &&
+                  canAddVideoHere(can) && (
+                    <ButtonLink to="/schedule" size="lg">
+                      {t('empty.mineAction')}
+                    </ButtonLink>
+                  )
+                }
                 className="rounded-2xl border border-dashed border-line-strong py-10"
               />
             )}

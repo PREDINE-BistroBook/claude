@@ -1,15 +1,17 @@
-import { CalendarClock, Clapperboard, Mail, Pencil, Phone, Plus, Trash2 } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { CalendarClock, Clapperboard, Mail, Pencil, Phone, Trash2 } from 'lucide-react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router';
+import { useLocation, useNavigate, useParams } from 'react-router';
 import type { CastingDetail, CastingRole, Submission } from '@shared/schemas/castings';
 import {
+  AddButton,
   Badge,
   Button,
   ButtonLink,
   Card,
   ConfirmDialog,
   DescriptionList,
+  EmptyAddAction,
   EmptyState,
   ErrorState,
   PageHeader,
@@ -68,6 +70,16 @@ function CastingView({ casting: c, del }: { casting: CastingDetail; del: ReturnT
   const [roleToDelete, setRoleToDelete] = useState<number | null>(null);
   const [pickerRoleId, setPickerRoleId] = useState<number | null>(null);
   const [submissionId, setSubmissionId] = useState<number | null>(null);
+
+  // Arriving at …#roles (from an opportunity's "Turn into a casting"): the Roles block is the next thing to fill in.
+  // After the shell's own scroll to the top of a new page.
+  const { hash } = useLocation();
+  const rolesRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (hash !== '#roles') return;
+    const timer = window.setTimeout(() => rolesRef.current?.scrollIntoView({ block: 'start' }), 60);
+    return () => window.clearTimeout(timer);
+  }, [hash]);
 
   const roleById = (rid: number | null): CastingRole | undefined => (rid === null ? undefined : c.roles.find((r) => r.id === rid));
   const submissionRole = submissionId === null ? undefined : c.roles.find((r) => r.submissions.some((s) => s.id === submissionId));
@@ -197,7 +209,7 @@ function CastingView({ casting: c, del }: { casting: CastingDetail; del: ReturnT
           </Card>
         </div>
 
-        <section aria-labelledby="roles-heading" className="min-w-0">
+        <section id="roles" ref={rolesRef} aria-labelledby="roles-heading" className="min-w-0 scroll-mt-32">
           <div className="mb-3 flex items-center justify-between gap-3">
             <h2 id="roles-heading" className="flex items-center gap-2 text-lg font-semibold text-ink">
               {t('roles.title')}
@@ -207,11 +219,7 @@ function CastingView({ casting: c, del }: { casting: CastingDetail; del: ReturnT
                 </span>
               )}
             </h2>
-            {canWrite && c.roles.length > 0 && (
-              <Button icon={Plus} onClick={() => setRoleForm({ roleId: null })}>
-                {t('roles.add')}
-              </Button>
-            )}
+            {canWrite && c.roles.length > 0 && <AddButton label={t('common:add.role')} onClick={() => setRoleForm({ roleId: null })} />}
           </div>
 
           {c.roles.length === 0 ? (
@@ -219,13 +227,7 @@ function CastingView({ casting: c, del }: { casting: CastingDetail; del: ReturnT
               icon={Clapperboard}
               title={t('roles.emptyTitle')}
               description={canWrite ? t('roles.emptyHint') : undefined}
-              action={
-                canWrite && (
-                  <Button variant="primary" icon={Plus} onClick={() => setRoleForm({ roleId: null })}>
-                    {t('roles.add')}
-                  </Button>
-                )
-              }
+              action={canWrite && <EmptyAddAction label={t('common:add.firstOf.role')} onClick={() => setRoleForm({ roleId: null })} />}
               className="rounded-2xl border border-dashed border-line-strong"
             />
           ) : (

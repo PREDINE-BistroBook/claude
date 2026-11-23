@@ -190,18 +190,20 @@ export interface VideoStepResult extends VideoDetail {
 /**
  * The video pipeline's part of the 20-second poll (GET /api/chat/unread →
  * `videos`): the counts behind the "Videos" menu badge and the School home's
- * cards. null for someone who holds no videos permission. Owners hold every
- * permission but get no editor's or reviewer's counts (they are not alerted
- * either, the school's rule): those are null for them.
+ * cards. null for someone who holds no videos permission. The editor's and
+ * the reviewer's counts go only to the working editors and reviewers
+ * (worksOnVideos, VID-PERM-3): whoever manages the team — owners, the
+ * director — holds those permissions but is not alerted as one either, so
+ * they are null for them.
  */
 export interface VideoCounts {
-  /** videos.edit (not owners): new videos and videos sent back with changes — the editor's "To edit". */
+  /** A working editor's (worksOnVideos): new videos and videos sent back with changes — the editor's "To edit". */
   toEdit: number | null;
   /** …of those, due today. */
   dueToday: number | null;
   /** …of those, due before today (late). */
   late: number | null;
-  /** videos.review (not owners): edits waiting for a check. */
+  /** A working reviewer's (worksOnVideos): edits waiting for a check. */
   toCheck: number | null;
   /** Videos I added (any status). */
   addedByMe: number;
@@ -210,10 +212,11 @@ export interface VideoCounts {
   /** Videos I added that were approved this week (the school's week, its time zone). */
   approvedThisWeek: number;
   /**
-   * How many people check finished edits (active accounts holding
-   * videos.review that are not owners) — for the editors (whether "Done"
-   * alerts anyone) and for whoever gives positions (staff.manage, owners), so
-   * a school where nobody checks yet is told on screen. null for the others.
+   * How many people check finished edits — the working reviewers, the same
+   * rule as the alerts (active, videos.review, not managing the team) — for
+   * the editors (whether "Done" alerts anyone) and for whoever gives positions
+   * (staff.manage: owners, the director), so a school where nobody checks yet
+   * is told on screen. null for the others.
    */
   reviewers: number | null;
 }

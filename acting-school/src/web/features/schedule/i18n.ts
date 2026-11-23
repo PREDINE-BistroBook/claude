@@ -24,6 +24,15 @@ const en = {
     audition: 'This schedule shows auditions, and your positions don’t include castings. Ask whoever manages team accounts if you need them.',
     any: 'Your positions don’t include anything this schedule shows. Ask whoever manages team accounts if you need it.',
   },
+  /** On a phone, under the week strip: the day the new session's form starts on (the day shown, or today for a past one). */
+  addSessionOn: 'Add a session on {{date}}',
+  /** "+ Add a session" on the School schedule (courses.write): which workshop first. */
+  addSession: {
+    title: 'Add a session — which workshop?',
+    hint: 'An extra session, on top of the weekly timetable. You pick the day and time next.',
+    none: 'No active workshops',
+    next: 'Next: {{when}}',
+  },
   previousWeek: 'Previous week',
   nextWeek: 'Next week',
   goToToday: 'Go to today',
@@ -83,6 +92,13 @@ const ar: TranslationOf<typeof en> = {
     class_interview: 'يعرض هذا الجدول الورش ومقابلات القبول، ومناصبك لا تشمل أيًّا منهما. اطلب ذلك ممن يدير حسابات الفريق إن احتجت إليه.',
     audition: 'يعرض هذا الجدول الاختبارات، ومناصبك لا تشمل تجارب الأداء. اطلب ذلك ممن يدير حسابات الفريق إن احتجت إليه.',
     any: 'مناصبك لا تشمل أي شيء يعرضه هذا الجدول. اطلب ذلك ممن يدير حسابات الفريق إن احتجت إليه.',
+  },
+  addSessionOn: 'إضافة حصة يوم {{date}}',
+  addSession: {
+    title: 'إضافة حصة — لأي ورشة؟',
+    hint: 'حصة إضافية فوق الجدول الأسبوعي. تختار اليوم والوقت بعد ذلك.',
+    none: 'لا ورش نشطة',
+    next: 'التالية: {{when}}',
   },
   previousWeek: 'الأسبوع السابق',
   nextWeek: 'الأسبوع التالي',

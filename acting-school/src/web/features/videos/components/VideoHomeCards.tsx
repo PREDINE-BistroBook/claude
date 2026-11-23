@@ -39,10 +39,10 @@ export function VideoHomeCards() {
 }
 
 /**
- * "Nobody checks finished edits yet": on the live school until an owner gives
- * someone (Moaty) the Video reviewer position, every "Done" alerts nobody —
- * so the owners are told where to fix it (with a link to Team), and the
- * director to ask an owner.
+ * "Nobody checks finished edits yet": on the live school until someone (Moaty)
+ * is given the Video reviewer position, every "Done" alerts nobody — so whoever
+ * can give it (the owners, the director since grant v6) is told where to fix it
+ * (with a link to Team), and anyone else who manages the team to ask an owner.
  */
 export function ReviewerNotice({ kind }: { kind: 'give' | 'ask' }) {
   const { t } = useTranslation('videos');

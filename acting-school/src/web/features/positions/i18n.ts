@@ -161,11 +161,11 @@ const en = {
       },
       edit: {
         label: 'Edit videos (the editor’s queue)',
-        description: 'The list of videos to edit: “Start editing”, then “Done” with the link to the edited video. Alerts about every new video (owners are not alerted).',
+        description: 'The list of videos to edit: “Start editing”, then “Done” with the link to the edited video. Alerts about every new video — not for someone who can also “Manage the team” (owners, the Executive Director): they can still use the buttons.',
       },
       review: {
         label: 'Check finished edits',
-        description: 'Watch each finished edit and tap “Approved” or “Needs changes” (with a note for the editor). Alerts about every finished edit (owners are not alerted). Comes with the Video reviewer position.',
+        description: 'Watch each finished edit and tap “Approved” or “Needs changes” (with a note for the editor). Alerts about every finished edit — not for someone who can also “Manage the team” (owners, the Executive Director): they can still use the buttons. Comes with the Video reviewer position.',
       },
     },
   },
@@ -343,11 +343,11 @@ const ar: TranslationOf<typeof en> = {
       },
       edit: {
         label: 'مونتاج الفيديوهات (قائمة المونتير)',
-        description: 'قائمة الفيديوهات المطلوب مونتاجها: «ابدأ المونتاج» ثم «تم» مع رابط الفيديو بعد المونتاج. تنبيه بكل فيديو جديد (لا تصل التنبيهات للمالكين).',
+        description: 'قائمة الفيديوهات المطلوب مونتاجها: «ابدأ المونتاج» ثم «تم» مع رابط الفيديو بعد المونتاج. تنبيه بكل فيديو جديد — إلا لمن يملك أيضًا «إدارة الفريق» (المالكون والمدير التنفيذي): يمكنهم استخدام الأزرار مع ذلك.',
       },
       review: {
         label: 'مراجعة المونتاج',
-        description: 'مشاهدة كل مونتاج منتهٍ والضغط على «موافق» أو «يحتاج تعديلات» (مع ملاحظة للمونتير). تنبيه بكل مونتاج منتهٍ (لا تصل التنبيهات للمالكين). تأتي مع منصب مراجع الفيديو.',
+        description: 'مشاهدة كل مونتاج منتهٍ والضغط على «موافق» أو «يحتاج تعديلات» (مع ملاحظة للمونتير). تنبيه بكل مونتاج منتهٍ — إلا لمن يملك أيضًا «إدارة الفريق» (المالكون والمدير التنفيذي): يمكنهم استخدام الأزرار مع ذلك. تأتي مع منصب مراجع الفيديو.',
       },
     },
   },

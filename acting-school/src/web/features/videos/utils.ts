@@ -55,6 +55,20 @@ export function queueTabs(roles: VideoRoles): QueueTab[] {
   return tabs;
 }
 
+/**
+ * Whether "+ Add video" shows in a session's or a workshop's Videos block (and
+ * at the top of a session's page): videos.add, and courses.read — POST
+ * /api/videos takes only a session or workshop the person can see (courses.read
+ * + its class scope, courseScope). The block sits only on a session or
+ * workshop page, which itself opens only for someone inside that scope (the
+ * same courseScope), so the button never leads to a refusal. Never shown on
+ * the queue (/videos): a video is added from the class it was filmed in
+ * (layout/addActions.ts, SCREENS.videos).
+ */
+export function canAddVideoHere(can: (p: Permission) => boolean): boolean {
+  return can('videos.add') && can('courses.read');
+}
+
 /** Whether the queue lists only my own videos (a coach who only adds): GET /api/videos?mine=1. */
 export function queueIsMine(roles: VideoRoles): boolean {
   return !roles.edit && !roles.review && !roles.read;
@@ -73,12 +87,13 @@ const TAB_STATUSES: Record<QueueTab, readonly VideoStatus[]> = {
 /**
  * The videos of one tab, in the order they are worked on: in "To edit" the
  * ones sent back with changes first, then by due date (the most overdue
- * first); "Editing" is the editor's own; "Approved" newest first; the rest by
- * due date.
+ * first); "Editing" is the editor's own — everyone's for `seesAllEditing`
+ * (owners and whoever manages the team: not a working editor, worksOnVideos);
+ * "Approved" newest first; the rest by due date.
  */
-export function tabVideos(videos: readonly Video[], tab: QueueTab, me: number, isOwner = false): Video[] {
+export function tabVideos(videos: readonly Video[], tab: QueueTab, me: number, seesAllEditing = false): Video[] {
   const statuses = TAB_STATUSES[tab];
-  const list = videos.filter((v) => statuses.includes(v.status) && (tab !== 'editing' || isOwner || v.editor?.id === me));
+  const list = videos.filter((v) => statuses.includes(v.status) && (tab !== 'editing' || seesAllEditing || v.editor?.id === me));
   if (tab === 'approved') return list.sort((a, b) => (b.decidedAt ?? 0) - (a.decidedAt ?? 0) || b.id - a.id);
   if (tab === 'toEdit') return list.sort(byEditorQueue);
   return list.sort(byDue);
@@ -96,9 +111,9 @@ export function byEditorQueue(a: Pick<Video, 'status' | 'dueOn' | 'id'>, b: Pick
 }
 
 /** How many videos each tab holds (the counts on the tabs). */
-export function tabCounts(videos: readonly Video[], tabs: readonly QueueTab[], me: number, isOwner = false): Record<QueueTab, number> {
+export function tabCounts(videos: readonly Video[], tabs: readonly QueueTab[], me: number, seesAllEditing = false): Record<QueueTab, number> {
   const out = {} as Record<QueueTab, number>;
-  for (const tab of tabs) out[tab] = tabVideos(videos, tab, me, isOwner).length;
+  for (const tab of tabs) out[tab] = tabVideos(videos, tab, me, seesAllEditing).length;
   return out;
 }
 
@@ -148,12 +163,14 @@ export function videoHomeCardKinds(counts: VideoCounts | null | undefined): Vide
 }
 
 /**
- * Nobody checks finished edits yet (nobody holds the Video reviewer position,
- * as on the live school before an owner gives it to Moaty): what this person
- * is told. 'give' — they can give the position themselves (staff.manage and
- * videos.review: the owners), with a link to Team; 'ask' — they manage the
- * team but can't give it (the director: ask an owner); null — nothing to say
- * here (the editors are told in the "Done" sheet and after sending).
+ * Nobody checks finished edits yet (no working reviewer — worksOnVideos —, as
+ * on the live school before Moaty is given the Video reviewer position): what
+ * this person is told. 'give' — they can give the position themselves
+ * (staff.manage and videos.review: the owners, and the director since
+ * BUILT_IN_GRANTS v6), with a link to Team; 'ask' — they manage the team but
+ * can't give it (staff.manage without videos.review: ask an owner); null —
+ * nothing to say here (the editors are told in the "Done" sheet and after
+ * sending).
  */
 export function reviewerNotice(counts: VideoCounts | null | undefined, can: (p: Permission) => boolean): 'give' | 'ask' | null {
   if (!counts || counts.reviewers !== 0 || !can('staff.manage')) return null;

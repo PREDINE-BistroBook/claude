@@ -37,6 +37,8 @@ const en = {
     approved: 'No approved videos yet',
     mine: 'You have not added any videos yet',
     mineHint: 'Open a session of your workshop and tap “+ Add video”.',
+    /** The coach's way there from an empty "In progress": videos are added from the class they were filmed in. */
+    mineAction: 'Open the schedule',
   },
   due: {
     today: 'Due today',
@@ -251,6 +253,7 @@ const ar: TranslationOf<typeof en> = {
     approved: 'لا توجد فيديوهات تمت الموافقة عليها بعد',
     mine: 'لم تُضف أي فيديو بعد',
     mineHint: 'افتح حصة من ورشتك واضغط «+ إضافة فيديو».',
+    mineAction: 'افتح الجدول',
   },
   due: {
     today: 'التسليم اليوم',

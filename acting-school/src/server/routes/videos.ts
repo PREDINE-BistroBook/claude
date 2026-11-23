@@ -55,15 +55,20 @@ import { currentUser, requireAnyPermission, requireAuth, requirePermission } fro
  *
  * - The coach (videos.add) adds a raw-footage link on a session — or a
  *   workshop — they can see (class scope), with the students in it, notes for
- *   the editor and a due date (tomorrow unless they choose). Every active
- *   editor who is not an owner is alerted.
+ *   the editor and a due date (tomorrow unless they choose). Every working
+ *   editor is alerted.
  * - The editor (videos.edit) takes it ("Start editing"), then hands in the
- *   edited link ("Done"): every active reviewer (videos.review) who is not an
- *   owner is alerted.
+ *   edited link ("Done"): every working reviewer (videos.review) is alerted.
  * - The reviewer approves it (the coach who added it is alerted) or asks for
- *   changes with a note (the editor who did it is alerted — every editor if
- *   nobody is named). The editor takes it again ("Start fixing") and hands it
- *   in again. An approved video can be reopened, with a note.
+ *   changes with a note (the editor who did it is alerted — every working
+ *   editor if nobody is named or that editor isn't one). The editor takes it
+ *   again ("Start fixing") and hands it in again. An approved video can be
+ *   reopened, with a note.
+ *
+ * "Working" editors and reviewers (worksOnVideos, VID-PERM-3): active holders
+ * of the permission who do not manage the team (staff.manage) — never the
+ * owners, never the director. They may still do any step (videoActions); they
+ * are only never alerted or counted as an editor or a reviewer.
  *
  * Every move is an `UPDATE … WHERE status = <the status read>`: two taps, or
  * two people, can't both move it (the second gets 409 video_moved with the
@@ -240,7 +245,7 @@ router.post('/', requirePermission('videos.add'), async (c) => {
       .get();
     setStudents(tx, row.id, studentIds);
     addEvent(tx, row.id, me.id, 'added', now, { note: input.notesForEditor ?? null, link: input.rawLink });
-    // Every active editor who is not an owner (and not the person adding it).
+    // Every working editor (not managing the team: never owners or the director; not the person adding it).
     const editors = videoTeam(tx, 'videos.edit', me.id);
     const alert: VideoAlert = { kind: 'video_new', title: 'videoNewTitle', body: 'videoNewBody', values: { title: input.title, course: name, name: me.name } };
     notifyVideo(tx, row.id, editors, alert, now);
@@ -347,7 +352,7 @@ router.post('/:id/take', requirePermission('videos.edit'), (c) => {
   return c.json<VideoStepResult>(stepResult(c, id, []));
 });
 
-/** "Done": the edited link (and notes for the reviewer). Every active reviewer who is not an owner is alerted. */
+/** "Done": the edited link (and notes for the reviewer). Every working reviewer (worksOnVideos) is alerted. */
 router.post('/:id/submit', requirePermission('videos.edit'), async (c) => {
   const id = paramId(c);
   const input = await body(c, videoSubmitInput);
@@ -369,7 +374,7 @@ router.post('/:id/submit', requirePermission('videos.edit'), async (c) => {
     if (!updated) return null;
     addEvent(tx, id, me.id, 'submitted', now, { note: input.notes ?? null, link: input.editedLink });
     markNotificationsRead(tx, me.id, 'video_changes', videoPath(id), now);
-    // "Moaty checks every edit": every active reviewer who is not an owner (and not the editor).
+    // "Moaty checks every edit": every working reviewer (not managing the team; not the editor).
     const reviewers = videoTeam(tx, 'videos.review', me.id);
     const alert: VideoAlert = { kind: 'video_review', title: 'videoReviewTitle', body: 'videoReviewBody', values: { title: row.title, course: name, name: me.name } };
     notifyVideo(tx, id, reviewers, alert, now);
@@ -418,7 +423,8 @@ async function decide(c: Context<AppEnv>, opts: { from: VideoStatus; to: VideoSt
       recipients = videoPerson(tx, row.addedById, me.id);
       alert = { kind: 'video_approved', title: 'videoApprovedTitle', body: 'videoApprovedBody', values: { title: row.title, course: name, name: me.name } };
     } else {
-      // The editor who did it — or, when nobody is named or they can no longer edit videos (switched off, position taken away), every editor who is not an owner.
+      // The editor who did it while a working editor — else (nobody named, switched off, position taken away, or someone
+      // who manages the team did the edit) every working editor.
       recipients = videoChangesRecipients(tx, row.editorId, me.id);
       alert = {
         kind: 'video_changes',

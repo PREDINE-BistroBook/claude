@@ -19,6 +19,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useOnline, useSchoolName } from '../lib/hooks';
 import { useApplicationCounts } from '../features/applications/api';
+import { useOpportunityCounts } from '../features/opportunities/api';
 import { legacyScheduleRedirect } from '../features/schedule/utils';
 import { usePositionNames } from '../lib/positions';
 import { useFormat } from '../lib/format';
@@ -30,6 +31,7 @@ import {
   cafeMenuActive,
   cafeMenuHint,
   mobileTabs,
+  moreBadgeCount,
   navItemActive,
   sectionNavItems,
   teamMenuActive,
@@ -148,14 +150,17 @@ export function AppShell() {
   // The Office helper (serves, no section): the board and the menu editor are their own menu.
   const cafeHome = !!user && boardIsHome(can, visible.length, cafe?.enabled);
 
-  // Count badges. New casting applications: fetched only while the person is in the section that lists
+  // Count badges. New casting applications and new opportunities: fetched only while the person is in the section that lists
   // them. Cafeteria orders nobody has taken yet: with the poll, for whoever serves. Videos waiting for the
   // editor or the reviewer: with the poll too (owners get no such counts: they are not alerted either).
   const applicationBadge = section === 'casting' && can('talent.read');
   const applicationCounts = useApplicationCounts(applicationBadge);
+  const opportunityBadge = section === 'casting' && can('castings.read');
+  const opportunityCounts = useOpportunityCounts(opportunityBadge);
   const videoCounts = useVideoCounts();
   const badgeOf = (item: MenuItem): number => {
     if (item.badge === 'newCastingApplications') return applicationBadge ? (applicationCounts.data?.new ?? 0) : 0;
+    if (item.badge === 'newOpportunities') return opportunityBadge ? (opportunityCounts.data?.new ?? 0) : 0;
     if (item.badge === 'cafeNewOrders') return cafeBadge(cafe);
     if (item.badge === 'videosWaiting') return videosBadge(videoCounts);
     return 0;
@@ -168,6 +173,8 @@ export function AppShell() {
   const ownItems: MenuItem[] = section ? [] : cafeHome ? CAFE_HOME_ITEMS : [START_ITEM];
   const tabs = section ? (tabPaths.map((to) => sectionItems.find((i) => i.to === to)).filter(Boolean) as MenuItem[]) : user ? ownItems : [];
   const moreSection = sectionItems.filter((i) => !tabPaths.includes(i.to));
+  // The section's counts hidden in the More sheet show on the More button too.
+  const moreBadge = moreBadgeCount(moreSection, badgeOf);
   const teamActive = teamMenuActive(pathname);
   // The Cafeteria entry in the account / "More" menu: for everyone while it is on — except the Office helper, whose own menu has it.
   const cafeEntry = cafeOn && !cafeHome;
@@ -348,7 +355,7 @@ export function AppShell() {
 
       {/* ── Page ────────────────────────────────────────────────────── */}
       <main className={clsx('lg:ms-64', !showTabs && 'lg:pt-1')}>
-        <div className="mx-auto max-w-6xl px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-5 sm:px-6 sm:pt-6 lg:px-8 lg:pb-12 lg:pt-8">
+        <div data-app-main className="mx-auto max-w-6xl px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-5 sm:px-6 sm:pt-6 lg:px-8 lg:pb-12 lg:pt-8">
           <Suspense fallback={<PageLoader />}>
             <Outlet />
           </Suspense>
@@ -391,8 +398,9 @@ export function AppShell() {
                 moreActive ? 'font-semibold text-section' : 'text-muted',
               )}
             >
-              <span className={clsx('flex h-7 w-12 items-center justify-center rounded-full', moreActive && 'bg-section-soft')}>
+              <span className={clsx('relative flex h-7 w-12 items-center justify-center rounded-full', moreActive && 'bg-section-soft')}>
                 <Ellipsis className="size-[22px]" aria-hidden />
+                <CountBadge count={moreBadge} className="absolute -top-1.5 -end-1" />
               </span>
               {t('nav.more')}
             </button>

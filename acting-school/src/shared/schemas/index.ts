@@ -19,3 +19,4 @@ export * from './summons';
 export * from './notifications';
 export * from './cafe';
 export * from './videos';
+export * from './opportunities';

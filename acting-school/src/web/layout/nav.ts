@@ -1,5 +1,6 @@
 import {
   BadgeCheck,
+  Binoculars,
   CalendarDays,
   Clapperboard,
   ClipboardList,
@@ -19,7 +20,7 @@ import {
   UtensilsCrossed,
   type LucideIcon,
 } from 'lucide-react';
-import { VIDEO_PERMISSIONS_LIST, type Permission } from '@shared/permissions';
+import { VIDEO_PERMISSIONS_LIST, worksOnVideos, type Permission } from '@shared/permissions';
 import { CAFE_BOARD_PATH, CAFE_MENU_PATH, CAFE_PATH, CAFE_REPORT_PATH } from '../features/cafe/utils';
 import { sectionByKey, sectionForPath, visibleSections, type SectionKey } from './sections';
 
@@ -27,11 +28,11 @@ export type NavSection = SectionKey | 'admin';
 
 /**
  * A count shown next to a menu entry: things waiting for someone. New casting
- * applications are fetched by AppShell only in that entry's section; cafeteria
+ * applications and new casting opportunities are fetched by AppShell only in that entry's section; cafeteria
  * orders nobody has taken yet, and the videos waiting for the editor or the
  * reviewer (Part L), come with the 20-second poll.
  */
-export type NavBadge = 'newCastingApplications' | 'cafeNewOrders' | 'videosWaiting';
+export type NavBadge = 'newCastingApplications' | 'newOpportunities' | 'cafeNewOrders' | 'videosWaiting';
 
 export interface NavItem {
   to: string;
@@ -72,6 +73,8 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/talent', label: 'talent', icon: Star, permission: 'talent.read', section: 'casting' },
   { to: '/castings', label: 'castings', icon: Clapperboard, permission: 'castings.read', section: 'casting' },
   { to: '/casting/applications', label: 'applications', icon: UserRoundPlus, permission: 'talent.read', section: 'casting', badge: 'newCastingApplications' },
+  // Casting calls the team saw elsewhere and added by hand (Part K1), with the count of new ones.
+  { to: '/casting/opportunities', label: 'opportunities', icon: Binoculars, permission: 'castings.read', section: 'casting', badge: 'newOpportunities' },
   { to: '/casting/schedule', label: 'schedule', icon: CalendarDays, permission: 'castings.read', section: 'casting' },
   // ── Website ──
   home('website'),
@@ -197,11 +200,12 @@ export function landingAfterSignIn(next: string, can: (p: Permission) => boolean
 
 /**
  * The video queue is first in the School bottom bar for whoever works through
- * it — the editor (videos.edit) and the reviewer (videos.review) — unless they
- * run admissions (the director, owners: enquiries stay their first stop).
+ * it — the working editor and reviewer (worksOnVideos: holding videos.edit or
+ * videos.review without managing the team) — unless they run admissions
+ * (enquiries stay their first stop). Never the director or owners.
  */
 export function videosFirst(can: (p: Permission) => boolean): boolean {
-  return (can('videos.edit') || can('videos.review')) && !can('admissions.read');
+  return (worksOnVideos(can, 'videos.edit') || worksOnVideos(can, 'videos.review')) && !can('admissions.read');
 }
 
 /** Bottom-bar priorities per section, before filtering by permission. */
@@ -214,6 +218,18 @@ const PHONE_PRIORITY = {
   casting: ['/talent', '/castings', '/casting/applications'],
   website: ['/website/pages', '/website/workshops', '/website/casting-call'],
 } as const;
+
+/**
+ * The count on the phone's "More" button: the section's pages that are in the
+ * More sheet rather than the bar (Opportunities for the casting team, …) add
+ * up, so "3 new opportunities" shows from every screen, not only once More is
+ * open. The sheet's other entries (Administration, the Cafeteria, Team,
+ * Profile) don't count: an owner's or the director's More never lights up for
+ * a cafeteria order (they get no order alerts — Part J).
+ */
+export function moreBadgeCount<T>(moreSectionItems: readonly T[], badgeOf: (item: T) => number): number {
+  return moreSectionItems.reduce((n, item) => n + Math.max(0, badgeOf(item)), 0);
+}
 
 /**
  * Phone bottom bar for a section: its Home, then up to three of its

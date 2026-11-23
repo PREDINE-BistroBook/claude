@@ -1,9 +1,9 @@
-import { CalendarClock, MapPin, Pencil, Trash2, UserPlus, UserRound } from 'lucide-react';
+import { CalendarClock, MapPin, Pencil, Trash2, UserRound } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import { SUBMISSION_STATUSES } from '@shared/enums';
 import type { CastingRole, Submission } from '@shared/schemas/castings';
-import { Avatar, Badge, Button, Card, IconButton, StatusBadge } from '@web/components/ui';
+import { AddButton, Avatar, Badge, Card, IconButton, StatusBadge } from '@web/components/ui';
 import { displayName, fullName, useFormat } from '@web/lib/format';
 import { SUBMISSION_TONES, roleHasRequirements } from '../utils';
 import { BidiText, RoleRequirementChips } from './bits';
@@ -68,6 +68,11 @@ export function RoleCard({ role, canWrite, onEdit, onDelete, onAddTalent, onOpen
         </div>
       )}
 
+      {canWrite && (
+        <div className="border-t border-line px-4 py-2.5 sm:px-5">
+          <AddButton label={t('roles.addTalent')} onClick={onAddTalent} className="max-sm:w-full" />
+        </div>
+      )}
       {role.submissions.length > 0 ? (
         <ul className="divide-y divide-line border-t border-line">
           {role.submissions.map((s) => (
@@ -78,13 +83,6 @@ export function RoleCard({ role, canWrite, onEdit, onDelete, onAddTalent, onOpen
         <p className="border-t border-line px-4 py-4 text-sm text-muted sm:px-5">{t('roles.noSubmissions')}</p>
       )}
 
-      {canWrite && (
-        <div className="border-t border-line px-4 py-2.5 sm:px-5">
-          <Button variant="ghost" icon={UserPlus} onClick={onAddTalent} className="-mx-2 max-sm:w-full max-sm:justify-center">
-            {t('roles.addTalent')}
-          </Button>
-        </div>
-      )}
     </Card>
   );
 }

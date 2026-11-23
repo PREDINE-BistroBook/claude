@@ -1,11 +1,12 @@
 import clsx from 'clsx';
-import { CalendarClock, Check, GraduationCap, MapPin, Plus, UserRound, Users } from 'lucide-react';
+import { CalendarClock, Check, GraduationCap, MapPin, UserRound, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router';
 import type { CourseStatus } from '@shared/enums';
 import type { CourseListItem } from '@shared/schemas/courses';
-import { Badge, ButtonLink, EmptyState, ErrorState, PageHeader, PageLoader, SearchInput, Segmented, StatusBadge } from '@web/components/ui';
+import { Badge, EmptyState, ErrorState, PageHeader, PageLoader, SearchInput, Segmented, StatusBadge } from '@web/components/ui';
+import { ScreenAddAction, ScreenEmptyAdd } from '@web/layout/ScreenAdd';
 import { useAuth } from '@web/lib/auth';
 import { courseColor } from '@web/lib/colors';
 import { useFormat } from '@web/lib/format';
@@ -51,13 +52,7 @@ export default function ClassesPage() {
         title={t('title')}
         subtitle={courses.data ? t('list.count', { count: courses.data.items.length }) : undefined}
         documentTitle={t('title')}
-        actions={
-          can('courses.write') && (
-            <ButtonLink to="/classes/new" variant="primary" icon={Plus}>
-              {t('list.newClass')}
-            </ButtonLink>
-          )
-        }
+        actions={<ScreenAddAction screen="classes" />}
       />
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -110,13 +105,7 @@ export default function ClassesPage() {
               icon={GraduationCap}
               title={t('list.emptyTitle')}
               description={t('list.emptyHint')}
-              action={
-                can('courses.write') && (
-                  <ButtonLink to="/classes/new" variant="primary" icon={Plus}>
-                    {t('list.newClass')}
-                  </ButtonLink>
-                )
-              }
+              action={<ScreenEmptyAdd screen="classes" />}
             />
           )}
         </div>

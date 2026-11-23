@@ -122,8 +122,8 @@ describe('mobileTabs(section, can)', () => {
     expect(mobileTabs('casting', canWith(PERMISSIONS))).toEqual(['/casting', '/talent', '/castings', '/casting/applications']);
   });
 
-  it('a closed priority entry lets the section’s next page in (castings.read only: Castings, then Schedule)', () => {
-    expect(mobileTabs('casting', canWith(['castings.read']))).toEqual(['/casting', '/castings', '/casting/schedule']);
+  it('a closed priority entry lets the section’s next pages in (castings.read only: Castings, then Opportunities and Schedule)', () => {
+    expect(mobileTabs('casting', canWith(['castings.read']))).toEqual(['/casting', '/castings', '/casting/opportunities', '/casting/schedule']);
     // admissions.read alone: Admissions, then the schedule (interviews).
     expect(mobileTabs('school', canWith(['admissions.read']))).toEqual(['/school', '/admissions', '/schedule']);
   });

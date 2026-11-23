@@ -19,6 +19,7 @@ import dashboardRoutes from './routes/dashboard';
 import fileRoutes from './routes/files';
 import leadRoutes from './routes/leads';
 import notificationRoutes from './routes/notifications';
+import opportunityRoutes from './routes/opportunities';
 import positionRoutes from './routes/positions';
 import pushRoutes from './routes/push';
 import { castingFileRoutes, courseFileRoutes } from './routes/recordFiles';
@@ -120,6 +121,8 @@ export function createApp(deps: AppDeps) {
   app.route('/api/talent', talentRoutes);
   app.route('/api/castings', castingRoutes);
   app.route('/api/submissions', submissionRoutes);
+  // Casting opportunities the team saw elsewhere and added by hand (Part K1).
+  app.route('/api/opportunities', opportunityRoutes);
   app.route('/api/leads', leadRoutes);
   app.route('/api/schedule', scheduleRoutes);
   app.route('/api/dashboard', dashboardRoutes);

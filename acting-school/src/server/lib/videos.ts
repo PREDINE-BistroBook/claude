@@ -7,6 +7,7 @@
 import type { Context } from 'hono';
 import { and, asc, count, desc, eq, gte, inArray, sql, type SQL } from 'drizzle-orm';
 import { LOCALES, type Locale, type NotificationKind, type VideoStatus } from '../../shared/enums';
+import { worksOnVideos } from '../../shared/permissions';
 import type { SessionUser } from '../../shared/schemas/auth';
 import type { PushPayload } from '../../shared/schemas/notifications';
 import type { PersonRef } from '../../shared/schemas/team';
@@ -241,10 +242,13 @@ export interface VideoRecipient {
 }
 
 /**
- * Every active account holding `permission` that is not an owner (the
- * school's rule: owners hold every permission but are only alerted about what
- * they did themselves) — the editors (videos.edit) or the reviewers
- * (videos.review). `exceptUserId` leaves out whoever is acting.
+ * The working editors (videos.edit) or reviewers (videos.review): every
+ * active account that holds the permission and does not manage the team
+ * (worksOnVideos, VID-PERM-3 — so never the owners, who hold staff.manage like
+ * every permission, nor the Executive Director, who holds videos.edit and
+ * videos.review only to keep reach over those accounts). Who is alerted as an
+ * editor or a reviewer, and who counts as "someone checks finished edits".
+ * `exceptUserId` leaves out whoever is acting.
  */
 export function videoTeam(db: Reader, permission: 'videos.edit' | 'videos.review', exceptUserId?: number): VideoRecipient[] {
   const active = db.select({ id: users.id, locale: users.locale }).from(users).where(eq(users.active, true)).orderBy(asc(users.id)).all();
@@ -254,7 +258,7 @@ export function videoTeam(db: Reader, permission: 'videos.edit' | 'videos.review
   );
   return active.filter((u) => {
     const a = access.get(u.id);
-    return u.id !== exceptUserId && !!a && !a.isOwner && a.permissions.includes(permission);
+    return u.id !== exceptUserId && !!a && worksOnVideos(a.permissions, permission);
   });
 }
 
@@ -270,15 +274,18 @@ export function videoPerson(db: Reader, userId: number | null, exceptUserId: num
 }
 
 /**
- * Who hears that an edit needs changes: the editor who did it, while they can
- * still edit videos (editorsWhoCanEdit) — else every active editor who is not
- * an owner, so the video never waits on someone who can no longer open it.
- * Nobody when the one deciding is the editor themselves (an owner).
+ * Who hears that an edit needs changes (or an approved one is reopened): the
+ * editor who did it, while they are still a working editor — active, holding
+ * videos.edit, not managing the team (videoTeam) — else every working editor,
+ * so the video never waits on someone who can no longer open it or who is
+ * never alerted as an editor (an owner or the director who did the edit
+ * themselves: VID-PERM-3). Nobody when the one deciding is the editor themselves.
  */
 export function videoChangesRecipients(db: Reader, editorId: number | null, exceptUserId: number): VideoRecipient[] {
   if (editorId === exceptUserId) return [];
-  if (editorId !== null && editorsWhoCanEdit(db, [editorId]).has(editorId)) return videoPerson(db, editorId, exceptUserId);
-  return videoTeam(db, 'videos.edit', exceptUserId);
+  const editors = videoTeam(db, 'videos.edit', exceptUserId);
+  const theOne = editors.filter((e) => e.id === editorId);
+  return theOne.length ? theOne : editors;
 }
 
 /** The people alerted, as names and photos for the answer (VideoStepResult.told): "Moaty got an alert". */
@@ -367,15 +374,16 @@ export function hiddenVideoKinds(user: Pick<SessionUser, 'permissions'>): Notifi
 
 /**
  * The video pipeline's part of GET /api/chat/unread: null without any videos
- * permission; the editor's and the reviewer's counts only for holders who are
- * not owners (like the alerts); the coach's own counts for everyone who adds.
+ * permission; the editor's and the reviewer's counts only for the working
+ * editors and reviewers (worksOnVideos: never someone who manages the team —
+ * owners, the director —, like the alerts); the coach's own counts for everyone who adds.
  * `weekStart`: epoch ms of the school's week start (its time zone), worked
  * out only when needed.
  */
 export function videoCounts(db: Reader, user: Viewer, today: string, weekStart: () => number): VideoCounts | null {
   if (!usesVideos(user)) return null;
   const out: VideoCounts = { toEdit: null, dueToday: null, late: null, toCheck: null, addedByMe: 0, addedOpen: 0, approvedThisWeek: 0, reviewers: null };
-  if (!user.isOwner && hasPermission(user, 'videos.edit')) {
+  if (worksOnVideos(user.permissions, 'videos.edit')) {
     const r = db
       .select({
         n: count(),
@@ -389,10 +397,11 @@ export function videoCounts(db: Reader, user: Viewer, today: string, weekStart: 
     out.dueToday = r?.dueToday ?? 0;
     out.late = r?.late ?? 0;
   }
-  if (!user.isOwner && hasPermission(user, 'videos.review')) {
+  if (worksOnVideos(user.permissions, 'videos.review')) {
     out.toCheck = db.select({ n: count() }).from(videos).where(eq(videos.status, 'in_review')).get()?.n ?? 0;
   }
-  // Whether "Done" alerts anyone: for the editors, and for whoever gives positions (a school where nobody checks yet is told).
+  // Whether "Done" alerts anyone — how many working reviewers there are (the same rule as the alerts): for the editors,
+  // and for whoever gives positions (a school where nobody checks yet is told).
   if (hasPermission(user, 'videos.edit') || hasPermission(user, 'staff.manage')) out.reviewers = videoTeam(db, 'videos.review').length;
   const mine = db
     .select({

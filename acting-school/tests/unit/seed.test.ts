@@ -4,6 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
+import { onSchoolToday, schoolTodayAgo } from '../../src/server/db/demoSeed';
+import { epochAt, todayIn } from '../../src/server/lib/clock';
 import { addDays } from '../../src/shared/dates';
 import { todayISO } from '../helpers';
 
@@ -183,4 +185,48 @@ describe('npm run seed', () => {
     expect(count('select count(*) as n from users where must_change_password = 1')).toBe(0);
     expect(count('select count(*) as n from cafe_orders')).toBe(7);
   }, 90_000);
+});
+
+describe('the demo’s "today" moments stay on the school’s today, whatever the hour the seed runs', () => {
+  const tz = 'Africa/Cairo';
+  const day = '2026-11-24';
+  const midnight = epochAt(tz, day);
+  const MIN = 60_000;
+
+  it('just after midnight (Cairo), "75, 72 and 68 minutes ago" are squeezed in order between midnight + 1 minute and now', () => {
+    for (const since of [3 * MIN, 30 * MIN, 68 * MIN, 76 * MIN - 1]) {
+      const now = midnight + since;
+      const [ordered, onTheWay, delivered] = [75, 72, 68].map((m) => onSchoolToday(now, midnight, m, 75));
+      expect(ordered!, `${since / MIN} min after midnight`).toBeGreaterThanOrEqual(midnight + MIN);
+      expect(ordered!).toBeLessThan(onTheWay!);
+      expect(onTheWay!).toBeLessThan(delivered!);
+      expect(delivered!).toBeLessThanOrEqual(now);
+      for (const at of [ordered!, onTheWay!, delivered!]) expect(todayIn(tz, new Date(at))).toBe(day);
+    }
+    // In the very first seconds: after midnight all the same (half the time since), never in the future.
+    const early = midnight + 10_000;
+    expect(onSchoolToday(early, midnight, 75, 75)).toBe(midnight + 5_000);
+    expect(onSchoolToday(early, midnight, 68, 75)).toBeLessThanOrEqual(early);
+    expect(todayIn(tz, new Date(onSchoolToday(early, midnight, 4)))).toBe(day);
+  });
+
+  it('later in the day the moments are exactly what they say', () => {
+    const now = midnight + 9 * 60 * MIN;
+    expect(onSchoolToday(now, midnight, 68, 75)).toBe(now - 68 * MIN);
+    expect(onSchoolToday(midnight + 76 * MIN, midnight, 75, 75)).toBe(midnight + MIN);
+    // With the school's clock: 00:20 in Cairo is the evening before in UTC; "68 minutes ago" is still Cairo's today.
+    const at0020 = epochAt(tz, day, '00:20');
+    expect(todayIn('UTC', new Date(at0020))).toBe(addDays(day, -1));
+    expect(todayIn(tz, new Date(schoolTodayAgo(tz, 68, 75, at0020)))).toBe(day);
+  });
+
+  it('the seed uses it for what happened today: the delivered coffee and the waiting teas, "added this morning", "approved this morning", today’s enquiries', () => {
+    const src = fs.readFileSync(path.join(root, 'src/server/db/demoSeed.ts'), 'utf8');
+    expect(src).toContain('const coffeeAt = (minutes: number) => schoolTodayAgo(timeZone, minutes, 75);');
+    expect(src).toContain('const teasAt = schoolTodayAgo(timeZone, 4);');
+    expect(src).not.toMatch(/deliveredAt: ago\(68\)/);
+    expect(src).toMatch(/addedAgo: 50,\s*addedToday: true,/);
+    expect(src).toContain("{ by: daniel, path: 'approve', at: 70, today: true }");
+    expect(src.match(/daysAgo === 0 \? schoolTodayAgo\(timeZone, 1\)/g)).toHaveLength(2);
+  });
 });
