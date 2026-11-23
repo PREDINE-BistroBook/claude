@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { DATETIME_RE, TIME_RE, isValidDate } from '../dates';
+import { normalizePhone } from '../phone';
 
 /**
  * Building blocks for request validation. Forms send '' for an empty field;
@@ -33,6 +34,15 @@ const blankToNullNumber = (v: unknown) => {
 
 export const reqText = (max = 200) => z.string().trim().min(1).max(max);
 export const optText = (max = 1000) => z.preprocess(blankToNull, z.string().max(max).nullable().optional());
+
+/**
+ * Phone numbers are stored normalised (Western digits, no invisible bidi marks
+ * pasted from WhatsApp, single spaces — see normalizePhone in shared/phone.ts),
+ * so they can be matched and searched. Otherwise as typed.
+ */
+const normalizePhoneInput = (v: unknown) => (typeof v === 'string' ? normalizePhone(v) : v);
+export const reqPhoneText = (max = 50) => z.preprocess(normalizePhoneInput, reqText(max));
+export const optPhoneText = (max = 50) => z.preprocess(normalizePhoneInput, optText(max));
 
 export const email = z.string().trim().toLowerCase().pipe(z.email().max(254));
 export const optEmail = z.preprocess(

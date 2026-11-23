@@ -12,6 +12,8 @@ import {
   nextScheduledInterview,
   parseSource,
   parseTab,
+  statusAfterInterviewEnds,
+  statusAfterScheduling,
   suggestedTemplate,
   tabFilter,
 } from '../../src/web/features/admissions/utils';
@@ -93,6 +95,27 @@ describe('interviews', () => {
     expect(criterionLabel({ label: 'Voice', labelAr: 'الصوت' }, 'ar')).toBe('الصوت');
     expect(criterionLabel({ label: 'Voice', labelAr: null }, 'ar')).toBe('Voice');
     expect(criterionLabel({ label: 'Voice', labelAr: 'الصوت' }, 'en')).toBe('Voice');
+  });
+  it('scheduling an interview moves new/contacted/interviewed leads to interview_scheduled; an accepted lead keeps its decision', () => {
+    expect(statusAfterScheduling('new')).toBe('interview_scheduled');
+    expect(statusAfterScheduling('contacted')).toBe('interview_scheduled');
+    expect(statusAfterScheduling('interviewed')).toBe('interview_scheduled');
+    expect(statusAfterScheduling('interview_scheduled')).toBe('interview_scheduled');
+    expect(statusAfterScheduling('accepted')).toBe('accepted');
+  });
+  it('cancelling / missing the last scheduled interview: back to interviewed after an assessment, else contacted (as the server)', () => {
+    // First interview only → contacted.
+    expect(statusAfterInterviewEnds({ status: 'interview_scheduled', interviews: [iv(1, '2026-11-26T10:00', 'scheduled')] }, 1)).toBe('contacted');
+    // A callback after a done interview → interviewed, not contacted.
+    expect(
+      statusAfterInterviewEnds({ status: 'interview_scheduled', interviews: [iv(1, '2026-11-20T10:00', 'done'), iv(2, '2026-11-26T10:00', 'scheduled')] }, 2),
+    ).toBe('interviewed');
+    // Another interview still scheduled → stays.
+    expect(
+      statusAfterInterviewEnds({ status: 'interview_scheduled', interviews: [iv(1, '2026-11-26T10:00', 'scheduled'), iv(2, '2026-11-27T10:00', 'scheduled')] }, 1),
+    ).toBe('interview_scheduled');
+    // An accepted lead keeps its decision.
+    expect(statusAfterInterviewEnds({ status: 'accepted', interviews: [iv(1, '2026-11-26T10:00', 'scheduled')] }, 1)).toBe('accepted');
   });
   it('suggested WhatsApp message follows the stage', () => {
     expect(suggestedTemplate('new', false)).toBe('first_reply');

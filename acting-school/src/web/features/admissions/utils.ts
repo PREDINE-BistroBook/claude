@@ -70,6 +70,27 @@ export const canReopen = (status: LeadStatus) => status === 'lost' || status ===
 /** Interviews can be scheduled on open leads only (reopen a lost/declined lead first). */
 export const canScheduleInterview = (status: LeadStatus) => !isClosedLeadStatus(status);
 
+/** Statuses that scheduling an interview moves to interview_scheduled; an accepted lead keeps its decision (as the server). */
+const MOVES_TO_INTERVIEW_SCHEDULED: readonly LeadStatus[] = ['new', 'contacted', 'interviewed'];
+
+/** The lead's status once an interview is scheduled (or a cancelled one is put back). */
+export function statusAfterScheduling(status: LeadStatus): LeadStatus {
+  return MOVES_TO_INTERVIEW_SCHEDULED.includes(status) ? 'interview_scheduled' : status;
+}
+
+/**
+ * The lead's status once this scheduled interview is cancelled or missed (as
+ * the server): only a lead in 'interview_scheduled' with no other interview
+ * still scheduled moves — back to 'interviewed' when an earlier interview was
+ * assessed, else to 'contacted'. Any other status (e.g. accepted) stays.
+ */
+export function statusAfterInterviewEnds(lead: { status: LeadStatus; interviews: readonly Pick<Interview, 'id' | 'status'>[] }, interviewId: number): LeadStatus {
+  if (lead.status !== 'interview_scheduled') return lead.status;
+  const others = lead.interviews.filter((i) => i.id !== interviewId);
+  if (others.some((i) => i.status === 'scheduled')) return lead.status;
+  return others.some((i) => i.status === 'done') ? 'interviewed' : 'contacted';
+}
+
 // ── Interviews ──────────────────────────────────────────────────────────────
 
 /** The soonest interview still scheduled. */

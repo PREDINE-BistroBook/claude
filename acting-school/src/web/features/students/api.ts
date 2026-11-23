@@ -49,8 +49,9 @@ export function useDeleteStudent(id: number) {
     onSuccess: () => {
       qc.removeQueries({ queryKey: studentKeys.detail(id) });
       void qc.invalidateQueries({ queryKey: studentKeys.all });
-      // Their enrollments and attendance are gone; a linked talent profile is now unlinked.
-      for (const key of ['courses', 'sessions', 'talent', 'dashboard', 'schedule']) void qc.invalidateQueries({ queryKey: [key] });
+      // Their enrollments and attendance are gone; a linked talent profile is now unlinked;
+      // an admissions enquiry enrolled as them is back to 'accepted'.
+      for (const key of ['courses', 'sessions', 'talent', 'leads', 'dashboard', 'schedule']) void qc.invalidateQueries({ queryKey: [key] });
     },
   });
 }

@@ -11,7 +11,8 @@ import type { SessionUser } from '../../shared/schemas/auth';
 import type { InterviewEvent } from '../../shared/schemas/schedule';
 import type { DB } from '../db/client';
 import { courses, interviews, leadActivities, leads, students, users } from '../db/schema';
-import { maySeeStudent } from './access';
+import { maySeeStudent, type Conn } from './access';
+import { phoneDigitsSql } from './phone';
 
 export type LeadRow = typeof leads.$inferSelect;
 export type InterviewRow = typeof interviews.$inferSelect;
@@ -24,13 +25,6 @@ export const leadIsOpen = inArray(leads.status, [...OPEN_LEAD_STATUSES]);
 
 /** WHERE: an open lead whose follow-up is due on or before `today`. */
 export const followUpDue = (today: string) => and(leadIsOpen, lte(leads.nextFollowUpOn, today));
-
-/** The phone column with common separators removed ("+20 (10) 123-4567" → "20101234567"). */
-export function digitsOnly(col: SQL | typeof leads.phone | typeof students.phone): SQL<string> {
-  let expr = sql`coalesce(${col}, '')`;
-  for (const ch of [' ', '-', '(', ')', '+', '.', '/']) expr = sql`replace(${expr}, ${ch}, '')`;
-  return expr as SQL<string>;
-}
 
 /** Display names of these users, in one query. */
 export function userNames(db: Pick<DB, 'select'>, ids: readonly (number | null)[]): Map<number, string> {
@@ -151,6 +145,15 @@ export function loadInterviews(db: DB, where: SQL): Interview[] {
   return rows.map((r) => toInterview(r, names, courseNames));
 }
 
+/** Has the lead an interview recorded as done (an assessment)? */
+export function leadHasDoneInterview(db: Pick<DB, 'select'>, leadId: number): boolean {
+  return !!db
+    .select({ id: interviews.id })
+    .from(interviews)
+    .where(and(eq(interviews.leadId, leadId), eq(interviews.status, 'done')))
+    .get();
+}
+
 export function loadInterview(db: DB, id: number): Interview | null {
   return loadInterviews(db, eq(interviews.id, id))[0] ?? null;
 }
@@ -209,8 +212,8 @@ export function loadLeadDetail(db: DB, id: number, viewer: Pick<SessionUser, 'id
 
 /**
  * Students with the same phone (as international digits) or email. SQL narrows
- * by the last 7 digits; the exact comparison runs here, so "010…" matches
- * "+20 10…". Names only.
+ * by the last 7 digits (phone_digits() reads Arabic digits and ignores marks);
+ * the exact comparison runs here, so "010…" matches "+20 10…". Names only.
  */
 export function findStudentMatches(
   db: Pick<DB, 'select'>,
@@ -221,7 +224,7 @@ export function findStudentMatches(
   const intl = internationalPhone(phone, countryCode);
   const mail = email?.trim().toLowerCase() || null;
   const conds: SQL[] = [];
-  if (intl) conds.push(sql`${digitsOnly(students.phone)} like ${`%${intl.slice(-7)}`}`);
+  if (intl) conds.push(sql`${phoneDigitsSql(students.phone)} like ${`%${intl.slice(-7)}`}`);
   if (mail) conds.push(sql`lower(${students.email}) = ${mail}`);
   if (!conds.length) return [];
   return db
@@ -234,7 +237,10 @@ export function findStudentMatches(
     .map((s) => ({ id: s.id, name: `${s.firstName} ${s.lastName}` }));
 }
 
-/** Open leads (other than `excludeLeadId`) and students with the same phone or email. */
+/**
+ * Open leads and students with the same phone or email. `excludeLeadId` (the
+ * lead being edited) leaves out that lead and the student made from it.
+ */
 export function findDuplicates(
   db: Pick<DB, 'select'>,
   opts: { phone?: string | null; email?: string | null; excludeLeadId?: number; countryCode: string },
@@ -242,7 +248,7 @@ export function findDuplicates(
   const intl = internationalPhone(opts.phone, opts.countryCode);
   const mail = opts.email?.trim().toLowerCase() || null;
   const conds: SQL[] = [];
-  if (intl) conds.push(sql`${digitsOnly(leads.phone)} like ${`%${intl.slice(-7)}`}`);
+  if (intl) conds.push(sql`${phoneDigitsSql(leads.phone)} like ${`%${intl.slice(-7)}`}`);
   if (mail) conds.push(sql`lower(${leads.email}) = ${mail}`);
   const leadMatches: DuplicateMatch[] = conds.length
     ? db
@@ -254,8 +260,29 @@ export function findDuplicates(
         .filter((l) => (intl !== null && internationalPhone(l.phone, opts.countryCode) === intl) || (mail !== null && l.email?.toLowerCase() === mail))
         .map((l) => ({ kind: 'lead' as const, id: l.id, name: `${l.firstName} ${l.lastName}`, status: l.status }))
     : [];
-  const studentMatches: DuplicateMatch[] = findStudentMatches(db, opts.phone, opts.email, opts.countryCode).map((s) => ({ kind: 'student' as const, ...s }));
+  const ownStudentId = opts.excludeLeadId
+    ? (db.select({ studentId: leads.studentId }).from(leads).where(eq(leads.id, opts.excludeLeadId)).get()?.studentId ?? null)
+    : null;
+  const studentMatches: DuplicateMatch[] = findStudentMatches(db, opts.phone, opts.email, opts.countryCode)
+    .filter((s) => s.id !== ownStudentId)
+    .map((s) => ({ kind: 'student' as const, ...s }));
   return [...leadMatches, ...studentMatches];
+}
+
+/**
+ * Before a student is deleted (students module): an enquiry enrolled as that
+ * student goes back to 'accepted' with a status_change on its timeline, so it
+ * can be enrolled or linked again instead of staying 'enrolled' with no student
+ * (leads.student_id would only be set to NULL). Call inside the delete's transaction.
+ */
+export function reopenLeadsOfStudent(tx: Conn, studentId: number, userId: number) {
+  const linked = tx.select({ id: leads.id, status: leads.status }).from(leads).where(eq(leads.studentId, studentId)).all();
+  for (const lead of linked) {
+    tx.update(leads).set({ status: 'accepted', studentId: null, updatedAt: Date.now() }).where(eq(leads.id, lead.id)).run();
+    if (lead.status !== 'accepted') {
+      tx.insert(leadActivities).values({ leadId: lead.id, type: 'status_change', meta: { from: lead.status, to: 'accepted' }, createdById: userId }).run();
+    }
+  }
 }
 
 // ── Schedule ────────────────────────────────────────────────────────────────

@@ -22,7 +22,7 @@ import {
 } from '../enums';
 import { MIN_PHONE_DIGITS, phoneDigits } from '../phone';
 import type { CourseListItem } from './courses';
-import { dateTimeStr, id, optDate, optEmail, optEnum, optId, optText, reqText } from './common';
+import { dateTimeStr, id, optDate, optEmail, optEnum, optId, optPhoneText, optText, reqPhoneText, reqText } from './common';
 
 /**
  * Admissions: enquiries ("leads") → follow-ups → interview → decision →
@@ -32,14 +32,14 @@ import { dateTimeStr, id, optDate, optEmail, optEnum, optId, optText, reqText } 
  * class-scoped, contact details included); admissions.write adds/edits leads,
  * logs contacts, schedules/reschedules/cancels interviews, marks no-shows,
  * closes/reopens; admissions.decide records assessments, accepts/declines,
- * enrols, deletes leads.
+ * enrols, deletes leads — on its own (without admissions.write) only those.
  */
 
 // ── Inputs ──────────────────────────────────────────────────────────────────
 
-/** A phone number with at least 7 digits (any spacing, "+", Arabic digits). */
-const phone = reqText(50).refine((v) => phoneDigits(v).length >= MIN_PHONE_DIGITS, { message: 'admissions:errors.invalidPhone' });
-const optPhone = optText(50).refine((v) => v == null || phoneDigits(v).length >= MIN_PHONE_DIGITS, { message: 'admissions:errors.invalidPhone' });
+/** A phone number with at least 7 digits (any spacing, "+", Arabic digits — stored with Western digits, see normalizePhone). */
+const phone = reqPhoneText(50).refine((v) => phoneDigits(v).length >= MIN_PHONE_DIGITS, { message: 'admissions:errors.invalidPhone' });
+const optPhone = optPhoneText(50).refine((v) => v == null || phoneDigits(v).length >= MIN_PHONE_DIGITS, { message: 'admissions:errors.invalidPhone' });
 
 const leadFields = z.object({
   firstName: reqText(100),
@@ -100,7 +100,7 @@ export const leadListQuery = z.object({
 });
 export type LeadListQuery = z.infer<typeof leadListQuery>;
 
-/** GET /api/leads/duplicates — at least one of phone / email; `excludeLeadId` leaves the lead being edited out. */
+/** GET /api/leads/duplicates — at least one of phone / email; `excludeLeadId` leaves the lead being edited out (and the student made from it). */
 export const leadDuplicatesQuery = z.object({
   phone: z.string().trim().max(50).optional(),
   email: z.string().trim().max(254).optional(),
@@ -130,7 +130,7 @@ export const MIN_INTERVIEW_MINUTES = 5;
 export const MAX_INTERVIEW_MINUTES = 480;
 const durationMinutes = z.number().int().min(MIN_INTERVIEW_MINUTES).max(MAX_INTERVIEW_MINUTES);
 
-/** POST /api/leads/:id/interviews (admissions.write) — the lead moves to 'interview_scheduled'. */
+/** POST /api/leads/:id/interviews (admissions.write) — the lead moves to 'interview_scheduled' (an accepted lead stays accepted). */
 export const interviewScheduleInput = z.object({
   scheduledAt: dateTimeStr,
   /** Defaults to DEFAULT_INTERVIEW_MINUTES. */
@@ -156,9 +156,12 @@ export const interviewScores = z.record(
  * - the assessment (scores, strengths, areasToWork, recommendation,
  *   recommendedLevel, recommendedCourseId), status 'done', and any change to a
  *   done interview → admissions.decide. Sending assessment fields without a
- *   status records the interview as done.
- * Lead status follows: done → interviewed; no_show/cancelled → contacted (when
- * no other interview is still scheduled); back to scheduled → interview_scheduled.
+ *   status records the interview as done. admissions.decide without
+ *   admissions.write may record the assessment (notes included), nothing else.
+ * Lead status follows: done → interviewed; no_show/cancelled → back to
+ * interviewed if an interview is done, else contacted (when no other interview
+ * is still scheduled); back to scheduled → interview_scheduled. An accepted
+ * lead keeps its status.
  */
 export const interviewUpdateInput = z
   .object({
@@ -188,7 +191,10 @@ export const INTERVIEW_ASSESSMENT_FIELDS = ['scores', 'strengths', 'areasToWork'
  * lead and enrols them in the class, in one transaction. If a student with the
  * same phone (compared as international digits) or email already exists, the
  * answer is 409 possible_duplicate with details.matches, unless the body says
- * linkStudentId (enrol that existing student instead) or createNew: true.
+ * linkStudentId (enrol that existing student instead — only one of those
+ * matches; any other id is 400 studentNotFound) or createNew: true. A linked
+ * student already in the class keeps that enrollment; one who was in it before
+ * is re-enrolled (capacity checked).
  */
 export const enrolInput = z
   .object({

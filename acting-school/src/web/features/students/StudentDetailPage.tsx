@@ -256,7 +256,7 @@ function StudentView({ student: s, del }: { student: StudentDetail; del: ReturnT
       <ConfirmDialog
         open={confirmOpen}
         title={t('detail.deleteTitle', { name })}
-        message={t('detail.deleteMessage')}
+        message={can('admissions.read') ? `${t('detail.deleteMessage')} ${t('detail.deleteAdmissionsNote')}` : t('detail.deleteMessage')}
         loading={del.isPending}
         onConfirm={onDelete}
         onCancel={() => setConfirmOpen(false)}

@@ -1031,8 +1031,8 @@ for (const l of leadSpec) {
         }),
       );
     } else {
-      // Enrolling creates the student and the enrollment (from today).
-      await step(lead.id, s.daysAgo, () => director.post(`/leads/${lead.id}/enrol`, { courseId: courseIds[s.course] }));
+      // Enrolling creates the student and the enrollment, both joining on the step's day (as its timeline entry says).
+      await step(lead.id, s.daysAgo, () => director.post(`/leads/${lead.id}/enrol`, { courseId: courseIds[s.course], joinedOn: addDays(today, -s.daysAgo) }));
     }
   }
 }

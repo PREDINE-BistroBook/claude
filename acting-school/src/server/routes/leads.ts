@@ -21,6 +21,7 @@ import {
   type LeadCounts,
   type LeadDetail,
   type LeadListItem,
+  type LeadUpdateInput,
   type PossibleDuplicateDetails,
 } from '../../shared/schemas/admissions';
 import type { SessionUser } from '../../shared/schemas/auth';
@@ -30,7 +31,6 @@ import { courses, interviews, leadActivities, leads, students } from '../db/sche
 import type { AppEnv } from '../env';
 import { hasPermission, isVisibleActiveStaff, type Conn } from '../lib/access';
 import {
-  digitsOnly,
   findDuplicates,
   findStudentMatches,
   followUpDue,
@@ -38,16 +38,18 @@ import {
   loadInterview,
   loadLeadDetail,
   loadLeadListItems,
+  leadHasDoneInterview,
   toActivity,
   userNames,
   type LeadRow,
 } from '../lib/admissions';
 import { loadCourseListItems } from '../lib/classSessions';
-import { addEnrollment } from '../lib/enrollments';
+import { addEnrollment, ensureEnrolled } from '../lib/enrollments';
 import { ApiError, fieldError, forbidden, notFound } from '../lib/errors';
 import { getSettings } from '../lib/settings';
 import { body, paramId, query } from '../lib/validate';
-import { currentUser, requireAuth, requirePermission } from '../middleware/auth';
+import { phoneDigitsSql, phoneSearchDigits } from '../lib/phone';
+import { currentUser, requireAnyPermission, requireAuth, requirePermission } from '../middleware/auth';
 
 /**
  * Admissions: enquiries ("leads") → follow-ups → interviews → decision →
@@ -55,16 +57,23 @@ import { currentUser, requireAuth, requirePermission } from '../middleware/auth'
  * class-scoped and their contact details are visible to anyone who may read
  * them (they have to call them). Writes need admissions.write; recording an
  * interview assessment, accepting/declining, enrolling and deleting need
- * admissions.decide. Enrolling creates the student and the enrollment even
- * without students.write / courses.write; afterwards the student follows the
- * students module's own rules.
+ * admissions.decide — which on its own (without admissions.write) is enough
+ * for those decisions, nothing else. Enrolling creates the student and the
+ * enrollment even without students.write / courses.write (linking only a
+ * student the possible_duplicate answer named); afterwards the student follows
+ * the students module's own rules.
  *
  * Status moves on its own: logging a contact on a new lead → contacted;
- * scheduling an interview → interview_scheduled; recording it done →
- * interviewed; a no-show (or cancelling the last scheduled interview) →
- * contacted; enrolling → enrolled. Every status change writes a status_change
- * activity { from, to }. Closing a lead (enrolled/declined/lost) clears its
- * follow-up date and cancels interviews still scheduled.
+ * scheduling an interview → interview_scheduled (an accepted lead keeps its
+ * decision); recording it done → interviewed; a no-show (or cancelling the
+ * last scheduled interview) → back to interviewed if an interview is done,
+ * else contacted; enrolling → enrolled. Every status change writes a
+ * status_change activity { from, to }. Closing a lead (enrolled/declined/lost)
+ * clears its follow-up date and cancels interviews still scheduled.
+ *
+ * Writes read the request body first and only then the lead, inside their
+ * transaction: nothing awaits in between, so a slow upload can't write back a
+ * status read before someone else's change (e.g. an enrol).
  */
 const router = new Hono<AppEnv>();
 router.use(requireAuth);
@@ -72,10 +81,13 @@ router.use(requireAuth);
 const canRead = requirePermission('admissions.read');
 const canWrite = requirePermission('admissions.write');
 const canDecide = requirePermission('admissions.decide');
+/** Editing a lead / an interview: admissions.write, or admissions.decide alone for decisions (checked in the handler). */
+const canWriteOrDecide = requireAnyPermission('admissions.write', 'admissions.decide');
 
 router.use(canRead);
 
 const decides = (me: SessionUser) => hasPermission(me, 'admissions.decide');
+const writes = (me: SessionUser) => hasPermission(me, 'admissions.write');
 
 const leadEnrolledError = () => new ApiError(409, ADMISSIONS_ERROR_CODES.leadEnrolled, 'This lead is already enrolled');
 const leadClosedError = () => new ApiError(409, ADMISSIONS_ERROR_CODES.leadClosed, 'This lead is closed; reopen it first');
@@ -87,12 +99,12 @@ function findLead(db: Pick<DB, 'select'>, id: number): LeadRow {
 }
 
 /** Assignees and interviewers: an active staff member the caller may see (hidden owners answer like missing ids). */
-function assertStaff(db: DB, me: SessionUser, userId: number, path: string, message: string) {
+function assertStaff(db: Pick<DB, 'select'>, me: SessionUser, userId: number, path: string, message: string) {
   if (!isVisibleActiveStaff(db, me, userId)) throw fieldError([path], message);
 }
 
 /** A class that exists and isn't archived (for preferred / recommended class). */
-function assertCourseAvailable(db: DB, courseId: number, path: string) {
+function assertCourseAvailable(db: Pick<DB, 'select'>, courseId: number, path: string) {
   const course = db.select({ status: courses.status }).from(courses).where(eq(courses.id, courseId)).get();
   if (!course) throw fieldError([path], 'admissions:errors.courseNotFound');
   if (course.status === 'archived') throw fieldError([path], 'admissions:errors.courseArchived');
@@ -186,8 +198,8 @@ function moveStatus(tx: Conn, lead: Pick<LeadRow, 'id' | 'status'>, to: LeadStat
 const escapeLike = (s: string) => s.replace(/[\\%_]/g, (m) => `\\${m}`);
 const likeEscaped = (expr: SQL, pattern: string) => sql`${expr} like ${pattern} escape '\\'`;
 
-/** Names, email and phone (digits, so "010 123" finds "+20 10123…"). */
-function searchCondition(q: string): SQL {
+/** Names, email and phone (digits in any format: "010 123" finds "+20 10123…", "+20 100…" finds "0100…"). */
+function searchCondition(q: string, countryCode: string): SQL {
   const term = q.replace(/\s+/g, ' ');
   const pattern = `%${escapeLike(term)}%`;
   const parts: SQL[] = [
@@ -198,12 +210,7 @@ function searchCondition(q: string): SQL {
     likeEscaped(sql`${leads.email}`, pattern),
     likeEscaped(sql`${leads.phone}`, pattern),
   ];
-  const digits = term.replace(/[\s\-().+/]/g, '');
-  if (/^\d{3,}$/.test(digits)) {
-    parts.push(sql`${digitsOnly(leads.phone)} like ${`%${digits}%`}`);
-    // A local number typed with its trunk 0 ("0101…") against one stored internationally ("+20 101…").
-    if (digits.startsWith('0') && digits.length > 3) parts.push(sql`${digitsOnly(leads.phone)} like ${`%${digits.slice(1)}%`}`);
-  }
+  for (const digits of phoneSearchDigits(term, countryCode) ?? []) parts.push(sql`${phoneDigitsSql(leads.phone)} like ${`%${digits}%`}`);
   return or(...parts)!;
 }
 
@@ -224,7 +231,7 @@ router.get('/', (c) => {
     q.group ? GROUP_WHERE[q.group]!(today) : undefined,
     q.source ? eq(leads.source, q.source) : undefined,
     q.assignedToId ? eq(leads.assignedToId, q.assignedToId) : undefined,
-    q.q ? searchCondition(q.q) : undefined,
+    q.q ? searchCondition(q.q, getSettings(c.get('db')).defaultCountryCode) : undefined,
   );
   return c.json<ListResponse<LeadListItem>>({ items: loadLeadListItems(c.get('db'), where) });
 });
@@ -309,30 +316,41 @@ router.post('/', canWrite, async (c) => {
 
 router.get('/:id', (c) => c.json(detail(c.get('db'), paramId(c), currentUser(c))));
 
-router.patch('/:id', canWrite, async (c) => {
+/** admissions.decide without admissions.write: PATCH /:id may only accept or decline. */
+function assertDecisionOnly(input: LeadUpdateInput) {
+  const sent = Object.keys(input).filter((k) => input[k as keyof LeadUpdateInput] !== undefined);
+  const decision = input.status === undefined || input.status === 'accepted' || input.status === 'declined';
+  if (!decision || sent.some((k) => k !== 'status')) throw forbidden('Editing leads needs the admissions write permission');
+}
+
+/** The status / lost reason / follow-up columns a plan changes (unchanged ones aren't written). */
+function statusColumns(existing: Pick<LeadRow, 'status' | 'lostReason'>, plan: StatusPlan): Partial<typeof leads.$inferInsert> {
+  return {
+    ...(plan.status !== existing.status ? { status: plan.status } : {}),
+    ...(plan.lostReason !== existing.lostReason ? { lostReason: plan.lostReason } : {}),
+    ...(plan.nextFollowUpOn !== undefined ? { nextFollowUpOn: plan.nextFollowUpOn } : {}),
+  };
+}
+
+router.patch('/:id', canWriteOrDecide, async (c) => {
   const id = paramId(c);
   const me = currentUser(c);
   const db = c.get('db');
-  const existing = findLead(db, id);
   const input = await body(c, leadUpdateInput);
-  if (input.assignedToId && input.assignedToId !== existing.assignedToId) {
-    assertStaff(db, me, input.assignedToId, 'assignedToId', 'admissions:errors.assigneeInvalid');
-  }
-  if (input.preferredCourseId && input.preferredCourseId !== existing.preferredCourseId) {
-    assertCourseAvailable(db, input.preferredCourseId, 'preferredCourseId');
-  }
-  const plan = planStatus(me, existing, input);
-  const { status: _s, lostReason: _l, nextFollowUpOn: _n, ...rest } = input;
-  const fields = Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined)) as Partial<typeof leads.$inferInsert>;
+  if (!writes(me)) assertDecisionOnly(input);
   db.transaction((tx) => {
+    const existing = findLead(tx, id);
+    if (input.assignedToId && input.assignedToId !== existing.assignedToId) {
+      assertStaff(tx, me, input.assignedToId, 'assignedToId', 'admissions:errors.assigneeInvalid');
+    }
+    if (input.preferredCourseId && input.preferredCourseId !== existing.preferredCourseId) {
+      assertCourseAvailable(tx, input.preferredCourseId, 'preferredCourseId');
+    }
+    const plan = planStatus(me, existing, input);
+    const { status: _s, lostReason: _l, nextFollowUpOn: _n, ...rest } = input;
+    const fields = Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined)) as Partial<typeof leads.$inferInsert>;
     tx.update(leads)
-      .set({
-        ...fields,
-        status: plan.status,
-        lostReason: plan.lostReason,
-        ...(plan.nextFollowUpOn !== undefined ? { nextFollowUpOn: plan.nextFollowUpOn } : {}),
-        updatedAt: Date.now(),
-      })
+      .set({ ...fields, ...statusColumns(existing, plan), updatedAt: Date.now() })
       .where(eq(leads.id, id))
       .run();
     applyStatus(tx, existing, plan, me);
@@ -355,12 +373,12 @@ router.post('/:id/activities', canWrite, async (c) => {
   const id = paramId(c);
   const me = currentUser(c);
   const db = c.get('db');
-  const lead = findLead(db, id);
   const input = await body(c, leadActivityInput);
-  // Contacting a new lead means they've been contacted (a note alone doesn't).
-  const auto = input.status === undefined && input.type !== 'note' && lead.status === 'new' ? 'contacted' : undefined;
-  const plan = planStatus(me, lead, input, auto);
   const activity = db.transaction((tx) => {
+    const lead = findLead(tx, id);
+    // Contacting a new lead means they've been contacted (a note alone doesn't).
+    const auto = input.status === undefined && input.type !== 'note' && lead.status === 'new' ? 'contacted' : undefined;
+    const plan = planStatus(me, lead, input, auto);
     const row = logActivity(
       tx,
       id,
@@ -370,12 +388,7 @@ router.post('/:id/activities', canWrite, async (c) => {
       input.body ?? null,
     );
     tx.update(leads)
-      .set({
-        status: plan.status,
-        lostReason: plan.lostReason,
-        ...(plan.nextFollowUpOn !== undefined ? { nextFollowUpOn: plan.nextFollowUpOn } : {}),
-        updatedAt: Date.now(),
-      })
+      .set({ ...statusColumns(lead, plan), updatedAt: Date.now() })
       .where(eq(leads.id, id))
       .run();
     applyStatus(tx, lead, plan, me);
@@ -391,15 +404,18 @@ function assertCanSchedule(lead: Pick<LeadRow, 'status'>) {
   if (isClosedLeadStatus(lead.status)) throw leadClosedError();
 }
 
+/** Statuses that scheduling an interview moves to interview_scheduled (an accepted lead keeps its decision). */
+const MOVES_TO_INTERVIEW_SCHEDULED: readonly LeadStatus[] = ['new', 'contacted', 'interviewed'];
+
 router.post('/:id/interviews', canWrite, async (c) => {
   const id = paramId(c);
   const me = currentUser(c);
   const db = c.get('db');
-  const lead = findLead(db, id);
   const input = await body(c, interviewScheduleInput);
-  assertCanSchedule(lead);
-  if (input.interviewerId) assertStaff(db, me, input.interviewerId, 'interviewerId', 'admissions:errors.interviewerInvalid');
   const interviewId = db.transaction((tx) => {
+    const lead = findLead(tx, id);
+    assertCanSchedule(lead);
+    if (input.interviewerId) assertStaff(tx, me, input.interviewerId, 'interviewerId', 'admissions:errors.interviewerInvalid');
     const created = tx
       .insert(interviews)
       .values({
@@ -414,72 +430,78 @@ router.post('/:id/interviews', canWrite, async (c) => {
       .returning({ id: interviews.id })
       .get();
     logActivity(tx, id, me, 'interview_scheduled', { interviewId: created.id, scheduledAt: input.scheduledAt });
-    moveStatus(tx, lead, 'interview_scheduled', me);
+    if (MOVES_TO_INTERVIEW_SCHEDULED.includes(lead.status)) moveStatus(tx, lead, 'interview_scheduled', me);
     tx.update(leads).set({ updatedAt: Date.now() }).where(eq(leads.id, id)).run();
     return created.id;
   });
   return c.json(loadInterview(db, interviewId), 201);
 });
 
-router.patch('/:id/interviews/:interviewId', canWrite, async (c) => {
+router.patch('/:id/interviews/:interviewId', canWriteOrDecide, async (c) => {
   const leadId = paramId(c);
   const interviewId = paramId(c, 'interviewId');
   const me = currentUser(c);
   const db = c.get('db');
-  const lead = findLead(db, leadId);
-  const iv = db
-    .select()
-    .from(interviews)
-    .where(and(eq(interviews.id, interviewId), eq(interviews.leadId, leadId)))
-    .get();
-  if (!iv) throw notFound('Interview not found');
   const input = await body(c, interviewUpdateInput);
-
-  const assessment = INTERVIEW_ASSESSMENT_FIELDS.some((f) => input[f] !== undefined);
-  // Sending an assessment records the interview as done.
-  const nextStatus: InterviewStatus = input.status ?? (assessment ? 'done' : iv.status);
-  if (assessment && nextStatus !== 'done') throw fieldError(['status'], 'admissions:errors.assessmentNeedsDone');
-  const statusChanged = nextStatus !== iv.status;
-  const touchesAnything = Object.values(input).some((v) => v !== undefined);
-
-  // Who may: the assessment, recording done, and any change to a done interview need admissions.decide.
-  const needsDecide = assessment || (statusChanged && (nextStatus === 'done' || iv.status === 'done')) || (iv.status === 'done' && touchesAnything);
-  if (needsDecide && !decides(me)) throw forbidden('Recording interview assessments needs the admissions decisions permission');
-
-  // Only a scheduled interview has a time to change.
-  const rescheduled =
-    (input.scheduledAt !== undefined && input.scheduledAt !== iv.scheduledAt) ||
-    (input.durationMinutes !== undefined && input.durationMinutes !== iv.durationMinutes);
-  if (rescheduled && nextStatus !== 'scheduled') {
-    throw new ApiError(409, ADMISSIONS_ERROR_CODES.interviewNotScheduled, 'Only a scheduled interview can be rescheduled');
-  }
-  // A closed lead gets no interview back on the calendar.
-  if (nextStatus === 'scheduled' && (statusChanged || rescheduled)) assertCanSchedule(lead);
-
-  if (input.interviewerId && input.interviewerId !== iv.interviewerId) {
-    assertStaff(db, me, input.interviewerId, 'interviewerId', 'admissions:errors.interviewerInvalid');
-  }
-  if (input.recommendedCourseId && input.recommendedCourseId !== iv.recommendedCourseId) {
-    assertCourseAvailable(db, input.recommendedCourseId, 'recommendedCourseId');
-  }
-  if (input.scores) {
-    // Current criteria, plus keys already stored here (scores of a removed criterion are kept).
-    const allowed = new Set([...getSettings(db).interviewCriteria.map((cr) => cr.key), ...Object.keys(iv.scores ?? {})]);
-    for (const key of Object.keys(input.scores)) {
-      if (!allowed.has(key)) throw fieldError(['scores', key], 'admissions:errors.unknownCriterion');
-    }
-  }
-
-  const patch: Partial<typeof interviews.$inferInsert> = Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined));
-  if (input.scores === null) patch.scores = {};
-  patch.status = nextStatus;
-  const recorded = assessment || (statusChanged && (nextStatus === 'done' || nextStatus === 'no_show'));
-  if (recorded) {
-    patch.recordedById = me.id;
-    patch.recordedAt = Date.now();
-  }
+  const criteria = getSettings(db).interviewCriteria;
 
   db.transaction((tx) => {
+    const lead = findLead(tx, leadId);
+    const iv = tx
+      .select()
+      .from(interviews)
+      .where(and(eq(interviews.id, interviewId), eq(interviews.leadId, leadId)))
+      .get();
+    if (!iv) throw notFound('Interview not found');
+
+    const assessment = INTERVIEW_ASSESSMENT_FIELDS.some((f) => input[f] !== undefined);
+    // Sending an assessment records the interview as done.
+    const nextStatus: InterviewStatus = input.status ?? (assessment ? 'done' : iv.status);
+    if (assessment && nextStatus !== 'done') throw fieldError(['status'], 'admissions:errors.assessmentNeedsDone');
+    const statusChanged = nextStatus !== iv.status;
+    const touchesAnything = Object.values(input).some((v) => v !== undefined);
+    const rescheduled =
+      (input.scheduledAt !== undefined && input.scheduledAt !== iv.scheduledAt) ||
+      (input.durationMinutes !== undefined && input.durationMinutes !== iv.durationMinutes);
+
+    // Who may: the assessment, recording done, and any change to a done interview need admissions.decide …
+    const needsDecide = assessment || (statusChanged && (nextStatus === 'done' || iv.status === 'done')) || (iv.status === 'done' && touchesAnything);
+    if (needsDecide && !decides(me)) throw forbidden('Recording interview assessments needs the admissions decisions permission');
+    // … the time, room, interviewer, cancelling / no-show / back to scheduled, and notes outside an assessment need admissions.write.
+    const recording = assessment || nextStatus === 'done' || iv.status === 'done';
+    const changes = (k: 'room' | 'interviewerId' | 'notes') => input[k] !== undefined && input[k] !== iv[k];
+    const needsWrite = rescheduled || changes('room') || changes('interviewerId') || (statusChanged && nextStatus !== 'done') || (changes('notes') && !recording);
+    if (needsWrite && !writes(me)) throw forbidden('Rescheduling or cancelling interviews needs the admissions write permission');
+
+    // Only a scheduled interview has a time to change.
+    if (rescheduled && nextStatus !== 'scheduled') {
+      throw new ApiError(409, ADMISSIONS_ERROR_CODES.interviewNotScheduled, 'Only a scheduled interview can be rescheduled');
+    }
+    // A closed lead gets no interview back on the calendar.
+    if (nextStatus === 'scheduled' && (statusChanged || rescheduled)) assertCanSchedule(lead);
+
+    if (input.interviewerId && input.interviewerId !== iv.interviewerId) {
+      assertStaff(tx, me, input.interviewerId, 'interviewerId', 'admissions:errors.interviewerInvalid');
+    }
+    if (input.recommendedCourseId && input.recommendedCourseId !== iv.recommendedCourseId) {
+      assertCourseAvailable(tx, input.recommendedCourseId, 'recommendedCourseId');
+    }
+    if (input.scores) {
+      // Current criteria, plus keys already stored here (scores of a removed criterion are kept).
+      const allowed = new Set([...criteria.map((cr) => cr.key), ...Object.keys(iv.scores ?? {})]);
+      for (const key of Object.keys(input.scores)) {
+        if (!allowed.has(key)) throw fieldError(['scores', key], 'admissions:errors.unknownCriterion');
+      }
+    }
+
+    const patch: Partial<typeof interviews.$inferInsert> = Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined));
+    if (input.scores === null) patch.scores = {};
+    patch.status = nextStatus;
+    if (assessment || (statusChanged && (nextStatus === 'done' || nextStatus === 'no_show'))) {
+      patch.recordedById = me.id;
+      patch.recordedAt = Date.now();
+    }
+
     tx.update(interviews).set(patch).where(eq(interviews.id, interviewId)).run();
     const scheduledAt = input.scheduledAt ?? iv.scheduledAt;
     if (statusChanged && nextStatus === 'scheduled') {
@@ -492,7 +514,7 @@ router.patch('/:id/interviews/:interviewId', canWrite, async (c) => {
       logActivity(tx, leadId, me, 'interview_scheduled', { interviewId, scheduledAt, previousScheduledAt: iv.scheduledAt });
     }
 
-    // The lead follows its interviews while it is open.
+    // The lead follows its interviews while it is open (an accepted lead keeps its decision).
     if (statusChanged && !isClosedLeadStatus(lead.status)) {
       if (nextStatus === 'done' && ['new', 'contacted', 'interview_scheduled'].includes(lead.status)) {
         moveStatus(tx, lead, 'interviewed', me);
@@ -502,8 +524,9 @@ router.patch('/:id/interviews/:interviewId', canWrite, async (c) => {
           .from(interviews)
           .where(and(eq(interviews.leadId, leadId), eq(interviews.status, 'scheduled'), ne(interviews.id, interviewId)))
           .get();
-        if (!stillScheduled) moveStatus(tx, lead, 'contacted', me);
-      } else if (nextStatus === 'scheduled' && (lead.status === 'new' || lead.status === 'contacted')) {
+        // Back to where it was before this interview: assessed already, or just contacted.
+        if (!stillScheduled) moveStatus(tx, lead, leadHasDoneInterview(tx, leadId) ? 'interviewed' : 'contacted', me);
+      } else if (nextStatus === 'scheduled' && MOVES_TO_INTERVIEW_SCHEDULED.includes(lead.status)) {
         moveStatus(tx, lead, 'interview_scheduled', me);
       }
     }
@@ -518,37 +541,38 @@ router.post('/:id/enrol', canDecide, async (c) => {
   const id = paramId(c);
   const me = currentUser(c);
   const db = c.get('db');
-  const lead = findLead(db, id);
   const input = await body(c, enrolInput);
-  if (lead.status === 'enrolled' || lead.studentId !== null) throw leadEnrolledError();
-
-  const course = db.select().from(courses).where(eq(courses.id, input.courseId)).get();
-  if (!course) throw fieldError(['courseId'], 'admissions:errors.courseNotFound');
-  if (course.status === 'archived') throw new ApiError(409, ADMISSIONS_ERROR_CODES.courseArchived, 'This class is archived');
-
-  let linked: { id: number; status: (typeof students.$inferSelect)['status'] } | undefined;
-  if (input.linkStudentId) {
-    linked = db.select({ id: students.id, status: students.status }).from(students).where(eq(students.id, input.linkStudentId)).get();
-    if (!linked) throw fieldError(['linkStudentId'], 'admissions:errors.studentNotFound');
-  } else if (!input.createNew) {
-    const matches = findStudentMatches(db, lead.phone, lead.email, getSettings(db).defaultCountryCode);
-    if (matches.length) {
-      const details: PossibleDuplicateDetails = { matches };
-      throw new ApiError(409, ADMISSIONS_ERROR_CODES.possibleDuplicate, 'A student with the same phone or email already exists', undefined, details);
-    }
-  }
+  const countryCode = getSettings(db).defaultCountryCode;
   const joinedOn = input.joinedOn ?? todayISO();
 
   const result = db.transaction((tx) => {
-    // Re-check inside the transaction: two enrol requests must not both win.
-    const fresh = tx.select({ status: leads.status, studentId: leads.studentId }).from(leads).where(eq(leads.id, id)).get();
-    if (!fresh) throw notFound('Lead not found');
-    if (fresh.status === 'enrolled' || fresh.studentId !== null) throw leadEnrolledError();
+    // Read inside the transaction: two enrol requests must not both win.
+    const lead = findLead(tx, id);
+    if (lead.status === 'enrolled' || lead.studentId !== null) throw leadEnrolledError();
+
+    const course = tx.select().from(courses).where(eq(courses.id, input.courseId)).get();
+    if (!course) throw fieldError(['courseId'], 'admissions:errors.courseNotFound');
+    if (course.status === 'archived') throw new ApiError(409, ADMISSIONS_ERROR_CODES.courseArchived, 'This class is archived');
+
+    const matches = input.createNew ? [] : findStudentMatches(tx, lead.phone, lead.email, countryCode);
+    let linked: { id: number; status: (typeof students.$inferSelect)['status'] } | undefined;
+    if (input.linkStudentId) {
+      // Only a student the possible_duplicate answer names (same phone or email); any other id answers like a
+      // missing one, so admissions.decide can't enrol or reactivate arbitrary students, nor probe which ids exist.
+      if (!matches.some((m) => m.id === input.linkStudentId)) throw fieldError(['linkStudentId'], 'admissions:errors.studentNotFound');
+      linked = tx.select({ id: students.id, status: students.status }).from(students).where(eq(students.id, input.linkStudentId)).get()!;
+    } else if (!input.createNew && matches.length) {
+      const details: PossibleDuplicateDetails = { matches };
+      throw new ApiError(409, ADMISSIONS_ERROR_CODES.possibleDuplicate, 'A student with the same phone or email already exists', undefined, details);
+    }
 
     let studentId: number;
+    let enrollmentId: number;
     if (linked) {
       studentId = linked.id;
       if (linked.status !== 'active') tx.update(students).set({ status: 'active' }).where(eq(students.id, linked.id)).run();
+      // Already in the class → that enrollment; in it before → re-enrolled (capacity checked); else a new one.
+      enrollmentId = ensureEnrolled(tx, course, studentId, joinedOn);
     } else {
       studentId = tx
         .insert(students)
@@ -570,18 +594,18 @@ router.post('/:id/enrol', canDecide, async (c) => {
         })
         .returning({ id: students.id })
         .get().id;
+      // The classes module's rules: capacity (a new student has no enrollment yet). A refusal rolls everything back.
+      enrollmentId = addEnrollment(tx, course, studentId, joinedOn);
     }
-    // The classes module's rules: already/previously enrolled, capacity. A refusal rolls everything back.
-    const enrollmentId = addEnrollment(tx, course, studentId, joinedOn);
 
     tx.update(leads).set({ status: 'enrolled', studentId, lostReason: null, nextFollowUpOn: null, updatedAt: Date.now() }).where(eq(leads.id, id)).run();
-    logStatusChange(tx, id, me, fresh.status, 'enrolled');
+    logStatusChange(tx, id, me, lead.status, 'enrolled');
     cancelScheduledInterviews(tx, id, me);
     logActivity(tx, id, me, 'enrolled', { courseId: course.id, courseName: course.name, studentId, linkedExistingStudent: !!linked });
-    return { studentId, enrollmentId };
+    return { studentId, enrollmentId, createdStudent: !linked };
   });
 
-  const res: EnrolResult = { lead: detail(db, id, me), studentId: result.studentId, enrollmentId: result.enrollmentId, createdStudent: !linked };
+  const res: EnrolResult = { lead: detail(db, id, me), ...result };
   return c.json(res, 201);
 });
 

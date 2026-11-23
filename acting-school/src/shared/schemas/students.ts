@@ -1,12 +1,12 @@
 import { z } from 'zod';
 import { GENDERS, STUDENT_STATUSES, type EnrollmentStatus, type Gender, type StudentStatus } from '../enums';
-import { optDate, optEmail, optEnum, optFileId, optText, reqText } from './common';
+import { optDate, optEmail, optEnum, optFileId, optPhoneText, optText, reqText } from './common';
 
 export const studentInput = z.object({
   firstName: reqText(100),
   lastName: reqText(100),
   email: optEmail,
-  phone: optText(50),
+  phone: optPhoneText(50),
   dateOfBirth: optDate,
   gender: optEnum(GENDERS),
   /** Defaults to 'active' on create. */
@@ -14,10 +14,10 @@ export const studentInput = z.object({
   /** Defaults to today on create. */
   joinedOn: optDate,
   guardianName: optText(200),
-  guardianPhone: optText(50),
+  guardianPhone: optPhoneText(50),
   guardianEmail: optEmail,
   emergencyName: optText(200),
-  emergencyPhone: optText(50),
+  emergencyPhone: optPhoneText(50),
   photoFileId: optFileId,
   /** Photo/filming consent. Defaults to false on create. */
   mediaConsent: z.boolean().optional(),

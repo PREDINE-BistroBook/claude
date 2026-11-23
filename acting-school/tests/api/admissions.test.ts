@@ -943,20 +943,22 @@ describe('POST /api/leads/:id/enrol', () => {
     expect(t.db.select().from(students).all()).toHaveLength(3);
   });
 
-  it('linkStudentId must exist; linking a student already in the class → 409 already_enrolled, nothing changes', async () => {
+  it('linkStudentId must exist; linking a student already in the class links the lead to that enrollment (nothing new created)', async () => {
     const t = await makeTestContext();
     const director = await t.as('executive_director');
     const course = mkCourse(t);
     const existing = mkStudent(t, { phone: '01007654321' });
-    t.db.insert(enrollments).values({ courseId: course.id, studentId: existing.id, enrolledOn: today }).run();
+    const enrollment = t.db.insert(enrollments).values({ courseId: course.id, studentId: existing.id, enrolledOn: addDays(today, -7) }).returning().get()!;
     const lead = await mkLead(director);
     const missing = await director.post(`/api/leads/${lead.id}/enrol`, { courseId: course.id, linkStudentId: 999 });
     expect(missing.status).toBe(400);
     expect(missing.body.error.issues[0]).toMatchObject({ path: ['linkStudentId'], message: 'admissions:errors.studentNotFound' });
-    const res = await director.post(`/api/leads/${lead.id}/enrol`, { courseId: course.id, linkStudentId: existing.id });
-    expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe('already_enrolled');
     expect(statusOf(t, lead.id)).toBe('new');
+    const res = await director.post<EnrolResult>(`/api/leads/${lead.id}/enrol`, { courseId: course.id, linkStudentId: existing.id });
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ studentId: existing.id, enrollmentId: enrollment.id, createdStudent: false, lead: { status: 'enrolled', studentId: existing.id } });
+    expect(t.db.select().from(enrollments).all()).toEqual([enrollment]);
+    expect(t.db.select().from(students).all()).toHaveLength(1);
   });
 });
 
@@ -1093,5 +1095,298 @@ describe('admissions on the dashboard', () => {
     const reader = await t.as({ permissions: ['admissions.read'] });
     const body = (await reader.get<DashboardData>('/api/dashboard')).body;
     expect(body).toMatchObject({ counts: { openLeads: 0, newLeadsThisWeek: 0 }, followUpsDue: [], followUpsDueCount: 0, upcomingInterviews: [] });
+  });
+});
+
+// ── Review regressions ──────────────────────────────────────────────────────
+
+/**
+ * A request whose JSON body arrives later (a slow phone upload): the handler
+ * starts as soon as the headers are in. `send` delivers the body.
+ */
+function slowRequest(client: Client, method: string, url: string) {
+  let send!: (body: unknown) => void;
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      send = (body) => {
+        controller.enqueue(new TextEncoder().encode(JSON.stringify(body)));
+        controller.close();
+      };
+    },
+  });
+  const res = client.raw(url, {
+    method,
+    headers: { 'x-requested-with': 'fetch', cookie: client.cookie!, 'content-type': 'application/json' },
+    body: stream,
+    duplex: 'half',
+  } as RequestInit);
+  return { send: (body: unknown) => send(body), res };
+}
+const tick = () => new Promise((r) => setTimeout(r, 30));
+
+describe('enrol: linkStudentId is limited to the possible_duplicate matches', () => {
+  it('an existing student who shares nothing with the lead answers like a missing id; nothing changes', async () => {
+    const t = await makeTestContext();
+    const decider = await t.as({ permissions: ['admissions.read', 'admissions.write', 'admissions.decide'] });
+    const course = mkCourse(t);
+    const unrelated = mkStudent(t, { firstName: 'Unrelated', lastName: 'Alumna', phone: '0111 111 1111', email: 'alumna@example.com', status: 'alumni' });
+    expect((await decider.get(`/api/students/${unrelated.id}`)).status).toBe(403);
+    const lead = await mkLead(decider);
+
+    const res = await decider.post(`/api/leads/${lead.id}/enrol`, { courseId: course.id, linkStudentId: unrelated.id });
+    expect(res.status).toBe(400);
+    expect(res.body.error.issues).toEqual([expect.objectContaining({ path: ['linkStudentId'], message: 'admissions:errors.studentNotFound' })]);
+    const missing = await decider.post(`/api/leads/${lead.id}/enrol`, { courseId: course.id, linkStudentId: 99999 });
+    expect(missing.status).toBe(400);
+    expect(missing.body).toEqual(res.body);
+
+    expect(t.db.select().from(students).where(eq(students.id, unrelated.id)).get()!.status).toBe('alumni');
+    expect(t.db.select().from(enrollments).all()).toEqual([]);
+    expect(await getLead(decider, lead.id)).toMatchObject({ status: 'new', studentId: null, activities: [] });
+  });
+});
+
+describe('phone matching: Arabic-Indic digits, invisible marks, international search, trunk 0 after the country code', () => {
+  it('phones typed with Arabic digits or pasted with bidi marks are stored with Western digits', async () => {
+    const t = await makeTestContext();
+    const director = await t.as('executive_director');
+    const lead = await mkLead(director, { phone: '٠١٠١٢٣٤٥٦٧٨', guardianPhone: '‪+20 101 234 5600‬' });
+    expect(lead).toMatchObject({ phone: '01012345678', guardianPhone: '+20 101 234 5600' });
+    const student = await director.post('/api/students', { firstName: 'Mona', lastName: 'Adel', phone: '‎٠١٠ ١٢٣ ٤٥٦٧٨', guardianPhone: '۰۱۰۱۲۳۴۵۶۰۰' });
+    expect(student.status).toBe(201);
+    expect(student.body).toMatchObject({ phone: '010 123 45678', guardianPhone: '01012345600' });
+  });
+
+  it('a student stored with Arabic digits is a duplicate (warning and enrol 409); stored marks and Arabic digits are searchable', async () => {
+    const t = await makeTestContext();
+    const director = await t.as('executive_director');
+    const course = mkCourse(t);
+    // Rows saved before phones were normalised.
+    const mona = mkStudent(t, { firstName: 'Mona', lastName: 'Adel', phone: '٠١٠١٢٣٤٥٦٧٨' });
+    expect((await director.get('/api/leads/duplicates?phone=01012345678')).body.items).toEqual([{ kind: 'student', id: mona.id, name: 'Mona Adel' }]);
+    const lead = await mkLead(director, { firstName: 'Mona', lastName: 'Adel', phone: '+20 101 234 5678' });
+    const enrol = await director.post(`/api/leads/${lead.id}/enrol`, { courseId: course.id });
+    expect(enrol.status).toBe(409);
+    expect(enrol.body.error.code).toBe('possible_duplicate');
+    expect(t.db.select().from(students).all()).toHaveLength(1);
+
+    const marked = t.db.insert(leads).values({ firstName: 'Bidi', lastName: 'Marks', phone: '‪+20 122 555 6677‬', source: 'whatsapp' }).returning().get()!;
+    const arabic = t.db.insert(leads).values({ firstName: 'Arabic', lastName: 'Digits', phone: '٠١١٢٢٢٣٣٣٤٤', source: 'whatsapp' }).returning().get()!;
+    expect((await director.get('/api/leads/duplicates?phone=01225556677')).body.items).toEqual([{ kind: 'lead', id: marked.id, name: 'Bidi Marks', status: 'new' }]);
+    const ids = async (q: string) => (await director.get<{ items: LeadListItem[] }>(`/api/leads?q=${encodeURIComponent(q)}`)).body.items.map((i) => i.id);
+    expect(await ids('01122233344')).toEqual([arabic.id]);
+    expect(await ids('٠١١٢٢٢٣٣٣٤٤')).toEqual([arabic.id]);
+    expect(await ids('0122 555 6677')).toEqual([marked.id]);
+  });
+
+  it('the list search finds a locally stored number from its international form', async () => {
+    const t = await makeTestContext();
+    const director = await t.as('executive_director');
+    const lead = await mkLead(director, { phone: '0100 765 4321' });
+    await mkLead(director, { firstName: 'Other', phone: '0122 000 1111' });
+    for (const q of ['+20 100 765 4321', '00201007654321', '201007654321', '+20 100 765', '01007654321', '1007654321']) {
+      const res = await director.get<{ items: LeadListItem[] }>(`/api/leads?q=${encodeURIComponent(q)}`);
+      expect(res.body.items.map((i) => i.id), q).toEqual([lead.id]);
+    }
+  });
+
+  it('"+20 (0) 100…" is the same number as "0100…" (enrol answers possible_duplicate)', async () => {
+    const t = await makeTestContext();
+    const director = await t.as('executive_director');
+    const student = mkStudent(t, { phone: '01007654321' });
+    const lead = await mkLead(director, { phone: '+20 (0) 100 765 4321' });
+    const res = await director.post(`/api/leads/${lead.id}/enrol`, { courseId: mkCourse(t).id });
+    expect(res.status).toBe(409);
+    expect(res.body.error.details).toEqual({ matches: [{ id: student.id, name: 'Existing Student' }] });
+  });
+});
+
+describe('a later interview never undoes an assessment or a decision', () => {
+  it('no-show / cancellation of a second interview → back to interviewed when one is done', async () => {
+    const t = await makeTestContext();
+    const director = await t.as('executive_director');
+    const lead = await mkLead(director);
+    const first = (await schedule(director, lead.id)).body;
+    await director.patch(`/api/leads/${lead.id}/interviews/${first.id}`, { status: 'done', scores: SCORES, recommendation: 'maybe' });
+    expect(statusOf(t, lead.id)).toBe('interviewed');
+    const second = (await schedule(director, lead.id, { scheduledAt: `${addDays(today, 3)}T12:00` })).body;
+    expect(statusOf(t, lead.id)).toBe('interview_scheduled');
+    expect((await director.patch(`/api/leads/${lead.id}/interviews/${second.id}`, { status: 'no_show' })).status).toBe(200);
+    expect(statusOf(t, lead.id)).toBe('interviewed');
+    expect((await director.get<{ items: LeadListItem[] }>('/api/leads?group=interviews')).body.items.map((i) => i.id)).toEqual([lead.id]);
+
+    const third = (await schedule(director, lead.id, { scheduledAt: `${addDays(today, 4)}T12:00` })).body;
+    await director.patch(`/api/leads/${lead.id}/interviews/${third.id}`, { status: 'cancelled' });
+    expect(statusOf(t, lead.id)).toBe('interviewed');
+    expect(statusChanges(await getLead(director, lead.id))).toEqual([
+      'new>interview_scheduled',
+      'interview_scheduled>interviewed',
+      'interviewed>interview_scheduled',
+      'interview_scheduled>interviewed',
+      'interviewed>interview_scheduled',
+      'interview_scheduled>interviewed',
+    ]);
+  });
+
+  it('an accepted lead stays accepted when another interview is scheduled, cancelled or missed', async () => {
+    const t = await makeTestContext();
+    const director = await t.as('executive_director');
+    const desk = await t.as({ permissions: ['admissions.read', 'admissions.write'] });
+    const lead = await mkLead(director, { status: 'accepted' });
+    const iv = (await schedule(desk, lead.id)).body;
+    expect(statusOf(t, lead.id)).toBe('accepted');
+    expect((await desk.patch(`/api/leads/${lead.id}/interviews/${iv.id}`, { status: 'cancelled' })).status).toBe(200);
+    expect(statusOf(t, lead.id)).toBe('accepted');
+    const again = (await schedule(desk, lead.id)).body;
+    await desk.patch(`/api/leads/${lead.id}/interviews/${again.id}`, { status: 'no_show' });
+    expect(statusOf(t, lead.id)).toBe('accepted');
+    expect(statusChanges(await getLead(director, lead.id))).toEqual([]);
+  });
+});
+
+describe('enrol: linking a student who is or was in the class', () => {
+  it('previously enrolled (withdrawn) → re-enrolled in the same enrollment; the lead is linked', async () => {
+    const t = await makeTestContext();
+    const director = await t.as('executive_director');
+    const course = mkCourse(t);
+    const student = mkStudent(t, { phone: '01112223334', status: 'alumni' });
+    const old = t.db.insert(enrollments).values({ courseId: course.id, studentId: student.id, enrolledOn: addDays(today, -200), status: 'withdrawn' }).returning().get()!;
+    const lead = await mkLead(director, { phone: '01112223334', status: 'accepted' });
+
+    const res = await director.post<EnrolResult>(`/api/leads/${lead.id}/enrol`, { courseId: course.id, linkStudentId: student.id });
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ studentId: student.id, enrollmentId: old.id, createdStudent: false, lead: { status: 'enrolled', studentId: student.id } });
+    expect(t.db.select().from(enrollments).all()).toEqual([expect.objectContaining({ id: old.id, status: 'enrolled' })]);
+    expect(t.db.select().from(students).where(eq(students.id, student.id)).get()!.status).toBe('active');
+  });
+
+  it('re-enrolling still respects capacity: a full class → 409 class_full, nothing changes', async () => {
+    const t = await makeTestContext();
+    const director = await t.as('executive_director');
+    const course = mkCourse(t, { capacity: 1 });
+    t.db.insert(enrollments).values({ courseId: course.id, studentId: mkStudent(t, { phone: '0999 000 000' }).id, enrolledOn: today }).run();
+    const student = mkStudent(t, { phone: '01112223334', status: 'alumni' });
+    t.db.insert(enrollments).values({ courseId: course.id, studentId: student.id, enrolledOn: addDays(today, -200), status: 'completed' }).run();
+    const lead = await mkLead(director, { phone: '01112223334' });
+    const res = await director.post(`/api/leads/${lead.id}/enrol`, { courseId: course.id, linkStudentId: student.id });
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('class_full');
+    expect(t.db.select().from(enrollments).where(eq(enrollments.studentId, student.id)).get()!.status).toBe('completed');
+    expect(t.db.select().from(students).where(eq(students.id, student.id)).get()!.status).toBe('alumni');
+    expect(statusOf(t, lead.id)).toBe('new');
+  });
+});
+
+describe('admissions.decide without admissions.write', () => {
+  it('may accept, decline and record assessments — but not edit, reschedule or cancel', async () => {
+    const t = await makeTestContext();
+    const director = await t.as('executive_director');
+    const salma = await t.as({ permissions: ['admissions.read', 'admissions.decide'] });
+    const lead = await mkLead(director);
+    const iv = (await schedule(director, lead.id)).body;
+    const ivUrl = `/api/leads/${lead.id}/interviews/${iv.id}`;
+
+    expect((await salma.patch(ivUrl, { room: 'Studio B' })).status).toBe(403);
+    expect((await salma.patch(ivUrl, { scheduledAt: `${addDays(today, 2)}T10:00` })).status).toBe(403);
+    expect((await salma.patch(ivUrl, { status: 'cancelled' })).status).toBe(403);
+    expect((await salma.patch(ivUrl, { status: 'no_show' })).status).toBe(403);
+    const recorded = await salma.patch<Interview>(ivUrl, {
+      status: 'done',
+      scores: { voice: 4 },
+      strengths: 'Voice',
+      notes: 'Calm',
+      recommendation: 'accept',
+      // The whole interview form may come back unchanged.
+      scheduledAt: `${tomorrow}T17:00`,
+      room: null,
+    });
+    expect(recorded.status).toBe(200);
+    expect(recorded.body).toMatchObject({ status: 'done', scores: { voice: 4 }, notes: 'Calm', recommendation: 'accept', recordedById: salma.user.id });
+    expect((await salma.patch(ivUrl, { recommendation: 'maybe', notes: 'Second look' })).status).toBe(200);
+    expect(statusOf(t, lead.id)).toBe('interviewed');
+
+    expect((await salma.patch(`/api/leads/${lead.id}`, { notes: 'x' })).status).toBe(403);
+    expect((await salma.patch(`/api/leads/${lead.id}`, { status: 'contacted' })).status).toBe(403);
+    expect((await salma.patch(`/api/leads/${lead.id}`, { status: 'accepted', nextFollowUpOn: tomorrow })).status).toBe(403);
+    expect((await salma.patch<LeadDetail>(`/api/leads/${lead.id}`, { status: 'accepted' })).body.status).toBe('accepted');
+    expect((await salma.patch<LeadDetail>(`/api/leads/${lead.id}`, { status: 'declined' })).body.status).toBe('declined');
+    expect((await salma.post(`/api/leads/${lead.id}/activities`, { type: 'call' })).status).toBe(403);
+    expect((await schedule(salma, lead.id)).status).toBe(403);
+  });
+});
+
+describe('duplicates while editing an enrolled lead', () => {
+  it('excludeLeadId also leaves out the student made from that lead', async () => {
+    const t = await makeTestContext();
+    const director = await t.as('executive_director');
+    const lead = await mkLead(director, { firstName: 'Lina', lastName: 'Fares', phone: '+20 128 777 1212', email: 'lina@example.com' });
+    const enrol = (await director.post<EnrolResult>(`/api/leads/${lead.id}/enrol`, { courseId: mkCourse(t).id })).body;
+    const qs = `phone=${encodeURIComponent('+20 128 777 1212')}&email=lina%40example.com`;
+    expect((await director.get(`/api/leads/duplicates?${qs}&excludeLeadId=${lead.id}`)).body.items).toEqual([]);
+    // Another enquiry with the same number still sees that student.
+    expect((await director.get(`/api/leads/duplicates?${qs}`)).body.items).toEqual([{ kind: 'student', id: enrol.studentId, name: 'Lina Fares' }]);
+  });
+});
+
+describe('a slow request body never writes back a stale status', () => {
+  async function enrolledDuring(t: Ctx, director: Client, leadId: number, method: string, url: string, payload: unknown) {
+    const slow = slowRequest(director, method, url);
+    await tick();
+    const enrol = await director.post(`/api/leads/${leadId}/enrol`, { courseId: mkCourse(t).id, createNew: true });
+    expect(enrol.status).toBe(201);
+    slow.send(payload);
+    return (await slow.res).status;
+  }
+
+  it('PATCH /:id (no status in the body) keeps the lead enrolled', async () => {
+    const t = await makeTestContext();
+    const director = await t.as('executive_director');
+    const lead = await mkLead(director, { status: 'accepted' });
+    expect(await enrolledDuring(t, director, lead.id, 'PATCH', `/api/leads/${lead.id}`, { notes: 'typo fixed' })).toBe(200);
+    expect(await getLead(director, lead.id)).toMatchObject({ status: 'enrolled', notes: 'typo fixed', studentId: expect.any(Number) });
+  });
+
+  it('POST /:id/activities keeps the lead enrolled', async () => {
+    const t = await makeTestContext();
+    const director = await t.as('executive_director');
+    const lead = await mkLead(director, { status: 'accepted' });
+    expect(await enrolledDuring(t, director, lead.id, 'POST', `/api/leads/${lead.id}/activities`, { type: 'call', body: 'Called' })).toBe(201);
+    expect(statusOf(t, lead.id)).toBe('enrolled');
+  });
+
+  it('PATCH an interview (no-show) keeps the lead enrolled', async () => {
+    const t = await makeTestContext();
+    const director = await t.as('executive_director');
+    const lead = await mkLead(director);
+    const iv = (await schedule(director, lead.id)).body;
+    await enrolledDuring(t, director, lead.id, 'PATCH', `/api/leads/${lead.id}/interviews/${iv.id}`, { status: 'no_show' });
+    expect(statusOf(t, lead.id)).toBe('enrolled');
+  });
+
+  it('POST /:id/interviews on a lead enrolled meanwhile → 409 lead_enrolled, nothing scheduled', async () => {
+    const t = await makeTestContext();
+    const director = await t.as('executive_director');
+    const lead = await mkLead(director);
+    expect(await enrolledDuring(t, director, lead.id, 'POST', `/api/leads/${lead.id}/interviews`, { scheduledAt: `${tomorrow}T17:00` })).toBe(409);
+    expect(statusOf(t, lead.id)).toBe('enrolled');
+    expect(t.db.select().from(interviews).all()).toEqual([]);
+  });
+});
+
+describe('deleting the student an enrolled lead points to', () => {
+  it('moves the lead back to accepted (on the timeline), so it can be enrolled or linked again', async () => {
+    const t = await makeTestContext();
+    const director = await t.as('executive_director');
+    const course = mkCourse(t);
+    const lead = await mkLead(director, { status: 'accepted' });
+    const first = (await director.post<EnrolResult>(`/api/leads/${lead.id}/enrol`, { courseId: course.id })).body;
+    expect((await director.delete(`/api/students/${first.studentId}`)).status).toBe(204);
+
+    const d = await getLead(director, lead.id);
+    expect(d).toMatchObject({ status: 'accepted', studentId: null, student: null });
+    expect(d.activities[0]).toMatchObject({ type: 'status_change', meta: { from: 'enrolled', to: 'accepted' }, createdById: director.user.id });
+    const again = await director.post<EnrolResult>(`/api/leads/${lead.id}/enrol`, { courseId: course.id });
+    expect(again.status).toBe(201);
+    expect(again.body.lead.status).toBe('enrolled');
   });
 });

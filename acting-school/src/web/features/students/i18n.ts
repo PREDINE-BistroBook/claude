@@ -79,6 +79,7 @@ const en = {
     noNotes: 'No notes.',
     deleteTitle: 'Delete {{name}}?',
     deleteMessage: 'Their class enrollments and attendance history will be deleted too. A linked talent profile is kept. This can’t be undone.',
+    deleteAdmissionsNote: 'If they joined through admissions, their enquiry goes back to “Accepted” so it can be enrolled again.',
     deleted: 'Student deleted',
   },
   errors: {
@@ -177,6 +178,7 @@ const ar: TranslationOf<typeof en> = {
     noNotes: 'لا توجد ملاحظات.',
     deleteTitle: 'حذف {{name}}؟',
     deleteMessage: 'سيُحذف معه سجلّ تسجيله في الصفوف وسجلّ حضوره. أمّا ملف الموهبة المرتبط به فسيبقى. لا يمكن التراجع عن هذا الإجراء.',
+    deleteAdmissionsNote: 'إن كان قد انضم عن طريق القبول، يعود استفساره إلى «مقبول» ليمكن تسجيله من جديد.',
     deleted: 'تم حذف الطالب',
   },
   errors: {

@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { BuiltInPositionKey } from '../../shared/permissions';
 import { upgradeBuiltInPositions } from '../lib/access';
+import { registerPhoneFunctions } from '../lib/phone';
 import * as schema from './schema';
 
 export type DB = BetterSQLite3Database<typeof schema> & { $client: Database.Database };
@@ -59,7 +60,8 @@ export function migrationsDir(): string {
  * permissions granted to built-in positions since this database last started
  * (BUILT_IN_GRANTS in shared/permissions.ts). A phase-1
  * database (fixed roles) also gets each account's role carried over to the
- * matching position. Pass ':memory:' for a throwaway database (tests).
+ * matching position. Every connection gets the app's SQL functions
+ * (phone_digits, lib/phone.ts). Pass ':memory:' for a throwaway database (tests).
  */
 export function createDb(filename: string): DB {
   if (filename !== ':memory:') fs.mkdirSync(path.dirname(filename), { recursive: true });
@@ -67,6 +69,8 @@ export function createDb(filename: string): DB {
   if (filename !== ':memory:') sqlite.pragma('journal_mode = WAL');
   sqlite.pragma('foreign_keys = ON');
   sqlite.pragma('busy_timeout = 5000');
+  // phone_digits(): phone matching and search in SQL (lib/phone.ts).
+  registerPhoneFunctions(sqlite);
   const db = drizzle(sqlite, { schema }) as DB;
   // Read before migrating: the positions migration drops the column. (The migrator
   // commits its own transaction, so the carry-over runs right after it.)

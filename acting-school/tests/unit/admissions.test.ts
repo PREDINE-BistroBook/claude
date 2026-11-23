@@ -7,7 +7,7 @@ import { createDb, type DB } from '../../src/server/db/client';
 import { positions, settings } from '../../src/server/db/schema';
 import { builtInGrantsVersion, upgradeBuiltInPositions } from '../../src/server/lib/access';
 import { BUILT_IN_GRANTS, BUILT_IN_GRANTS_SETTING, BUILT_IN_POSITIONS, LATEST_BUILT_IN_GRANTS_VERSION } from '../../src/shared/permissions';
-import { internationalPhone, phoneDigits, samePhone, telLink, westernDigits, whatsAppLink } from '../../src/shared/phone';
+import { internationalPhone, normalizePhone, phoneDigits, samePhone, telLink, westernDigits, whatsAppLink } from '../../src/shared/phone';
 
 const ADMISSIONS = ['admissions.read', 'admissions.write', 'admissions.decide'];
 const perms = (db: DB, key: string) => db.select().from(positions).where(eq(positions.key, key)).get()!.permissions as string[];
@@ -137,6 +137,31 @@ describe('phone numbers → WhatsApp (shared helper)', () => {
     expect(westernDigits('٠١٠١٢٣٤٥٦٧٨')).toBe('01012345678');
     expect(phoneDigits('۰۱۰ ۱۲۳')).toBe('010123');
     expect(internationalPhone('٠١٠١٢٣٤٥٦٧٨', '20')).toBe('201012345678');
+  });
+
+  it('drops a trunk 0 written after the country code (+20 010…, +20 (0)…, 0020 0…) where national numbers never start with 0', () => {
+    expect(internationalPhone('+20 010 1234 5678', '20')).toBe('201012345678');
+    expect(internationalPhone('+20 (0) 100 765 4321', '20')).toBe('201007654321');
+    expect(internationalPhone('0020 0101 234 5678', '20')).toBe('201012345678');
+    expect(internationalPhone('20 0101 234 5678', '20')).toBe('201012345678');
+    expect(internationalPhone('+44 (0)7700 900123', '20')).toBe('447700900123');
+    expect(internationalPhone('+971 050 123 4567', '20')).toBe('971501234567');
+    // Italy keeps its 0 after the country code (+39 055… is Florence).
+    expect(internationalPhone('+39 055 123 4567', '20')).toBe('390551234567');
+    expect(internationalPhone('0039 055 123 4567', '20')).toBe('390551234567');
+    expect(samePhone('+20 (0) 100 765 4321', '01007654321', '20')).toBe(true);
+    expect(whatsAppLink('+20 (0) 100 765 4321', '20')).toBe('https://wa.me/201007654321');
+    expect(telLink('+20 (0) 100 765 4321')).toBe('tel:+201007654321');
+    expect(telLink('+39 055 123 4567')).toBe('tel:+390551234567');
+  });
+
+  it('ignores invisible bidi marks and no-break spaces pasted with a number; normalizePhone cleans them for storage', () => {
+    expect(internationalPhone('\u202A+20 101 234 5678\u202C', '20')).toBe('201012345678');
+    expect(internationalPhone('\u200E٠١٠١٢٣٤٥٦٧٨', '20')).toBe('201012345678');
+    expect(telLink('\u202A+20 101 234 5678\u202C')).toBe('tel:+201012345678');
+    expect(normalizePhone('\u202A+20\u00A0101\u00A0234 5678\u202C')).toBe('+20 101 234 5678');
+    expect(normalizePhone(' ٠١٠  ١٢٣٤ ٥٦٧٨\u200F ')).toBe('010 1234 5678');
+    expect(normalizePhone('\u2066۰۱۰۱۲۳۴۵۶۷۸\u2069')).toBe('01012345678');
   });
 
   it('refuses what cannot be a phone number', () => {

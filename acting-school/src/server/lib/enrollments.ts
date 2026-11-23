@@ -68,3 +68,20 @@ export function setEnrollmentStatus(tx: Tx, course: CourseForEnrollment, enrollm
   tx.update(enrollments).set({ status }).where(eq(enrollments.id, enrollmentId)).run();
   return true;
 }
+
+/**
+ * Admissions linking an existing student to a class: make sure they are
+ * enrolled. Already enrolled → that enrollment as it is; in the class before
+ * (withdrawn/completed) → re-enrolled, capacity checked (setEnrollmentStatus);
+ * never in it → a new enrollment (addEnrollment). Returns the enrollment id.
+ */
+export function ensureEnrolled(tx: Tx, course: CourseForEnrollment, studentId: number, enrolledOn: string): number {
+  const existing = tx
+    .select({ id: enrollments.id, status: enrollments.status })
+    .from(enrollments)
+    .where(and(eq(enrollments.courseId, course.id), eq(enrollments.studentId, studentId)))
+    .get();
+  if (!existing) return addEnrollment(tx, course, studentId, enrolledOn);
+  setEnrollmentStatus(tx, course, existing.id, 'enrolled');
+  return existing.id;
+}

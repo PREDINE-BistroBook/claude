@@ -100,7 +100,11 @@ function LogContactDialog({ onClose, lead, defaultType = 'call' }: Props) {
         <FormError messageKey={form.formError} />
         <fieldset>
           <legend className="mb-1.5 text-sm font-medium text-ink">{t('log.type')}</legend>
-          <div role="radiogroup" aria-label={t('log.type')} className="grid grid-cols-5 gap-1.5">
+          {/*
+            Phones: three per row (the rest share the next row) so labels like "WhatsApp" or
+            "بريد إلكتروني" fit at 375px; one row from sm up. Labels wrap rather than being cut off.
+          */}
+          <div role="radiogroup" aria-label={t('log.type')} className="flex flex-wrap gap-1.5">
             {LEAD_CONTACT_TYPES.map((ct) => {
               const Icon = CONTACT_ICONS[ct];
               const active = ct === type;
@@ -112,12 +116,12 @@ function LogContactDialog({ onClose, lead, defaultType = 'call' }: Props) {
                   aria-checked={active}
                   onClick={() => setType(ct)}
                   className={clsx(
-                    'flex min-w-0 flex-col items-center gap-1 rounded-xl border px-1 py-2 text-xs font-medium transition-colors',
+                    'flex min-w-0 flex-[1_1_30%] flex-col items-center gap-1 rounded-xl border px-1.5 py-2 text-xs font-medium transition-colors sm:flex-[1_1_0%]',
                     active ? 'border-accent bg-accent-soft text-accent' : 'border-line-strong bg-surface text-ink hover:bg-surface-2',
                   )}
                 >
                   <Icon className="size-5" aria-hidden />
-                  <span className="max-w-full truncate">{t(`common:enums.leadActivityType.${ct}`)}</span>
+                  <span className="max-w-full text-center leading-tight break-words">{t(`common:enums.leadActivityType.${ct}`)}</span>
                 </button>
               );
             })}

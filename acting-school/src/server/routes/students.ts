@@ -16,7 +16,10 @@ import type { DB } from '../db/client';
 import { attendance, classSessions, courses, enrollments, files, students, talent } from '../db/schema';
 import type { AppEnv } from '../env';
 import { courseScope, hasPermission, ownCourseIds, redactContact, seesAllClasses, studentScope, withoutContact } from '../lib/access';
+import { reopenLeadsOfStudent } from '../lib/admissions';
 import { ApiError, notFound } from '../lib/errors';
+import { phoneDigitsSql, phoneSearchDigits } from '../lib/phone';
+import { getSettings } from '../lib/settings';
 import { body, paramId, query } from '../lib/validate';
 import { currentUser, requireAuth, requirePermission } from '../middleware/auth';
 
@@ -27,7 +30,8 @@ import { currentUser, requireAuth, requirePermission } from '../middleware/auth'
  * students.write changes them. Phone, email, guardian and emergency contacts
  * need students.contact: without it they come back null (contactHidden: true),
  * aren't searched and are ignored on writes. Deleting a student removes their
- * enrollments and attendance (FK cascade); a linked talent profile is kept, unlinked.
+ * enrollments and attendance (FK cascade); a linked talent profile is kept,
+ * unlinked; an admissions enquiry enrolled as them goes back to 'accepted'.
  */
 const router = new Hono<AppEnv>();
 router.use(requireAuth);
@@ -93,11 +97,8 @@ function findStudent(db: DB, id: number, user: SessionUser): StudentRow {
 const escapeLike = (s: string) => s.replace(/[\\%_]/g, (m) => `\\${m}`);
 const likeEscaped = (expr: SQL, pattern: string) => sql`${expr} like ${pattern} escape '\\'`;
 
-/** Phone digits with common separators removed, for matching "050 123 4567" against "0501234567". */
-const phoneDigitsSql = sql`replace(replace(replace(replace(replace(coalesce(${students.phone}, ''), ' ', ''), '-', ''), '(', ''), ')', ''), '+', '')`;
-
 /** Name search; email and phone too only for someone who may see them (otherwise a search would reveal them). */
-function searchCondition(q: string, withContact: boolean): SQL {
+function searchCondition(q: string, withContact: boolean, countryCode: string): SQL {
   const term = q.replace(/\s+/g, ' ');
   const pattern = `%${escapeLike(term)}%`;
   const parts: SQL[] = [
@@ -108,8 +109,8 @@ function searchCondition(q: string, withContact: boolean): SQL {
   ];
   if (withContact) {
     parts.push(likeEscaped(sql`${students.email}`, pattern), likeEscaped(sql`${students.phone}`, pattern));
-    const digits = term.replace(/[\s\-().+]/g, '');
-    if (/^\d{3,}$/.test(digits)) parts.push(sql`${phoneDigitsSql} like ${`%${digits}%`}`);
+    // Phone digits in any format ("050 123 4567" finds "0501234567", Arabic digits too).
+    for (const digits of phoneSearchDigits(term, countryCode) ?? []) parts.push(sql`${phoneDigitsSql(students.phone)} like ${`%${digits}%`}`);
   }
   return or(...parts)!;
 }
@@ -134,7 +135,7 @@ router.get('/', canRead, (c) => {
   const scope = studentScope(me);
   if (scope) conditions.push(scope);
   if (status) conditions.push(eq(students.status, status));
-  if (q) conditions.push(searchCondition(q, seesContact(me)));
+  if (q) conditions.push(searchCondition(q, seesContact(me), getSettings(db).defaultCountryCode));
 
   const rows = db
     .select({
@@ -252,10 +253,15 @@ router.patch('/:id', canWrite, async (c) => {
 router.delete('/:id', canWrite, (c) => {
   const id = paramId(c);
   const db = c.get('db');
-  findStudent(db, id, currentUser(c));
-  // Enrollments and attendance cascade; talent.student_id is set to NULL (see db/schema.ts).
-  const result = db.delete(students).where(eq(students.id, id)).run();
-  if (result.changes === 0) throw notFound('Student not found');
+  const me = currentUser(c);
+  findStudent(db, id, me);
+  db.transaction((tx) => {
+    // An enquiry enrolled as this student goes back to 'accepted' (admissions), so it can be enrolled again.
+    reopenLeadsOfStudent(tx, id, me.id);
+    // Enrollments and attendance cascade; talent.student_id is set to NULL (see db/schema.ts).
+    const result = tx.delete(students).where(eq(students.id, id)).run();
+    if (result.changes === 0) throw notFound('Student not found');
+  });
   return c.body(null, 204);
 });
 

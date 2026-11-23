@@ -10,6 +10,25 @@ export function westernDigits(s: string): string {
   return s.replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660)).replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0));
 }
 
+/**
+ * Invisible formatting characters that come along when a number is copied from
+ * WhatsApp or another right-to-left context: zero-width space/joiners, LRM/RLM,
+ * the bidi embeddings, overrides and isolates (U+202A–U+202E, U+2066–U+2069)
+ * and the byte-order mark.
+ */
+const INVISIBLE_MARKS_RE = /[​-‏‪-‮⁦-⁩﻿]/g;
+/** No-break and other unusual spaces → a plain space. */
+const ODD_SPACES_RE = /[  -   　]/g;
+
+/**
+ * A phone number as we store it: Western digits, no invisible marks, single
+ * spaces, trimmed. Otherwise kept as typed ("+20 101 234 5678" stays spaced).
+ * Applied by the lead and student schemas, so stored numbers can be matched.
+ */
+export function normalizePhone(raw: string): string {
+  return westernDigits(raw).replace(INVISIBLE_MARKS_RE, '').replace(ODD_SPACES_RE, ' ').replace(/\s+/g, ' ').trim();
+}
+
 /** Only the digits of a phone number (Arabic digits converted); '' for nothing. */
 export function phoneDigits(raw: string | null | undefined): string {
   return raw ? westernDigits(raw).replace(/\D/g, '') : '';
@@ -24,16 +43,43 @@ export const MAX_PHONE_DIGITS = 15;
 export const COUNTRY_CODE_RE = /^[1-9]\d{0,3}$/;
 
 /**
+ * Country codes whose national numbers never start with 0 (0 is only the
+ * domestic trunk prefix), so "+20 010…", "+20 (0) 100…" or "0020 010…" mean
+ * "+20 10…". Egypt and its neighbours, plus where students often come from.
+ * Not every country: Italy (39) keeps its 0 after the code (+39 055… is
+ * Florence), as do a few others, so a code is added here only when that is
+ * certain. Country codes are prefix-free, so a match is unambiguous.
+ */
+export const TRUNK_ZERO_COUNTRY_CODES: readonly string[] = [
+  // Egypt, the Arab world and the region
+  '20', '212', '213', '216', '218', '249', '961', '962', '963', '964', '965', '966', '967', '968', '970', '971', '972', '973', '974', '90',
+  // Europe and elsewhere
+  '27', '30', '31', '32', '33', '34', '41', '43', '44', '49', '61', '91', '92',
+];
+
+/** "20" + "0101…" → "20101…" for the codes above (digits only, international form). */
+function dropTrunkZero(digits: string): string {
+  for (const code of TRUNK_ZERO_COUNTRY_CODES) {
+    if (digits.startsWith(code)) return digits.startsWith(`${code}0`) ? code + digits.slice(code.length + 1) : digits;
+  }
+  return digits;
+}
+
+/** The number without invisible marks and with Western digits, trimmed — what the rules below look at. */
+const cleaned = (raw: string) => westernDigits(raw).replace(INVISIBLE_MARKS_RE, '').trim();
+
+/**
  * International digits for a phone number, without "+" (what wa.me wants), or
  * null when it can't be a phone number.
  * - "+20 101 …" or "0020 101 …" → already international: just the digits;
  * - "0101 …" (national trunk prefix 0) → the default country code + the rest;
  * - digits already starting with the country code ("20101…") → as they are;
- * - anything else ("101 …") → the default country code + the digits.
+ * - anything else ("101 …") → the default country code + the digits;
+ * - a trunk 0 kept after a country code that never has one ("+20 (0) 10…") is dropped.
  */
 export function internationalPhone(raw: string | null | undefined, defaultCountryCode: string): string | null {
   if (!raw) return null;
-  const trimmed = westernDigits(raw).trim();
+  const trimmed = cleaned(raw);
   let digits = phoneDigits(trimmed);
   if (!digits) return null;
   const cc = COUNTRY_CODE_RE.test(defaultCountryCode) ? defaultCountryCode : '';
@@ -46,6 +92,7 @@ export function internationalPhone(raw: string | null | undefined, defaultCountr
   } else if (!cc || !digits.startsWith(cc)) {
     digits = cc + digits;
   }
+  digits = dropTrunkZero(digits);
   if (digits.length < MIN_PHONE_DIGITS + 1 || digits.length > MAX_PHONE_DIGITS) return null;
   return digits;
 }
@@ -69,8 +116,8 @@ export function whatsAppLink(phone: string | null | undefined, defaultCountryCod
 /** A tel: link (keeps a leading "+", drops spaces and punctuation), or null without digits. */
 export function telLink(phone: string | null | undefined): string | null {
   if (!phone) return null;
-  const s = westernDigits(phone).trim();
+  const s = cleaned(phone);
   const digits = phoneDigits(s);
   if (!digits) return null;
-  return `tel:${s.startsWith('+') ? '+' : ''}${digits}`;
+  return s.startsWith('+') ? `tel:+${dropTrunkZero(digits)}` : `tel:${digits}`;
 }

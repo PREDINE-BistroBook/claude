@@ -59,6 +59,12 @@ describe('npm run seed', () => {
     expect(count(`select count(distinct status) as n from interviews where status in ('scheduled', 'done', 'no_show')`)).toBe(3);
     expect(count(`select count(*) as n from leads l join students s on s.id = l.student_id where l.status = 'enrolled'`)).toBe(1);
     expect(count(`select count(*) as n from leads where status = 'lost' and lost_reason is not null`)).toBe(2);
+    // The enrolled lead joined yesterday everywhere: timeline, student profile and class roster.
+    expect(
+      count(`select count(*) as n from leads l join students s on s.id = l.student_id join enrollments e on e.student_id = s.id
+             where l.status = 'enrolled' and s.joined_on = date('now', 'localtime', '-1 day') and e.enrolled_on = s.joined_on`),
+    ).toBe(1);
+
     expect(count(`select count(*) as n from leads where status in ('enrolled', 'declined', 'lost') and next_follow_up_on is not null`)).toBe(0);
     expect(count(`select count(*) as n from leads where next_follow_up_on < date('now', 'localtime')`)).toBeGreaterThan(0);
     expect(count('select count(*) as n from lead_activities')).toBeGreaterThan(30);

@@ -2,6 +2,7 @@ import { CalendarX } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { addDays, splitDateTime, todayISO } from '@shared/dates';
+import type { LeadStatus } from '@shared/enums';
 import {
   ADMISSIONS_ERROR_CODES,
   DEFAULT_INTERVIEW_MINUTES,
@@ -16,6 +17,7 @@ import { useAuth } from '@web/lib/auth';
 import { useFormat } from '@web/lib/format';
 import { useForm } from '@web/lib/forms';
 import { admissionsErrorKey, isApiCode, useScheduleInterview, useUpdateInterview } from '../api';
+import { statusAfterInterviewEnds, statusAfterScheduling } from '../utils';
 import { StaffSelect } from './bits';
 
 const DURATIONS = [15, 20, 30, 45, 60, 90, 120];
@@ -55,6 +57,14 @@ function InterviewDialog({ onClose, lead, interview }: Props) {
   });
   const v = form.values;
   const durations = DURATIONS.includes(Number(v.durationMinutes)) ? DURATIONS : [...DURATIONS, Number(v.durationMinutes)].sort((a, b) => a - b);
+  // What the lead's status will do, as the server moves it (an accepted lead keeps its decision).
+  const statusLabel = (s: LeadStatus) => t(`common:enums.leadStatus.${s}`);
+  const afterSchedule = statusAfterScheduling(lead.status);
+  const scheduleHint =
+    afterSchedule === lead.status ? t('interview.scheduleHintStays', { status: statusLabel(lead.status) }) : t('interview.scheduleHint', { status: statusLabel(afterSchedule) });
+  const afterCancel = interview ? statusAfterInterviewEnds(lead, interview.id) : lead.status;
+  const cancelMessage =
+    afterCancel === lead.status ? t('interview.cancelMessageStays', { status: statusLabel(lead.status) }) : t('interview.cancelMessage', { status: statusLabel(afterCancel) });
 
   const onError = (err: unknown) => {
     if (err instanceof ApiError && err.issues?.length) {
@@ -127,7 +137,7 @@ function InterviewDialog({ onClose, lead, interview }: Props) {
         open
         onClose={onClose}
         title={t(editing ? 'interview.editTitle' : 'interview.scheduleTitle')}
-        description={editing ? undefined : t('interview.scheduleHint')}
+        description={editing ? undefined : scheduleHint}
         footer={
           <>
             {editing && (
@@ -182,7 +192,7 @@ function InterviewDialog({ onClose, lead, interview }: Props) {
       <ConfirmDialog
         open={confirmCancel}
         title={t('interview.cancelTitle')}
-        message={t('interview.cancelMessage')}
+        message={cancelMessage}
         confirmLabel={t('interview.cancel')}
         loading={update.isPending}
         onConfirm={cancelInterview}
