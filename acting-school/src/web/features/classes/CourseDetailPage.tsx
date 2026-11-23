@@ -107,7 +107,8 @@ export default function CourseDetailPage() {
       <div className="grid gap-5">
         <InfoCard course={c} enrolled={enrolled} />
 
-        <div>
+        {/* min-w-0: the tab strip scrolls sideways inside the page instead of widening the grid past a 375 px screen. */}
+        <div className="min-w-0">
           <Tabs<Tab>
             value={tab}
             onChange={(v) => setParams(v === 'students' ? {} : { tab: v }, { replace: true })}

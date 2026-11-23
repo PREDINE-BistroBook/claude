@@ -10,8 +10,8 @@ import { ApiError } from '@web/lib/api';
 import { fullName, useFormat } from '@web/lib/format';
 import { useForm } from '@web/lib/forms';
 import { useVideoActions, videoErrorKey } from '../api';
-import { defaultVideoTitle, tidyLink, toggleStudent } from '../utils';
-import { WRAP } from './VideoParts';
+import { defaultVideoTitle, tidyLink, titleForSession, toggleStudent } from '../utils';
+import { WRAP, useStepToast } from './VideoParts';
 
 export interface VideoFormStudent {
   id: number;
@@ -35,18 +35,29 @@ export interface VideoFormProps {
   onSaved?: (v: VideoDetail) => void;
 }
 
-type Values = { title: string; kind: VideoKind; rawLink: string; notesForEditor: string; dueOn: string; sessionId: string; studentIds: number[] };
+type Values = {
+  title: string;
+  kind: VideoKind;
+  rawLink: string;
+  notesForEditor: string;
+  dueOn: string;
+  sessionId: string;
+  studentIds: number[];
+};
 
 /**
  * "+ Add video" (and "Change" while the video is new): the title — offered as
- * "<workshop> — <date>" —, what it is, the raw footage link, who is in it as
- * big tick boxes, notes for the editor and the day it is needed (tomorrow).
- * A bottom sheet on phones.
+ * "<workshop> — 23/11/2026" (digits: readable in both directions), following
+ * the session picked from a workshop until the coach types their own —, what
+ * it is, the raw footage link, who is in it as big tick boxes, notes for the
+ * editor and the due date (tomorrow). A bottom sheet on phones. After adding,
+ * the toast names who was alerted.
  */
 export function AddVideoModal({ open, onClose, course, session, sessions, students, video, onSaved }: VideoFormProps) {
   const { t } = useTranslation(['videos', 'common']);
   const f = useFormat();
   const toast = useToast();
+  const stepToast = useStepToast();
   const actions = useVideoActions();
   const mutation = video ? actions.update : actions.add;
   const kindLabelId = useId();
@@ -64,7 +75,7 @@ export function AddVideoModal({ open, onClose, course, session, sessions, studen
             studentIds: video.students.map((s) => s.id),
           }
         : {
-            title: defaultVideoTitle(course.name, session ? f.date(session.date, 'medium') : null),
+            title: defaultVideoTitle(course.name, session ? session.date : (sessions?.at(-1)?.date ?? null)),
             kind: 'scene',
             rawLink: '',
             notesForEditor: '',
@@ -72,7 +83,7 @@ export function AddVideoModal({ open, onClose, course, session, sessions, studen
             sessionId: sessions?.length ? String(sessions[sessions.length - 1]!.id) : '',
             studentIds: [],
           },
-    [video, course.name, session, sessions, f],
+    [video, course.name, session, sessions],
   );
   const form = useForm<Values>(initial);
   // Each time the sheet opens it starts from the video (or a fresh form).
@@ -106,12 +117,29 @@ export function AddVideoModal({ open, onClose, course, session, sessions, studen
     const where = session ? { sessionId: session.id } : v.sessionId ? { sessionId: Number(v.sessionId) } : { courseId: course.id };
     const data = form.validate(videoInput, { ...payload, ...where });
     if (!data) return;
-    actions.add.mutate(data, { onSuccess: done('toasts.added'), onError: failed });
+    actions.add.mutate(data, {
+      onSuccess: (saved) => {
+        // "Video added — Ali got an alert" (or that nobody edits videos yet).
+        stepToast('add', saved);
+        onClose();
+        onSaved?.(saved);
+      },
+      onError: failed,
+    });
   };
   const done = (key: string) => (saved: VideoDetail) => {
     toast.success(t(key));
     onClose();
     onSaved?.(saved);
+  };
+  /** Picking another session: the offered title follows it, unless the coach typed their own. */
+  const pickSession = (id: string) => {
+    const date = (sid: string) => sessions?.find((s) => String(s.id) === sid)?.date ?? null;
+    form.setValues({
+      ...v,
+      sessionId: id,
+      title: titleForSession(v.title, course.name, date(v.sessionId), date(id)),
+    });
   };
   // Field problems show under their fields; anything else (the editor has just started on it…) above the buttons.
   const failed = (err: unknown) => {
@@ -153,7 +181,8 @@ export function AddVideoModal({ open, onClose, course, session, sessions, studen
           placeholder="https://"
           required
         />
-        <TextField label={t('form.title')} {...form.bind('title')} error={form.error('title')} maxLength={VIDEO_TITLE_MAX} required />
+        {/* dir="auto": an English workshop name in the Arabic screen (or the other way round) is shown the way it is written. */}
+        <TextField label={t('form.title')} {...form.bind('title')} error={form.error('title')} maxLength={VIDEO_TITLE_MAX} dir="auto" required />
 
         <Field label={<span id={kindLabelId}>{t('form.kind')}</span>} error={form.error('kind')}>
           <div role="radiogroup" aria-labelledby={kindLabelId} className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -180,7 +209,7 @@ export function AddVideoModal({ open, onClose, course, session, sessions, studen
         </Field>
 
         {!session && !video && sessions && sessions.length > 0 && (
-          <SelectField label={t('form.session')} {...form.bind('sessionId')} error={form.error('sessionId')}>
+          <SelectField label={t('form.session')} value={v.sessionId} onChange={(e) => pickSession(e.target.value)} error={form.error('sessionId')}>
             {[...sessions].reverse().map((s) => (
               <option key={s.id} value={s.id}>
                 {f.date(s.date, 'weekday')} · {f.time(s.startTime)}
@@ -193,12 +222,7 @@ export function AddVideoModal({ open, onClose, course, session, sessions, studen
         <Field label={<span id={studentsLabelId}>{t('form.students')}</span>} hint={students.length ? t('form.studentsHint') : undefined} error={form.error('studentIds')}>
           {students.length ? (
             <div role="group" aria-labelledby={studentsLabelId} className="grid gap-2">
-              <StudentTick
-                label={t('form.allStudents')}
-                checked={allTicked}
-                onChange={() => form.set('studentIds', allTicked ? [] : students.map((s) => s.id))}
-                strong
-              />
+              <StudentTick label={t('form.allStudents')} checked={allTicked} onChange={() => form.set('studentIds', allTicked ? [] : students.map((s) => s.id))} strong />
               <div className="grid gap-2 sm:grid-cols-2">
                 {students.map((s) => (
                   <StudentTick key={s.id} student={s} label={fullName(s)} checked={v.studentIds.includes(s.id)} onChange={() => form.set('studentIds', toggleStudent(v.studentIds, s.id))} />

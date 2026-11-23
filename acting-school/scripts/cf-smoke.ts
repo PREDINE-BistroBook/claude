@@ -694,7 +694,11 @@ export async function runApiSmoke(base: string, opts: { adminToken: string; pass
     check(expectStatus(await editor.post(`/api/videos/${added.id}/take`), 409, 'taken twice').body.error.code === 'video_moved', 'two taps: the second is refused');
     expectStatus(await coach.patch(`/api/videos/${added.id}`, { title: 'Too late' }), 409, 'the coach can’t change it once taken');
     check((await alertsFor(editor, added.id)).every((n) => n.readAt !== null), 'taken: the alert leaves the editor’s bell');
-    check(expectStatus(await editor.post(`/api/videos/${added.id}/submit`, { editedLink: 'https://youtu.be/smoke-1', notes: 'First cut' }), 200, 'done').body.status === 'in_review', 'waiting for the check');
+    const sent = expectStatus(await editor.post(`/api/videos/${added.id}/submit`, { editedLink: 'https://youtu.be/smoke-1', notes: 'First cut' }), 200, 'done').body;
+    check(sent.status === 'in_review', 'waiting for the check');
+    const reviewerId = reviewerMe.id as number;
+    check(sent.told.length === 1 && sent.told[0].id === reviewerId, '"Done" answers who was told: the reviewer (coach2), so the editor sees it on screen');
+    check(expectStatus(await owner.get('/api/chat/unread'), 200, 'owner poll').body.videos.reviewers === 1, 'the owners see that someone checks the edits');
     check((await alertsFor(reviewer, added.id)).some((n) => n.kind === 'video_review' && n.readAt === null), 'the reviewer (coach2) is alerted about the finished edit');
     await nobodyElse(added.id, 'video_review', [reviewer]);
     check((expectStatus(await reviewer.get('/api/chat/unread'), 200, 'reviewer poll').body.videos.toCheck as number) >= 1, 'the reviewer’s count');

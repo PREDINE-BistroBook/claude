@@ -19,6 +19,8 @@ export function VideosBlock({
   session,
   sessions,
   students,
+  adding: addingProp,
+  onAddingChange,
 }: {
   course: { id: number; name: string };
   /** On a session's page: its videos, and new ones go to it. */
@@ -26,10 +28,15 @@ export function VideosBlock({
   /** On a workshop's page: its sessions so far, to pick one for a new video. */
   sessions?: { id: number; date: string; startTime: string }[];
   students: VideoFormStudent[];
+  /** The "Add a class video" sheet opened from elsewhere on the page (the session's "+ Add video" at the top). */
+  adding?: boolean;
+  onAddingChange?: (open: boolean) => void;
 }) {
   const { t } = useTranslation('videos');
   const { user, can } = useAuth();
-  const [adding, setAdding] = useState(false);
+  const [addingHere, setAddingHere] = useState(false);
+  const adding = addingProp ?? addingHere;
+  const setAdding = onAddingChange ?? setAddingHere;
   const show = !!user && usesVideos(user);
   const list = useVideos(session ? { sessionId: session.id } : { courseId: course.id }, show);
   if (!show) return null;
@@ -67,24 +74,10 @@ export function VideosBlock({
             ))}
           </ul>
         ) : (
-          <EmptyState
-            icon={Clapperboard}
-            title={t(session ? 'block.empty' : 'block.emptyWorkshop')}
-            description={canAdd ? t('block.emptyHint') : undefined}
-            className="py-8"
-          />
+          <EmptyState icon={Clapperboard} title={t(session ? 'block.empty' : 'block.emptyWorkshop')} description={canAdd ? t('block.emptyHint') : undefined} className="py-8" />
         )}
       </Card>
-      {canAdd && (
-        <AddVideoModal
-          open={adding}
-          onClose={() => setAdding(false)}
-          course={course}
-          session={session ?? null}
-          sessions={sessions}
-          students={students}
-        />
-      )}
+      {canAdd && <AddVideoModal open={adding} onClose={() => setAdding(false)} course={course} session={session ?? null} sessions={sessions} students={students} />}
     </section>
   );
 }

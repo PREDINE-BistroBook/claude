@@ -7,6 +7,7 @@ import {
   VIDEOS_PAGE,
   VIDEO_ERROR_CODES,
   videoActions,
+  videoChangesInput,
   videoInput,
   videoNoteInput,
   videoSubmitInput,
@@ -15,9 +16,10 @@ import {
   type Video,
   type VideoDetail,
   type VideoEvent,
+  type VideoStepResult,
 } from '../../shared/schemas/videos';
 import type { DB } from '../db/database';
-import { classSessions, courses, enrollments, notifications, videoEvents, videoStudents, videos } from '../db/schema';
+import { classSessions, courses, enrollments, videoEvents, videoStudents, videos } from '../db/schema';
 import type { AppEnv } from '../env';
 import { courseScope, hasPermission, type Conn } from '../lib/access';
 import { schoolToday } from '../lib/clock';
@@ -27,12 +29,15 @@ import { inChunks, insertBatches } from '../lib/sqlLimits';
 import { body, paramId, query } from '../lib/validate';
 import {
   alertNote,
+  deleteVideoAlerts,
   findVisibleVideo,
   loadVideoDetail,
   loadVideoEvents,
   loadVideos,
   notifyVideo,
   pushVideo,
+  toldPersons,
+  videoChangesRecipients,
   videoPath,
   videoPerson,
   videoRuleFacts,
@@ -81,6 +86,11 @@ function detailOf(c: Context<AppEnv>, id: number): VideoDetail {
   const detail = loadVideoDetail(c.get('db'), id, currentUser(c));
   if (!detail) throw notFound('Video not found');
   return detail;
+}
+
+/** A step's answer: the video as the caller sees it now, and who was alerted (names and photos). */
+function stepResult(c: Context<AppEnv>, id: number, told: readonly VideoRecipient[]): VideoStepResult {
+  return { ...detailOf(c, id), told: toldPersons(c.get('db'), told) };
 }
 
 /** 409: the video has moved on since it was read — with the video as it is now. */
@@ -237,7 +247,7 @@ router.post('/', requirePermission('videos.add'), async (c) => {
     return { id: row.id, editors, alert };
   });
   pushVideo(c, id, editors, alert);
-  return c.json<VideoDetail>(detailOf(c, id), 201);
+  return c.json<VideoStepResult>(stepResult(c, id, editors), 201);
 });
 
 /**
@@ -295,7 +305,7 @@ router.delete('/:id', requireAnyPermission('videos.add', 'videos.review'), (c) =
       .returning({ id: videos.id })
       .get();
     // Its alerts would open a page that is gone: they go too.
-    if (deleted) tx.delete(notifications).where(eq(notifications.link, videoPath(id))).run();
+    if (deleted) deleteVideoAlerts(tx, [id]);
     return !!deleted;
   });
   if (!gone) throw moved(c, id);
@@ -334,7 +344,7 @@ router.post('/:id/take', requirePermission('videos.edit'), (c) => {
     return true;
   });
   if (!done) throw moved(c, id);
-  return c.json<VideoDetail>(detailOf(c, id));
+  return c.json<VideoStepResult>(stepResult(c, id, []));
 });
 
 /** "Done": the edited link (and notes for the reviewer). Every active reviewer who is not an owner is alerted. */
@@ -367,14 +377,17 @@ router.post('/:id/submit', requirePermission('videos.edit'), async (c) => {
   });
   if (!result) throw moved(c, id);
   pushVideo(c, id, result.reviewers, result.alert);
-  return c.json<VideoDetail>(detailOf(c, id));
+  // Who was told — none when nobody holds the Video reviewer position yet: the screen says so.
+  return c.json<VideoStepResult>(stepResult(c, id, result.reviewers));
 });
 
 // ── The reviewer ────────────────────────────────────────────────────────────
 
 /**
  * A reviewer's decision, from `from` to `to`: the history entry, the "to
- * check" alerts done with for every reviewer, and the alert to whoever is told.
+ * check" alerts done with for every reviewer, and the alert to whoever is
+ * told. Allowed by the one shared rule (videoActions): never on an edit the
+ * reviewer made themselves (someone holding both positions), unless an owner.
  */
 async function decide(c: Context<AppEnv>, opts: { from: VideoStatus; to: VideoStatus; event: 'approved' | 'changes_requested' | 'reopened'; note: string | null }) {
   const id = paramId(c);
@@ -382,6 +395,9 @@ async function decide(c: Context<AppEnv>, opts: { from: VideoStatus; to: VideoSt
   const db = c.get('db');
   const row = visibleRow(c, id);
   if (row.status !== opts.from) throw moved(c, id);
+  const can = videoActions(videoRuleFacts(db, row), me);
+  const allowed = opts.event === 'approved' ? can.approve : opts.event === 'reopened' ? can.reopen : can.requestChanges;
+  if (!allowed) throw new ApiError(403, VIDEO_ERROR_CODES.ownEdit, 'You edited this video: another reviewer checks it');
   const now = Date.now();
   const name = courseName(db, row.courseId);
 
@@ -402,9 +418,8 @@ async function decide(c: Context<AppEnv>, opts: { from: VideoStatus; to: VideoSt
       recipients = videoPerson(tx, row.addedById, me.id);
       alert = { kind: 'video_approved', title: 'videoApprovedTitle', body: 'videoApprovedBody', values: { title: row.title, course: name, name: me.name } };
     } else {
-      // The editor who did it — or, when nobody is named (or they have left), every editor who is not an owner.
-      recipients = videoPerson(tx, row.editorId, me.id);
-      if (!recipients.length && row.editorId !== me.id) recipients = videoTeam(tx, 'videos.edit', me.id);
+      // The editor who did it — or, when nobody is named or they can no longer edit videos (switched off, position taken away), every editor who is not an owner.
+      recipients = videoChangesRecipients(tx, row.editorId, me.id);
       alert = {
         kind: 'video_changes',
         title: opts.event === 'reopened' ? 'videoReopenedTitle' : 'videoChangesTitle',
@@ -417,7 +432,7 @@ async function decide(c: Context<AppEnv>, opts: { from: VideoStatus; to: VideoSt
   });
   if (!result) throw moved(c, id);
   pushVideo(c, id, result.recipients, result.alert);
-  return c.json<VideoDetail>(detailOf(c, id));
+  return c.json<VideoStepResult>(stepResult(c, id, result.recipients));
 }
 
 /** "Approved ✓". The coach who added it is alerted. */
@@ -425,13 +440,13 @@ router.post('/:id/approve', requirePermission('videos.review'), (c) => decide(c,
 
 /** "Needs changes", with a note (required). The editor who did it is alerted. */
 router.post('/:id/request-changes', requirePermission('videos.review'), async (c) => {
-  const { note } = await body(c, videoNoteInput);
+  const { note } = await body(c, videoChangesInput);
   return decide(c, { from: 'in_review', to: 'changes_requested', event: 'changes_requested', note });
 });
 
 /** An approved video back to the editor, with a note (required). */
 router.post('/:id/reopen', requirePermission('videos.review'), async (c) => {
-  const { note } = await body(c, videoNoteInput);
+  const { note } = await body(c, videoChangesInput);
   return decide(c, { from: 'approved', to: 'changes_requested', event: 'reopened', note });
 });
 

@@ -218,7 +218,7 @@ const en = {
     videoStatus: {
       new: 'Waiting for the editor',
       editing: 'Being edited',
-      in_review: 'Waiting for the check',
+      in_review: 'Waiting to be checked',
       changes_requested: 'Needs changes',
       approved: 'Approved',
     },
@@ -551,12 +551,12 @@ const ar: TranslationOf<typeof en> = {
     castingApplicationStatus: { new: 'جديد', reviewing: 'قيد المراجعة', accepted: 'أُضيف إلى قائمة الممثلين', declined: 'مرفوض' },
     videoStatus: {
       new: 'في انتظار المونتير',
-      editing: 'قيد المونتاج',
+      editing: 'جاري المونتاج',
       in_review: 'في انتظار المراجعة',
       changes_requested: 'يحتاج تعديلات',
       approved: 'تمت الموافقة',
     },
-    videoKind: { scene: 'مشهد', monologue: 'مونولوج', exercise: 'تمرين', showreel: 'شوريل', performance: 'عرض', other: 'أخرى' },
+    videoKind: { scene: 'مشهد', monologue: 'مونولوج', exercise: 'تمرين', showreel: 'شوريل', performance: 'أداء', other: 'غير ذلك' },
     summonsStatus: { pending: 'في انتظار الرد', on_my_way: 'في الطريق', cant_now: 'لا أستطيع الآن', cancelled: 'أُلغي', expired: 'لا يوجد رد' },
     fileKind: { photo: 'صورة', document: 'ملف' },
     leadLostReason: {

@@ -34,6 +34,7 @@ import { addEnrollment, setEnrollmentStatus } from '../lib/enrollments';
 import { ApiError, fieldError, notFound } from '../lib/errors';
 import { releaseFiles } from '../lib/fileRefs';
 import { body, paramId, query } from '../lib/validate';
+import { deleteVideoAlerts } from '../lib/videos';
 import { currentUser, requireAuth, requirePermission } from '../middleware/auth';
 
 /**
@@ -201,7 +202,12 @@ router.delete('/:id', write, async (c) => {
   requireCourse(db, id, currentUser(c));
   // Its photos & files go with it (cascade); their stored files too, unless used elsewhere.
   const fileIds = db.select({ fileId: courseFiles.fileId }).from(courseFiles).where(eq(courseFiles.courseId, id)).all().map((r) => r.fileId);
-  db.delete(courses).where(eq(courses.id, id)).run();
+  db.transaction((tx) => {
+    // Its class videos go with it (cascade) — and their alerts, which would open a page that is gone.
+    const videoIds = tx.select({ id: videos.id }).from(videos).where(eq(videos.courseId, id)).all().map((r) => r.id);
+    deleteVideoAlerts(tx, videoIds);
+    tx.delete(courses).where(eq(courses.id, id)).run();
+  });
   await releaseFiles(db, c.get('files'), fileIds);
   return c.body(null, 204);
 });

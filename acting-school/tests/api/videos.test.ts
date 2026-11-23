@@ -26,7 +26,7 @@ import type { ChatUnreadResponse } from '../../src/shared/schemas/chat';
 import type { CourseDetail } from '../../src/shared/schemas/courses';
 import type { NotificationsResponse } from '../../src/shared/schemas/notifications';
 import type { Position } from '../../src/shared/schemas/positions';
-import type { Video, VideoDetail, VideoEvent } from '../../src/shared/schemas/videos';
+import type { Video, VideoDetail, VideoEvent, VideoStepResult } from '../../src/shared/schemas/videos';
 import { makeTestContext, SCHOOL_TZ, todayISO, type Client } from '../helpers';
 import { fakeBrowser, pushRecorder } from '../pushHelpers';
 
@@ -36,7 +36,7 @@ import { fakeBrowser, pushRecorder } from '../pushHelpers';
  */
 
 type Ctx = Awaited<ReturnType<typeof makeTestContext>>;
-type Answer = VideoDetail & { error: { code: string; details?: any; issues: any[] } };
+type Answer = VideoStepResult & { error: { code: string; details?: any; issues: any[] } };
 
 /**
  * A school with one workshop of Layla's (a session today, three students), one
@@ -92,6 +92,11 @@ const alertedIds = (t: Ctx, videoId: number, kind: string) =>
     .filter((n) => n.kind === kind)
     .map((n) => n.userId)
     .sort((a, b) => a - b);
+
+/** Give someone other positions (as an owner does on Team › their name), keeping the account. */
+async function moveToPositions(s: School, userId: number, keys: Parameters<Ctx['positionId']>[0][]) {
+  expect((await s.owner.patch(`/api/staff/${userId}`, { positionIds: keys.map((k) => s.t.positionId(k)) })).status).toBe(200);
+}
 
 /** A video of Layla's on today's session, with Maya and Chloe in it. */
 async function newVideo(s: School, body: Record<string, unknown> = {}) {
@@ -386,6 +391,15 @@ describe('adding a video', () => {
     await step(s.editor, v.id, 'take');
     expect((await step(s.editor, v.id, 'submit', { editedLink: 'javascript:alert(1)' })).status).toBe(400);
     expect((await step(s.editor, v.id, 'submit', {})).status).toBe(400);
+    // An empty field says what to put in it, not a bare "Required".
+    expect((await add(s.coach, { sessionId: s.session.id, rawLink: '  ' })).body.error.issues[0].message).toBe('videos:errors.rawLinkRequired');
+    expect((await step(s.editor, v.id, 'submit', { editedLink: '' })).body.error.issues[0].message).toBe('videos:errors.editedLinkRequired');
+    await step(s.editor, v.id, 'submit', { editedLink: EDIT });
+    for (const action of ['request-changes', 'reopen']) {
+      const empty = await step(s.reviewer, v.id, action, { note: ' ' });
+      expect(empty.status, action).toBe(400);
+      expect(empty.body.error.issues[0], action).toMatchObject({ path: ['note'], message: 'videos:errors.changesNoteRequired' });
+    }
   });
 
   it('students: only the workshop’s own (now or before); repeats are dropped', async () => {
@@ -570,7 +584,7 @@ describe('who is alerted at each step (never the owners unless they act)', () =>
     expect(alertedIds(s.t, v.id, 'video_new')).toEqual([s.editor.user.id, second.user.id].sort((a, b) => a - b));
     expect(videoAlerts(s.t, v.id)).toHaveLength(2);
     const ar = (await bell(s.editor)).items[0]!;
-    expect(ar).toMatchObject({ kind: 'video_new', title: 'فيديو جديد للمونتاج: Screen Acting I — scene', body: 'Screen Acting I · من Layla Haddad', link: `/videos/${v.id}`, readAt: null });
+    expect(ar).toMatchObject({ kind: 'video_new', title: 'فيديو جديد للمونتاج: Screen Acting I — scene', body: 'من Layla Haddad · Screen Acting I', link: `/videos/${v.id}`, readAt: null });
     expect((await bell(second)).items[0]).toMatchObject({ title: 'New video to edit: Screen Acting I — scene', body: 'Screen Acting I · from Layla Haddad' });
     // Nobody else: not the owner, the director, the reviewer, the coach who added it.
     for (const c of [s.owner, s.director, s.reviewer, s.coach]) expect((await bell(c)).items.filter((n) => n.kind.startsWith('video_')), c.user.name).toEqual([]);
@@ -588,7 +602,7 @@ describe('who is alerted at each step (never the owners unless they act)', () =>
     await step(s.editor, v.id, 'submit', { editedLink: EDIT });
     expect(alertedIds(s.t, v.id, 'video_review')).toEqual([s.reviewer.user.id, another.user.id].sort((a, b) => a - b));
     expect((await bell(s.reviewer)).items[0]).toMatchObject({ kind: 'video_review', title: 'Edit ready to check: Screen Acting I — scene', body: 'Screen Acting I · edited by Ali El Gohary', link: `/videos/${v.id}` });
-    expect((await bell(another)).items[0]).toMatchObject({ title: 'مونتاج جاهز للمراجعة: Screen Acting I — scene', body: 'Screen Acting I · المونتاج: Ali El Gohary' });
+    expect((await bell(another)).items[0]).toMatchObject({ title: 'مونتاج جاهز للمراجعة: Screen Acting I — scene', body: 'المونتاج: Ali El Gohary · Screen Acting I' });
     for (const c of [s.owner, s.director, s.coach]) expect((await bell(c)).items.filter((n) => n.kind === 'video_review')).toEqual([]);
     // One reviewer decides: the alert leaves the other reviewer's bell too.
     await step(another, v.id, 'approve');
@@ -603,7 +617,7 @@ describe('who is alerted at each step (never the owners unless they act)', () =>
     await step(s.editor, v.id, 'submit', { editedLink: EDIT });
     await step(s.reviewer, v.id, 'request-changes', { note: 'Music too loud at 0:42' });
     expect(alertedIds(s.t, v.id, 'video_changes')).toEqual([s.editor.user.id]);
-    expect((await bell(s.editor)).items[0]).toMatchObject({ kind: 'video_changes', title: 'مطلوب تعديلات: Screen Acting I — scene', body: 'Moaty: Music too loud at 0:42', readAt: null });
+    expect((await bell(s.editor)).items[0]).toMatchObject({ kind: 'video_changes', title: 'مطلوب تعديلات: Screen Acting I — scene', body: 'ملاحظة Moaty: Music too loud at 0:42', readAt: null });
     expect((await bell(second)).items.filter((n) => n.kind === 'video_changes')).toEqual([]);
     // Fixing it reads the alert; the resubmitted edit alerts the reviewer again (one alert per video, moved to the top, unread).
     await step(s.editor, v.id, 'take');
@@ -619,7 +633,7 @@ describe('who is alerted at each step (never the owners unless they act)', () =>
     expect((await bell(s.coach)).items[0]).toMatchObject({ kind: 'video_approved', title: 'Video approved: Screen Acting I — scene', body: 'Screen Acting I · checked by Moaty', link: `/videos/${v.id}` });
 
     await step(s.reviewer, v.id, 'reopen', { note: 'Title card misspelt' });
-    expect((await bell(s.editor)).items[0]).toMatchObject({ kind: 'video_changes', title: 'أُعيد فتحه، مطلوب تعديلات: Screen Acting I — scene', body: 'Moaty: Title card misspelt', readAt: null });
+    expect((await bell(s.editor)).items[0]).toMatchObject({ kind: 'video_changes', title: 'أُعيد فتحه، مطلوب تعديلات: Screen Acting I — scene', body: 'ملاحظة Moaty: Title card misspelt', readAt: null });
     for (const c of [s.owner, s.director]) expect((await bell(c)).items.filter((n) => n.kind.startsWith('video_'))).toEqual([]);
   });
 
@@ -673,7 +687,7 @@ describe('who is alerted at each step (never the owners unless they act)', () =>
     expect(sentTo()).toEqual([phones.editor.endpoint]);
     expect(await phones.editor.decrypt(push.sent[0]!.body)).toEqual({
       title: 'فيديو جديد للمونتاج: Screen Acting I — scene',
-      body: 'Screen Acting I · من Layla Haddad',
+      body: 'من Layla Haddad · Screen Acting I',
       link: `/videos/${v.id}`,
       kind: 'video_new',
       tag: `video-${v.id}`,
@@ -691,6 +705,136 @@ describe('who is alerted at each step (never the owners unless they act)', () =>
     expect(sentTo().slice(2)).toEqual([phones.coach.endpoint]);
     expect(await phones.coach.decrypt(push.sent[2]!.body)).toMatchObject({ title: 'Video approved: Screen Acting I — scene', kind: 'video_approved' });
     expect(sentTo()).not.toContain(phones.owner.endpoint);
+  });
+});
+
+// ── People who change positions, people who hold both ──────────────────────
+
+describe('when the editor no longer edits, or one person holds both positions', () => {
+  it('the Video editor position taken away, the account kept: the video they were editing goes to the other editors', async () => {
+    const s = await school();
+    const hany = await s.t.as('video_editor', { name: 'Hany' });
+    const moved = await s.t.as('video_editor', { name: 'Ed Three' });
+    const v = await newVideo(s);
+    expect((await step(moved, v.id, 'take')).status).toBe(200);
+    expect((await step(hany, v.id, 'take')).status).toBe(409);
+    await moveToPositions(s, moved.user.id, ['reception']);
+    // He can't hand it in any more; nobody else was able to move it before — now any other editor takes it over.
+    expect((await step(moved, v.id, 'submit', { editedLink: EDIT })).status).toBe(403);
+    const seen = (await hany.get<VideoDetail>(`/api/videos/${v.id}`)).body;
+    expect(seen).toMatchObject({ status: 'editing', editor: { id: moved.user.id, active: true }, editorCanEdit: false });
+    const over = await step(hany, v.id, 'take');
+    expect(over.status).toBe(200);
+    expect(over.body).toMatchObject({ status: 'editing', editor: { id: hany.user.id }, editorCanEdit: true });
+    expect((await step(s.editor, v.id, 'take')).status).toBe(409);
+    expect((await step(hany, v.id, 'submit', { editedLink: EDIT })).status).toBe(200);
+  });
+
+  it('"needs changes" on an edit by someone who no longer edits → the editors who can act; his old video alerts leave his bell', async () => {
+    const s = await school();
+    const hany = await s.t.as('video_editor', { name: 'Hany' });
+    const moved = await s.t.as('video_editor', { name: 'Ed Four' });
+    const v = await newVideo(s);
+    await step(moved, v.id, 'take');
+    await step(moved, v.id, 'submit', { editedLink: EDIT });
+    const waiting = await newVideo(s, { title: 'Still new' });
+    expect(alertedIds(s.t, waiting.id, 'video_new')).toContain(moved.user.id);
+    expect((await poll(moved))!.toEdit).toBe(1);
+    await moveToPositions(s, moved.user.id, ['reception']);
+
+    expect((await step(s.reviewer, v.id, 'request-changes', { note: 'Shorter please' })).body.told.map((p) => p.id).sort((a, b) => a - b)).toEqual(
+      [s.editor.user.id, hany.user.id].sort((a, b) => a - b),
+    );
+    expect(alertedIds(s.t, v.id, 'video_changes')).toEqual([s.editor.user.id, hany.user.id].sort((a, b) => a - b));
+    // Reception sees no videos: no alert that only opens "No access", and none counted on the bell.
+    expect((await bell(moved)).items.filter((n) => n.kind.startsWith('video_'))).toEqual([]);
+    expect((await moved.get<ChatUnreadResponse>('/api/chat/unread')).body).toMatchObject({ notifications: 0, videos: null });
+    // Hany takes it ("Start fixing") and sends it again.
+    expect((await step(hany, v.id, 'take')).status).toBe(200);
+    expect((await step(hany, v.id, 'submit', { editedLink: EDIT })).status).toBe(200);
+    // Reopening later goes to Hany, who can still edit.
+    await step(s.reviewer, v.id, 'approve');
+    await step(s.reviewer, v.id, 'reopen', { note: 'One more thing' });
+    expect(
+      videoAlerts(s.t, v.id)
+        .filter((n) => n.kind === 'video_changes' && n.readAt === null)
+        .map((n) => n.userId),
+    ).toEqual([hany.user.id]);
+  });
+
+  it('each video alert shows only to someone still doing that part: a coach who stops adding keeps no "approved" alert', async () => {
+    const s = await school();
+    const v = await newVideo(s);
+    await step(s.editor, v.id, 'take');
+    await step(s.editor, v.id, 'submit', { editedLink: EDIT });
+    await step(s.reviewer, v.id, 'approve');
+    expect((await bell(s.coach)).items.map((n) => n.kind)).toContain('video_approved');
+    await moveToPositions(s, s.coach.user.id, ['casting_team']);
+    expect((await bell(s.coach)).items.filter((n) => n.kind.startsWith('video_'))).toEqual([]);
+    // Moaty without the Video reviewer position: his "to check" alerts are hidden.
+    const w = (await add(s.owner, { sessionId: s.session.id })).body;
+    await step(s.editor, w.id, 'take');
+    await step(s.editor, w.id, 'submit', { editedLink: EDIT });
+    expect((await bell(s.reviewer)).items.map((n) => n.kind)).toContain('video_review');
+    await moveToPositions(s, s.reviewer.user.id, ['acting_coach', 'finance']);
+    expect((await bell(s.reviewer)).items.filter((n) => n.kind === 'video_review')).toEqual([]);
+  });
+
+  it('someone holding both Video editor and Video reviewer never checks their own edit: Moaty is asked, and his alert stays', async () => {
+    const s = await school();
+    const both = await s.t.as(['video_editor', 'video_reviewer'], { name: 'Both Roles' });
+    const v = await newVideo(s);
+    await step(both, v.id, 'take');
+    const sent = await step(both, v.id, 'submit', { editedLink: EDIT });
+    expect(sent.status).toBe(200);
+    // Moaty is told; the editor himself is not.
+    expect(sent.body.told.map((p) => p.id)).toEqual([s.reviewer.user.id]);
+    expect(alertedIds(s.t, v.id, 'video_review')).toEqual([s.reviewer.user.id]);
+    for (const action of ['approve', 'request-changes'] as const) {
+      const refused = await step(both, v.id, action, action === 'approve' ? undefined : { note: 'Fine' });
+      expect(refused.status, action).toBe(403);
+      expect(refused.body.error.code).toBe('own_edit');
+    }
+    // Nothing moved, and Moaty's "Edit ready to check" is still waiting for him.
+    expect((await both.get<VideoDetail>(`/api/videos/${v.id}`)).body.status).toBe('in_review');
+    expect((await bell(s.reviewer)).items.find((n) => n.kind === 'video_review')).toMatchObject({ readAt: null });
+    expect((await step(s.reviewer, v.id, 'approve')).status).toBe(200);
+    // On a video someone else edited, he checks like any reviewer.
+    const w = await newVideo(s);
+    await step(s.editor, w.id, 'take');
+    await step(s.editor, w.id, 'submit', { editedLink: EDIT });
+    expect((await step(both, w.id, 'approve')).status).toBe(200);
+    // An owner may finish what they edited themselves.
+    const x = await newVideo(s);
+    await step(s.owner, x.id, 'take');
+    await step(s.owner, x.id, 'submit', { editedLink: EDIT });
+    expect((await step(s.owner, x.id, 'approve')).status).toBe(200);
+  });
+
+  it('every step answers who was told — none when nobody checks edits yet (no Video reviewer), which the editors and the owners see in the poll', async () => {
+    const s = await school();
+    const v = await newVideo(s);
+    const added = (await s.t.db.select().from(videos).where(eq(videos.id, v.id)).get())!;
+    expect(added.status).toBe('new');
+    expect((v as unknown as VideoStepResult).told).toEqual([expect.objectContaining({ id: s.editor.user.id, name: 'Ali El Gohary' })]);
+    expect((await step(s.editor, v.id, 'take')).body.told).toEqual([]);
+    expect((await step(s.editor, v.id, 'submit', { editedLink: EDIT })).body.told).toEqual([expect.objectContaining({ id: s.reviewer.user.id, name: 'Moaty' })]);
+    expect((await step(s.reviewer, v.id, 'request-changes', { note: 'Again' })).body.told.map((p) => p.id)).toEqual([s.editor.user.id]);
+    await step(s.editor, v.id, 'take');
+    await step(s.editor, v.id, 'submit', { editedLink: EDIT });
+    expect((await step(s.reviewer, v.id, 'approve')).body.told.map((p) => p.id)).toEqual([s.coach.user.id]);
+
+    // The live school before an owner gives Moaty the Video reviewer position: nobody checks.
+    await moveToPositions(s, s.reviewer.user.id, ['acting_coach', 'finance']);
+    expect((await poll(s.editor))!.reviewers).toBe(0);
+    expect((await poll(s.owner))!.reviewers).toBe(0);
+    expect((await poll(s.coach))!.reviewers).toBeNull();
+    const w = await newVideo(s);
+    await step(s.editor, w.id, 'take');
+    const unseen = await step(s.editor, w.id, 'submit', { editedLink: EDIT });
+    expect(unseen.status).toBe(200);
+    expect(unseen.body.told).toEqual([]);
+    expect(alertedIds(s.t, w.id, 'video_review')).toEqual([]);
   });
 });
 
@@ -750,11 +894,13 @@ describe('the queue and the counts in the poll', () => {
 
   it('the poll: the editor’s to edit (due today, late), the reviewer’s to check, the coach’s approved this week; owners get no work counts; others null', async () => {
     const s = await school();
-    const empty = { toEdit: null, dueToday: null, late: null, toCheck: null, addedByMe: 0, approvedThisWeek: 0 };
-    expect(await poll(s.editor)).toEqual({ ...empty, toEdit: 0, dueToday: 0, late: 0 });
+    const empty = { toEdit: null, dueToday: null, late: null, toCheck: null, addedByMe: 0, addedOpen: 0, approvedThisWeek: 0, reviewers: null };
+    // How many check the edits (Moaty): for the editors and for whoever gives positions (owners, staff.manage) — not for coaches.
+    expect(await poll(s.editor)).toEqual({ ...empty, toEdit: 0, dueToday: 0, late: 0, reviewers: 1 });
     expect(await poll(s.reviewer)).toEqual({ ...empty, toCheck: 0 });
     expect(await poll(s.coach)).toEqual(empty);
-    expect(await poll(s.owner)).toEqual(empty);
+    expect(await poll(s.owner)).toEqual({ ...empty, reviewers: 1 });
+    expect(await poll(s.director)).toEqual({ ...empty, reviewers: 1 });
     expect(await poll(await s.t.as('casting_team'))).toBeNull();
 
     await newVideo(s, { dueOn: s.today });
@@ -769,9 +915,10 @@ describe('the queue and the counts in the poll', () => {
     await step(s.reviewer, sent.id, 'request-changes', { note: 'Again' });
     expect(await poll(s.editor)).toMatchObject({ toEdit: 3, toCheck: null });
     expect(await poll(s.reviewer)).toMatchObject({ toCheck: 1, toEdit: null });
+    expect(await poll(s.coach)).toEqual({ ...empty, addedByMe: 4, addedOpen: 4, approvedThisWeek: 0 });
     await step(s.reviewer, v.id, 'approve');
-    expect(await poll(s.coach)).toEqual({ ...empty, addedByMe: 4, approvedThisWeek: 1 });
-    expect(await poll(s.owner)).toEqual(empty);
+    expect(await poll(s.coach)).toEqual({ ...empty, addedByMe: 4, addedOpen: 3, approvedThisWeek: 1 });
+    expect(await poll(s.owner)).toEqual({ ...empty, reviewers: 1 });
     // "This week" is the school's week: approved before it began doesn't count.
     const weekStart = epochAt(SCHOOL_TZ, startOfWeek(s.today, 1));
     s.t.db.update(videos).set({ decidedAt: weekStart - 1 }).where(eq(videos.id, v.id)).run();
@@ -791,8 +938,13 @@ describe('videos and the sessions they come from', () => {
     expect(s.t.db.select().from(classSessions).where(eq(classSessions.id, tomorrowish.id)).get()).toBeTruthy();
     expect((await s.owner.delete(`/api/sessions/${tomorrowish.id}`)).status).toBe(204);
     expect((await s.coach.get<VideoDetail>(`/api/videos/${v.id}`)).body).toMatchObject({ sessionId: null, courseId: s.screen.id });
+    // Its alerts go with it: nothing left in a bell that would open a page that is gone.
+    const waiting = (await add(s.coach, { courseId: s.screen.id })).body;
+    expect((await bell(s.editor)).items.map((n) => n.link)).toContain(`/videos/${waiting.id}`);
     expect((await s.owner.delete(`/api/courses/${s.screen.id}`)).status).toBe(204);
     expect(s.t.db.select().from(videos).all()).toEqual([]);
     expect(s.t.db.select().from(videoEvents).all()).toEqual([]);
+    expect(s.t.db.select().from(notifications).all().filter((n) => n.link?.startsWith('/videos/'))).toEqual([]);
+    expect((await bell(s.editor)).unread).toBe(0);
   });
 });

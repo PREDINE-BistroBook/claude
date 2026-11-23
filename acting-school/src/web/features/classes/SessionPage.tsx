@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
-import { Ban, CheckCheck, ChevronLeft, ChevronRight, Info, Pencil, RotateCcw, StickyNote, Users } from 'lucide-react';
+import { Ban, CheckCheck, ChevronLeft, ChevronRight, Clapperboard, Info, Pencil, RotateCcw, StickyNote, Users } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router';
@@ -37,6 +37,7 @@ import { VideosBlock } from '../videos/components/VideosBlock';
 
 export default function SessionPage() {
   const { t } = useTranslation('classes');
+  const { t: tv } = useTranslation('videos');
   const f = useFormat();
   const id = Number(useParams().id);
   const session = useSession(id);
@@ -47,6 +48,8 @@ export default function SessionPage() {
   const invalidate = useInvalidateClasses();
   const [editing, setEditing] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  // "+ Add video" at the top: right after class the coach needn't scroll past the whole attendance list to the Videos block.
+  const [addingVideo, setAddingVideo] = useState(false);
 
   const setStatus = useMutation({
     mutationFn: (status: 'scheduled' | 'cancelled') => api.patch(`/sessions/${id}`, { status }),
@@ -92,19 +95,28 @@ export default function SessionPage() {
           </span>
         }
         actions={
-          canWrite && (
+          (canWrite || can('videos.add')) && (
             <>
-              <Button icon={Pencil} onClick={() => setEditing(true)} disabled={!c}>
-                {t('common:actions.edit')}
-              </Button>
-              {cancelled ? (
-                <Button icon={RotateCcw} loading={setStatus.isPending} onClick={() => setStatus.mutate('scheduled')}>
-                  {t('session.restore')}
+              {can('videos.add') && (
+                <Button variant="primary" size="lg" icon={Clapperboard} onClick={() => setAddingVideo(true)}>
+                  {tv('actions.add')}
                 </Button>
-              ) : (
-                <Button icon={Ban} variant="danger-ghost" onClick={() => setConfirmCancel(true)}>
-                  {t('session.cancel')}
-                </Button>
+              )}
+              {canWrite && (
+                <>
+                  <Button icon={Pencil} onClick={() => setEditing(true)} disabled={!c}>
+                    {t('common:actions.edit')}
+                  </Button>
+                  {cancelled ? (
+                    <Button icon={RotateCcw} loading={setStatus.isPending} onClick={() => setStatus.mutate('scheduled')}>
+                      {t('session.restore')}
+                    </Button>
+                  ) : (
+                    <Button icon={Ban} variant="danger-ghost" onClick={() => setConfirmCancel(true)}>
+                      {t('session.cancel')}
+                    </Button>
+                  )}
+                </>
               )}
             </>
           )
@@ -152,6 +164,8 @@ export default function SessionPage() {
           course={{ id: s.courseId, name: s.courseName }}
           session={{ id: s.id, date: s.date }}
           students={s.roster.map((r) => ({ id: r.studentId, firstName: r.firstName, lastName: r.lastName, photoFileId: r.photoFileId }))}
+          adding={addingVideo}
+          onAddingChange={setAddingVideo}
         />
       </div>
 

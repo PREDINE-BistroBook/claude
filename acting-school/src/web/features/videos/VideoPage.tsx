@@ -1,11 +1,11 @@
 import clsx from 'clsx';
-import { CircleCheck, Hammer, History, MessageCircle, MessageSquareWarning, PencilLine, Plus, RotateCcw, Send, Trash2, type LucideIcon } from 'lucide-react';
+import { CircleCheck, ExternalLink, Hammer, History, MessageCircle, MessageSquareWarning, PencilLine, Plus, RotateCcw, Send, Trash2, type LucideIcon } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router';
 import { todayISO } from '@shared/dates';
 import type { VideoEventType } from '@shared/enums';
-import { VIDEO_NOTE_MAX, videoActions, videoNoteInput, type VideoDetail, type VideoEvent } from '@shared/schemas/videos';
+import { VIDEO_NOTE_MAX, videoActions, videoLinkHost, videoNoteInput, type VideoDetail, type VideoEvent } from '@shared/schemas/videos';
 import { Avatar, Button, Card, ConfirmDialog, EmptyState, ErrorState, PageHeader, PageLoader, TextAreaField, useToast } from '@web/components/ui';
 import { ApiError } from '@web/lib/api';
 import { useAuth } from '@web/lib/auth';
@@ -14,7 +14,7 @@ import { useForm } from '@web/lib/forms';
 import { useCourse } from '../classes/api';
 import { useVideo, useVideoActions, videoErrorKey } from './api';
 import { AddVideoModal } from './components/AddVideoModal';
-import { DueLabel, NextStepButtons, NoteBox, VideoLinkButton, VideoStatusBadge, WRAP, useViewer } from './components/VideoParts';
+import { NextStepButtons, NoteBox, VideoLinkButton, VideoStatusBadge, WRAP, WhenLabel, useNoteLabels, useViewer } from './components/VideoParts';
 import { VIDEOS_PATH } from './utils';
 
 /**
@@ -56,6 +56,12 @@ function VideoView({ video: v }: { video: VideoDetail }) {
   const course = useCourse(v.courseId, editing && can('courses.read'));
   const today = todayISO();
   const seesWorkshops = can('courses.read');
+  const labels = useNoteLabels();
+  const approved = v.status === 'approved';
+  // Once handed in, the edit is what the page is for: "Watch the edit" comes first (and is the main button).
+  const editFirst = !!v.editedLink && (v.status === 'in_review' || approved);
+  /** A link inside the facts: a full 48 px target. */
+  const factLink = 'inline-flex min-h-12 items-center font-medium text-accent hover:underline';
 
   const remove = () =>
     void mutations.remove.mutateAsync(v.id).then(
@@ -73,7 +79,7 @@ function VideoView({ video: v }: { video: VideoDetail }) {
     {
       label: t('page.workshop'),
       value: seesWorkshops ? (
-        <Link to={`/classes/${v.courseId}`} className="font-medium text-accent hover:underline">
+        <Link to={`/classes/${v.courseId}`} className={factLink}>
           <bdi>{v.courseName}</bdi>
         </Link>
       ) : (
@@ -84,7 +90,7 @@ function VideoView({ video: v }: { video: VideoDetail }) {
       label: t('page.session'),
       value: v.sessionDate ? (
         seesWorkshops && v.sessionId ? (
-          <Link to={`/sessions/${v.sessionId}`} className="font-medium text-accent hover:underline">
+          <Link to={`/sessions/${v.sessionId}`} className={factLink}>
             {f.date(v.sessionDate, 'weekday')}
           </Link>
         ) : (
@@ -95,9 +101,21 @@ function VideoView({ video: v }: { video: VideoDetail }) {
       ),
     },
     { label: t('page.kind'), value: t(`common:enums.videoKind.${v.kind}`) },
-    { label: t('page.due'), value: <DueLabel video={v} today={today} className="!text-base" /> },
-    { label: t('page.addedBy'), value: v.addedBy ? <Person person={v.addedBy} /> : '—' },
-    { label: t('page.editor'), value: v.editor ? <Person person={v.editor} /> : '—' },
+    // The date only (today / tomorrow / late is in the header); once approved, the day it was approved instead.
+    approved && v.decidedAt
+      ? {
+          label: t('page.approvedOn'),
+          value: f.timestamp(v.decidedAt, 'weekday'),
+        }
+      : { label: t('page.due'), value: f.date(v.dueOn, 'weekday') },
+    {
+      label: t('page.addedBy'),
+      value: v.addedBy ? <Person person={v.addedBy} /> : '—',
+    },
+    {
+      label: t('page.editor'),
+      value: v.editor ? <Person person={v.editor} /> : <span className="text-muted">{t('page.notStarted')}</span>,
+    },
     ...(v.reviewer ? [{ label: t('page.reviewer'), value: <Person person={v.reviewer} /> }] : []),
   ];
 
@@ -106,11 +124,12 @@ function VideoView({ video: v }: { video: VideoDetail }) {
       <PageHeader
         back={VIDEOS_PATH}
         documentTitle={v.title}
-        title={<span className={WRAP}>{v.title}</span>}
+        title={<bdi className={WRAP}>{v.title}</bdi>}
         subtitle={
           <span className="flex flex-wrap items-center gap-2">
             <VideoStatusBadge video={v} />
-            {v.status !== 'approved' && <DueLabel video={v} today={today} />}
+            {/* Approved: the green line below says by whom and when. */}
+            {!approved && <WhenLabel video={v} today={today} />}
           </span>
         }
         actions={
@@ -135,22 +154,44 @@ function VideoView({ video: v }: { video: VideoDetail }) {
         {/* The links and the next step: what the page is for. */}
         <Card>
           <div className="grid gap-3">
+            {approved && (
+              <p role="status" className={clsx('flex items-start gap-2 rounded-xl bg-success-soft px-3 py-2.5 font-semibold text-success', WRAP)}>
+                <CircleCheck className="mt-0.5 size-5 shrink-0" aria-hidden />
+                <span>
+                  {v.reviewer && v.decidedAt
+                    ? t('page.approvedBanner', {
+                        name: `\u2068${v.reviewer.name}\u2069`,
+                        date: f.timestamp(v.decidedAt, 'weekday'),
+                      })
+                    : t('page.approvedBannerNoName')}
+                </span>
+              </p>
+            )}
             {v.changesNote && (v.status === 'changes_requested' || v.status === 'editing') && (
-              <NoteBox tone="warning" icon={MessageSquareWarning} label={v.reviewer ? t('card.changesBy', { name: v.reviewer.name }) : t('card.changes')}>
+              <NoteBox tone="warning" icon={MessageSquareWarning} label={labels.changes(v.reviewer)}>
                 {v.changesNote}
               </NoteBox>
             )}
             <div className="grid gap-2 sm:grid-cols-2">
-              <VideoLinkButton href={v.rawLink} kind="raw" className="sm:w-full" />
-              {v.editedLink ? (
-                <VideoLinkButton href={v.editedLink} kind="edit" primary={v.status === 'in_review'} className="sm:w-full" />
+              {editFirst ? (
+                <>
+                  <VideoLinkButton href={v.editedLink!} kind="edit" primary className="sm:w-full" />
+                  <VideoLinkButton href={v.rawLink} kind="raw" className="sm:w-full" />
+                </>
               ) : (
-                <p className="flex min-h-12 items-center justify-center rounded-xl border border-dashed border-line-strong px-3 text-sm text-muted">{t('page.notYet')}</p>
+                <>
+                  <VideoLinkButton href={v.rawLink} kind="raw" className="sm:w-full" />
+                  {v.editedLink ? (
+                    <VideoLinkButton href={v.editedLink} kind="edit" className="sm:w-full" />
+                  ) : (
+                    <p className="flex min-h-12 items-center justify-center rounded-xl border border-dashed border-line-strong px-3 text-sm text-muted">{t('page.notYet')}</p>
+                  )}
+                </>
               )}
             </div>
             {v.changesNote && v.status === 'in_review' && <NoteBox label={t('card.changes')}>{v.changesNote}</NoteBox>}
-            {v.notesForEditor && <NoteBox label={t('card.notesForEditor')}>{v.notesForEditor}</NoteBox>}
-            {v.editorNotes && <NoteBox label={t('card.editorNotes')}>{v.editorNotes}</NoteBox>}
+            {v.notesForEditor && <NoteBox label={labels.coach(v.addedBy)}>{v.notesForEditor}</NoteBox>}
+            {v.editorNotes && <NoteBox label={labels.editor(v.editor)}>{v.editorNotes}</NoteBox>}
             <NextStepButtons video={v} />
           </div>
         </Card>
@@ -197,7 +238,14 @@ function VideoView({ video: v }: { video: VideoDetail }) {
           open={editing && (!seesWorkshops || !!course.data)}
           onClose={() => setEditing(false)}
           course={{ id: v.courseId, name: v.courseName }}
-          students={(course.data?.enrollments ?? []).filter((e) => e.status !== 'withdrawn').map((e) => ({ id: e.studentId, firstName: e.firstName, lastName: e.lastName, photoFileId: e.photoFileId }))}
+          students={(course.data?.enrollments ?? [])
+            .filter((e) => e.status !== 'withdrawn')
+            .map((e) => ({
+              id: e.studentId,
+              firstName: e.firstName,
+              lastName: e.lastName,
+              photoFileId: e.photoFileId,
+            }))}
           video={v}
         />
       )}
@@ -228,7 +276,10 @@ const EVENT_LOOK: Record<VideoEventType, { icon: LucideIcon; tone: string }> = {
   added: { icon: Plus, tone: 'bg-accent-soft text-accent' },
   taken: { icon: Hammer, tone: 'bg-info-soft text-info' },
   submitted: { icon: Send, tone: 'bg-warning-soft text-warning' },
-  changes_requested: { icon: MessageSquareWarning, tone: 'bg-danger-soft text-danger' },
+  changes_requested: {
+    icon: MessageSquareWarning,
+    tone: 'bg-danger-soft text-danger',
+  },
   approved: { icon: CircleCheck, tone: 'bg-success-soft text-success' },
   reopened: { icon: RotateCcw, tone: 'bg-danger-soft text-danger' },
   comment: { icon: MessageCircle, tone: 'bg-surface-2 text-ink' },
@@ -256,9 +307,12 @@ function HistoryList({ events }: { events: VideoEvent[] }) {
                   {e.note}
                 </p>
               )}
+              {/* The big buttons above carry the links; here only where it went, as a short link (its host). */}
               {e.link && (
-                <a href={e.link} target="_blank" rel="noopener noreferrer" dir="ltr" className="inline-flex min-h-12 items-center text-sm text-accent underline">
-                  {e.link}
+                <a href={e.link} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-12 items-center gap-1.5 text-sm font-medium text-accent hover:underline">
+                  <ExternalLink className="size-4 shrink-0" aria-hidden />
+                  <bdi dir="ltr">{videoLinkHost(e.link) ?? e.link}</bdi>
+                  <span className="sr-only">({t('links.opensNewTab')})</span>
                 </a>
               )}
               <p className="mt-1 text-xs text-muted">{f.timestampTime(e.createdAt)}</p>

@@ -1,17 +1,24 @@
 import clsx from 'clsx';
 import { useEffect, useRef, type ReactNode } from 'react';
 
-/** Underlined tabs; scrolls sideways on narrow screens, keeping the active tab in view. */
+/**
+ * Underlined tabs; scrolls sideways on narrow screens, keeping the active tab
+ * in view. `fill`: on phones the tabs share the width equally and a long
+ * label wraps onto two lines instead — every tab stays in sight (four tabs
+ * with counts at 375 px, in Arabic too).
+ */
 export function Tabs<T extends string>({
   tabs,
   value,
   onChange,
   className,
+  fill = false,
 }: {
   tabs: { id: T; label: ReactNode; count?: number }[];
   value: T;
   onChange: (id: T) => void;
   className?: string;
+  fill?: boolean;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
   // Counts often arrive after the first render and widen the tabs, so re-check when they change.
@@ -28,7 +35,11 @@ export function Tabs<T extends string>({
   }, [value, layoutKey]);
   return (
     // Phones: tighter padding (the first label still starts on the page's 16 px gutter) so three tabs with counts fit 375 px.
-    <div ref={listRef} role="tablist" className={clsx('-mx-4 flex gap-1 overflow-x-auto border-b border-line px-2 sm:mx-0 sm:px-0', className)}>
+    <div
+      ref={listRef}
+      role="tablist"
+      className={clsx('-mx-4 gap-1 border-b border-line px-2 sm:mx-0 sm:flex sm:px-0', fill ? 'grid auto-cols-fr grid-flow-col sm:overflow-x-auto' : 'flex overflow-x-auto', className)}
+    >
       {tabs.map((tab) => {
         const active = tab.id === value;
         return (
@@ -40,6 +51,7 @@ export function Tabs<T extends string>({
             onClick={() => onChange(tab.id)}
             className={clsx(
               '-mb-px inline-flex min-h-12 shrink-0 items-center gap-1.5 border-b-2 px-2 py-2.5 text-sm font-medium transition-colors sm:gap-2 sm:px-3',
+              fill && 'min-w-0 flex-wrap justify-center gap-x-1 gap-y-0.5 px-1 py-1.5 text-center leading-tight sm:flex-nowrap sm:whitespace-nowrap',
               active ? 'border-accent text-ink' : 'border-transparent text-muted hover:text-ink',
             )}
           >

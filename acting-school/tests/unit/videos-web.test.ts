@@ -7,20 +7,31 @@ import { seesAllVideos, usesVideos, videoActions, videoLinkHost, type Video, typ
 import { NAV_ITEMS, landingAfterSignIn, mobileTabs, videosFirst } from '../../src/web/layout/nav';
 import { sectionForPath, visibleSections } from '../../src/web/layout/sections';
 import {
+  QUEUE_MOVE_REST_MS,
   VIDEOS_PATH,
+  afterStep,
   byEditorQueue,
+  cardWhen,
   defaultVideoTitle,
   dueWords,
   firstTab,
+  namesList,
+  pinnedVideos,
   queueIsMine,
+  queueResting,
   queueTabs,
+  reviewerNotice,
   tabCounts,
   tabVideos,
   tidyLink,
+  titleForSession,
   toggleStudent,
+  videoHomeCardKinds,
   videoRoles,
   videosBadge,
+  waitedParts,
 } from '../../src/web/features/videos/utils';
+import type { VideoCounts } from '../../src/shared/schemas/videos';
 
 /**
  * The video pipeline on the web side (Part L): the queue's tabs and order,
@@ -52,6 +63,7 @@ function video(over: Partial<Video> = {}): Video {
     status: 'new',
     addedBy: { id: 10, name: 'Layla', photoFileId: null, active: true },
     editor: null,
+    editorCanEdit: false,
     reviewer: null,
     editedLink: null,
     editorNotes: null,
@@ -67,6 +79,18 @@ function video(over: Partial<Video> = {}): Video {
   };
 }
 const person = (id: number, active = true) => ({ id, name: `P${id}`, photoFileId: null, active });
+/** The poll's counts: nothing but what is given. */
+const counts = (over: Partial<VideoCounts> = {}): VideoCounts => ({
+  toEdit: null,
+  dueToday: null,
+  late: null,
+  toCheck: null,
+  addedByMe: 0,
+  addedOpen: 0,
+  approvedThisWeek: 0,
+  reviewers: null,
+  ...over,
+});
 
 // ── Which buttons each role sees ────────────────────────────────────────────
 
@@ -85,7 +109,9 @@ describe('which buttons each role sees (videoActions — the rule the API enforc
     owner: { id: 50, isOwner: true, permissions: [...PERMISSIONS] },
   };
   const on = (a: VideoActions) => (Object.keys(a) as (keyof VideoActions)[]).filter((k) => a[k]).sort();
-  const at = (status: VideoStatus, editor: number | null = status === 'new' ? null : EDITOR, editorActive = true) => video({ status, editor: editor === null ? null : person(editor, editorActive) });
+  /** A video at `status`, taken by `editor`; `editorCanEdit` false: that editor was switched off, or lost the Video editor position. */
+  const at = (status: VideoStatus, editor: number | null = status === 'new' ? null : EDITOR, editorCanEdit = true) =>
+    video({ status, editor: editor === null ? null : person(editor), editorCanEdit: editor !== null && editorCanEdit });
 
   it('new: the coach changes or deletes it; editors start it; the reviewer may change it; nobody decides', () => {
     const v = at('new');
@@ -97,7 +123,7 @@ describe('which buttons each role sees (videoActions — the rule the API enforc
     expect(on(videoActions(v, viewers.owner!))).toEqual(['comment', 'edit', 'remove', 'take']);
   });
 
-  it('editing: only the editor on it says "Done"; another editor waits — unless the first has left', () => {
+  it('editing: only the editor on it says "Done"; another editor waits — unless the first can no longer edit (switched off, or the position taken away)', () => {
     expect(on(videoActions(at('editing'), viewers.editor!))).toEqual(['comment', 'submit']);
     expect(on(videoActions(at('editing'), viewers.otherEditor!))).toEqual(['comment']);
     expect(on(videoActions(at('editing', EDITOR, false), viewers.otherEditor!))).toEqual(['comment', 'take']);
@@ -107,6 +133,11 @@ describe('which buttons each role sees (videoActions — the rule the API enforc
 
   it('in review: the reviewer sees Approved and Needs changes; the editor and the coach only comment', () => {
     expect(on(videoActions(at('in_review'), viewers.reviewer!))).toEqual(['approve', 'comment', 'requestChanges']);
+    // Someone holding both positions never checks their own edit (an owner may); on someone else's edit they check as usual.
+    const both: VideoViewer = { id: EDITOR, isOwner: false, permissions: [...builtIn('video_editor'), ...builtIn('video_reviewer')] };
+    expect(on(videoActions(at('in_review', EDITOR), both))).toEqual(['comment']);
+    expect(on(videoActions(at('in_review', OTHER_EDITOR), both))).toEqual(['approve', 'comment', 'requestChanges']);
+    expect(on(videoActions(at('in_review', viewers.owner!.id), viewers.owner!))).toEqual(['approve', 'comment', 'requestChanges']);
     expect(on(videoActions(at('in_review'), viewers.editor!))).toEqual(['comment']);
     expect(on(videoActions(at('in_review'), viewers.coach!))).toEqual(['comment']);
     expect(on(videoActions(at('in_review'), viewers.director!))).toEqual([]);
@@ -192,9 +223,70 @@ describe('the queue: tabs for each role and their order', () => {
   it('the badge on "Videos": what waits for this person — owners and coaches get none', () => {
     expect(videosBadge(undefined)).toBe(0);
     expect(videosBadge(null)).toBe(0);
-    expect(videosBadge({ toEdit: 3, dueToday: 1, late: 0, toCheck: null, addedByMe: 0, approvedThisWeek: 0 })).toBe(3);
-    expect(videosBadge({ toEdit: null, dueToday: null, late: null, toCheck: 2, addedByMe: 4, approvedThisWeek: 1 })).toBe(2);
-    expect(videosBadge({ toEdit: null, dueToday: null, late: null, toCheck: null, addedByMe: 4, approvedThisWeek: 1 })).toBe(0);
+    expect(videosBadge(counts({ toEdit: 3, dueToday: 1, late: 0 }))).toBe(3);
+    expect(videosBadge(counts({ toCheck: 2, addedByMe: 4, approvedThisWeek: 1 }))).toBe(2);
+    expect(videosBadge(counts({ addedByMe: 4, approvedThisWeek: 1 }))).toBe(0);
+  });
+
+  it('the School home cards: the editor’s, the reviewer’s, and the coach’s only while a video is in progress or one was approved this week', () => {
+    expect(videoHomeCardKinds(undefined)).toEqual([]);
+    expect(videoHomeCardKinds(counts({ toEdit: 0 }))).toEqual(['editor']);
+    expect(videoHomeCardKinds(counts({ toCheck: 0, addedByMe: 3, addedOpen: 1 }))).toEqual(['reviewer', 'coach']);
+    // Never a "0 of your videos approved this week" card.
+    expect(videoHomeCardKinds(counts({ addedByMe: 3, addedOpen: 0, approvedThisWeek: 0 }))).toEqual([]);
+    expect(videoHomeCardKinds(counts({ addedByMe: 3, addedOpen: 0, approvedThisWeek: 2 }))).toEqual(['coach']);
+  });
+
+  it('nobody checks finished edits yet: the owners are told to give the Video reviewer position, the director to ask an owner; nobody else here', () => {
+    const none = counts({ reviewers: 0 });
+    expect(reviewerNotice(none, canWith([...PERMISSIONS]))).toBe('give');
+    expect(reviewerNotice(none, canWith(builtIn('executive_director')))).toBe('ask');
+    expect(reviewerNotice(counts({ toEdit: 1, reviewers: 0 }), canWith(builtIn('video_editor')))).toBeNull();
+    expect(reviewerNotice(counts({ reviewers: 1 }), canWith([...PERMISSIONS]))).toBeNull();
+    expect(reviewerNotice(counts({ reviewers: null }), canWith([...PERMISSIONS]))).toBeNull();
+    expect(reviewerNotice(null, canWith([...PERMISSIONS]))).toBeNull();
+  });
+
+  it('a card says the due date while the editor works, how long an edit has waited once sent, and when it was approved', () => {
+    expect(cardWhen(video({ status: 'editing' }))).toEqual({ kind: 'due' });
+    expect(cardWhen(video({ status: 'in_review', submittedAt: 500 }))).toEqual({ kind: 'sent', at: 500 });
+    expect(cardWhen(video({ status: 'approved', decidedAt: 900 }))).toEqual({ kind: 'approved', at: 900 });
+    const min = 60_000;
+    expect(waitedParts(0, 30_000)).toEqual({ unit: 'now' });
+    expect(waitedParts(0, 90 * min)).toEqual({ unit: 'minute', value: 90 });
+    expect(waitedParts(0, 5 * 60 * min)).toEqual({ unit: 'hour', value: 5 });
+    expect(waitedParts(0, 3 * 24 * 60 * min)).toEqual({ unit: 'day', value: 3 });
+  });
+
+  it('after a tap the cards stay put for two seconds; "Start editing" opens the Editing tab with that video on top', () => {
+    expect(QUEUE_MOVE_REST_MS).toBe(2_000);
+    expect(queueResting(null, 5_000)).toBe(false);
+    expect(queueResting(1_000, 2_999)).toBe(true);
+    expect(queueResting(1_000, 3_000)).toBe(false);
+    // While resting the tab shows the same cards in the same places, each with its new state (the taken one now "editing").
+    const a = video({ id: 501 });
+    const b = video({ id: 502 });
+    const c = video({ id: 503 });
+    const after = [a, { ...b, status: 'editing' as const }, c];
+    expect(pinnedVideos(after, [501, 502, 503]).map((v) => [v.id, v.status])).toEqual([
+      [501, 'new'],
+      [502, 'editing'],
+      [503, 'new'],
+    ]);
+    expect(pinnedVideos([a, c], [501, 502, 503]).map((v) => v.id)).toEqual([501, 503]);
+    expect(tabVideos(after, 'toEdit', 20).map((v) => v.id)).toEqual([501, 503]);
+    const editorTabs = queueTabs(videoRoles(canWith(builtIn('video_editor'))));
+    expect(afterStep('take', 'toEdit', editorTabs, 502, [7, 502, 9])).toEqual({ tab: 'editing', pinned: [502, 7, 9] });
+    expect(afterStep('approve', 'toCheck', ['toCheck', 'withEditor', 'approved'], 502, [])).toEqual({ tab: 'toCheck', pinned: null });
+    expect(afterStep('submit', 'editing', editorTabs, 502, [])).toEqual({ tab: 'editing', pinned: null });
+  });
+
+  it('the toast names who was told, each name isolated in the sentence’s direction', () => {
+    expect(namesList(['Moaty'], 'en')).toBe('\u2068Moaty\u2069');
+    expect(namesList(['Ali', 'Hany'], 'en')).toBe('\u2068Ali\u2069 and \u2068Hany\u2069');
+    expect(namesList(['Ali', 'Hany', 'Sara'], 'en')).toBe('\u2068Ali\u2069, \u2068Hany\u2069, and \u2068Sara\u2069');
+    expect(namesList(['Ali', 'Hany'], 'ar')).toContain('\u2068Hany\u2069');
+    expect(namesList(['Ali', 'Hany'], 'ar')).toContain(' و');
   });
 });
 
@@ -239,9 +331,21 @@ describe('where the queue lives: School, the menu entry, the editor’s start an
 // ── The add form ────────────────────────────────────────────────────────────
 
 describe('the add form', () => {
-  it('offers "<workshop> — <date>" as the title', () => {
-    expect(defaultVideoTitle('Screen Acting I', '24 Nov 2026')).toBe('Screen Acting I — 24 Nov 2026');
+  it('offers "<workshop> — 23/11/2026" as the title: digits, the same for an Arabic or an English reader, never a month name that the text direction scrambles', () => {
+    expect(defaultVideoTitle('Screen Acting I', '2026-11-24')).toBe('Screen Acting I — 24/11/2026');
     expect(defaultVideoTitle('Screen Acting I', null)).toBe('Screen Acting I');
+    // What an Arabic-reading coach stores is exactly what an English-reading one stores: no Arabic letters, no invisible marks.
+    const stored = defaultVideoTitle('Voice & Speech', '2026-11-23');
+    expect(stored).toBe('Voice & Speech — 23/11/2026');
+    expect(stored).not.toMatch(/[\u0600-\u06FF\u200E\u200F\u2066-\u2069]/);
+    expect(defaultVideoTitle('ورشة الصوت', '2026-11-23')).toBe('ورشة الصوت — 23/11/2026');
+  });
+
+  it('the offered title follows the session picked from a workshop, until the coach types their own', () => {
+    expect(titleForSession('Voice — 23/11/2026', 'Voice', '2026-11-23', '2026-11-16')).toBe('Voice — 16/11/2026');
+    expect(titleForSession('', 'Voice', '2026-11-23', '2026-11-16')).toBe('Voice — 16/11/2026');
+    expect(titleForSession('Voice — 23/11/2026', 'Voice', '2026-11-23', null)).toBe('Voice');
+    expect(titleForSession('My scene with Maya', 'Voice', '2026-11-23', '2026-11-16')).toBe('My scene with Maya');
   });
 
   it('tidies a pasted link: spaces off, https:// in front of a bare address; anything else is left for the server to refuse', () => {
@@ -290,7 +394,7 @@ describe('the words on screen and the route table', () => {
     walk(path.resolve(__dirname, '../../src/shared'));
     const keys = new Set<string>();
     for (const f of files) for (const m of fs.readFileSync(f, 'utf8').matchAll(/'videos:errors\.(\w+)'/g)) keys.add(m[1]!);
-    expect([...keys].sort()).toEqual(['invalidLink', 'notInWorkshop', 'sessionNotInWorkshop']);
+    expect([...keys].sort()).toEqual(['changesNoteRequired', 'editedLinkRequired', 'invalidLink', 'notInWorkshop', 'rawLinkRequired', 'sessionNotInWorkshop']);
     const missing = [...keys].filter((k) => !(videos.en.errors as Record<string, string>)[k] || !(videos.ar.errors as Record<string, unknown>)[k]);
     expect(missing).toEqual([]);
   });

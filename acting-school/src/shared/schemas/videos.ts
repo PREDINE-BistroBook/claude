@@ -33,18 +33,21 @@ export const VIDEOS_PAGE = 200;
  * at most 1000 characters. Pasted text around it ("Link: https://…") is not
  * cleaned up — the field must hold the link itself.
  */
-export const videoLink = z
-  .string()
-  .trim()
-  .min(1)
-  .max(VIDEO_LINK_MAX)
-  .pipe(z.url({ protocol: /^https?$/, hostname: z.regexes.domain, message: 'videos:errors.invalidLink' }));
+const linkField = (whenEmpty?: string) =>
+  z
+    .string()
+    .trim()
+    .min(1, whenEmpty ? { message: whenEmpty } : undefined)
+    .max(VIDEO_LINK_MAX)
+    .pipe(z.url({ protocol: /^https?$/, hostname: z.regexes.domain, message: 'videos:errors.invalidLink' }));
+export const videoLink = linkField();
 
 const videoFields = z.object({
   title: reqText(VIDEO_TITLE_MAX),
   /** Defaults to 'other' on create. */
   kind: z.enum(VIDEO_KINDS).optional(),
-  rawLink: videoLink,
+  /** Empty: "Paste the link to the raw footage first" (not a bare "Required"). */
+  rawLink: linkField('videos:errors.rawLinkRequired'),
   notesForEditor: optText(VIDEO_NOTE_MAX),
   /** Defaults to the day after it is added (the school's clock). */
   dueOn: optDate,
@@ -71,14 +74,18 @@ export type VideoUpdateInput = z.infer<typeof videoUpdateInput>;
 
 /** POST /api/videos/:id/submit (videos.edit): the edited link (required), and notes for the reviewer. */
 export const videoSubmitInput = z.object({
-  editedLink: videoLink,
+  editedLink: linkField('videos:errors.editedLinkRequired'),
   notes: optText(VIDEO_NOTE_MAX),
 });
 export type VideoSubmitInput = z.infer<typeof videoSubmitInput>;
 
-/** POST /:id/request-changes, /:id/reopen (videos.review) and /:id/comments: a note, required. */
+/** POST /:id/comments: a note, required. */
 export const videoNoteInput = z.object({ note: reqText(VIDEO_NOTE_MAX) });
 export type VideoNoteInput = z.infer<typeof videoNoteInput>;
+
+/** POST /:id/request-changes and /:id/reopen (videos.review): what the editor should change, required. */
+export const videoChangesInput = z.object({ note: z.string().trim().min(1, { message: 'videos:errors.changesNoteRequired' }).max(VIDEO_NOTE_MAX) });
+export type VideoChangesInput = z.infer<typeof videoChangesInput>;
 
 const statusList = z
   .string()
@@ -141,6 +148,13 @@ export interface Video {
   addedBy: PersonRef | null;
   /** The editor who took it (and hands in the edit). */
   editor: PersonRef | null;
+  /**
+   * Whether that editor can still edit videos: an active account that holds
+   * videos.edit (owners hold everything). False when nobody has taken it, and
+   * when the account was switched off or the Video editor position taken away
+   * — then another editor may take the video over.
+   */
+  editorCanEdit: boolean;
   /** The reviewer who decided last (approved, asked for changes, reopened). */
   reviewer: PersonRef | null;
   editedLink: string | null;
@@ -164,6 +178,16 @@ export interface VideoDetail extends Video {
 }
 
 /**
+ * The answer to adding a video and to every step (take, submit, approve,
+ * needs changes, reopen): the video with its history, and who was alerted
+ * about this step — so the screen can say "Moaty got an alert", or say
+ * plainly that nobody did (nobody holds the Video reviewer position yet).
+ */
+export interface VideoStepResult extends VideoDetail {
+  told: PersonRef[];
+}
+
+/**
  * The video pipeline's part of the 20-second poll (GET /api/chat/unread →
  * `videos`): the counts behind the "Videos" menu badge and the School home's
  * cards. null for someone who holds no videos permission. Owners hold every
@@ -179,10 +203,19 @@ export interface VideoCounts {
   late: number | null;
   /** videos.review (not owners): edits waiting for a check. */
   toCheck: number | null;
-  /** Videos I added (any status): whether the coach's card shows. */
+  /** Videos I added (any status). */
   addedByMe: number;
+  /** Videos I added that are not approved yet (with the editor or the reviewer): the coach's card. */
+  addedOpen: number;
   /** Videos I added that were approved this week (the school's week, its time zone). */
   approvedThisWeek: number;
+  /**
+   * How many people check finished edits (active accounts holding
+   * videos.review that are not owners) — for the editors (whether "Done"
+   * alerts anyone) and for whoever gives positions (staff.manage, owners), so
+   * a school where nobody checks yet is told on screen. null for the others.
+   */
+  reviewers: number | null;
 }
 
 /** Error codes (error.code) of the videos API besides the generic ones. */
@@ -193,6 +226,8 @@ export const VIDEO_ERROR_CODES = {
   locked: 'video_locked',
   /** 403 — "Done" from an editor who isn't the one editing it. */
   notYourEdit: 'not_your_edit',
+  /** 403 — the person who edited it can't approve it or send it back themselves: another reviewer checks it. */
+  ownEdit: 'own_edit',
 } as const;
 
 // ── Who may do what (the API enforces it; the screens show the buttons) ─────
@@ -208,7 +243,9 @@ export interface VideoViewer {
 export interface VideoRuleFacts {
   status: VideoStatus;
   addedBy: Pick<PersonRef, 'id'> | null;
-  editor: Pick<PersonRef, 'id' | 'active'> | null;
+  editor: Pick<PersonRef, 'id'> | null;
+  /** The editor named on it can still edit videos (active, holding videos.edit): see Video.editorCanEdit. */
+  editorCanEdit: boolean;
 }
 
 export interface VideoActions {
@@ -220,9 +257,9 @@ export interface VideoActions {
   take: boolean;
   /** "Done": hand in the edited link (the editor who is editing it). */
   submit: boolean;
-  /** "Approved ✓" (an edit waiting for a check). */
+  /** "Approved ✓" (an edit waiting for a check — never the edit's own editor, unless an owner). */
   approve: boolean;
-  /** "Needs changes", with a note (an edit waiting for a check). */
+  /** "Needs changes", with a note (an edit waiting for a check — never the edit's own editor, unless an owner). */
   requestChanges: boolean;
   /** Reopen an approved video, with a note: back to the editor. */
   reopen: boolean;
@@ -243,15 +280,17 @@ export function videoActions(v: VideoRuleFacts, viewer: VideoViewer): VideoActio
   const isEditor = v.editor?.id === viewer.id;
   // The coach who added it (still adding videos), a reviewer, or an owner.
   const mayChange = v.status === 'new' && ((isAdder && holds('videos.add')) || reviewer || viewer.isOwner);
-  // An editor who has left (account switched off) leaves the video to the other editors.
-  const abandoned = v.status === 'editing' && (v.editor === null || !v.editor.active) && !isEditor;
+  // An editor who can no longer edit (account switched off, or the Video editor position taken away) leaves the video to the others.
+  const abandoned = v.status === 'editing' && !v.editorCanEdit && !isEditor;
+  // "Moaty checks every edit": whoever edited it (someone holding both positions) doesn't check their own work — another reviewer does.
+  const checks = reviewer && v.status === 'in_review' && (!isEditor || viewer.isOwner);
   return {
     edit: mayChange,
     remove: mayChange,
     take: editor && (v.status === 'new' || v.status === 'changes_requested' || abandoned),
     submit: editor && v.status === 'editing' && (isEditor || viewer.isOwner),
-    approve: reviewer && v.status === 'in_review',
-    requestChanges: reviewer && v.status === 'in_review',
+    approve: checks,
+    requestChanges: checks,
     reopen: reviewer && v.status === 'approved',
     comment: isAdder || isEditor || editor || reviewer,
   };

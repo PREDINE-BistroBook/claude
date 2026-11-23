@@ -32,6 +32,7 @@ import { localeOf, markNotificationsReadForEveryone, notificationText, notify } 
 import { queuePush } from './push';
 import { inChunks } from './sqlLimits';
 import { loadPersons, missingPerson } from './team';
+import { hiddenVideoKinds } from './videos';
 
 type Reader = Pick<DB, 'select'>;
 type OrderRow = typeof cafeOrders.$inferSelect;
@@ -234,10 +235,13 @@ export const cafeOrderLink = (orderId: number) => `/cafeteria?order=${orderId}`;
  * Alerts left out of this person's bell and its count: new-order alerts
  * (`cafe_order`, which open the board) for anyone who is not — or no longer —
  * someone who serves from the board (cafeServers: the permission taken away,
- * or a section given since), and for everyone while the cafeteria is switched off.
+ * or a section given since), and for everyone while the cafeteria is switched
+ * off; and the video alerts of a part of the video work the person no longer
+ * does (hiddenVideoKinds, lib/videos.ts).
  */
 export function hiddenNotificationKinds(db: Reader, user: Pick<SessionUser, 'permissions'>): NotificationKind[] {
-  return cafeSettings(db).enabled && servesFromBoard(user.permissions) ? [] : ['cafe_order'];
+  const cafe: NotificationKind[] = cafeSettings(db).enabled && servesFromBoard(user.permissions) ? [] : ['cafe_order'];
+  return [...cafe, ...hiddenVideoKinds(user)];
 }
 
 /** "2 × Tea (no sugar) — to Studio 1", in the reader's language. */

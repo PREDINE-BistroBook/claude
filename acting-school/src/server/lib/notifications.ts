@@ -70,14 +70,15 @@ const ar: Record<keyof typeof en, string> = {
   cafeOrderTakenTitle: 'طلب {{name}}: في الطريق',
   cafeOrderCancelledTitle: 'طلب {{name}}: أُلغي',
   videoNewTitle: 'فيديو جديد للمونتاج: {{title}}',
-  videoNewBody: '{{course}} · من {{name}}',
+  // Arabic bodies start with an Arabic word, so the bell and the phone lay them out right to left (a Latin name first would turn the line around).
+  videoNewBody: 'من {{name}} · {{course}}',
   videoReviewTitle: 'مونتاج جاهز للمراجعة: {{title}}',
-  videoReviewBody: '{{course}} · المونتاج: {{name}}',
+  videoReviewBody: 'المونتاج: {{name}} · {{course}}',
   videoChangesTitle: 'مطلوب تعديلات: {{title}}',
   videoReopenedTitle: 'أُعيد فتحه، مطلوب تعديلات: {{title}}',
-  videoChangesBody: '{{name}}: {{note}}',
+  videoChangesBody: 'ملاحظة {{name}}: {{note}}',
   videoApprovedTitle: 'تمت الموافقة على الفيديو: {{title}}',
-  videoApprovedBody: '{{course}} · المراجعة: {{name}}',
+  videoApprovedBody: 'المراجِع: {{name}} · {{course}}',
 };
 
 export const NOTIFICATION_TEXT: Record<Locale, typeof en> = { en, ar };

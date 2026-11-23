@@ -12,12 +12,12 @@ import type { PushPayload } from '../../shared/schemas/notifications';
 import type { PersonRef } from '../../shared/schemas/team';
 import { seesAllVideos, usesVideos, type Video, type VideoCounts, type VideoDetail, type VideoEvent, type VideoRuleFacts, type VideoStudent } from '../../shared/schemas/videos';
 import type { DB } from '../db/database';
-import { classSessions, courses, students, users, videoEvents, videoStudents, videos } from '../db/schema';
+import { classSessions, courses, notifications, students, users, videoEvents, videoStudents, videos } from '../db/schema';
 import type { AppEnv } from '../env';
 import { hasPermission, loadAccess, ownCourseIds, seesAllClasses, studentScope, type Conn } from './access';
 import { notify, type NotificationTextKey, notificationText, preview } from './notifications';
 import { queuePush } from './push';
-import { inChunks } from './sqlLimits';
+import { chunk, IN_LIST_CHUNK, inChunks } from './sqlLimits';
 import { loadPersons, missingPerson } from './team';
 
 type Reader = Pick<DB, 'select'>;
@@ -55,13 +55,38 @@ export function findVisibleVideo(db: Reader, id: number, user: Viewer): VideoRow
     .get();
 }
 
-/** The facts the rules read (shared/schemas/videos.ts videoActions): the status, who added it, who is editing it and whether they are still active. */
+/**
+ * Of these accounts, the ones that can still edit videos: active, and holding
+ * videos.edit (owners hold every permission). An editor who was switched off,
+ * or whose Video editor position was taken away while keeping the account,
+ * is not one of them: the video they were editing goes to the other editors.
+ */
+export function editorsWhoCanEdit(db: Reader, userIds: readonly (number | null)[]): Set<number> {
+  const ids = [...new Set(userIds.filter((id): id is number => id !== null))];
+  if (!ids.length) return new Set();
+  const active = new Set(
+    inChunks(ids, (part) =>
+      db
+        .select({ id: users.id })
+        .from(users)
+        .where(and(inArray(users.id, part), eq(users.active, true)))
+        .all(),
+    ).map((r) => r.id),
+  );
+  const access = loadAccess(
+    db,
+    ids.filter((id) => active.has(id)),
+  );
+  return new Set([...access].filter(([, a]) => a.isOwner || a.permissions.includes('videos.edit')).map(([id]) => id));
+}
+
+/** The facts the rules read (shared/schemas/videos.ts videoActions): the status, who added it, who is editing it and whether they can still edit. */
 export function videoRuleFacts(db: Reader, row: Pick<VideoRow, 'status' | 'addedById' | 'editorId'>): VideoRuleFacts {
-  const people = loadPersons(db, [row.addedById, row.editorId]);
   return {
     status: row.status,
     addedBy: row.addedById === null ? null : { id: row.addedById },
-    editor: row.editorId === null ? null : (people.get(row.editorId) ?? missingPerson(row.editorId)),
+    editor: row.editorId === null ? null : { id: row.editorId },
+    editorCanEdit: row.editorId !== null && editorsWhoCanEdit(db, [row.editorId]).has(row.editorId),
   };
 }
 
@@ -148,6 +173,10 @@ export function loadVideos(db: Reader, where: SQL | undefined, viewer: Viewer, o
   const person = (userId: number | null): PersonRef | null => (userId === null ? null : (people.get(userId) ?? missingPerson(userId)));
   const inIt = studentsOf(db, ids, viewer);
   const notes = changesNotes(db, ids);
+  const canEdit = editorsWhoCanEdit(
+    db,
+    rows.map((r) => r.video.editorId),
+  );
   return rows.map(({ video: v, ...r }) => ({
     id: v.id,
     courseId: v.courseId,
@@ -164,6 +193,7 @@ export function loadVideos(db: Reader, where: SQL | undefined, viewer: Viewer, o
     status: v.status,
     addedBy: person(v.addedById),
     editor: person(v.editorId),
+    editorCanEdit: v.editorId !== null && canEdit.has(v.editorId),
     reviewer: person(v.reviewerId),
     editedLink: v.editedLink,
     editorNotes: v.editorNotes,
@@ -228,7 +258,7 @@ export function videoTeam(db: Reader, permission: 'videos.edit' | 'videos.review
   });
 }
 
-/** One person, if active and not the one acting (the coach who added a video, the editor who did it). */
+/** One person, if active and not the one acting (the coach who added a video). */
 export function videoPerson(db: Reader, userId: number | null, exceptUserId: number): VideoRecipient[] {
   if (userId === null || userId === exceptUserId) return [];
   const row = db
@@ -237,6 +267,32 @@ export function videoPerson(db: Reader, userId: number | null, exceptUserId: num
     .where(and(eq(users.id, userId), eq(users.active, true)))
     .get();
   return row ? [row] : [];
+}
+
+/**
+ * Who hears that an edit needs changes: the editor who did it, while they can
+ * still edit videos (editorsWhoCanEdit) — else every active editor who is not
+ * an owner, so the video never waits on someone who can no longer open it.
+ * Nobody when the one deciding is the editor themselves (an owner).
+ */
+export function videoChangesRecipients(db: Reader, editorId: number | null, exceptUserId: number): VideoRecipient[] {
+  if (editorId === exceptUserId) return [];
+  if (editorId !== null && editorsWhoCanEdit(db, [editorId]).has(editorId)) return videoPerson(db, editorId, exceptUserId);
+  return videoTeam(db, 'videos.edit', exceptUserId);
+}
+
+/** The people alerted, as names and photos for the answer (VideoStepResult.told): "Moaty got an alert". */
+export function toldPersons(db: Reader, recipients: readonly VideoRecipient[]): PersonRef[] {
+  const people = loadPersons(
+    db,
+    recipients.map((r) => r.id),
+  );
+  return recipients.map((r) => people.get(r.id) ?? missingPerson(r.id));
+}
+
+/** The video's alerts in everyone's bell (they would open a page that is gone): deleting a video, or the workshop that holds it. */
+export function deleteVideoAlerts(tx: Conn, videoIds: readonly number[]): void {
+  for (const part of chunk(videoIds.map(videoPath), IN_LIST_CHUNK)) tx.delete(notifications).where(inArray(notifications.link, part)).run();
 }
 
 /** What one alert says, written for each reader's language. */
@@ -292,6 +348,21 @@ export function pushVideo(c: Context<AppEnv>, videoId: number, recipients: reado
   }
 }
 
+/**
+ * Video alerts left out of a person's bell and its count: the editor's
+ * ("New video to edit", "Changes needed") without videos.edit, the reviewer's
+ * ("Edit ready to check") without videos.review, "Video approved" without any
+ * videos permission — someone whose position was taken away keeps no alert
+ * that only opens a "No access" page.
+ */
+export function hiddenVideoKinds(user: Pick<SessionUser, 'permissions'>): NotificationKind[] {
+  const out: NotificationKind[] = [];
+  if (!user.permissions.includes('videos.edit')) out.push('video_new', 'video_changes');
+  if (!user.permissions.includes('videos.review')) out.push('video_review');
+  if (!usesVideos(user)) out.push('video_approved');
+  return out;
+}
+
 // ── The poll ────────────────────────────────────────────────────────────────
 
 /**
@@ -303,7 +374,7 @@ export function pushVideo(c: Context<AppEnv>, videoId: number, recipients: reado
  */
 export function videoCounts(db: Reader, user: Viewer, today: string, weekStart: () => number): VideoCounts | null {
   if (!usesVideos(user)) return null;
-  const out: VideoCounts = { toEdit: null, dueToday: null, late: null, toCheck: null, addedByMe: 0, approvedThisWeek: 0 };
+  const out: VideoCounts = { toEdit: null, dueToday: null, late: null, toCheck: null, addedByMe: 0, addedOpen: 0, approvedThisWeek: 0, reviewers: null };
   if (!user.isOwner && hasPermission(user, 'videos.edit')) {
     const r = db
       .select({
@@ -321,7 +392,18 @@ export function videoCounts(db: Reader, user: Viewer, today: string, weekStart: 
   if (!user.isOwner && hasPermission(user, 'videos.review')) {
     out.toCheck = db.select({ n: count() }).from(videos).where(eq(videos.status, 'in_review')).get()?.n ?? 0;
   }
-  out.addedByMe = db.select({ n: count() }).from(videos).where(eq(videos.addedById, user.id)).get()?.n ?? 0;
+  // Whether "Done" alerts anyone: for the editors, and for whoever gives positions (a school where nobody checks yet is told).
+  if (hasPermission(user, 'videos.edit') || hasPermission(user, 'staff.manage')) out.reviewers = videoTeam(db, 'videos.review').length;
+  const mine = db
+    .select({
+      n: count(),
+      open: sql<number>`coalesce(sum(case when ${videos.status} <> 'approved' then 1 else 0 end), 0)`.mapWith(Number),
+    })
+    .from(videos)
+    .where(eq(videos.addedById, user.id))
+    .get();
+  out.addedByMe = mine?.n ?? 0;
+  out.addedOpen = mine?.open ?? 0;
   if (out.addedByMe > 0) {
     out.approvedThisWeek =
       db
