@@ -271,14 +271,14 @@ Design rule for everything here: **made for older, non-technical people.**
 - **Node:** `src/server/index.ts` must not serve the SPA for `/site*`.
 - **The staff app's service worker must never answer `/site`:** in `vite.config.ts`, `navigateFallbackDenylist: [/^\/api\//, /^\/site(\/|$)/]`.
 - **The studio's own domain (decided 2026-11-23).** The school bought `turquoisestudio.app`.
-  - **Staff app:** `staff.turquoisestudio.app` (already attached to the Worker).
+  - **Staff app:** `team.turquoisestudio.app` (renamed 2026-11-23, when the school asked for "Team" instead of "Staff"). Its first address, `staff.turquoisestudio.app`, stays attached and forwards to it: a var `HOST_REDIRECTS` (`"staff.turquoisestudio.app=team.turquoisestudio.app"`, the same in both wrangler configs) read by `src/worker/hostRedirect.ts` before any other routing. On the old host, pages answer 301 to the same path on the new one, `/api/*` keeps answering (a page already open doesn't break mid-task), and `/sw.js` is a service worker that removes itself and reloads, so an installed app there follows the redirect.
   - **Public website:** at the root of `turquoisestudio.app`. `www.turquoisestudio.app` redirects (301) to it.
   - **How the Worker routes it:** a var `PUBLIC_SITE_HOSTS` (comma-separated; `"turquoisestudio.app,www.turquoisestudio.app"`, the same in both wrangler configs) names the public hosts.
     - On a public host, the site is served **at the root**: `/` → home, `/ar`, `/en/workshops/12`, `/ar/casting-call`, `/en/links`, `/media/:id`, and so on.
     - The Worker maps a public-host path `/x` to the app's `/site/x`, with no `/site` in the visible URLs.
     - Nothing of the staff app answers on a public host. `/api/*`, `/login`, the staff static files and the service worker all get the site's 404 page.
     - `www` → 301 to the apex, with the same path and query.
-  - **Links inside the pages** come from `src/server/site/paths.ts`, given the request: `/site/...` on any other host (staff host, workers.dev, localhost), bare paths on a public host.
+  - **Links inside the pages** come from `src/server/site/paths.ts`, given the request: `/site/...` on any other host (the staff app's host `team.turquoisestudio.app`, workers.dev, localhost), bare paths on a public host.
   - **On a non-public host,** `/site/*` keeps working as today, for previews.
   - **`run_worker_first`:** with static assets, a path on a public host must reach the Worker before assets. So `wrangler.jsonc` uses `"run_worker_first": true`, and the Worker passes staff-host asset requests to `env.ASSETS` exactly as before; the embedded variant already runs the Worker first.
   - **Tests:** cover the public-host routing (Worker-level unit tests in `tests/unit/`, using a fake ASSETS and DO stub) and the link building in `paths.ts`.

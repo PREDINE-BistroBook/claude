@@ -27,9 +27,11 @@
     "ALLOW_DEMO_RESET": "false",
     // The studio's own domain: these hosts serve the public website at their
     // root (www redirects to the apex) and nothing of the staff app. The staff
-    // app is on staff.turquoisestudio.app. The deployer attaches the domains
+    // app is on team.turquoisestudio.app. The deployer attaches the domains
     // (routes with custom_domain) when switching them on.
-    "PUBLIC_SITE_HOSTS": "turquoisestudio.app,www.turquoisestudio.app"
+    "PUBLIC_SITE_HOSTS": "turquoisestudio.app,www.turquoisestudio.app",
+    // The staff app's old address forwards to the new one (src/worker/hostRedirect.ts).
+    "HOST_REDIRECTS": "staff.turquoisestudio.app=team.turquoisestudio.app"
   },
   // Secrets (dashboard → Worker → Settings → Variables and Secrets, or `wrangler secret put`):
   //   ADMIN_TOKEN  bearer token for /api/admin/* (24+ characters), and the setup code first-run setup asks
@@ -47,8 +49,10 @@
   "preview_urls": false,
 
   // The studio's own domain (Cloudflare adds the DNS records and certificates).
-  // staff. = this staff app; the apex and www = the public website (PUBLIC_SITE_HOSTS).
+  // team. = this staff app (staff. is its old address and forwards to it: HOST_REDIRECTS);
+  // the apex and www = the public website (PUBLIC_SITE_HOSTS).
   "routes": [
+    { "pattern": "team.turquoisestudio.app", "custom_domain": true },
     { "pattern": "staff.turquoisestudio.app", "custom_domain": true },
     { "pattern": "turquoisestudio.app", "custom_domain": true },
     { "pattern": "www.turquoisestudio.app", "custom_domain": true }

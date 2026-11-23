@@ -4,6 +4,10 @@
  * no Cloudflare credentials (CLOUDFLARE_API_TOKEN / ACCOUNT_ID are removed
  * from its environment), metrics are off, and remote bindings are disabled.
  * Never deploy from here — deploys go through Workers Builds.
+ *
+ * The Worker sees the real local address (wranglerDevArgs: origin inference
+ * from "routes" is off), so its host routing — the public site's hosts, the
+ * old staff address — runs here exactly as it does on Cloudflare.
  */
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
@@ -53,6 +57,23 @@ export function ensureWebBuild(force = false) {
   if (r.status !== 0) throw new Error('vite build failed');
 }
 
+/**
+ * The arguments of every local `wrangler dev` here.
+ *
+ * --infer-origin-from-routes=false: both wrangler configs have "routes" (the
+ * studio's custom domains), and by default `wrangler dev` then tells the
+ * Worker that every request came to the FIRST route's host over https
+ * (request.url and the Host header say team.turquoisestudio.app). The Worker
+ * routes by host, so that would hide the public website's hosts and the old
+ * staff address from local runs, and the public forms' Origin check (Origin
+ * must be the host the Worker sees) would refuse every form sent to
+ * http://127.0.0.1. With the inference off the Worker sees the address the
+ * request really came to — localhost, or whatever Host header a test sends.
+ */
+export function wranglerDevArgs(port: number, extra: readonly string[] = []): string[] {
+  return ['wrangler', 'dev', '--local', '--port', String(port), '--infer-origin-from-routes=false', ...extra];
+}
+
 export interface WranglerDev {
   child: ChildProcess;
   url: string;
@@ -61,7 +82,7 @@ export interface WranglerDev {
 
 /** Start `wrangler dev --local` on `port` and wait until /api/health answers. */
 export async function startWranglerDev(opts: { port: number; persistTo?: string; quiet?: boolean; timeoutMs?: number; config?: string }): Promise<WranglerDev> {
-  const args = ['wrangler', 'dev', '--local', '--port', String(opts.port), '--ip', '127.0.0.1', '--show-interactive-dev-session=false'];
+  const args = wranglerDevArgs(opts.port, ['--ip', '127.0.0.1', '--show-interactive-dev-session=false']);
   if (opts.config) args.push('-c', opts.config);
   if (opts.persistTo) args.push('--persist-to', opts.persistTo);
   const child = spawn('npx', args, { cwd: ROOT, env: wranglerEnv(), stdio: ['ignore', 'pipe', 'pipe'], detached: true });

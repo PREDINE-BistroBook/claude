@@ -60,7 +60,7 @@ describe('PUBLIC_SITE_HOSTS and the links per host (paths.ts)', () => {
   it('a public host gets bare links; every other host (staff, workers.dev, localhost) /site/…', () => {
     expect(normalizeHost('TurquoiseStudio.app:8443')).toBe('turquoisestudio.app');
     expect(isPublicSiteHost('turquoisestudio.app.', HOSTS)).toBe(true);
-    expect(isPublicSiteHost('staff.turquoisestudio.app', HOSTS)).toBe(false);
+    expect(isPublicSiteHost('team.turquoisestudio.app', HOSTS)).toBe(false);
     expect(isPublicSiteHost('', HOSTS)).toBe(false);
 
     const pub = sitePathsFor('https://turquoisestudio.app/site/en', HOSTS);
@@ -74,7 +74,7 @@ describe('PUBLIC_SITE_HOSTS and the links per host (paths.ts)', () => {
     expect(pub.thanks('ar', 'apply')).toBe('/ar/thanks?k=apply');
     expect(pub.media('abc')).toBe('/media/abc');
 
-    for (const url of ['https://staff.turquoisestudio.app/site/en', 'https://claude.example.workers.dev/site', 'http://localhost:3000/site/ar']) {
+    for (const url of ['https://team.turquoisestudio.app/site/en', 'https://claude.example.workers.dev/site', 'http://localhost:3000/site/ar']) {
       const p = sitePathsFor(url, HOSTS);
       expect(p, url).toBe(sitePaths);
       expect(p.root()).toBe('/site');
@@ -90,7 +90,7 @@ describe('PUBLIC_SITE_HOSTS and the links per host (paths.ts)', () => {
     expect(routePublicHost(new URL('https://turquoisestudio.app/'), HOSTS)).toEqual({ kind: 'site', url: 'https://turquoisestudio.app/site' });
     expect(routePublicHost(new URL('https://turquoisestudio.app/en/workshops/12?x=1'), HOSTS)).toEqual({ kind: 'site', url: 'https://turquoisestudio.app/site/en/workshops/12?x=1' });
     expect(routePublicHost(new URL('https://turquoisestudio.app/../api/students'), HOSTS)).toEqual({ kind: 'site', url: 'https://turquoisestudio.app/site/api/students' });
-    expect(routePublicHost(new URL('https://staff.turquoisestudio.app/site/en'), HOSTS)).toEqual({ kind: 'staff' });
+    expect(routePublicHost(new URL('https://team.turquoisestudio.app/site/en'), HOSTS)).toEqual({ kind: 'staff' });
     // www alone (apex not listed) is served, not redirected.
     expect(routePublicHost(new URL('https://www.example.org/en'), ['www.example.org'])).toEqual({ kind: 'site', url: 'https://www.example.org/site/en' });
   });
@@ -108,12 +108,12 @@ describe('the Worker on the staff host (and workers.dev, localhost)', () => {
   it('/api/* and /site, /site/* go to the Durable Object; everything else to the static assets, as before', async () => {
     const f = fakes();
     for (const path of ['/api/health', '/api', '/site', '/site/en', '/site/ar/casting-call', '/site/media/x']) {
-      await routeRequest(req(`https://staff.turquoisestudio.app${path}`), f.deps);
+      await routeRequest(req(`https://team.turquoisestudio.app${path}`), f.deps);
     }
     expect(f.school.map((s) => new URL(s.url).pathname)).toEqual(['/api/health', '/api', '/site', '/site/en', '/site/ar/casting-call', '/site/media/x']);
     expect(f.assets).toHaveLength(0);
     for (const path of ['/', '/students/12', '/login', '/sw.js', '/sitemap.xml', '/siteX', '/manifest.webmanifest']) {
-      const res = await routeRequest(req(`https://staff.turquoisestudio.app${path}`), f.deps);
+      const res = await routeRequest(req(`https://team.turquoisestudio.app${path}`), f.deps);
       expect(await res.text(), path).toBe('asset');
     }
     expect(f.assets.map((a) => new URL(a.url).pathname)).toEqual(['/', '/students/12', '/login', '/sw.js', '/sitemap.xml', '/siteX', '/manifest.webmanifest']);
@@ -131,7 +131,7 @@ describe('the Worker on the staff host (and workers.dev, localhost)', () => {
 
   it('too large for the route: 413 before the Durable Object (JSON for the API, the friendly page for the site)', async () => {
     const f = fakes();
-    const post = (path: string, length: number) => req(`https://staff.turquoisestudio.app${path}`, { method: 'POST', headers: { 'content-length': String(length) } });
+    const post = (path: string, length: number) => req(`https://team.turquoisestudio.app${path}`, { method: 'POST', headers: { 'content-length': String(length) } });
     const api = await routeRequest(post('/api/auth/login', 1024 * 1024 + 1), f.deps);
     expect(api.status).toBe(413);
     expect(((await api.json()) as { error: { code: string } }).error.code).toBe('payload_too_large');
@@ -240,7 +240,7 @@ describe('the real app behind the Worker', () => {
       const location = res.headers.get('location');
       if (location !== null) expect(location, sneaky).toMatch(/^\/[^/\\]/);
     }
-    expect((await routeRequest(req('https://staff.turquoisestudio.app/site//evil.example/'), deps)).headers.get('location')).toBe('/site/evil.example');
+    expect((await routeRequest(req('https://team.turquoisestudio.app/site//evil.example/'), deps)).headers.get('location')).toBe('/site/evil.example');
     const bot = await routeRequest(
       req('https://turquoisestudio.app/en/apply', { method: 'POST', body: 'website=spam', headers: { 'content-type': 'application/x-www-form-urlencoded' } }),
       deps,
@@ -251,10 +251,10 @@ describe('the real app behind the Worker', () => {
 
   it('on the staff host: the staff app as before, and /site previews with /site links', async () => {
     const { deps } = realApp();
-    expect(await (await routeRequest(req('https://staff.turquoisestudio.app/students/1'), deps)).text()).toBe('staff app');
-    expect((await routeRequest(req('https://staff.turquoisestudio.app/api/health'), deps)).status).toBe(200);
-    const preview = await (await routeRequest(req('https://staff.turquoisestudio.app/site/en'), deps)).text();
+    expect(await (await routeRequest(req('https://team.turquoisestudio.app/students/1'), deps)).text()).toBe('staff app');
+    expect((await routeRequest(req('https://team.turquoisestudio.app/api/health'), deps)).status).toBe(200);
+    const preview = await (await routeRequest(req('https://team.turquoisestudio.app/site/en'), deps)).text();
     expect(preview).toContain('href="/site/en/workshops"');
-    expect(preview).toContain('<link rel="canonical" href="https://staff.turquoisestudio.app/site/en">');
+    expect(preview).toContain('<link rel="canonical" href="https://team.turquoisestudio.app/site/en">');
   });
 });

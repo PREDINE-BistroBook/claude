@@ -1,7 +1,8 @@
 /**
- * Where each request to the Worker goes (index.ts wires in the real bindings;
- * no Cloudflare imports here, so the Node tests can drive it with a fake
- * ASSETS and Durable Object — tests/unit/workerRouting.test.ts):
+ * Where each request to the Worker goes (index.ts wires in the real bindings,
+ * after forwarding the staff app's old address — hostRedirect.ts; no
+ * Cloudflare imports here, so the Node tests can drive it with a fake ASSETS
+ * and Durable Object — tests/unit/workerRouting.test.ts):
  *
  * On a public host (PUBLIC_SITE_HOSTS: turquoisestudio.app, www.…):
  * - www → 301 to the apex, same path and query;
@@ -9,7 +10,7 @@
  *   root); nothing of the staff app — /api/*, /login, its static files, the
  *   service worker — answers there: those paths get the site's 404 page.
  *
- * On any other host (staff.turquoisestudio.app, workers.dev, localhost):
+ * On any other host (team.turquoisestudio.app, workers.dev, localhost):
  * - /api/* and /site, /site/* → the Durable Object (the API and the public
  *   site's /site previews), unless the body is too large (413, per route);
  * - everything else → the static assets (the staff app), exactly as before;

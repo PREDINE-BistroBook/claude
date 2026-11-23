@@ -12,6 +12,8 @@ export interface Env {
   ALLOW_DEMO_RESET?: string;
   /** Secret: bearer token for /api/admin/* (at least 24 characters), and the setup code for first-run setup. Unset = no admin routes, no setup. */
   ADMIN_TOKEN?: string;
+  /** Old staff-app hosts that forward to the current one: "old.host=new.host,…" (src/worker/hostRedirect.ts). */
+  HOST_REDIRECTS?: string;
   /** Session lifetime in days (default 30). */
   SESSION_DAYS?: string;
   /** "false" to send the session cookie without Secure (never needed on Cloudflare, which always serves HTTPS). */

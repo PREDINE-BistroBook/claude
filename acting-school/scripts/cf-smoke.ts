@@ -18,7 +18,9 @@
  * refused (413) and the session cookie is __Host- prefixed. The public
  * website (/site): every page in both languages with its headers, one
  * enquiry and one casting application with a photo through the real forms,
- * accept → talent, and /site/media serving only public images. The team pack:
+ * accept → talent, and /site/media serving only public images; the studio's
+ * domain (the site at the root of turquoisestudio.app, the staff app on
+ * team.turquoisestudio.app, its old address staff. forwarding). The team pack:
  * the Team page, a chat round trip with a photo, a workshop document, a call
  * to the office answered, notifications, push off without VAPID keys.
  * Exit code 1 on the first failure. Local only (scripts/cf-local.ts).
@@ -633,9 +635,11 @@ async function siteChecks(base: string, opts: { password: string }) {
 }
 
 /**
- * The studio's own domain (PUBLIC_SITE_HOSTS in wrangler.jsonc): wrangler dev passes the Host header
- * through, so the Worker's host routing (src/worker/routing.ts) runs for real here. On a public host
- * the site answers at the root with bare links and nothing of the staff app does; www → the apex.
+ * The studio's own domain (PUBLIC_SITE_HOSTS and HOST_REDIRECTS in wrangler.jsonc): local runs pass
+ * the Host header through to the Worker (scripts/cf-local.ts: wranglerDevArgs), so its host routing
+ * (src/worker/routing.ts, hostRedirect.ts) runs for real here. On a public host the site answers at
+ * the root with bare links and nothing of the staff app does; www → the apex. The staff app is on
+ * team.turquoisestudio.app, and its old address, staff., forwards there.
  */
 async function publicHostChecks(base: string) {
   step('studio domain: turquoisestudio.app serves the site at the root, www → apex, no staff app there');
@@ -664,6 +668,39 @@ async function publicHostChecks(base: string) {
   check(www.status === 301 && /^https?:\/\/turquoisestudio\.app\/ar\/links\?from=ig$/.test(String(www.headers.location)), `www → apex (${www.status} ${www.headers.location})`);
   const staff = await get('/students/1', `${hostname}:${port}`);
   check(staff.status === 200 && staff.body.includes('<div id="root">'), 'the staff host still serves the staff app');
+  // A form sent from the studio's own domain passes the Origin check there (and only there).
+  const crossHost = await new Promise<number>((resolve, reject) => {
+    const req = http.request(
+      { host: hostname, port, path: '/en/apply', method: 'POST', headers: { host: 'turquoisestudio.app', origin: 'https://team.turquoisestudio.app', 'content-type': 'application/x-www-form-urlencoded', 'content-length': 0 } },
+      (res) => {
+        res.resume();
+        res.on('end', () => resolve(res.statusCode ?? 0));
+      },
+    );
+    req.on('error', reject);
+    req.end();
+  });
+  check(crossHost === 403, `a form posted to the public host from another of our hosts is refused (${crossHost})`);
+
+  step('staff app address: team.turquoisestudio.app serves it; staff.turquoisestudio.app forwards there');
+  const team = await get('/students/1', 'team.turquoisestudio.app');
+  check(team.status === 200 && team.body.includes('<div id="root">'), `team. serves the staff app (${team.status})`);
+  const teamSw = await get('/sw.js', 'team.turquoisestudio.app');
+  check(teamSw.status === 200 && teamSw.body.includes('/push-sw.js') && !teamSw.body.includes('registration.unregister()'), 'team. has the real service worker (with the push handlers)');
+  const moved = await get('/students/12?tab=notes', 'staff.turquoisestudio.app');
+  check(
+    moved.status === 301 && moved.headers.location === 'https://team.turquoisestudio.app/students/12?tab=notes',
+    `staff. forwards pages to the same path on team. (${moved.status} ${moved.headers.location})`,
+  );
+  const movedRoot = await get('/', 'staff.turquoisestudio.app');
+  check(movedRoot.status === 301 && movedRoot.headers.location === 'https://team.turquoisestudio.app/', `staff. root forwards (${movedRoot.status} ${movedRoot.headers.location})`);
+  const oldApi = await get('/api/health', 'staff.turquoisestudio.app');
+  check(oldApi.status === 200 && oldApi.body.includes('"ok":true'), `the API keeps answering on staff. (${oldApi.status})`);
+  const oldSw = await get('/sw.js', 'staff.turquoisestudio.app');
+  check(
+    oldSw.status === 200 && oldSw.body.includes('registration.unregister()') && oldSw.headers['cache-control'] === 'no-store',
+    `staff. serves the service worker that removes itself (${oldSw.status})`,
+  );
 }
 
 async function main() {
