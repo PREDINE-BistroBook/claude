@@ -6,7 +6,7 @@ import type { Namespace, TranslationOf } from './types';
  * and reach these with t('common:…') or useTranslation(['students', 'common']).
  */
 const en = {
-  appName: 'Acting School',
+  appName: 'Turquoise Studio',
   nav: {
     home: 'Home',
     schedule: 'Schedule',
@@ -223,7 +223,9 @@ const en = {
     setupTitle: 'Set up your school',
     setupSubtitle: 'Create your account — it gets the CEO position. You can add the rest of the team afterwards.',
     schoolName: 'School name',
-    schoolNamePlaceholder: 'e.g. Stage Left Academy',
+    schoolNamePlaceholder: 'e.g. Turquoise Studio',
+    schoolNameAr: 'School name in Arabic',
+    schoolNameArPlaceholder: 'e.g. استوديو تركواز',
     yourName: 'Your name',
     createSchool: 'Create school',
     creating: 'Creating…',
@@ -252,7 +254,7 @@ const en = {
 };
 
 const ar: TranslationOf<typeof en> = {
-  appName: 'مدرسة التمثيل',
+  appName: 'استوديو تركواز',
   nav: {
     home: 'الرئيسية',
     schedule: 'الجدول',
@@ -473,7 +475,9 @@ const ar: TranslationOf<typeof en> = {
     setupTitle: 'إعداد مدرستك',
     setupSubtitle: 'أنشئ حسابك، وسيحصل على منصب الرئيس التنفيذي. يمكنك إضافة بقية الفريق لاحقًا.',
     schoolName: 'اسم المدرسة',
-    schoolNamePlaceholder: 'مثال: أكاديمية المسرح',
+    schoolNamePlaceholder: 'مثال: Turquoise Studio',
+    schoolNameAr: 'اسم المدرسة بالعربية',
+    schoolNameArPlaceholder: 'مثال: استوديو تركواز',
     yourName: 'اسمك',
     createSchool: 'إنشاء المدرسة',
     creating: 'جارٍ الإنشاء…',

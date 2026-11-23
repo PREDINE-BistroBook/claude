@@ -55,6 +55,7 @@ function SettingsForm({ settings }: { settings: AppSettings }) {
   const qc = useQueryClient();
   const form = useForm({
     schoolName: settings.schoolName,
+    schoolNameAr: settings.schoolNameAr ?? '',
     defaultLocale: settings.defaultLocale as Locale,
     weekStartsOn: String(settings.weekStartsOn),
     defaultCountryCode: settings.defaultCountryCode,
@@ -69,8 +70,9 @@ function SettingsForm({ settings }: { settings: AppSettings }) {
       // New criteria got their keys on the server's copy: start again from it.
       setCriteria(toDrafts(saved.interviewCriteria));
       form.set('defaultCountryCode', saved.defaultCountryCode);
+      form.set('schoolNameAr', saved.schoolNameAr ?? '');
       toast.success(t('saved'));
-      // The school name in the shell comes from /auth/me; the schedule reads the week start from ['settings'].
+      // The school name (and its Arabic name) in the shell comes from /auth/me; the schedule reads the week start from ['settings'].
       await Promise.all([qc.invalidateQueries({ queryKey: SETTINGS_KEY }), qc.invalidateQueries({ queryKey: ME_KEY })]);
     },
     onError: form.setServerError,
@@ -80,6 +82,7 @@ function SettingsForm({ settings }: { settings: AppSettings }) {
   const candidate = { ...form.values, weekStartsOn: Number(form.values.weekStartsOn), interviewCriteria };
   const dirty =
     candidate.schoolName.trim() !== settings.schoolName ||
+    (candidate.schoolNameAr.trim() || null) !== settings.schoolNameAr ||
     candidate.defaultLocale !== settings.defaultLocale ||
     candidate.weekStartsOn !== settings.weekStartsOn ||
     candidate.defaultCountryCode.replace(/[\s+]/g, '') !== settings.defaultCountryCode ||
@@ -96,14 +99,26 @@ function SettingsForm({ settings }: { settings: AppSettings }) {
     >
       <FormError messageKey={form.formError} />
       <FormSection title={t('school.title')} description={t('school.description')}>
-        <TextField
-          label={t('school.name')}
-          placeholder={t('school.namePlaceholder')}
-          autoComplete="organization"
-          required
-          {...form.bind('schoolName')}
-          error={form.error('schoolName')}
-        />
+        <FormGrid>
+          <TextField
+            label={t('school.name')}
+            placeholder={t('school.namePlaceholder')}
+            autoComplete="organization"
+            required
+            {...form.bind('schoolName')}
+            error={form.error('schoolName')}
+          />
+          <TextField
+            label={t('school.nameAr')}
+            placeholder={t('school.nameArPlaceholder')}
+            autoComplete="off"
+            dir="rtl"
+            lang="ar"
+            {...form.bind('schoolNameAr')}
+            error={form.error('schoolNameAr')}
+            hint={t('school.nameArHint')}
+          />
+        </FormGrid>
       </FormSection>
 
       <FormSection title={t('preferences.title')} description={t('preferences.description')}>

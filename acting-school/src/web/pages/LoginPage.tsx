@@ -8,7 +8,7 @@ import { FormError, SplashScreen } from '../components/ui/States';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useForm } from '../lib/forms';
-import { usePageTitle } from '../lib/hooks';
+import { usePageTitle, useSchoolName } from '../lib/hooks';
 import { AuthLayout } from './AuthLayout';
 import { PasswordInput } from './PasswordInput';
 
@@ -23,6 +23,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const form = useForm({ email: '', password: '' });
+  const school = useSchoolName();
   usePageTitle(t('auth.signIn'));
 
   const login = useMutation({
@@ -39,7 +40,7 @@ export default function LoginPage() {
   if (user) return <Navigate to={safeNext(params.get('next'))} replace />;
 
   return (
-    <AuthLayout title={t('auth.signInTitle')} subtitle={t('auth.signInSubtitle')}>
+    <AuthLayout title={t('auth.signInTitle')} subtitle={t('auth.signInSubtitle')} school={school}>
       <form
         noValidate
         className="grid gap-4"

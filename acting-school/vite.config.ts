@@ -24,11 +24,12 @@ export default defineConfig({
       injectRegister: false,
       includeAssets: ['icon.svg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Acting School',
-        short_name: 'Acting School',
-        description: 'Staff app for the acting school and talent agency',
-        theme_color: '#7f1d2d',
-        background_color: '#f7f4f0',
+        name: 'Turquoise Studio',
+        short_name: 'Turquoise',
+        description: 'Staff app for Turquoise Studio — acting school and casting agency',
+        // Keep in step with --accent and --canvas (light) in src/web/styles.css.
+        theme_color: '#0c766c',
+        background_color: '#f2f6f5',
         display: 'standalone',
         start_url: '/',
         scope: '/',

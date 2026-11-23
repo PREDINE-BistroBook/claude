@@ -144,7 +144,8 @@ async function uploadPortrait(client: ReturnType<typeof as>, who: string, gender
 // ── 1. The school and its staff ─────────────────────────────────────────────
 
 const setup = await call(null, 'POST', '/auth/setup', {
-  schoolName: 'Stage Left Academy',
+  schoolName: 'Turquoise Studio',
+  schoolNameAr: 'استوديو تركواز',
   name: 'Karim Mansour',
   email: 'owner@demo.school',
   password: PASSWORD,
@@ -1045,7 +1046,7 @@ await owner.patch(`/staff/${staff.tom}`, { active: false });
 db.$client.close();
 const secs = ((Date.now() - started) / 1000).toFixed(1);
 console.log(`
-Stage Left Academy demo data is ready (${secs}s) in ${config.dataDir}
+Turquoise Studio demo data is ready (${secs}s) in ${config.dataDir}
 
   ${studentSpec.length + 1} students · ${courseSpec.length} classes · ${talentSpec.length} talent · ${castingSpec.length} castings · ${leadSpec.length} enquiries
 

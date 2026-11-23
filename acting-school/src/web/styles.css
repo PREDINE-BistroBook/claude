@@ -38,47 +38,57 @@
   --color-danger-soft: var(--danger-soft);
   --color-info: var(--info);
   --color-info-soft: var(--info-soft);
+  --color-brand-tile: var(--brand-tile);
+  --color-brand-mint: var(--brand-mint);
+  --color-brand-turquoise: var(--brand-turquoise);
 }
 
 :root {
   --font-ui: "Inter Variable", "IBM Plex Sans Arabic", ui-sans-serif, system-ui, sans-serif;
-  --canvas: #f6f3ef;
+  /* Turquoise Studio: cool neutrals with a hint of mint, deep teal accent (white text on it passes AA). */
+  --canvas: #f2f6f5;
   --surface: #ffffff;
-  --surface-2: #f1ece6;
-  --ink: #1f1a17;
-  --muted: #6b625b;
-  --line: #e6dfd7;
-  --line-strong: #d3c9be;
-  --accent: #8c1d32;
-  --accent-hover: #741628;
-  --accent-soft: #f7e6e9;
+  --surface-2: #e8f0ee;
+  --ink: #132120;
+  --muted: #566664;
+  --line: #dbe4e2;
+  --line-strong: #c2cfcc;
+  --accent: #0c766c;
+  --accent-hover: #085f57;
+  --accent-soft: #ddf3ef;
   --accent-ink: #ffffff;
-  --success: #15803d;
-  --success-soft: #e5f4ea;
-  --warning: #a35107;
-  --warning-soft: #fcf0de;
+  /* Success leans yellow-green so it never reads as the teal accent. */
+  --success: #3d7a0c;
+  --success-soft: #ebf5da;
+  --warning: #a34b07;
+  --warning-soft: #fcefdc;
   --danger: #b91c1c;
   --danger-soft: #fde8e8;
   --info: #1d4ed8;
   --info-soft: #e6edfc;
+  /* The logo's own colours (black disc, mint → turquoise "T"): the same in both themes. */
+  --brand-tile: #000000;
+  --brand-mint: #a8f0e8;
+  --brand-turquoise: #50e0d0;
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --canvas: #13100f;
-    --surface: #1c1816;
-    --surface-2: #26201d;
-    --ink: #f3eee9;
-    --muted: #a99f96;
-    --line: #342d28;
-    --line-strong: #4a413b;
-    --accent: #e8657c;
-    --accent-hover: #f08496;
-    --accent-soft: #3b1c24;
-    --accent-ink: #1a0a0e;
-    --success: #4ade80;
-    --success-soft: #14301e;
+    /* Near-black with a teal tint, like the studio's posts; brand turquoise accent. */
+    --canvas: #0e1514;
+    --surface: #151d1c;
+    --surface-2: #1c2725;
+    --ink: #e7f0ee;
+    --muted: #93a4a1;
+    --line: #24312f;
+    --line-strong: #33433f;
+    --accent: #2ccbbb;
+    --accent-hover: #5cdccf;
+    --accent-soft: #103230;
+    --accent-ink: #031a17;
+    --success: #a5d65a;
+    --success-soft: #1f2e12;
     --warning: #f5b544;
     --warning-soft: #33260e;
     --danger: #f87171;

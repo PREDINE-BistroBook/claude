@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from './auth';
 
 export function useDebounced<T>(value: T, ms = 250): T {
@@ -10,12 +11,19 @@ export function useDebounced<T>(value: T, ms = 250): T {
   return v;
 }
 
+/** The school's name in the current language: its Arabic name in Arabic when one is set, else its name (the app's name until it loads). */
+export function useSchoolName(): string {
+  const { schoolName, schoolNameAr } = useAuth();
+  const { t, i18n } = useTranslation();
+  return (i18n.language === 'ar' && schoolNameAr) || schoolName || t('common:appName');
+}
+
 /** Sets the browser tab title: "<title> · <school>". */
 export function usePageTitle(title: string | null | undefined) {
-  const { schoolName } = useAuth();
+  const school = useSchoolName();
   useEffect(() => {
-    document.title = [title, schoolName || 'Acting School'].filter(Boolean).join(' · ');
-  }, [title, schoolName]);
+    document.title = [title, school].filter(Boolean).join(' · ');
+  }, [title, school]);
 }
 
 /** True while the browser reports no network. */

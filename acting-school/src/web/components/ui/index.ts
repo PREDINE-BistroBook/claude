@@ -5,6 +5,7 @@
 export { Avatar } from './Avatar';
 export { Badge, type Tone } from './Badge';
 export { BidiText, DataLine } from './BidiText';
+export { BrandMark } from './BrandMark';
 export { Button, ButtonLink, IconButton, buttonClasses } from './Button';
 export { Card } from './Card';
 export { DescriptionList } from './DescriptionList';

@@ -11,6 +11,8 @@ interface AuthState {
   user: SessionUser | null;
   needsSetup: boolean;
   schoolName: string;
+  /** Arabic name, when the school has one. For display use useSchoolName() (picks by language). */
+  schoolNameAr: string | null;
   loading: boolean;
   /** Whether the signed-in person's positions allow this (owners: everything). */
   can: (permission: Permission) => boolean;
@@ -81,6 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       needsSetup: me.data?.needsSetup ?? false,
       schoolName: me.data?.schoolName ?? '',
+      schoolNameAr: me.data?.schoolNameAr ?? null,
       loading: me.isPending,
       can: (p) => !!user?.permissions.includes(p),
       refresh,

@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { errorMessageKey } from '../../lib/forms';
 import { ApiError } from '../../lib/api';
+import { BrandMark } from './BrandMark';
 import { Button } from './Button';
 
 export function Spinner({ className }: { className?: string }) {
@@ -25,7 +26,7 @@ export function PageLoader({ label }: { label?: string }) {
 export function SplashScreen() {
   return (
     <div className="flex min-h-dvh items-center justify-center bg-canvas" role="status" aria-label="Loading">
-      <Drama className="size-10 animate-pulse text-accent" aria-hidden />
+      <BrandMark className="size-12 animate-pulse" />
     </div>
   );
 }

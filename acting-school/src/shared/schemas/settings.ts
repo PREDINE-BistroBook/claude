@@ -35,6 +35,8 @@ const countryCode = z.preprocess(
 export const settingsInput = z
   .object({
     schoolName: reqText(120),
+    /** The school's name in Arabic, shown instead of schoolName when the app is in Arabic. Blank/null → none (schoolName is shown). */
+    schoolNameAr: optText(80),
     defaultLocale: z.enum(LOCALES),
     /** 0 Sunday, 1 Monday, 6 Saturday. */
     weekStartsOn: z.union([z.literal(0), z.literal(1), z.literal(6)]),
@@ -58,6 +60,8 @@ export type SettingsInput = z.infer<typeof settingsInput>;
 /** GET /api/settings — every signed-in person may read them. */
 export interface AppSettings {
   schoolName: string;
+  /** Arabic name; show `schoolName` when null. */
+  schoolNameAr: string | null;
   defaultLocale: Locale;
   weekStartsOn: 0 | 1 | 6;
   interviewCriteria: InterviewCriterion[];
@@ -77,6 +81,7 @@ export const DEFAULT_INTERVIEW_CRITERIA: InterviewCriterion[] = [
 
 export const DEFAULT_SETTINGS: AppSettings = {
   schoolName: 'Acting School',
+  schoolNameAr: null,
   defaultLocale: 'en',
   weekStartsOn: 1,
   interviewCriteria: DEFAULT_INTERVIEW_CRITERIA,

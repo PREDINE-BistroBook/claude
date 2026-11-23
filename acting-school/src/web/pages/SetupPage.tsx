@@ -17,7 +17,7 @@ export default function SetupPage() {
   const { t } = useTranslation();
   const { user, loading, needsSetup, refresh } = useAuth();
   const navigate = useNavigate();
-  const form = useForm({ schoolName: '', name: '', email: '', password: '' });
+  const form = useForm({ schoolName: '', schoolNameAr: '', name: '', email: '', password: '' });
   usePageTitle(t('auth.setupTitle'));
 
   const setup = useMutation({
@@ -45,6 +45,15 @@ export default function SetupPage() {
       >
         <FormError messageKey={form.formError} />
         <TextField label={t('auth.schoolName')} placeholder={t('auth.schoolNamePlaceholder')} autoFocus {...form.bind('schoolName')} error={form.error('schoolName')} />
+        <TextField
+          label={t('auth.schoolNameAr')}
+          placeholder={t('auth.schoolNameArPlaceholder')}
+          optional
+          dir="rtl"
+          lang="ar"
+          {...form.bind('schoolNameAr')}
+          error={form.error('schoolNameAr')}
+        />
         <TextField label={t('auth.yourName')} autoComplete="name" {...form.bind('name')} error={form.error('name')} />
         <TextField label={t('fields.email')} type="email" autoComplete="username" inputMode="email" dir="ltr" {...form.bind('email')} error={form.error('email')} />
         <Field label={t('fields.password')} htmlFor="f-password" error={form.error('password')} hint={t('auth.passwordHint')}>

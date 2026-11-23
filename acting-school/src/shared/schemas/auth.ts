@@ -12,6 +12,8 @@ export type LoginInput = z.infer<typeof loginInput>;
 /** First run only: creates the owner account and names the school. */
 export const setupInput = z.object({
   schoolName: reqText(120),
+  /** Optional Arabic name (see settings.schoolNameAr). */
+  schoolNameAr: optText(80),
   name: reqText(120),
   email,
   password,
@@ -68,4 +70,6 @@ export interface MeResponse {
   /** True only while no staff account exists yet (first run → /setup). */
   needsSetup: boolean;
   schoolName: string;
+  /** Arabic name; show `schoolName` when null. */
+  schoolNameAr: string | null;
 }

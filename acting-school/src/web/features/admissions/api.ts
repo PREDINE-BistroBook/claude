@@ -98,6 +98,7 @@ export function useAdmissionsSettings(): AppSettings & { ready: boolean } {
   const s = settings.data;
   return {
     schoolName: s?.schoolName ?? DEFAULT_SETTINGS.schoolName,
+    schoolNameAr: s?.schoolNameAr ?? DEFAULT_SETTINGS.schoolNameAr,
     defaultLocale: s?.defaultLocale ?? DEFAULT_SETTINGS.defaultLocale,
     weekStartsOn: s?.weekStartsOn ?? DEFAULT_SETTINGS.weekStartsOn,
     interviewCriteria: s?.interviewCriteria ?? DEFAULT_SETTINGS.interviewCriteria,

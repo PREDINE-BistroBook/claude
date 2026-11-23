@@ -1,14 +1,15 @@
 import clsx from 'clsx';
-import { Drama, Ellipsis, Languages, LogOut, UserRound, WifiOff, X } from 'lucide-react';
+import { Ellipsis, Languages, LogOut, UserRound, WifiOff, X } from 'lucide-react';
 import { Suspense, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, NavLink, Outlet, useLocation } from 'react-router';
 import { Avatar } from '../components/ui/Avatar';
+import { BrandMark } from '../components/ui/BrandMark';
 import { PageLoader } from '../components/ui/States';
 import { currentLanguage, setLanguage } from '../i18n';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { useOnline } from '../lib/hooks';
+import { useOnline, useSchoolName } from '../lib/hooks';
 import { usePositionNames } from '../lib/positions';
 import { NAV_ITEMS, mobileTabs, navItemOpen, type NavItem } from './nav';
 
@@ -30,7 +31,8 @@ function isActive(pathname: string, to: string) {
 
 export function AppShell() {
   const { t } = useTranslation();
-  const { user, can, schoolName, signOut } = useAuth();
+  const { user, can, signOut } = useAuth();
+  const school = useSchoolName();
   const { pathname } = useLocation();
   const online = useOnline();
   const toggleLanguage = useLanguageToggle();
@@ -56,16 +58,13 @@ export function AppShell() {
     { id: 'agency', label: t('nav.agency') },
     { id: 'admin', label: t('nav.admin') },
   ];
-  const school = schoolName || t('appName');
 
   return (
     <div className="min-h-dvh bg-canvas">
       {/* ── Desktop sidebar ─────────────────────────────────────────── */}
       <aside className="fixed inset-y-0 start-0 z-30 hidden w-64 flex-col border-e border-line bg-surface lg:flex">
         <Link to="/" className="flex items-center gap-2.5 px-5 py-5">
-          <span className="flex size-9 items-center justify-center rounded-xl bg-accent text-accent-ink">
-            <Drama className="size-5" aria-hidden />
-          </span>
+          <BrandMark className="size-9" />
           <span className="min-w-0 truncate text-[15px] font-semibold leading-tight">{school}</span>
         </Link>
         <nav aria-label={t('nav.mainMenu')} className="flex-1 overflow-y-auto px-3 pb-4">
@@ -132,9 +131,7 @@ export function AppShell() {
       <header className="pt-safe sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur lg:hidden">
         <div className="flex h-14 items-center justify-between gap-3 px-4">
           <Link to="/" className="flex min-w-0 items-center gap-2">
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-ink">
-              <Drama className="size-[18px]" aria-hidden />
-            </span>
+            <BrandMark className="size-8" />
             <span className="truncate font-semibold">{school}</span>
           </Link>
           <button

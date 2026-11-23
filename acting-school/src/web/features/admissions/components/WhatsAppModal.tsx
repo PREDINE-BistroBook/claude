@@ -50,11 +50,12 @@ function WhatsAppDialog({ onClose, lead }: Props) {
     const at = interview ? splitDateTime(interview.scheduledAt) : null;
     return tt(`whatsapp.templates.${template}.text`, {
       name: lead.firstName,
-      school: settings.schoolName || authSchool,
+      // An Arabic message names the school in Arabic when it has an Arabic name.
+      school: (lang === 'ar' && settings.schoolNameAr) || settings.schoolName || authSchool,
       date: at ? fmt.date(at.date, 'full') : '',
       time: at ? fmt.time(at.time) : '',
     });
-  }, [i18n, lang, template, lead.firstName, settings.schoolName, authSchool, interview]);
+  }, [i18n, lang, template, lead.firstName, settings.schoolName, settings.schoolNameAr, authSchool, interview]);
 
   // Editing the text keeps the edit until another message or language is picked.
   const [edited, setEdited] = useState<{ key: string; text: string } | null>(null);

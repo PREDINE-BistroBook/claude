@@ -422,7 +422,14 @@ describe('settings', () => {
     const me = await t.as(role);
     const res = await me.get('/api/settings');
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ schoolName: 'Acting School', defaultLocale: 'en', weekStartsOn: 1, interviewCriteria: DEFAULT_INTERVIEW_CRITERIA, defaultCountryCode: '20' });
+    expect(res.body).toEqual({
+      schoolName: 'Acting School',
+      schoolNameAr: null,
+      defaultLocale: 'en',
+      weekStartsOn: 1,
+      interviewCriteria: DEFAULT_INTERVIEW_CRITERIA,
+      defaultCountryCode: '20',
+    });
   });
 
   it('PATCH saves (partially) and the school name shows in /api/auth/me', async () => {
@@ -441,6 +448,71 @@ describe('settings', () => {
     expect((await teacher.get('/api/settings')).body).toEqual({ ...DEFAULT_SETTINGS, schoolName: 'Stage Left', defaultLocale: 'ar', weekStartsOn: 0 });
     expect((await teacher.get('/api/auth/me')).body.schoolName).toBe('Stage Left');
     expect((await admin.patch('/api/settings', {})).status).toBe(200);
+  });
+
+  it('Arabic school name: optional, saved (trimmed), kept by other changes, cleared with blank or null; shown in /api/auth/me', async () => {
+    const t = await makeTestContext();
+    const admin = await t.as('admin');
+    expect((await t.anon.get('/api/auth/me')).body).toMatchObject({ schoolName: 'Acting School', schoolNameAr: null });
+
+    const res = await admin.patch('/api/settings', { schoolName: 'Turquoise Studio', schoolNameAr: '  استوديو تركواز  ' });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ...DEFAULT_SETTINGS, schoolName: 'Turquoise Studio', schoolNameAr: 'استوديو تركواز' });
+    // Everyone signed in reads it; /auth/me answers it signed in and signed out (the sign-in page shows it).
+    const teacher = await t.as('teacher');
+    expect((await teacher.get('/api/settings')).body.schoolNameAr).toBe('استوديو تركواز');
+    expect((await teacher.get('/api/auth/me')).body).toMatchObject({ schoolName: 'Turquoise Studio', schoolNameAr: 'استوديو تركواز' });
+    expect((await t.anon.get('/api/auth/me')).body).toMatchObject({ user: null, schoolName: 'Turquoise Studio', schoolNameAr: 'استوديو تركواز' });
+
+    // Saving other settings (or the English name) leaves it alone.
+    expect((await admin.patch('/api/settings', { weekStartsOn: 6 })).body.schoolNameAr).toBe('استوديو تركواز');
+    expect((await admin.patch('/api/settings', { schoolName: 'Turquoise' })).body.schoolNameAr).toBe('استوديو تركواز');
+
+    // Blank clears it; so does null.
+    const cleared = await admin.patch('/api/settings', { schoolNameAr: '   ' });
+    expect(cleared.status).toBe(200);
+    expect(cleared.body).toEqual({ ...DEFAULT_SETTINGS, schoolName: 'Turquoise', weekStartsOn: 6, schoolNameAr: null });
+    expect((await t.anon.get('/api/auth/me')).body).toMatchObject({ schoolName: 'Turquoise', schoolNameAr: null });
+    await admin.patch('/api/settings', { schoolNameAr: 'تركواز' });
+    expect((await admin.get('/api/auth/me')).body.schoolNameAr).toBe('تركواز');
+    expect((await admin.patch('/api/settings', { schoolNameAr: null })).body.schoolNameAr).toBeNull();
+    expect((await admin.get('/api/settings')).body.schoolNameAr).toBeNull();
+  });
+
+  it('Arabic school name: at most 80 characters, text only, settings.manage only', async () => {
+    const t = await makeTestContext();
+    const owner = await t.as('owner');
+    await owner.patch('/api/settings', { schoolNameAr: 'تركواز' });
+    for (const bad of ['ت'.repeat(81), 42, ['تركواز'], { ar: 'تركواز' }]) {
+      const r = await owner.patch('/api/settings', { schoolNameAr: bad });
+      expect(r.status).toBe(400);
+      expect(r.body.error.issues[0].path).toEqual(['schoolNameAr']);
+    }
+    expect((await owner.patch('/api/settings', { schoolNameAr: 'ت'.repeat(80) })).status).toBe(200);
+    expect((await (await t.as('teacher')).patch('/api/settings', { schoolNameAr: 'X' })).status).toBe(403);
+    expect((await (await t.as('agent')).patch('/api/settings', { schoolNameAr: null })).status).toBe(403);
+    expect((await t.anon.patch('/api/settings', { schoolNameAr: 'X' })).status).toBe(401);
+    expect((await owner.get('/api/settings')).body.schoolNameAr).toBe('ت'.repeat(80));
+  });
+
+  it('first-run setup may name the school in Arabic too (optional)', async () => {
+    const t = await makeTestContext();
+    const res = await t.anon.post('/api/auth/setup', {
+      schoolName: 'Turquoise Studio',
+      schoolNameAr: ' استوديو تركواز ',
+      name: 'Karim',
+      email: 'owner@example.com',
+      password: 'longenough',
+    });
+    expect(res.status).toBe(201);
+    expect((await t.anon.get('/api/auth/me')).body).toMatchObject({ needsSetup: false, schoolName: 'Turquoise Studio', schoolNameAr: 'استوديو تركواز' });
+
+    const other = await makeTestContext();
+    expect((await other.anon.post('/api/auth/setup', { schoolName: 'X', schoolNameAr: '', name: 'Y', email: 'y@example.com', password: 'longenough' })).status).toBe(201);
+    expect((await other.anon.get('/api/auth/me')).body).toMatchObject({ schoolName: 'X', schoolNameAr: null });
+    const tooLong = await (await makeTestContext()).anon.post('/api/auth/setup', { schoolName: 'X', schoolNameAr: 'ت'.repeat(81), name: 'Y', email: 'y@example.com', password: 'longenough' });
+    expect(tooLong.status).toBe(400);
+    expect(tooLong.body.error.issues[0].path).toEqual(['schoolNameAr']);
   });
 
   it('PATCH validates: week starts on Sat/Sun/Mon only, name required, known language', async () => {

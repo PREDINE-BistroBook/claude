@@ -38,11 +38,12 @@ function staffCount(c: { get: (k: 'db') => AppEnv['Variables']['db'] }): number 
 
 /** Who am I? Public: answers { user: null } when signed out, plus whether first-run setup is needed. */
 router.get('/me', (c) => {
-  const db = c.get('db');
+  const { schoolName, schoolNameAr } = getSettings(c.get('db'));
   const res: MeResponse = {
     user: c.get('user'),
     needsSetup: staffCount(c) === 0,
-    schoolName: getSettings(db).schoolName,
+    schoolName,
+    schoolNameAr,
   };
   return c.json(res);
 });
@@ -89,7 +90,11 @@ router.post('/setup', async (c) => {
     return user;
   });
   if (!created) throw new ApiError(409, 'already_set_up', 'This school is already set up');
-  saveSettings(db, { schoolName: input.schoolName, ...(input.locale ? { defaultLocale: input.locale } : {}) });
+  saveSettings(db, {
+    schoolName: input.schoolName,
+    ...(input.schoolNameAr ? { schoolNameAr: input.schoolNameAr } : {}),
+    ...(input.locale ? { defaultLocale: input.locale } : {}),
+  });
   startSession(c, created.id);
   return c.json({ user: toSessionUser(db, created) }, 201);
 });

@@ -5,9 +5,12 @@ const en = {
   subtitle: 'These apply to everyone at the school.',
   school: {
     title: 'School',
-    description: 'Shown at the top of the app and in browser tabs.',
+    description: 'Shown at the top of the app, on the sign-in page and in browser tabs.',
     name: 'School name',
-    namePlaceholder: 'e.g. Stage Left Academy',
+    namePlaceholder: 'e.g. Turquoise Studio',
+    nameAr: 'Name in Arabic',
+    nameArPlaceholder: 'e.g. استوديو تركواز',
+    nameArHint: 'Shown when the app is in Arabic. Leave blank to use the name above.',
   },
   preferences: {
     title: 'Preferences',
@@ -52,9 +55,12 @@ const ar: TranslationOf<typeof en> = {
   subtitle: 'تنطبق هذه الإعدادات على جميع العاملين في المدرسة.',
   school: {
     title: 'المدرسة',
-    description: 'يظهر في أعلى التطبيق وفي عناوين صفحات المتصفح.',
+    description: 'يظهر في أعلى التطبيق وفي صفحة تسجيل الدخول وفي عناوين صفحات المتصفح.',
     name: 'اسم المدرسة',
-    namePlaceholder: 'مثال: أكاديمية المسرح',
+    namePlaceholder: 'مثال: Turquoise Studio',
+    nameAr: 'الاسم بالعربية',
+    nameArPlaceholder: 'مثال: استوديو تركواز',
+    nameArHint: 'يظهر عندما يكون التطبيق بالعربية. اتركه فارغًا لاستخدام الاسم أعلاه.',
   },
   preferences: {
     title: 'التفضيلات',
