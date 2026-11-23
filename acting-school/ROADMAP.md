@@ -8,7 +8,9 @@ What the school asked for, in the order we plan to build it. Update this file as
 
 **Phase 2, step 2 (admissions) — done (2026-11-23):** enquiries, follow-ups, interviews scored on editable criteria, coach and class choice, one-step enrolment, WhatsApp/call buttons; reviewed (12 issues found and fixed, each with a test).
 
-**Next:** step 3 — go-live essentials, starting with putting the app on the school's Cloudflare plan.
+**Phase 2, step 3 (go-live essentials) — started (2026-11-23):** the app is live on the school's Cloudflare plan at https://claude.hashesha.workers.dev with demo data (one Worker, one Durable Object holding the database; reviewed: 10 issues found and fixed before going live, including a setup code so nobody else can claim an empty school). "Classes" are now called **Workshops / ورش** on screen.
+
+**Next:** the rest of step 3 — nightly backup (#88), change history with undo (#99), the notification bar (#89), staff leaving checklist (#94), vetting folder (#92). Then step 4 (Sheets import).
 
 ## Decisions so far
 
@@ -18,7 +20,7 @@ What the school asked for, in the order we plan to build it. Update this file as
 - **Languages:** English + Arabic (right-to-left). Arabic uses Western digits.
 - **Budget:** $0. The only paid piece is the AI model: **Claude Haiku**, pay per use (estimated $1–5/month at the school's size). Everything else uses free tools (Google Sheets / Forms / Apps Script, Gmail, wa.me WhatsApp links, Google Drive).
 - **Requests arrive today via:** Google Sheets, WhatsApp, email.
-- **Hosting:** the school already pays for a Cloudflare plan and asked to use it (2026-11-23). The app would run there as its own separate app (own database, own file storage), with photos and videos stored in Cloudflare R2. To confirm: the web address, and an access key added through a secure form.
+- **Hosting:** the school's Cloudflare plan (asked 2026-11-23; live the same day). One Worker named `claude` (the one connected to GitHub) at the free address https://claude.hashesha.workers.dev; the whole database lives in one Durable Object with 30 days of point-in-time recovery. Photos are stored in the database for now; videos and bigger files move to Cloudflare R2 once R2 is switched on in the account. A custom address (e.g. app.<the studio's domain>) can be added later. Deploys: automatically on every push once the Workers Builds settings are filled in on the dashboard; until then from the cloud session.
 
 ## Positions (confirmed by the school)
 
@@ -85,7 +87,9 @@ Updated 2026-11-23 with the school's picks from the Idea Board. The numbers in b
 - The casting sources to watch (sites, pages, channels).
 - An Anthropic account with a small prepaid credit (the key is added through a secure form, never pasted in chat).
 - What Salma assesses in interviews and what coaches rank on (defaults used until then).
-- The web address for the app (a subdomain of a domain already on Cloudflare, or a free workers.dev address to start).
+- Whether to keep the free address (claude.hashesha.workers.dev) or use one on the studio's own domain.
+- The Workers Builds settings on the Cloudflare dashboard (root directory `acting-school`, build `npm run build`, deploy `npx wrangler deploy`), so every push updates the live app.
+- Switching on R2 in the Cloudflare account (free tier), for videos.
 
 ## Ideas backlog
 
