@@ -16,9 +16,9 @@ export function westernDigits(s: string): string {
  * the bidi embeddings, overrides and isolates (U+202A–U+202E, U+2066–U+2069)
  * and the byte-order mark.
  */
-const INVISIBLE_MARKS_RE = /[​-‏‪-‮⁦-⁩﻿]/g;
+const INVISIBLE_MARKS_RE = /[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g;
 /** No-break and other unusual spaces → a plain space. */
-const ODD_SPACES_RE = /[  -   　]/g;
+const ODD_SPACES_RE = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g;
 
 /**
  * A phone number as we store it: Western digits, no invisible marks, single

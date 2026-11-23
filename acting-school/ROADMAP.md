@@ -6,7 +6,9 @@ What the school asked for, in the order we plan to build it. Update this file as
 
 **Phase 2, step 1 (positions & permissions) — done (2026-11-23):** the positions below are built in, editable on the Positions page, and enforced by the server; reviewed for security (23 issues found and fixed, each with a test).
 
-**Next:** step 2 — admissions.
+**Phase 2, step 2 (admissions) — done (2026-11-23):** enquiries, follow-ups, interviews scored on editable criteria, coach and class choice, one-step enrolment, WhatsApp/call buttons; reviewed (12 issues found and fixed, each with a test).
+
+**Next:** step 3 — go-live essentials, starting with putting the app on the school's Cloudflare plan.
 
 ## Decisions so far
 
@@ -15,7 +17,7 @@ What the school asked for, in the order we plan to build it. Update this file as
 - **Languages:** English + Arabic (right-to-left). Arabic uses Western digits.
 - **Budget:** $0. The only paid piece is the AI model: **Claude Haiku**, pay per use (estimated $1–5/month at the school's size). Everything else uses free tools (Google Sheets / Forms / Apps Script, Gmail, wa.me WhatsApp links, Google Drive).
 - **Requests arrive today via:** Google Sheets, WhatsApp, email.
-- **Hosting:** not decided. The app is one Node process + one data folder, so it can run on a free server (e.g. Oracle Cloud Always Free) or an always-on computer at the school.
+- **Hosting:** the school already pays for a Cloudflare plan and asked to use it (2026-11-23). The app would run there as its own separate app (own database, own file storage), with photos and videos stored in Cloudflare R2. To confirm: the web address, and an access key added through a secure form.
 
 ## Positions (confirmed by the school)
 
@@ -36,9 +38,9 @@ Rules that hold for every position: owner accounts are visible and editable only
 Updated 2026-11-23 with the school's picks from the Idea Board. The numbers in brackets (#n) are ideas from `docs/IDEAS.md`. Each one is built with the step it extends.
 
 1. ✅ **Positions & permissions.** Replace the four fixed roles with the positions above, editable as checkboxes per permission by owners (and by the Executive Director within her own limits). A person can hold several positions.
-2. **Admissions** *(building now)*. Leads (people asking about classes, from WhatsApp / email / Sheets / forms) → interview with Salma (notes + assessment) → Salma picks the coach and class → enrolled student. Follow-up reminders so no lead is forgotten.
+2. ✅ **Admissions.** Leads (people asking about classes, from WhatsApp / email / Sheets / forms) → interview with Salma (notes + assessment) → Salma picks the coach and class → enrolled student. Follow-up reminders so no lead is forgotten.
    - Picked ideas, right after the core: referral codes and bring-a-friend days (#22); cold lead revival and win-back (#54) — the daily follow-up list first, AI-written messages once the AI key is in; free trial class booking page (#2) — a public page, so it needs hosting.
-3. **Go-live essentials** *(new — before the school puts real data in)*. Nightly backup with restore test (#88); change history with one-tap undo (#99); unusual activity alarms (#89) as an **in-app notification bar** as the school asked, not Telegram; one-button staff leaving checklist (#94); staff vetting folder with expiry alerts (#92). The hosting choice is needed here.
+3. **Go-live essentials** *(new — before the school puts real data in)*. Move the app onto the school's Cloudflare plan. Nightly backup with restore test (#88); change history with one-tap undo (#99); unusual activity alarms (#89) as an **in-app notification bar** as the school asked, not Telegram; one-button staff leaving checklist (#94); staff vetting folder with expiry alerts (#92).
 4. **Import from Google Sheets.** Upload a CSV/Excel export, match columns to fields (students, actors, leads). Optional automatic sync of new rows through a free Google Apps Script.
 5. **Coach rankings.** Coaches score their students on criteria (editable list), with notes and history; progress over time; top students surface for castings.
    - Picked ideas: Kombars-to-Batal level ladder (#13); voice notes become coach evaluations (#11); exam day jury mode (#18); session log and lesson library (#19); pre-class coach briefing card (#97).
@@ -82,6 +84,7 @@ Updated 2026-11-23 with the school's picks from the Idea Board. The numbers in b
 - The casting sources to watch (sites, pages, channels).
 - An Anthropic account with a small prepaid credit (the key is added through a secure form, never pasted in chat).
 - What Salma assesses in interviews and what coaches rank on (defaults used until then).
+- The web address for the app (a subdomain of a domain already on Cloudflare, or a free workers.dev address to start).
 
 ## Ideas backlog
 

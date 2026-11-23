@@ -1150,9 +1150,9 @@ describe('phone matching: Arabic-Indic digits, invisible marks, international se
   it('phones typed with Arabic digits or pasted with bidi marks are stored with Western digits', async () => {
     const t = await makeTestContext();
     const director = await t.as('executive_director');
-    const lead = await mkLead(director, { phone: '٠١٠١٢٣٤٥٦٧٨', guardianPhone: '‪+20 101 234 5600‬' });
+    const lead = await mkLead(director, { phone: '٠١٠١٢٣٤٥٦٧٨', guardianPhone: '\u202A+20 101 234 5600\u202C' });
     expect(lead).toMatchObject({ phone: '01012345678', guardianPhone: '+20 101 234 5600' });
-    const student = await director.post('/api/students', { firstName: 'Mona', lastName: 'Adel', phone: '‎٠١٠ ١٢٣ ٤٥٦٧٨', guardianPhone: '۰۱۰۱۲۳۴۵۶۰۰' });
+    const student = await director.post('/api/students', { firstName: 'Mona', lastName: 'Adel', phone: '\u200E٠١٠ ١٢٣ ٤٥٦٧٨', guardianPhone: '۰۱۰۱۲۳۴۵۶۰۰' });
     expect(student.status).toBe(201);
     expect(student.body).toMatchObject({ phone: '010 123 45678', guardianPhone: '01012345600' });
   });
@@ -1170,7 +1170,7 @@ describe('phone matching: Arabic-Indic digits, invisible marks, international se
     expect(enrol.body.error.code).toBe('possible_duplicate');
     expect(t.db.select().from(students).all()).toHaveLength(1);
 
-    const marked = t.db.insert(leads).values({ firstName: 'Bidi', lastName: 'Marks', phone: '‪+20 122 555 6677‬', source: 'whatsapp' }).returning().get()!;
+    const marked = t.db.insert(leads).values({ firstName: 'Bidi', lastName: 'Marks', phone: '\u202A+20 122 555 6677\u202C', source: 'whatsapp' }).returning().get()!;
     const arabic = t.db.insert(leads).values({ firstName: 'Arabic', lastName: 'Digits', phone: '٠١١٢٢٢٣٣٣٤٤', source: 'whatsapp' }).returning().get()!;
     expect((await director.get('/api/leads/duplicates?phone=01225556677')).body.items).toEqual([{ kind: 'lead', id: marked.id, name: 'Bidi Marks', status: 'new' }]);
     const ids = async (q: string) => (await director.get<{ items: LeadListItem[] }>(`/api/leads?q=${encodeURIComponent(q)}`)).body.items.map((i) => i.id);
