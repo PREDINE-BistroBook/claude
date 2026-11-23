@@ -56,8 +56,9 @@ describe('npm run seed', () => {
     expect(count('select count(*) as n from talent')).toBeGreaterThanOrEqual(12);
     expect(count('select count(*) as n from talent_photos')).toBeGreaterThan(5);
     expect(count('select count(distinct status) as n from submissions')).toBe(7);
-    // Admissions: ~16 leads in every status, most sources, interviews in three states, one enrolled lead linked to its new student.
-    expect(count('select count(*) as n from leads')).toBe(16);
+    // Admissions: 16 leads in every status, most sources, interviews in three states, one enrolled lead linked to its new student
+    // — plus the website demo's two new enquiries.
+    expect(count('select count(*) as n from leads')).toBe(18);
     expect(count('select count(distinct status) as n from leads')).toBe(8);
     expect(count('select count(distinct source) as n from leads')).toBeGreaterThanOrEqual(8);
     expect(count(`select count(distinct status) as n from interviews where status in ('scheduled', 'done', 'no_show')`)).toBe(3);
@@ -76,6 +77,18 @@ describe('npm run seed', () => {
     expect(count(`select count(*) as n from positions where key = 'executive_director' and permissions like '%admissions.decide%'`)).toBe(1);
     expect(count(`select count(*) as n from settings where key = 'builtInGrantsVersion'`)).toBe(1);
     expect(fs.readdirSync(path.join(dataDir, 'uploads')).length).toBeGreaterThan(5);
+    // The website demo: content with the casting call open, coaches linked to the demo coaches, workshops shown,
+    // four applications (one a minor with consent) with photos, two new website enquiries.
+    expect(count(`select count(*) as n from settings where key = 'site' and json_extract(value, '$.castingCall.open') = 1`)).toBe(1);
+    expect(count(`select count(*) as n from settings where key = 'siteFormSecret' and length(json_extract(value, '$')) = 64`)).toBe(1);
+    expect(count('select count(*) as n from site_coaches where user_id is not null and visible = 1')).toBe(2);
+    expect(count('select count(*) as n from site_workshops where visible = 1')).toBeGreaterThanOrEqual(3);
+    expect(count('select count(*) as n from casting_applications')).toBe(4);
+    expect(count(`select count(*) as n from casting_applications where status = 'new'`)).toBe(3);
+    expect(count('select count(*) as n from casting_applications where guardian_consent = 1 and guardian_name is not null')).toBe(1);
+    expect(count('select count(distinct application_id) as n from casting_application_photos')).toBe(4);
+    expect(count(`select count(*) as n from leads where source = 'website' and status = 'new' and created_by_id is null`)).toBe(2);
+    expect(count(`select count(*) as n from positions where key = 'executive_director' and permissions like '%website.manage%'`)).toBe(1);
 
     const again = seed();
     expect(again.status).toBe(1);

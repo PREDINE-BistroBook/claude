@@ -1,21 +1,25 @@
 import { count } from 'drizzle-orm';
 import type { MiddlewareHandler } from 'hono';
 import { FIRST_OWNER_POSITION } from '../../shared/permissions';
-import { grantOwnerInput, seedDemoInput, type GrantOwnerResponse, type ResetResult } from '../../shared/schemas/admin';
-import { seedDemo } from '../db/demoSeed';
-import { users } from '../db/schema';
+import { grantOwnerInput, seedDemoInput, type GrantOwnerResponse, type ResetResult, type SeedDemoWebsiteResult } from '../../shared/schemas/admin';
+import { seedDemo, seedDemoWebsite } from '../db/demoSeed';
+import { siteCoaches, users } from '../db/schema';
 import { wipeAllData } from '../db/wipe';
 import type { AppEnv } from '../env';
 import { ApiError, notFound } from '../lib/errors';
 import { grantOwner } from '../lib/ownerRecovery';
 import { sameSecret } from '../lib/password';
+import { hasSiteContent } from '../lib/siteContent';
 import { body } from '../lib/validate';
 
 /**
  * Operator endpoints for a deployment with no shell next to its database
- * (Cloudflare): demo seeding, demo reset, lockout recovery.
+ * (Cloudflare): demo seeding (the school, or just its website on a database
+ * seeded before the website existed), demo reset, lockout recovery.
  *
  *   POST /api/admin/seed-demo    { password }  only while there are no staff accounts (else 409)
+ *   POST /api/admin/seed-demo-website           the website demo, only while the website is empty
+ *                                               (no 'site' settings key and no coaches; else 409)
  *   POST /api/admin/reset                      wipes everything; only with ALLOW_DEMO_RESET=true
  *   POST /api/admin/grant-owner  { email }     same as `npm run owner -- email`
  *
@@ -44,9 +48,25 @@ export function adminRoutes(deps: { request: (path: string, init: RequestInit) =
       const staff = db.select({ n: count() }).from(users).get()?.n ?? 0;
       if (staff > 0) throw new ApiError(409, 'not_empty', 'This database already has staff accounts; demo data only goes into an empty one');
       // Setup on Cloudflare asks for the setup code, which is this same token.
-      const result = await seedDemo({ db, request: deps.request, password: input.password, timeZone: c.get('config').timeZone, setupCode: token });
+      const result = await seedDemo({
+        db,
+        files: c.get('files'),
+        request: deps.request,
+        password: input.password,
+        timeZone: c.get('config').timeZone,
+        setupCode: token,
+      });
       console.log(`Admin: demo data seeded in ${result.seconds}s.`);
       return c.json(result, 201);
+    }
+
+    if (action === 'seed-demo-website') {
+      // Idempotent: the website is filled in once, only while nobody has edited it (no content saved, no coaches).
+      const coaches = db.select({ n: count() }).from(siteCoaches).get()?.n ?? 0;
+      if (hasSiteContent(db) || coaches > 0) throw new ApiError(409, 'not_empty', 'The website already has content; the demo only goes into an empty one');
+      const result = await seedDemoWebsite({ db, files: c.get('files'), timeZone: c.get('config').timeZone });
+      console.log(`Admin: website demo seeded (${result.coaches} coaches, ${result.workshops} workshops, ${result.applications} applications).`);
+      return c.json<SeedDemoWebsiteResult>(result, 201);
     }
 
     if (action === 'reset') {

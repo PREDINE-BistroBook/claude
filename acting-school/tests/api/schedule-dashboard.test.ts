@@ -279,14 +279,23 @@ describe('GET /api/dashboard', () => {
     const res = await owner.get<DashboardData>('/api/dashboard');
     expect(res.status).toBe(200);
     expect(res.body.today).toBe(todayISO());
-    expect(res.body.counts).toEqual({ activeStudents: 2, activeCourses: 1, activeTalent: 1, openCastings: 2, openLeads: 0, newLeadsThisWeek: 0 });
+    expect(res.body.counts).toEqual({
+      activeStudents: 2,
+      activeCourses: 1,
+      activeTalent: 1,
+      openCastings: 2,
+      openLeads: 0,
+      newLeadsThisWeek: 0,
+      newWebsiteLeads: 0,
+      newCastingApplications: 0,
+    });
 
     // A coach without classes.all counts only their own classes and students: none yet.
     const teacher = await t.as('teacher');
-    expect((await teacher.get<DashboardData>('/api/dashboard')).body.counts).toEqual({ activeStudents: 0, activeCourses: 0 });
+    expect((await teacher.get<DashboardData>('/api/dashboard')).body.counts).toEqual({ activeStudents: 0, activeCourses: 0, newWebsiteLeads: null, newCastingApplications: null });
     // Coach + finance has classes.all (and no talent/castings).
     const moaty = await t.as(['acting_coach', 'finance']);
-    expect((await moaty.get<DashboardData>('/api/dashboard')).body.counts).toEqual({ activeStudents: 2, activeCourses: 1 });
+    expect((await moaty.get<DashboardData>('/api/dashboard')).body.counts).toEqual({ activeStudents: 2, activeCourses: 1, newWebsiteLeads: null, newCastingApplications: null });
   });
 
   it('shapes the answer by role: sections a role cannot see are absent', async () => {
@@ -308,7 +317,16 @@ describe('GET /api/dashboard', () => {
       const client = await t.as(role);
       const body = (await client.get('/api/dashboard')).body;
       expect(Object.keys(body).sort()).toEqual([...all].sort());
-      expect(Object.keys(body.counts).sort()).toEqual(['activeCourses', 'activeStudents', 'activeTalent', 'newLeadsThisWeek', 'openCastings', 'openLeads']);
+      expect(Object.keys(body.counts).sort()).toEqual([
+        'activeCourses',
+        'activeStudents',
+        'activeTalent',
+        'newCastingApplications',
+        'newLeadsThisWeek',
+        'newWebsiteLeads',
+        'openCastings',
+        'openLeads',
+      ]);
       expect(body).toMatchObject({
         todaySessions: [],
         attendanceToDo: [],
@@ -333,7 +351,10 @@ describe('GET /api/dashboard', () => {
     const ab = (await agent.get('/api/dashboard')).body;
     expect(Object.keys(ab).sort()).toEqual(['closingCastings', 'counts', 'today', 'todaySessions', 'upcomingAuditions']);
     expect('attendanceToDo' in ab).toBe(false);
-    expect(Object.keys(ab.counts).sort()).toEqual(['activeCourses', 'activeStudents', 'activeTalent', 'openCastings']);
+    expect(Object.keys(ab.counts).sort()).toEqual(['activeCourses', 'activeStudents', 'activeTalent', 'newCastingApplications', 'newWebsiteLeads', 'openCastings']);
+    // The website counts are always there: null when the position can't see them.
+    expect(ab.counts.newWebsiteLeads).toBeNull();
+    expect(ab.counts.newCastingApplications).toBe(0);
   });
 
   it("lists today's sessions in the ClassSession shape, sorted by time", async () => {
@@ -565,7 +586,7 @@ describe('class scope on the schedule and dashboard', () => {
     s.enroll(archived.id, s.student({ status: 'alumni' }).id);
     s.enroll(other.id, s.student().id);
     s.student();
-    expect((await coach.get<DashboardData>('/api/dashboard')).body.counts).toEqual({ activeStudents: 1, activeCourses: 1 });
+    expect((await coach.get<DashboardData>('/api/dashboard')).body.counts).toEqual({ activeStudents: 1, activeCourses: 1, newWebsiteLeads: null, newCastingApplications: null });
     expect((await (await t.as('admin')).get<DashboardData>('/api/dashboard')).body.counts).toMatchObject({ activeStudents: 3, activeCourses: 2 });
   });
 

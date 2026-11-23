@@ -36,9 +36,11 @@ if (existing > 0) {
   process.exit(1);
 }
 
-const app = createApp({ db, config, files: folderFileStore(config.uploadsDir) });
+const files = folderFileStore(config.uploadsDir);
+const app = createApp({ db, config, files });
 const result = await seedDemo({
   db,
+  files,
   request: (p, init) => app.request(p, init),
   password: PASSWORD,
   timeZone: config.timeZone,

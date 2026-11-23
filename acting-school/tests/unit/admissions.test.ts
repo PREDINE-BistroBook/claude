@@ -78,15 +78,16 @@ describe('built-in permission upgrades (BUILT_IN_GRANTS)', () => {
     const db = createDb(':memory:');
     db.delete(positions).where(eq(positions.key, 'video_editor')).run();
     setPerms(db, 'acting_coach', ['students.read', 'admissions.read']);
+    const next = LATEST_BUILT_IN_GRANTS_VERSION + 1;
     const grants = [
       ...BUILT_IN_GRANTS,
-      { version: 2, grants: { acting_coach: ['admissions.read', 'admissions.write'] as const, video_editor: ['admissions.read'] as const } },
+      { version: next, grants: { acting_coach: ['admissions.read', 'admissions.write'] as const, video_editor: ['admissions.read'] as const } },
     ];
     upgradeBuiltInPositions(db, grants as any);
     expect(perms(db, 'acting_coach')).toEqual(['students.read', 'admissions.read', 'admissions.write']);
     // Re-created with today's list, so the grant didn't touch it.
     expect(perms(db, 'video_editor')).toEqual([...BUILT_IN_POSITIONS.find((p) => p.key === 'video_editor')!.permissions]);
-    expect(builtInGrantsVersion(db)).toBe(2);
+    expect(builtInGrantsVersion(db)).toBe(next);
   });
 
   it('survives restarts of a real database file', () => {

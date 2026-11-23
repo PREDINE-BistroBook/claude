@@ -24,7 +24,8 @@
  *   coach2@demo.school    Acting coach + Finance   (Daniel Price — teaches classes)
  *   tom.wilkins@demo.school  former Acting coach, deactivated
  */
-import { and, eq, gt, max } from 'drizzle-orm';
+import { and, asc, eq, gt, gte, inArray, max } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
 import { addDays, weekdayOf } from '../../shared/dates';
 import type {
   AttendanceStatus,
@@ -38,13 +39,19 @@ import type {
   SubmissionStatus,
 } from '../../shared/enums';
 import type { Interview, LeadDetail } from '../../shared/schemas/admissions';
-import type { SeedDemoResult } from '../../shared/schemas/admin';
 import type { BuiltInPositionKey } from '../../shared/permissions';
 import type { CourseDetail, CourseEnrollment } from '../../shared/schemas/courses';
 import type { Position } from '../../shared/schemas/positions';
+import type { SeedDemoResult, SeedDemoWebsiteResult } from '../../shared/schemas/admin';
+import { castingApplicationInput } from '../../shared/schemas/castingApplications';
+import { siteApplyInput, type SiteContentParsed } from '../../shared/schemas/site';
+import { createWebsiteLead } from '../lib/admissions';
+import { createCastingApplication } from '../lib/castingApplications';
 import { epochAt, todayIn } from '../lib/clock';
+import type { FileStore } from '../lib/fileStore';
+import { findPublicWorkshop, saveSiteContent } from '../lib/siteContent';
 import type { DB } from './database';
-import { enrollments, interviews, leadActivities, leads } from './schema';
+import { castingApplications, courses, enrollments, files as filesTable, interviews, leadActivities, leads, siteCoaches, siteWorkshops, users } from './schema';
 import { lookFor, renderPortrait } from './seedPortraits';
 
 /** The seeded sign-ins (active accounts), in the order the CLI prints them. */
@@ -62,6 +69,8 @@ export const DEMO_LOGINS: SeedDemoResult['logins'] = [
 export interface SeedDemoOptions {
   /** An empty database (no staff yet): the caller checks. */
   db: DB;
+  /** The app's FileStore: the website demo stores its photos directly (seedDemoWebsite). */
+  files: FileStore;
   /** The app itself (createApp(...).request): every step goes through the real API. */
   request: (path: string, init: RequestInit) => Response | Promise<Response>;
   /** Password of every seeded account. */
@@ -1051,6 +1060,10 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
   // Tom left at the end of last term.
   await owner.patch(`/staff/${staff.tom}`, { active: false });
 
+  // ── 7. The public website ──────────────────────────────────────────────────
+
+  await seedDemoWebsite({ db, files: opts.files, timeZone, today });
+
   return {
     ok: true,
     logins: DEMO_LOGINS,
@@ -1062,5 +1075,321 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
       enquiries: leadSpec.length,
     },
     seconds: Math.round((Date.now() - started) / 100) / 10,
+  };
+}
+
+// ── The website demo ────────────────────────────────────────────────────────
+
+export interface SeedDemoWebsiteOptions {
+  db: DB;
+  /** Where the coach photos and the applicants' photos go (the app's FileStore). */
+  files: FileStore;
+  /** The school's time zone ("today" for ages, workshops on the site, backdated timestamps). */
+  timeZone: string;
+  /** "YYYY-MM-DD" to seed as if it were that day; default today in timeZone. */
+  today?: string;
+}
+
+/** The demo workshops' public texts, by course name (the demo school's courses). */
+const DEMO_WORKSHOP_TEXTS: Record<
+  string,
+  { titleAr: string; descriptionEn: string; descriptionAr: string; priceEn: string; priceAr: string; visible: boolean; accepting: boolean }
+> = {
+  'Screen Acting I': {
+    titleAr: 'التمثيل أمام الكاميرا ١',
+    descriptionEn: 'Acting for the camera from the first day: eyelines, continuity and playing small.\n\nEvery student leaves with two filmed scenes for their showreel.',
+    descriptionAr: 'التمثيل أمام الكاميرا من أول يوم: اتجاه النظر، والراكور، والأداء الهادئ.\n\nكل طالب يخرج بمشهدين مصوَّرين لملف أعماله.',
+    priceEn: '3,500 EGP',
+    priceAr: '٣٥٠٠ جنيه',
+    visible: true,
+    accepting: true,
+  },
+  'Kids Drama (8–12)': {
+    titleAr: 'دراما الأطفال (٨–١٢)',
+    descriptionEn: 'Games, storytelling and a short play at the end of the term. Parents are welcome at the last session.',
+    descriptionAr: 'ألعاب وحكايات ومسرحية قصيرة في نهاية الدورة. أولياء الأمور مدعوون لحضور الحصة الأخيرة.',
+    priceEn: '2,400 EGP',
+    priceAr: '٢٤٠٠ جنيه',
+    visible: true,
+    accepting: true,
+  },
+  'Voice & Speech': {
+    titleAr: 'الصوت والإلقاء',
+    descriptionEn: 'Breath, resonance, clear speech and projection, with texts in Arabic and English.',
+    descriptionAr: 'التنفس والرنين ووضوح النطق وقوة الصوت، بنصوص عربية وإنجليزية.',
+    priceEn: '2,800 EGP',
+    priceAr: '٢٨٠٠ جنيه',
+    visible: true,
+    // Nearly full: shown, without the apply form.
+    accepting: false,
+  },
+  'Improvisation Lab': {
+    titleAr: 'معمل الارتجال',
+    descriptionEn: 'Short and long improvisation: saying "yes, and", playing status, and building scenes from nothing.',
+    descriptionAr: 'ارتجال قصير وطويل: قول «نعم، و»، ولعب المكانة، وبناء المشاهد من لا شيء.',
+    priceEn: '2,600 EGP',
+    priceAr: '٢٦٠٠ جنيه',
+    visible: true,
+    accepting: true,
+  },
+  'Audition Technique': {
+    titleAr: 'تقنيات تجارب الأداء',
+    descriptionEn: 'Self-tapes, cold reads and choosing monologues, for students getting ready for castings.',
+    descriptionAr: 'التسجيل الذاتي والقراءة الأولى واختيار المونولوج، للطلاب المستعدين لتجارب الأداء.',
+    priceEn: '3,000 EGP',
+    priceAr: '٣٠٠٠ جنيه',
+    // Prepared, not shown yet.
+    visible: false,
+    accepting: true,
+  },
+};
+
+/**
+ * The website part of the demo: studio texts and contact lines (the studio's
+ * real public WhatsApp lines from its Instagram; the rest invented and meant to
+ * be edited), coach profiles for the demo coach accounts, the demo workshops
+ * shown with prices, an open casting call, three custom links, four casting
+ * applications with generated portraits (one a minor with guardian consent) and
+ * two website enquiries. Written straight to the database with the same
+ * library functions the API and the public forms use. Only adds rows: the
+ * caller checks the website is still empty (POST /api/admin/seed-demo-website:
+ * no 'site' key and no coaches).
+ */
+export async function seedDemoWebsite(opts: SeedDemoWebsiteOptions): Promise<SeedDemoWebsiteResult> {
+  const { db, files, timeZone } = opts;
+  const today = opts.today ?? todayIn(timeZone);
+  const [ty, tm, td] = today.split('-').map(Number) as [number, number, number];
+  const dobFor = (age: number, md: string) => {
+    const [m, d] = md.split('-').map(Number) as [number, number];
+    const hadBirthday = m < tm || (m === tm && d <= td);
+    return `${ty - age - (hadBirthday ? 0 : 1)}-${md}`;
+  };
+  /** "That day at 11:00" (never in the future). */
+  const stamp = (daysAgo: number, time = '11:00') => Math.min(epochAt(timeZone, addDays(today, -daysAgo), time), Date.now() - 60_000);
+
+  // ── Studio info, casting call, links ──
+  const content: SiteContentParsed = {
+    tagline: { en: 'Acting workshops and casting in Giza', ar: 'ورش تمثيل وكاستينج في الجيزة' },
+    about: {
+      en:
+        'Turquoise Studio is an acting school and casting studio in Mohandessin, Giza. We run small, practical workshops for beginners, teenagers and working actors: acting for the camera, voice, improvisation and audition technique, led by coaches who work in film, TV and theatre.\n\n' +
+        'Our casting team puts actors forward for films, series and commercials, so students can take what they learn straight to real auditions. Come and visit, watch a class, and find the workshop that fits you.',
+      ar:
+        'استوديو تركواز مدرسة تمثيل واستوديو كاستينج في المهندسين بالجيزة. نقدّم ورشًا عملية بمجموعات صغيرة للمبتدئين والمراهقين والممثلين المحترفين: التمثيل أمام الكاميرا، والصوت والإلقاء، والارتجال، وتقنيات تجارب الأداء، مع مدربين يعملون في السينما والتلفزيون والمسرح.\n\n' +
+        'يرشّح فريق الكاستينج لدينا الممثلين لأفلام ومسلسلات وإعلانات، فينقل الطلاب ما يتعلمونه مباشرة إلى تجارب أداء حقيقية. زورونا، واحضروا حصة، واختاروا الورشة التي تناسبكم.',
+    },
+    address: { en: 'Mohandessin, Giza', ar: 'المهندسين، الجيزة' },
+    mapUrl: 'https://maps.google.com/?q=Mohandessin%2C%20Giza',
+    instagram: 'turquoisecastingstudio',
+    whatsappWorkshops: '01094635959',
+    whatsappCasting: '01119003100',
+    phone: '01094635959',
+    email: null,
+    heroFileId: null,
+    castingCall: {
+      open: true,
+      intro: {
+        en: 'We are building our roster for new films, series and commercials this season. Send us your details and a few recent photos. Some roles need no experience at all.',
+        ar: 'نبني قائمة الممثلين لدينا لأفلام ومسلسلات وإعلانات جديدة هذا الموسم. أرسل بياناتك وبعض الصور الحديثة. بعض الأدوار لا تحتاج إلى أي خبرة.',
+      },
+      lookingFor: {
+        en: 'Men and women of all ages, especially 18 to 35.\n\nChildren aged 8 to 14, with a parent’s consent.\n\nPeople who speak English or French as well as Arabic.',
+        ar: 'رجال وسيدات من كل الأعمار، خاصة من ١٨ إلى ٣٥ سنة.\n\nأطفال من ٨ إلى ١٤ سنة، بموافقة وليّ الأمر.\n\nمن يتحدثون الإنجليزية أو الفرنسية إلى جانب العربية.',
+      },
+    },
+    links: [
+      { id: null, label: { en: 'Find us on Google Maps', ar: 'موقعنا على خرائط جوجل' }, url: 'https://maps.google.com/?q=Mohandessin%2C%20Giza', visible: true },
+      { id: null, label: { en: 'Student showreel 2026', ar: 'فيديو أعمال الطلاب ٢٠٢٦' }, url: 'https://vimeo.com/stageleft/turquoise-showreel', visible: true },
+      { id: null, label: { en: 'Parents: kids workshop questions', ar: 'لأولياء الأمور: أسئلة ورشة الأطفال' }, url: 'https://example.com/turquoise/kids-faq', visible: false },
+    ],
+  };
+  saveSiteContent(db, content);
+
+  // ── Coaches (photos stored like uploads, uploadedBy null) ──
+  async function storePortrait(person: number, gender: Gender, hair: string | null, name: string): Promise<string> {
+    const png = renderPortrait(lookFor(person, gender, { hair }));
+    const id = randomUUID();
+    const storageKey = `${id}.png`;
+    await files.put(storageKey, png, 'image/png');
+    db.insert(filesTable).values({ id, originalName: name, mime: 'image/png', size: png.byteLength, storageKey, uploadedBy: null }).run();
+    return id;
+  }
+  const accounts = new Map(
+    db
+      .select({ id: users.id, email: users.email, active: users.active })
+      .from(users)
+      .where(inArray(users.email, ['coach@demo.school', 'coach2@demo.school', 'director@demo.school']))
+      .all()
+      .map((u) => [u.email, u]),
+  );
+  const activeAccount = (email: string) => {
+    const u = accounts.get(email);
+    return u?.active ? u.id : null;
+  };
+  const coachSpec = [
+    {
+      email: 'coach@demo.school',
+      nameEn: 'Layla Haddad',
+      nameAr: 'ليلى حداد',
+      titleEn: 'Screen acting and audition coach',
+      titleAr: 'مدربة التمثيل أمام الكاميرا وتجارب الأداء',
+      bioEn: 'Layla has acted in Egyptian and Lebanese series for fifteen years. She teaches acting for the camera and helps students prepare self-tapes for real castings.',
+      bioAr: 'مثّلت ليلى في مسلسلات مصرية ولبنانية على مدى خمسة عشر عامًا. تدرّس التمثيل أمام الكاميرا وتساعد الطلاب على تحضير تسجيلاتهم لتجارب أداء حقيقية.',
+      gender: 'female' as Gender,
+      hair: 'Black',
+      visible: true,
+    },
+    {
+      email: 'coach2@demo.school',
+      nameEn: 'Daniel Price',
+      nameAr: 'دانيال برايس',
+      titleEn: 'Improvisation and kids drama coach',
+      titleAr: 'مدرب الارتجال ودراما الأطفال',
+      bioEn: 'Daniel trained in London and has led improvisation groups in Cairo since 2018. Children love his Saturday drama class.',
+      bioAr: 'تدرّب دانيال في لندن ويقود مجموعات الارتجال في القاهرة منذ ٢٠١٨. الأطفال يحبون حصة الدراما التي يقدّمها يوم السبت.',
+      gender: 'male' as Gender,
+      hair: 'Brown',
+      visible: true,
+    },
+    {
+      email: null,
+      nameEn: 'Hassan Lotfy',
+      nameAr: 'حسن لطفي',
+      titleEn: 'Guest theatre director',
+      titleAr: 'مخرج مسرحي ضيف',
+      bioEn: 'Theatre director at Falaki Theatre. Leads a two-day masterclass each spring.',
+      bioAr: 'مخرج مسرحي في مسرح الفلكي. يقدّم ورشة مكثفة لمدة يومين كل ربيع.',
+      gender: 'male' as Gender,
+      hair: 'Grey',
+      // Prepared, not shown yet.
+      visible: false,
+    },
+  ];
+  for (const [i, spec] of coachSpec.entries()) {
+    const photoFileId = await storePortrait(300 + i, spec.gender, spec.hair, `coach-${i + 1}.png`);
+    db.insert(siteCoaches)
+      .values({
+        userId: spec.email ? activeAccount(spec.email) : null,
+        nameEn: spec.nameEn,
+        nameAr: spec.nameAr,
+        titleEn: spec.titleEn,
+        titleAr: spec.titleAr,
+        bioEn: spec.bioEn,
+        bioAr: spec.bioAr,
+        photoFileId,
+        visible: spec.visible,
+        sortOrder: i,
+      })
+      .run();
+  }
+
+  // ── Workshops on the site: the demo courses by name, else the first four active ones ──
+  const active = db
+    .select({ id: courses.id, name: courses.name })
+    .from(courses)
+    .where(and(eq(courses.status, 'active'), gte(courses.endDate, today)))
+    .orderBy(asc(courses.startDate), asc(courses.name), asc(courses.id))
+    .all();
+  const known = active.filter((c) => DEMO_WORKSHOP_TEXTS[c.name]);
+  const chosen = known.length ? known : active.slice(0, 4);
+  for (const [i, course] of chosen.entries()) {
+    const t = DEMO_WORKSHOP_TEXTS[course.name];
+    db.insert(siteWorkshops)
+      .values({
+        courseId: course.id,
+        visible: t?.visible ?? true,
+        titleAr: t?.titleAr ?? '',
+        descriptionEn: t?.descriptionEn ?? '',
+        descriptionAr: t?.descriptionAr ?? '',
+        priceEn: t?.priceEn ?? '',
+        priceAr: t?.priceAr ?? '',
+        acceptingApplications: t?.accepting ?? true,
+        sortOrder: i,
+      })
+      .onConflictDoNothing()
+      .run();
+  }
+
+  // ── Casting applications (as if sent from the public form) ──
+  const applicationSpec = [
+    {
+      form: { firstName: 'Mariam', lastName: 'Hosny', gender: 'female', dateOfBirth: dobFor(22, '04-12'), phone: '+20 101 555 7001', email: 'mariam.hosny@example.com', city: 'Cairo', heightCm: '165', languages: 'Arabic, English', skills: 'Dance, Singing', experience: 'Two short films at university and three years in a theatre club.', links: 'https://www.instagram.com/mariam.hosny.acts/', message: 'I would love to audition for TV series.', locale: 'en' },
+      hair: 'Dark brown',
+      photos: 2,
+      daysAgo: 1,
+    },
+    {
+      form: { firstName: 'أحمد', lastName: 'سامي', gender: 'male', dateOfBirth: dobFor(27, '09-03'), phone: '0112 555 7002', city: 'الجيزة', heightCm: '180', languages: 'العربية، الإنجليزية', skills: 'كرة القدم، ركوب الخيل', experience: 'إعلانان تلفزيونيان ودور صغير في مسلسل رمضاني.', links: 'https://vimeo.com/stageleft/ahmed-samy', message: 'متاح للتصوير خارج القاهرة.', locale: 'ar' },
+      hair: 'Black',
+      photos: 1,
+      daysAgo: 2,
+    },
+    {
+      // A minor: her father's details and consent.
+      form: { firstName: 'جنى', lastName: 'وائل', gender: 'female', dateOfBirth: dobFor(14, '06-20'), phone: '0100 555 7003', city: 'القاهرة', heightCm: '152', languages: 'العربية، الفرنسية', skills: 'باليه، غناء', guardianName: 'وائل محمود', guardianPhone: '0100 555 7099', guardianConsent: 'on', message: 'تحب التمثيل وشاركت في مسرحية المدرسة.', locale: 'ar' },
+      hair: 'Brown',
+      photos: 2,
+      daysAgo: 3,
+    },
+    {
+      form: { firstName: 'Omar', lastName: 'Khalil', gender: 'male', dateOfBirth: dobFor(34, '11-28'), phone: '+20 122 555 7004', email: 'omar.khalil@example.com', city: 'Alexandria', heightCm: '178', languages: 'Arabic, English, French', skills: 'Stage combat, Driving', experience: 'Ten years of theatre in Alexandria and one feature film.', locale: 'en' },
+      hair: 'Grey',
+      photos: 1,
+      daysAgo: 6,
+      reviewing: true,
+    },
+  ];
+  const director = activeAccount('director@demo.school');
+  const castingForm = castingApplicationInput(today);
+  for (const [i, spec] of applicationSpec.entries()) {
+    const input = castingForm.parse({ ...spec.form, privacyConsent: 'on' });
+    const photos = Array.from({ length: spec.photos }, (_, v) => ({
+      data: renderPortrait(lookFor(320 + i, input.gender, { hair: spec.hair, variant: v })),
+      name: `photo-${v + 1}.png`,
+    }));
+    const { id } = await createCastingApplication(db, files, input, photos);
+    const at = stamp(spec.daysAgo, `1${i}:30`);
+    db.update(castingApplications)
+      .set({
+        createdAt: at,
+        updatedAt: at,
+        ...(spec.reviewing ? { status: 'reviewing' as const, reviewedById: director, reviewedAt: stamp(spec.daysAgo - 2) } : {}),
+      })
+      .where(eq(castingApplications.id, id))
+      .run();
+  }
+
+  // ── Website enquiries (as if sent from the apply forms) ──
+  const screen = chosen.find((c) => c.name === 'Screen Acting I') ?? chosen[0];
+  const screenOnSite = screen ? findPublicWorkshop(db, screen.id, today) : null;
+  const enquirySpec = [
+    {
+      form: { firstName: 'Laila', lastName: 'Mostafa', phone: '+20 106 555 7010', email: 'laila.mostafa@example.com', dateOfBirth: dobFor(24, '02-14'), experience: 'some', heardFrom: 'instagram', message: 'Do you have evening times? I work until 5.', locale: 'en' },
+      courseId: screenOnSite?.acceptingApplications ? screenOnSite.courseId : null,
+      daysAgo: 0,
+    },
+    {
+      form: { firstName: 'يوسف', lastName: 'عمرو', phone: '0111 555 7011', dateOfBirth: dobFor(16, '08-01'), experience: 'none', heardFrom: 'friend', message: 'ابني عنده ١٦ سنة ويحب التمثيل. أي ورشة تناسبه؟', guardianName: 'عمرو حسين', guardianPhone: '0111 555 7012', guardianConsent: 'on', locale: 'ar' },
+      courseId: null,
+      daysAgo: 1,
+    },
+  ];
+  const applyForm = siteApplyInput(today);
+  let enquiries = 0;
+  for (const spec of enquirySpec) {
+    const { leadId, created } = createWebsiteLead(db, applyForm.parse({ ...spec.form, privacyConsent: 'on' }), { courseId: spec.courseId, today });
+    if (!created) continue;
+    enquiries++;
+    const at = stamp(spec.daysAgo, '09:15');
+    db.update(leads).set({ createdAt: at, updatedAt: at }).where(eq(leads.id, leadId)).run();
+    db.update(leadActivities).set({ createdAt: at }).where(eq(leadActivities.leadId, leadId)).run();
+  }
+
+  return {
+    ok: true,
+    coaches: coachSpec.length,
+    workshops: chosen.length,
+    applications: applicationSpec.length,
+    enquiries,
   };
 }

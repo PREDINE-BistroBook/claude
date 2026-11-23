@@ -22,6 +22,20 @@ export interface SeedDemoResult {
   seconds: number;
 }
 
+/**
+ * POST /api/admin/seed-demo-website (no body): the website demo (studio texts,
+ * coaches, workshops shown, casting call, links, casting applications, website
+ * enquiries) — only while the website is empty (no 'site' settings key and no
+ * coaches), else 409. Adds rows only.
+ */
+export interface SeedDemoWebsiteResult {
+  ok: true;
+  coaches: number;
+  workshops: number;
+  applications: number;
+  enquiries: number;
+}
+
 /** POST /api/admin/grant-owner: lockout recovery, the same as `npm run owner -- email`. */
 export const grantOwnerInput = z.object({ email });
 export type GrantOwnerInput = z.infer<typeof grantOwnerInput>;
