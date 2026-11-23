@@ -95,7 +95,7 @@ export type CastingApplicationInput = z.output<ReturnType<typeof castingApplicat
 
 // ── Staff API ───────────────────────────────────────────────────────────────
 
-/** GET /api/casting-applications — `q` matches names, city and phone digits. Newest first. */
+/** GET /api/casting-applications — `q` matches names and city, plus phone (any format) and email with talent.contact. Newest first. */
 export const castingApplicationListQuery = z.object({
   status: z.enum(CASTING_APPLICATION_STATUSES).optional(),
   q: z.string().trim().max(100).optional(),

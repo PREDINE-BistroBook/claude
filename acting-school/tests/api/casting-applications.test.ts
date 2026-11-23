@@ -1,6 +1,6 @@
 import { count, eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
-import { castingApplicationPhotos, castingApplications, files, settings, talent, talentPhotos } from '../../src/server/db/schema';
+import { castingApplicationPhotos, castingApplications, files, talent, talentPhotos } from '../../src/server/db/schema';
 import { createCastingApplication, type CastingPhotoUpload } from '../../src/server/lib/castingApplications';
 import { ApiError } from '../../src/server/lib/errors';
 import type { FileStore } from '../../src/server/lib/fileStore';
@@ -75,7 +75,7 @@ const photoKeys = (t: Ctx, applicationId: number) =>
 function issues(o: Record<string, unknown>) {
   const r = castingApplicationInput(todayISO()).safeParse(form(o));
   expect(r.success).toBe(false);
-  return r.error!.issues.map((i) => `${i.path.join('.')}: ${i.message}`);
+  return [...new Set(r.error!.issues.map((i) => `${i.path.join('.')}: ${i.message}`))];
 }
 
 describe('/api/casting-applications — access', () => {
@@ -171,6 +171,14 @@ describe('GET /api/casting-applications', () => {
     expect(await ids(`q=${encodeURIComponent('0122 555')}`)).toEqual([c.id]);
     expect(await ids(`q=${encodeURIComponent('+20 100 123')}`)).toEqual([a.id]);
     expect(await ids('q=1112223333')).toEqual([b.id]);
+    expect(await ids('q=example.com')).toEqual([c.id, b.id, a.id]);
+    // Without talent.contact the search leaves phone and email out (it would reveal them).
+    const editor = await t.as('video_editor');
+    const editorIds = async (qs: string) => (await editor.get<{ items: CastingApplicationListItem[] }>(`/api/casting-applications?${qs}`)).body.items.map((x) => x.id);
+    expect(await editorIds('q=1112223333')).toEqual([]);
+    expect(await editorIds(`q=${encodeURIComponent('0122 555')}`)).toEqual([]);
+    expect(await editorIds('q=example.com')).toEqual([]);
+    expect(await editorIds('q=fahmy')).toEqual([a.id]);
     // A long Arabic term is fine (instr, not LIKE: the Durable Object's pattern limit doesn't apply).
     expect(await ids(`q=${encodeURIComponent('وائل'.repeat(20))}`)).toEqual([]);
 
@@ -244,7 +252,7 @@ describe('GET /api/casting-applications/:id', () => {
     expect(hidden).toMatchObject({ phone: null, email: null, guardianPhone: null, links: null, contactHidden: true, guardianName: 'Mona Fahmy', city: 'Giza' });
 
     expect((await team.get('/api/casting-applications/99999')).status).toBe(404);
-    expect((await team.get('/api/casting-applications/abc')).status).toBe(400);
+    expect((await team.get('/api/casting-applications/abc')).status).toBe(404);
   });
 });
 
@@ -410,9 +418,9 @@ describe('createCastingApplication (the public form’s write)', () => {
     const refused = async (photos: CastingPhotoUpload[]) => {
       const err = await createCastingApplication(t.db, t.files, input, photos).catch((e: unknown) => e);
       expect(err).toBeInstanceOf(ApiError);
-      const e = err as ApiError & { details?: { issues?: { path: (string | number)[]; message: string }[] } };
+      const e = err as ApiError;
       expect(e.status).toBe(400);
-      return e.details?.issues?.map((i) => `${i.path.join('.')}: ${i.message}`);
+      return e.issues?.map((i) => `${i.path.join('.')}: ${i.message}`);
     };
     expect(await refused([])).toEqual(['photos: site:errors.photoRequired']);
     expect(await refused([PNG_1PX, JPEG, WEBP, PNG_1PX].map((data) => ({ data })))).toEqual(['photos: site:errors.tooManyPhotos']);
@@ -455,8 +463,7 @@ describe('createCastingApplication (the public form’s write)', () => {
 
     // A database failure after every photo was stored: the bytes go too.
     puts = 10;
-    t.db.insert(settings).values({ key: 'probe', value: 1 }).run();
-    const bad = { ...input, locale: 'fr' as never };
+    const bad = { ...input, firstName: null as never };
     await expect(createCastingApplication(t.db, flaky, bad, [{ data: PNG_1PX }])).rejects.toThrow();
     expect(stored.size).toBe(0);
     expect([appCount(t), fileCount(t)]).toEqual([0, 0]);

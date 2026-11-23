@@ -119,8 +119,12 @@ export async function createCastingApplication(
 
 // ── Reading (staff) ─────────────────────────────────────────────────────────
 
-/** Names, city and phone (digits in any format), with instr, not LIKE (lib/sqlLimits.ts). */
-export function applicationSearch(q: string, countryCode: string): SQL {
+/**
+ * Names and city; the phone (digits in any format) and email too only for
+ * someone who may see them — talent.contact — since otherwise a search would
+ * reveal them. instr, not LIKE (lib/sqlLimits.ts).
+ */
+export function applicationSearch(q: string, countryCode: string, withContact: boolean): SQL {
   const term = q.replace(/\s+/g, ' ');
   const parts: SQL[] = [
     contains(castingApplications.firstName, term),
@@ -128,9 +132,11 @@ export function applicationSearch(q: string, countryCode: string): SQL {
     contains(sql`(${castingApplications.firstName} || ' ' || ${castingApplications.lastName})`, term),
     contains(sql`(${castingApplications.lastName} || ' ' || ${castingApplications.firstName})`, term),
     contains(castingApplications.city, term),
-    contains(castingApplications.phone, term),
   ];
-  for (const digits of phoneSearchDigits(term, countryCode) ?? []) parts.push(contains(castingApplications.phoneDigits, digits));
+  if (withContact) {
+    parts.push(contains(castingApplications.phone, term), contains(castingApplications.email, term));
+    for (const digits of phoneSearchDigits(term, countryCode) ?? []) parts.push(contains(castingApplications.phoneDigits, digits));
+  }
   return or(...parts)!;
 }
 

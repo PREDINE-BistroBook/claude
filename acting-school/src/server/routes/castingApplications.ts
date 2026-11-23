@@ -20,6 +20,7 @@ import {
   loadApplicationDetail,
   loadApplicationListItems,
 } from '../lib/castingApplications';
+import { hasPermission } from '../lib/access';
 import { schoolToday } from '../lib/clock';
 import { ApiError } from '../lib/errors';
 import { getSettings } from '../lib/settings';
@@ -29,7 +30,8 @@ import { currentUser, requireAuth, requirePermission } from '../middleware/auth'
 /**
  * Casting applications from the website's casting call (Casting ›
  * Applications). talent.read lists and opens them; phone, email, guardian
- * phone and links need talent.contact (null otherwise, contactHidden: true);
+ * phone and links need talent.contact (null otherwise, contactHidden: true,
+ * and the search then leaves phone and email out);
  * talent.write marks them new / reviewing / declined, accepts them ("Add to
  * roster": a talent profile with the same photos, once — 409 after) and
  * deletes them (with their photo files, unless a talent profile uses them).
@@ -46,7 +48,7 @@ router.get('/', canRead, (c) => {
   const db = c.get('db');
   const where = and(
     q.status ? eq(castingApplications.status, q.status) : undefined,
-    q.q ? applicationSearch(q.q, getSettings(db).defaultCountryCode) : undefined,
+    q.q ? applicationSearch(q.q, getSettings(db).defaultCountryCode, hasPermission(currentUser(c), 'talent.contact')) : undefined,
   );
   return c.json<ListResponse<CastingApplicationListItem>>({ items: loadApplicationListItems(db, where, schoolToday(c)) });
 });

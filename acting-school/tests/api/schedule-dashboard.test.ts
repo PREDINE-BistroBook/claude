@@ -5,11 +5,13 @@ import type { DashboardData } from '../../src/shared/schemas/dashboard';
 import type { ScheduleEvent } from '../../src/shared/schemas/schedule';
 import {
   attendance,
+  castingApplications,
   castingRoles,
   castings,
   classSessions,
   courses,
   enrollments,
+  leads,
   students,
   submissions,
   talent,
@@ -296,6 +298,34 @@ describe('GET /api/dashboard', () => {
     // Coach + finance has classes.all (and no talent/castings).
     const moaty = await t.as(['acting_coach', 'finance']);
     expect((await moaty.get<DashboardData>('/api/dashboard')).body.counts).toEqual({ activeStudents: 2, activeCourses: 1, newWebsiteLeads: null, newCastingApplications: null });
+  });
+
+  it('newWebsiteLeads / newCastingApplications: only website leads and applications still new, each for whoever may see them', async () => {
+    const t = await makeTestContext();
+    const lead = (source: typeof leads.$inferInsert.source, status: typeof leads.$inferInsert.status, i: number) =>
+      t.db.insert(leads).values({ firstName: 'L', lastName: `${i}`, phone: `0100 000 ${1000 + i}`, source, status }).run();
+    lead('website', 'new', 1);
+    lead('website', 'new', 2);
+    lead('website', 'contacted', 3);
+    lead('website', 'lost', 4);
+    lead('whatsapp', 'new', 5);
+    lead('walk_in', 'new', 6);
+    const app = (status: typeof castingApplications.$inferInsert.status, i: number) =>
+      t.db.insert(castingApplications).values({ firstName: 'A', lastName: `${i}`, dateOfBirth: '2000-01-01', phone: `0100 111 ${1000 + i}`, status }).run();
+    app('new', 1);
+    app('new', 2);
+    app('new', 3);
+    app('reviewing', 4);
+    app('accepted', 5);
+    app('declined', 6);
+
+    const counts = async (spec: Parameters<typeof t.as>[0]) => (await (await t.as(spec)).get<DashboardData>('/api/dashboard')).body.counts;
+    expect(await counts('executive_director')).toMatchObject({ newWebsiteLeads: 2, newCastingApplications: 3 });
+    expect(await counts('ceo')).toMatchObject({ newWebsiteLeads: 2, newCastingApplications: 3 });
+    // talent.read without admissions.read; admissions.read without talent.read; neither.
+    expect(await counts('casting_team')).toMatchObject({ newWebsiteLeads: null, newCastingApplications: 3 });
+    expect(await counts({ permissions: ['admissions.read'] })).toMatchObject({ newWebsiteLeads: 2, newCastingApplications: null });
+    expect(await counts({ permissions: ['website.manage'] })).toEqual({ newWebsiteLeads: null, newCastingApplications: null });
   });
 
   it('shapes the answer by role: sections a role cannot see are absent', async () => {

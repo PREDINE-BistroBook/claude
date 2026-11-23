@@ -1,8 +1,9 @@
 import { count, eq } from 'drizzle-orm';
 import { describe, expect, it, vi } from 'vitest';
 import { createDb, type DB } from '../../src/server/db/client';
-import { courseSlots, courses, files, leads, positions, settings, siteCoaches, siteWorkshops, students } from '../../src/server/db/schema';
+import { courseSlots, courses, files, leadActivities, leads, positions, settings, siteCoaches, siteWorkshops, students } from '../../src/server/db/schema';
 import { builtInGrantsVersion, upgradeBuiltInPositions } from '../../src/server/lib/access';
+import { createWebsiteLead, WEBSITE_GENERAL_ENQUIRY } from '../../src/server/lib/admissions';
 import { createCastingApplication } from '../../src/server/lib/castingApplications';
 import {
   findPublicFile,
@@ -20,7 +21,8 @@ import { sitePaths } from '../../src/server/site/paths';
 import { addDays } from '../../src/shared/dates';
 import { BUILT_IN_GRANTS, BUILT_IN_GRANTS_SETTING, BUILT_IN_POSITIONS, LATEST_BUILT_IN_GRANTS_VERSION } from '../../src/shared/permissions';
 import { castingApplicationInput } from '../../src/shared/schemas/castingApplications';
-import { DEFAULT_SITE_CONTENT, siteContent, type SiteCoach, type SiteContent, type SiteSummary, type SiteWorkshop } from '../../src/shared/schemas/site';
+import type { LeadDetail, LeadListItem } from '../../src/shared/schemas/admissions';
+import { DEFAULT_SITE_CONTENT, siteApplyInput, siteContent, type SiteCoach, type SiteContent, type SiteSummary, type SiteWorkshop } from '../../src/shared/schemas/site';
 import { makeTestContext, PNG_1PX, todayISO, uploadPng } from '../helpers';
 
 type Ctx = Awaited<ReturnType<typeof makeTestContext>>;
@@ -439,6 +441,142 @@ describe('the public side (library functions for /site)', () => {
     expect(sitePaths.workshopApply('en', 4)).toBe('/site/en/workshops/4/apply');
     expect(sitePaths.thanks('ar', 'casting')).toBe('/site/ar/thanks?k=casting');
     expect(sitePaths.media('abc')).toBe('/site/media/abc');
+  });
+});
+
+describe('createWebsiteLead (the enquiry form’s write)', () => {
+  /** The apply form's values (as the public page sends them), valid unless overridden. */
+  const applyForm = (o: Record<string, unknown> = {}) =>
+    siteApplyInput(todayISO()).parse({
+      firstName: 'Laila',
+      lastName: 'Mostafa',
+      phone: '0106 555 7010',
+      email: 'Laila@Example.com',
+      dateOfBirth: addDays(todayISO(), -24 * 366),
+      experience: 'some',
+      heardFrom: 'instagram',
+      message: 'Do you have evening times?',
+      privacyConsent: 'on',
+      locale: 'en',
+      ...o,
+    });
+
+  it('a general enquiry becomes a new website lead nobody is assigned to, with a note on its timeline', async () => {
+    const t = await makeTestContext();
+    const result = createWebsiteLead(t.db, applyForm(), { courseId: null, today: todayISO() });
+    expect(result).toEqual({ leadId: expect.any(Number), created: true });
+
+    const director = await t.as('executive_director');
+    const lead = (await director.get<LeadDetail>(`/api/leads/${result.leadId}`)).body;
+    expect(lead).toMatchObject({
+      firstName: 'Laila',
+      lastName: 'Mostafa',
+      phone: '0106 555 7010',
+      email: 'laila@example.com',
+      source: 'website',
+      sourceDetail: WEBSITE_GENERAL_ENQUIRY,
+      status: 'new',
+      assignedToId: null,
+      createdById: null,
+      preferredCourse: null,
+      experience: 'Some acting experience',
+    });
+    expect(lead.notes).toContain('Do you have evening times?');
+    expect(lead.notes).toContain('How they heard about us: Instagram');
+    expect(lead.notes).toContain('Sent from the English website');
+    expect(lead.activities.map((a) => [a.type, a.body])).toEqual([['note', `Applied on the website: ${WEBSITE_GENERAL_ENQUIRY}`]]);
+    expect(t.db.select().from(leads).get()!.phoneDigits).toBe('01065557010');
+
+    // Admissions finds it with the source filter.
+    const list = await director.get<{ items: LeadListItem[] }>('/api/leads?source=website');
+    expect(list.body.items.map((l) => l.id)).toEqual([result.leadId]);
+    expect((await director.get<{ items: LeadListItem[] }>('/api/leads?source=walk_in')).body.items).toEqual([]);
+  });
+
+  it('a workshop enquiry names the workshop; the workshop must be on the site and accepting applications', async () => {
+    const t = await makeTestContext();
+    const director = await t.as('executive_director');
+    const today = todayISO();
+    const shown = course(t, { name: 'Screen Acting I' });
+    const closed = course(t, { name: 'Voice' });
+    const hidden = course(t, { name: 'Hidden' });
+    const over = course(t, { name: 'Over', endDate: addDays(today, -1) });
+    await director.put(`/api/site/workshops/${shown.id}`, { visible: true, titleEn: 'Acting for the camera' });
+    await director.put(`/api/site/workshops/${closed.id}`, { visible: true, acceptingApplications: false });
+    await director.put(`/api/site/workshops/${hidden.id}`, { visible: false });
+    await director.put(`/api/site/workshops/${over.id}`, { visible: true });
+
+    const { leadId } = createWebsiteLead(t.db, applyForm({ locale: 'ar' }), { courseId: shown.id, today });
+    const lead = (await director.get<LeadDetail>(`/api/leads/${leadId}`)).body;
+    expect(lead).toMatchObject({ sourceDetail: 'Acting for the camera', preferredCourse: { id: shown.id, name: 'Screen Acting I' } });
+    expect(lead.notes).toContain('Sent from the Arabic website');
+
+    for (const c of [closed, hidden, over]) {
+      expect(() => createWebsiteLead(t.db, applyForm({ phone: `0100 000 ${1000 + c.id}` }), { courseId: c.id, today }), c.name).toThrow(
+        expect.objectContaining({ status: 404 }),
+      );
+    }
+    expect(() => createWebsiteLead(t.db, applyForm({ phone: '0100 000 9999' }), { courseId: 99999, today })).toThrow(expect.objectContaining({ status: 404 }));
+    expect(t.db.select().from(leads).all()).toHaveLength(1);
+  });
+
+  it('the same phone on an open lead adds “Applied again on the website” to it instead of a duplicate; a closed lead doesn’t count', async () => {
+    const t = await makeTestContext();
+    const director = await t.as('executive_director');
+    const existing = (await director.post<LeadDetail>('/api/leads', { firstName: 'Laila', lastName: 'M', phone: '+20 106 555 7010', source: 'whatsapp' })).body;
+
+    // Written as a local number: still the same phone.
+    const again = createWebsiteLead(t.db, applyForm({ phone: '٠١٠٦ ٥٥٥ ٧٠١٠', message: 'Still interested!' }), { courseId: null, today: todayISO() });
+    expect(again).toEqual({ leadId: existing.id, created: false });
+    expect(t.db.select().from(leads).all()).toHaveLength(1);
+    const lead = (await director.get<LeadDetail>(`/api/leads/${existing.id}`)).body;
+    expect(lead).toMatchObject({ source: 'whatsapp', status: 'new', firstName: 'Laila', lastName: 'M' });
+    const note = lead.activities.find((a) => a.type === 'note')!;
+    expect(note.body).toMatch(/^Applied again on the website: general\nLaila Mostafa\nStill interested!/);
+    expect(note.createdById).toBeNull();
+
+    // Once that lead is closed, a new enquiry from the same phone is a new lead.
+    await director.patch(`/api/leads/${existing.id}`, { status: 'lost', lostReason: 'no_response' });
+    const fresh = createWebsiteLead(t.db, applyForm(), { courseId: null, today: todayISO() });
+    expect(fresh.created).toBe(true);
+    expect(fresh.leadId).not.toBe(existing.id);
+    expect(t.db.select().from(leads).all()).toHaveLength(2);
+    expect(t.db.select().from(leadActivities).where(eq(leadActivities.leadId, fresh.leadId)).all()).toHaveLength(1);
+  });
+
+  it('under 18: guardian name, phone and consent are required, and travel with the lead', async () => {
+    const t = await makeTestContext();
+    const minorDob = addDays(todayISO(), -16 * 366);
+    const parse = (o: Record<string, unknown>) => {
+      const r = siteApplyInput(todayISO()).safeParse({
+        firstName: 'Youssef',
+        lastName: 'Amr',
+        phone: '0111 555 7011',
+        dateOfBirth: minorDob,
+        experience: 'none',
+        heardFrom: 'friend',
+        privacyConsent: 'on',
+        locale: 'ar',
+        ...o,
+      });
+      return r.success ? r.data : [...new Set(r.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`))];
+    };
+    expect(parse({})).toEqual(['guardianName: errors.required', 'guardianPhone: errors.required', 'guardianConsent: site:errors.guardianConsent']);
+    expect(parse({ guardianName: 'Amr Hussein', guardianPhone: '0111 555 7012', privacyConsent: undefined, guardianConsent: 'on' })).toEqual([
+      'privacyConsent: site:errors.privacyConsent',
+    ]);
+    expect(parse({ dateOfBirth: addDays(todayISO(), -3 * 366), guardianName: 'A', guardianPhone: '0111 555 7012', guardianConsent: 'on' })).toEqual([
+      'dateOfBirth: site:errors.ageRange',
+    ]);
+    expect(parse({ phone: '123', guardianName: 'A', guardianPhone: '0111 555 7012', guardianConsent: 'on' })).toEqual(['phone: site:errors.invalidPhone']);
+    expect(parse({ experience: 'expert', guardianName: 'A', guardianPhone: '0111 555 7012', guardianConsent: 'on' })).toHaveLength(1);
+
+    const input = parse({ guardianName: 'Amr Hussein', guardianPhone: '0111 555 7012', guardianConsent: 'on' });
+    expect(Array.isArray(input)).toBe(false);
+    const { leadId } = createWebsiteLead(t.db, input as Exclude<typeof input, string[]>, { courseId: null, today: todayISO() });
+    const lead = t.db.select().from(leads).where(eq(leads.id, leadId)).get()!;
+    expect(lead).toMatchObject({ guardianName: 'Amr Hussein', guardianPhone: '0111 555 7012', dateOfBirth: minorDob, email: null });
+    expect(lead.notes).toContain('Under 18 — guardian: Amr Hussein (0111 555 7012), consent given');
   });
 });
 
