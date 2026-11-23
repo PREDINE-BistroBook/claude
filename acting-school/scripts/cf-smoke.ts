@@ -32,6 +32,10 @@
  * team.turquoisestudio.app with its old address staff. forwarding. The team
  * pack: the Team page, a chat round trip with a photo, a workshop document, a
  * call to the office answered, notifications, push off without VAPID keys.
+ * The cafeteria: an order from start to delivered on the Office helper's
+ * board (new → on the way → delivered, one step at a time, alerts both ways),
+ * a coach and Reception can order but can't see anyone else's order or move
+ * one, an unavailable item, and the Settings switch that turns it all off.
  * Exit code 1 on the first failure. Local only (scripts/cf-local.ts).
  */
 import { spawnSync } from 'node:child_process';
@@ -148,6 +152,8 @@ const DEMO_ROLES = [
   'editor@demo.school',
   'coach@demo.school',
   'coach2@demo.school',
+  'reception@demo.school',
+  'helper@demo.school',
 ];
 
 /** Everything that runs against a freshly seeded Worker. Returns what the restart phase re-checks. */
@@ -455,6 +461,76 @@ export async function runApiSmoke(base: string, opts: { adminToken: string; pass
   expectStatus(await coach.post('/api/notifications/read', { all: true }), 200, 'mark notifications read');
   check(expectStatus(await coach.get('/api/push/config'), 200, 'push config').body.publicKey === null, 'push is off without VAPID keys');
 
+  step('cafeteria: an order from start to delivered on the helper’s board; nobody else sees it or moves it; an unavailable item; the switch');
+  const helper = clients['helper@demo.school']!;
+  const reception = clients['reception@demo.school']!;
+  const helperMe = expectStatus(await helper.get('/api/auth/me'), 200, 'helper me').body.user;
+  check(helperMe.permissions.join() === 'cafeteria.serve' && helperMe.positions[0]?.key === 'office_helper' && helperMe.locale === 'ar', `the Office helper serves the cafeteria, in Arabic (${helperMe.permissions})`);
+  const receptionMe = expectStatus(await reception.get('/api/auth/me'), 200, 'reception me').body.user;
+  check(receptionMe.permissions.length === 0 && receptionMe.positions[0]?.key === 'reception', 'Reception has no section permissions yet');
+  expectStatus(await reception.get('/api/students'), 403, 'Reception has no School');
+  expectStatus(await reception.get('/api/team'), 200, 'Reception has the Team page');
+  const cafeMenu = expectStatus(await coach.get('/api/cafe/menu'), 200, 'the menu, for everyone').body;
+  check(cafeMenu.items.length === 10 && cafeMenu.places.length === 4, `the usual menu and the default places (${cafeMenu.items.length}, ${cafeMenu.places.length})`);
+  const tea = cafeMenu.items.find((i: { nameEn: string }) => i.nameEn === 'Tea');
+  const juice = cafeMenu.items.find((i: { nameEn: string }) => i.nameEn === 'Juice');
+  check(tea?.nameAr === 'شاي' && !('price' in tea), 'items in both languages, no price');
+  const boardBefore = expectStatus(await helper.get('/api/cafe/orders'), 200, 'the helper’s board').body.items as { id: number; status: string; by: { name: string } }[];
+  check(boardBefore.some((o) => o.status === 'new' && o.by.name === 'Layla Haddad') && boardBefore.some((o) => o.status === 'delivered'), 'the seeded board: one waiting, one delivered today');
+  // Two teas, one with no sugar, picked in Arabic.
+  const cafeOrder = expectStatus(
+    await director.post('/api/cafe/orders', { place: 'استوديو 1', note: 'Smoke test', items: [{ itemId: tea.id, qty: 1 }, { itemId: tea.id, qty: 1, options: 'no sugar' }] }),
+    201,
+    'the director orders two teas',
+  ).body;
+  check(cafeOrder.status === 'new' && cafeOrder.place === 'Studio 1' && cafeOrder.items.length === 2 && cafeOrder.items[1].options === 'no sugar', 'the order as stored (the place by its English name)');
+  check(expectStatus(await helper.get('/api/chat/unread'), 200, 'helper poll').body.cafe.newOrders === 2, 'the poll counts two waiting orders for the helper');
+  check(expectStatus(await coach.get('/api/chat/unread'), 200, 'coach poll').body.cafe.newOrders === null, 'no count for someone who doesn’t serve');
+  const helperBell = expectStatus(await helper.get('/api/notifications'), 200, 'helper notifications').body.items as { kind: string; link: string; title: string; body: string }[];
+  const newOrderAlert = helperBell.find((n) => n.kind === 'cafe_order' && n.link === `/cafeteria/board?order=${cafeOrder.id}`);
+  check(newOrderAlert?.title === 'طلب جديد من Dalia Fathy' && newOrderAlert.body.includes('استوديو 1') && newOrderAlert.body.includes('شاي'), `the helper’s alert is in Arabic (${newOrderAlert?.title})`);
+  check((expectStatus(await helper.get('/api/cafe/orders?status=new'), 200, 'new orders').body.items as { id: number }[]).some((o) => o.id === cafeOrder.id), 'it is on the board');
+  // Nobody else sees it or moves it.
+  for (const [who, c] of [['a coach', coach], ['Reception', reception], ['the director', director]] as const) {
+    expectStatus(await c.get('/api/cafe/orders'), 403, `${who} has no board`);
+    expectStatus(await c.post(`/api/cafe/orders/${cafeOrder.id}/status`, { status: 'on_the_way' }), 403, `${who} can’t move an order`);
+  }
+  expectStatus(await coach.post(`/api/cafe/orders/${cafeOrder.id}/cancel`), 404, 'a coach can’t cancel someone else’s order');
+  check(!(expectStatus(await coach.get('/api/cafe/orders/mine'), 200, 'the coach’s own orders').body.items as { id: number }[]).some((o) => o.id === cafeOrder.id), 'a coach doesn’t see the director’s order');
+  // Reception orders, and takes it back while it is new.
+  const water = cafeMenu.items.find((i: { nameEn: string }) => i.nameEn === 'Water');
+  const receptionOrder = expectStatus(await reception.post('/api/cafe/orders', { place: 'Reception', items: [{ itemId: water.id, qty: 1 }] }), 201, 'Reception orders').body;
+  check(expectStatus(await reception.post(`/api/cafe/orders/${receptionOrder.id}/cancel`), 200, 'Reception cancels her own new order').body.status === 'cancelled', 'cancelled by the person who ordered');
+  // One step at a time.
+  check(expectStatus(await helper.post(`/api/cafe/orders/${cafeOrder.id}/status`, { status: 'delivered' }), 409, 'delivered before on the way').body.error.code === 'not_next_step', 'no step skipped');
+  check(expectStatus(await helper.post(`/api/cafe/orders/${cafeOrder.id}/status`, { status: 'on_the_way' }), 200, 'on the way').body.handledBy.name === 'Sayed Ramadan', 'taken by the helper');
+  check((expectStatus(await director.get('/api/cafe/orders/mine'), 200, 'the director’s orders').body.items as { id: number; status: string }[]).find((o) => o.id === cafeOrder.id)?.status === 'on_the_way', 'the director sees "on the way"');
+  check(expectStatus(await director.post(`/api/cafe/orders/${cafeOrder.id}/cancel`), 409, 'too late to cancel').body.error.code === 'already_on_the_way', 'no cancelling once it is on the way');
+  check(expectStatus(await helper.post(`/api/cafe/orders/${cafeOrder.id}/status`, { status: 'delivered' }), 200, 'delivered').body.status === 'delivered', 'delivered');
+  check(expectStatus(await helper.post(`/api/cafe/orders/${cafeOrder.id}/status`, { status: 'cancelled', reason: 'Too late' }), 409, 'nothing after delivered').body.error.code === 'order_closed', 'nothing changes after delivered');
+  const directorBell = expectStatus(await director.get('/api/notifications'), 200, 'director notifications').body.items as { kind: string; link: string; title: string }[];
+  check(directorBell.find((n) => n.kind === 'cafe_status' && n.link === `/cafeteria?order=${cafeOrder.id}`)?.title === 'Your order was delivered', 'the director’s alert says delivered');
+  check(expectStatus(await helper.get('/api/chat/unread'), 200, 'helper poll').body.cafe.newOrders === 1, 'one order still waiting');
+  // "Can't do this one" needs a reason.
+  const juiceOrder = expectStatus(await coach.post('/api/cafe/orders', { place: 'The roof', items: [{ itemId: juice.id, qty: 2 }] }), 201, 'a coach orders juice').body;
+  expectStatus(await helper.post(`/api/cafe/orders/${juiceOrder.id}/status`, { status: 'cancelled' }), 400, 'cancelling needs a reason');
+  check(expectStatus(await helper.post(`/api/cafe/orders/${juiceOrder.id}/status`, { status: 'cancelled', reason: 'No juice today' }), 200, 'turned down').body.cancelReason === 'No juice today', 'the reason is kept for the person');
+  // The director edits the menu (settings.manage): Juice off, so it can't be ordered.
+  expectStatus(await coach.patch(`/api/cafe/menu/${juice.id}`, { available: false }), 403, 'a coach can’t edit the menu');
+  expectStatus(await director.patch(`/api/cafe/menu/${juice.id}`, { available: false }), 200, 'the director switches Juice off');
+  const refused = expectStatus(await coach.post('/api/cafe/orders', { place: 'Office', items: [{ itemId: juice.id, qty: 1 }] }), 409, 'ordering an unavailable item');
+  check(refused.body.error.code === 'item_unavailable' && refused.body.error.details.itemIds[0] === juice.id, 'item_unavailable says which');
+  expectStatus(await helper.patch(`/api/cafe/menu/${juice.id}`, { available: true }), 200, 'the helper switches it back on');
+  expectStatus(await helper.post('/api/cafe/menu/defaults'), 409, '"Add the usual items" only on an empty menu');
+  // The switch.
+  expectStatus(await helper.patch('/api/settings', { cafeteriaEnabled: false }), 403, 'the helper can’t switch the cafeteria off');
+  check(expectStatus(await director.patch('/api/settings', { cafeteriaEnabled: false }), 200, 'the director switches the cafeteria off').body.cafeteriaEnabled === false, 'switched off');
+  check(expectStatus(await coach.get('/api/cafe/menu'), 409, 'the menu while off').body.error.code === 'cafeteria_off', 'cafeteria_off');
+  expectStatus(await helper.get('/api/cafe/orders'), 409, 'the board while off');
+  check(expectStatus(await helper.get('/api/chat/unread'), 200, 'poll while off').body.cafe.enabled === false, 'the poll says it is off');
+  expectStatus(await director.patch('/api/settings', { cafeteriaEnabled: true }), 200, 'switched on again');
+  check((expectStatus(await helper.get('/api/cafe/orders?status=delivered'), 200, 'delivered today').body.items as { id: number }[]).some((o) => o.id === cafeOrder.id), 'everything is where it was');
+
   step('the last deletes: student, class');
   expectStatus(await owner.delete(`/api/students/${sara.id}`), 204, 'delete student');
   expectStatus(await owner.delete(`/api/students/${sara.id}`), 404, 'delete student again');
@@ -471,7 +547,7 @@ export async function runApiSmoke(base: string, opts: { adminToken: string; pass
   check(granted.reactivated === true && granted.position === 'CEO', 'grant-owner reactivated the account as CEO');
   expectStatus(await anon.post('/api/admin/grant-owner', { email: 'nobody@example.com' }, bearer), 404, 'grant-owner unknown email');
 
-  return { ownerCookie: owner.cookie!, bigId, bigSha: sha(big), studentCount: studentsBefore };
+  return { ownerCookie: owner.cookie!, bigId, bigSha: sha(big), studentCount: studentsBefore, cafeOrderId: cafeOrder.id as number };
 }
 
 /** After a restart on the same state: data, sessions, the brake and files are all still there. */
@@ -485,6 +561,9 @@ async function afterRestart(base: string, before: Awaited<ReturnType<typeof runA
   const file = expectStatus(await owner.get(`/api/files/${before.bigId}`), 200, 'big file after restart');
   check(sha(file.bytes) === before.bigSha, 'big file intact');
   expectStatus(await new Client(base).post('/api/auth/login', { email: 'nobody@demo.school', password: 'wrong-password' }), 429, 'brake survived the restart');
+  // The cafeteria: the delivered order with its two lines (owners serve, so the CEO reads the board).
+  const delivered = (expectStatus(await owner.get('/api/cafe/orders?status=delivered'), 200, 'cafeteria after restart').body.items as { id: number; items: unknown[] }[]).find((o) => o.id === before.cafeOrderId);
+  check(delivered?.items.length === 2, 'the delivered cafeteria order survived');
 }
 
 /** Static assets: the SPA shell on deep links, the PWA files, and the _headers rules. */

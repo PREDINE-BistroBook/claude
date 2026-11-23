@@ -3,6 +3,7 @@ import { initReactI18next } from 'react-i18next';
 import type { Locale } from '@shared/enums';
 import admissions from '../features/admissions/i18n';
 import applications from '../features/applications/i18n';
+import cafe from '../features/cafe/i18n';
 import castings from '../features/castings/i18n';
 import chat from '../features/chat/i18n';
 import classes from '../features/classes/i18n';
@@ -35,6 +36,7 @@ export const namespaces = {
   website,
   team,
   chat,
+  cafe,
 } satisfies Record<
   string,
   Namespace<any>

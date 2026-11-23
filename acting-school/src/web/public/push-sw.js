@@ -5,9 +5,11 @@
  * clientsClaim) stay in the generated part.
  *
  * The server sends JSON (PushPayload in src/shared/schemas/notifications.ts):
- *   { title, body, link, kind: 'message' | 'summon' | 'summon_answer' | 'test', tag }
+ *   { title, body, link, kind: 'message' | 'summon' | 'summon_answer' | 'cafe_order' | 'cafe_status' | 'test', tag }
  * A call to the office stays on screen until it's touched and vibrates;
  * message notifications share a tag per conversation, so a new one replaces the last.
+ * A new cafeteria order (to whoever serves) vibrates and stays too; what became of
+ * an order (to whoever ordered) shares a tag per order: "Delivered" replaces "On the way".
  */
 /* global self, clients */
 
@@ -44,6 +46,10 @@ self.addEventListener('push', (event) => {
   if (data.kind === 'summon') {
     options.requireInteraction = true;
     options.vibrate = [300, 150, 300, 150, 300];
+  }
+  if (data.kind === 'cafe_order') {
+    options.requireInteraction = true;
+    options.vibrate = [200, 100, 200];
   }
   event.waitUntil(self.registration.showNotification(title, options));
 });

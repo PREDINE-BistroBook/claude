@@ -27,6 +27,13 @@ const en = {
   answerAbout: 'About: {{note}}',
   testTitle: 'Alerts are on',
   testBody: 'Messages and calls to the office will show up here.',
+  // The cafeteria: a new order (to whoever serves), then what became of it (to whoever ordered).
+  cafeNewOrderTitle: 'New order from {{name}}',
+  cafeOrderBody: '{{items}} — to {{place}}',
+  cafeOnTheWayTitle: 'Your order is on the way',
+  cafeDeliveredTitle: 'Your order was delivered',
+  cafeCancelledTitle: 'Sorry, your order can’t be made',
+  cafeCancelledBody: 'Reason: {{reason}}',
 };
 const ar: Record<keyof typeof en, string> = {
   messageTitle: 'رسالة جديدة من {{name}}',
@@ -40,6 +47,12 @@ const ar: Record<keyof typeof en, string> = {
   answerAbout: 'بخصوص: {{note}}',
   testTitle: 'التنبيهات تعمل',
   testBody: 'ستظهر هنا الرسائل وطلبات الحضور إلى المكتب.',
+  cafeNewOrderTitle: 'طلب جديد من {{name}}',
+  cafeOrderBody: '{{items}} — إلى {{place}}',
+  cafeOnTheWayTitle: 'طلبك في الطريق',
+  cafeDeliveredTitle: 'تم توصيل طلبك',
+  cafeCancelledTitle: 'عذرًا، تعذّر تنفيذ طلبك',
+  cafeCancelledBody: 'السبب: {{reason}}',
 };
 
 export const NOTIFICATION_TEXT: Record<Locale, typeof en> = { en, ar };
@@ -109,6 +122,18 @@ export function markNotificationsRead(tx: Conn, userId: number, kind: Notificati
     .run();
 }
 
+/**
+ * Mark everyone's unread notifications of this kind and link as read: the
+ * thing they point at is done with for all of them (a cafeteria order someone
+ * has taken, or that was cancelled, leaves every server's bell).
+ */
+export function markNotificationsReadForEveryone(tx: Conn, kind: NotificationKind, link: string, now: number): void {
+  tx.update(notifications)
+    .set({ readAt: now })
+    .where(and(eq(notifications.kind, kind), eq(notifications.link, link), isNull(notifications.readAt)))
+    .run();
+}
+
 /** Mark some of a person's notifications read (others' ids are ignored), or all of them. */
 export function markRead(tx: Conn, userId: number, ids: readonly number[] | 'all', now: number): void {
   const mine = and(eq(notifications.userId, userId), isNull(notifications.readAt));
@@ -148,6 +173,7 @@ export function toNotificationItem(r: typeof notifications.$inferSelect, now = D
 }
 
 // ── Links ───────────────────────────────────────────────────────────────────
+// (The cafeteria's links are in lib/cafe.ts: cafeBoardLink, cafeOrderLink.)
 
 export const conversationLink = (conversationId: number) => `/messages/${conversationId}`;
 /** The caller's link to one call (its answer's notification): the Team page with that person's row and answer. */

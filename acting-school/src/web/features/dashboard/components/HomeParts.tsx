@@ -7,6 +7,8 @@ import type { DashboardData } from '@shared/schemas/dashboard';
 import { ButtonLink, StatCard } from '@web/components/ui';
 import { useAuth } from '@web/lib/auth';
 import { useFormat } from '@web/lib/format';
+import { useCafeStatus } from '../../cafe/api';
+import { OrderDrinkButton } from '../../cafe/components/CafeParts';
 import { firstName, greetingFor } from '../utils';
 
 export interface HomeStat {
@@ -56,12 +58,20 @@ export function StatGrid({ stats, counts }: { stats: HomeStat[]; counts: Dashboa
   );
 }
 
-/** Big buttons for the section's everyday "new …" actions, each only with its permission. */
+/** Half the phone's width each: a long label ("Call someone to the office") takes two lines rather than being cut. */
+const QUICK_BUTTON = 'h-auto min-h-12 w-full whitespace-normal py-2 text-center leading-tight sm:w-auto';
+
+/**
+ * Big buttons for the section's everyday "new …" actions, each only with its
+ * permission — and, on every section home, "Order a drink" (the cafeteria:
+ * everyone, while it is switched on).
+ */
 export function QuickActions({ actions }: { actions: QuickAction[] }) {
   const { t } = useTranslation(['dashboard']);
   const { can } = useAuth();
+  const cafeOn = !!useCafeStatus()?.enabled;
   const allowed = actions.filter((a) => can(a.permission));
-  if (!allowed.length) return null;
+  if (!allowed.length && !cafeOn) return null;
   return (
     <section aria-labelledby="quick-actions">
       <h2 id="quick-actions" className="sr-only">
@@ -69,10 +79,11 @@ export function QuickActions({ actions }: { actions: QuickAction[] }) {
       </h2>
       <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
         {allowed.map((a) => (
-          <ButtonLink key={a.key} to={a.to} icon={a.icon} size="lg" className="w-full sm:w-auto">
+          <ButtonLink key={a.key} to={a.to} icon={a.icon} size="lg" className={QUICK_BUTTON}>
             {t(`quick.${a.key}`)}
           </ButtonLink>
         ))}
+        <OrderDrinkButton className={QUICK_BUTTON} />
       </div>
     </section>
   );
@@ -85,8 +96,9 @@ export function CardGrid({ children }: { children: ReactNode[] }) {
   return <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:items-start">{cards}</div>;
 }
 
-/** How many of the given quick actions the person may use (to tell an empty home from a quiet one). */
+/** How many quick actions the person has — "Order a drink" included while the cafeteria is on (to tell an empty home from a quiet one). */
 export function useAllowedCount(actions: QuickAction[]): number {
   const { can } = useAuth();
-  return actions.filter((a) => can(a.permission)).length;
+  const cafeOn = !!useCafeStatus()?.enabled;
+  return actions.filter((a) => can(a.permission)).length + (cafeOn ? 1 : 0);
 }

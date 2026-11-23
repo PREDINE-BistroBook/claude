@@ -13,6 +13,8 @@
 import { blob, index, integer, primaryKey, sqliteTable, text, uniqueIndex, type AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import {
   ATTENDANCE_STATUSES,
+  CAFE_CATEGORIES,
+  CAFE_ORDER_STATUSES,
   CASTING_APPLICATION_STATUSES,
   CASTING_STATUSES,
   CASTING_TYPES,
@@ -835,4 +837,70 @@ export const pushSubscriptions = sqliteTable(
     failures: integer('failures').notNull().default(0),
   },
   (t) => [index('push_subscriptions_user_idx').on(t.userId), index('push_subscriptions_session_idx').on(t.sessionId)],
+);
+
+// ── Cafeteria (Part J) ──────────────────────────────────────────────────────
+
+/** The cafeteria menu. No prices (the school's choice). Shown by category, then sort_order. */
+export const cafeItems = sqliteTable(
+  'cafe_items',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    nameEn: text('name_en').notNull(),
+    nameAr: text('name_ar').notNull(),
+    category: text('category', { enum: CAFE_CATEGORIES }).notNull(),
+    /** Off: still on the menu, greyed out, can't be ordered. */
+    available: integer('available', { mode: 'boolean' }).notNull().default(true),
+    sortOrder: integer('sort_order').notNull().default(0),
+    ...timestamps(),
+  },
+  (t) => [index('cafe_items_category_idx').on(t.category, t.sortOrder)],
+);
+
+/**
+ * A cafeteria order: new → on_the_way → delivered, or cancelled (by the person
+ * who ordered while it is new; by whoever serves, with a reason, while it is
+ * new or on the way). At most 10 an hour per person.
+ */
+export const cafeOrders = sqliteTable(
+  'cafe_orders',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    /** Who ordered. */
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Where it should come: a configured place's English name, or what the person typed (≤ 80). */
+    place: text('place').notNull(),
+    note: text('note'),
+    status: text('status', { enum: CAFE_ORDER_STATUSES }).notNull().default('new'),
+    /** Who last moved it (took it, delivered it or turned it down). */
+    handledById: integer('handled_by_id').references(() => users.id, { onDelete: 'set null' }),
+    /** Why it can't be done, when whoever serves cancelled it (the person who ordered reads it). */
+    cancelReason: text('cancel_reason'),
+    createdAt: integer('created_at').notNull().$defaultFn(now),
+    onTheWayAt: integer('on_the_way_at'),
+    deliveredAt: integer('delivered_at'),
+    cancelledAt: integer('cancelled_at'),
+  },
+  (t) => [index('cafe_orders_status_idx').on(t.status, t.createdAt), index('cafe_orders_user_idx').on(t.userId, t.createdAt)],
+);
+
+/** An order's lines. The item's names are copied when the order is sent, so renaming or deleting a menu item never changes an old order. */
+export const cafeOrderItems = sqliteTable(
+  'cafe_order_items',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    orderId: integer('order_id')
+      .notNull()
+      .references(() => cafeOrders.id, { onDelete: 'cascade' }),
+    itemId: integer('item_id').references(() => cafeItems.id, { onDelete: 'set null' }),
+    nameEn: text('name_en').notNull(),
+    nameAr: text('name_ar').notNull(),
+    /** 1–10. */
+    qty: integer('qty').notNull(),
+    /** How it is wanted ("no sugar"), ≤ 60. */
+    options: text('options'),
+  },
+  (t) => [index('cafe_order_items_order_idx').on(t.orderId)],
 );

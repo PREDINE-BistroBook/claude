@@ -69,6 +69,14 @@ export const PERMISSIONS = [
 
   /** Edit the public website: pages, coaches, workshops shown, casting call, links. */
   'website.manage',
+
+  /**
+   * The cafeteria (/api/cafe): see the orders board, move orders along (on the
+   * way → delivered) or turn one down with a reason, and edit the menu and the
+   * places. The Office helper's permission. Ordering needs no permission: every
+   * signed-in team member can order.
+   */
+  'cafeteria.serve',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -84,6 +92,7 @@ export const PERMISSION_GROUPS = [
   { id: 'admissions', permissions: ['admissions.read', 'admissions.write', 'admissions.decide'] },
   { id: 'money', permissions: ['payments.status', 'payments.manage'] },
   { id: 'website', permissions: ['website.manage'] },
+  { id: 'cafeteria', permissions: ['cafeteria.serve'] },
 ] as const satisfies readonly { id: string; permissions: readonly Permission[] }[];
 
 export type PermissionGroupId = (typeof PERMISSION_GROUPS)[number]['id'];
@@ -112,18 +121,25 @@ export function holdsAll(held: readonly Permission[], needed: readonly Permissio
 
 // ── Built-in positions ──────────────────────────────────────────────────────
 
-/** The Executive Director: everything except money amounts (website.manage since BUILT_IN_GRANTS v2, staff.summon since v3). */
-const ALL_BUT_PAYMENTS_MANAGE = PERMISSIONS.filter((p) => p !== 'payments.manage');
+/**
+ * The Executive Director: everything except money amounts and serving the
+ * cafeteria (website.manage since BUILT_IN_GRANTS v2, staff.summon since v3).
+ * cafeteria.serve is the Office helper's: the director still edits the menu
+ * and the places through settings.manage.
+ */
+const EXECUTIVE_DIRECTOR_PERMISSIONS = PERMISSIONS.filter((p) => p !== 'payments.manage' && p !== 'cafeteria.serve');
 
 /**
- * The school's positions (confirmed 2026-11-22). Created on startup when
- * missing (by `key`); owners may rename them and change what they allow
- * afterwards, but can't delete them.
+ * The school's positions (confirmed 2026-11-22; Reception and Office helper
+ * asked for on 2026-11-23). Created on startup when missing (by `key`) — so a
+ * position added here appears once in a database that already exists; owners
+ * may rename them and change what they allow afterwards, but can't delete
+ * them, and a renamed or changed one is never created again or reset.
  */
 export const BUILT_IN_POSITIONS = [
   { key: 'ceo', name: 'CEO', nameAr: 'الرئيس التنفيذي', isOwner: true, permissions: [...PERMISSIONS] },
   { key: 'cfo', name: 'CFO', nameAr: 'المدير المالي', isOwner: true, permissions: [...PERMISSIONS] },
-  { key: 'executive_director', name: 'Executive Director', nameAr: 'المدير التنفيذي', isOwner: false, permissions: ALL_BUT_PAYMENTS_MANAGE },
+  { key: 'executive_director', name: 'Executive Director', nameAr: 'المدير التنفيذي', isOwner: false, permissions: EXECUTIVE_DIRECTOR_PERMISSIONS },
   {
     key: 'head_of_casting',
     name: 'Head of Casting',
@@ -159,6 +175,11 @@ export const BUILT_IN_POSITIONS = [
     isOwner: false,
     permissions: ['students.read', 'students.contact', 'courses.read', 'classes.all', 'payments.status', 'payments.manage'],
   },
+  // No section permissions yet: the school will say what Reception does. A receptionist already has
+  // what every signed-in team member has: Team, Messages, Alerts, My profile, cafeteria ordering.
+  { key: 'reception', name: 'Reception', nameAr: 'الاستقبال', isOwner: false, permissions: [] },
+  // "Office helper is like the cafeteria, so food and beverage are on him": the orders board and the menu.
+  { key: 'office_helper', name: 'Office helper', nameAr: 'عامل المكتب', isOwner: false, permissions: ['cafeteria.serve'] },
 ] as const satisfies readonly { key: string; name: string; nameAr: string; isOwner: boolean; permissions: readonly Permission[] }[];
 
 export type BuiltInPositionKey = (typeof BUILT_IN_POSITIONS)[number]['key'];
@@ -182,6 +203,10 @@ export const FIRST_OWNER_POSITION: BuiltInPositionKey = 'ceo';
  * Adding a permission to a built-in position: add it to BUILT_IN_POSITIONS
  * above AND append a grant here with the next version number. Never edit or
  * reorder a released entry.
+ *
+ * A NEW built-in position needs no grant: ensureBuiltInPositions creates it
+ * with its full list wherever it is missing (Reception and Office helper,
+ * 2026-11-23: cafeteria.serve came with the Office helper position itself).
  */
 export const BUILT_IN_GRANTS: readonly { version: number; grants: Partial<Record<BuiltInPositionKey, readonly Permission[]>> }[] = [
   { version: 1, grants: { executive_director: ['admissions.read', 'admissions.write', 'admissions.decide'] } },

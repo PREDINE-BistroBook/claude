@@ -14,6 +14,8 @@ What the school asked for, in the order we plan to build it. Update this file as
 
 **Phase 2, step 3 — the team pack — done (2026-11-23):** everyone on the team can put **pictures and files** in the app (profile photos; photos and files on workshops, castings and in messages), **message** anyone else on the team one to one, and the CEO, CFO and Executive Director can **call someone to the office** (a can't-miss banner; "On my way" / "Can't come now"). The **Alerts** bell in every section lists messages and calls — the in-app notification bar the school asked for; the unusual activity alarms (#89) will show up in it when they are built — and they reach phones as push notifications once the operator sets the VAPID keys (README "Phone alerts"). The school asked to say **Team** instead of Staff: there is one **Team** page for everyone (photo, name, positions, Message, Call to the office), which is also where people who manage the team add and edit team members; every screen says "team" / "team member" (الفريق / عضو الفريق); and the app's address is **team.turquoisestudio.app** (staff.turquoisestudio.app forwards to it). Known and left for later: an alert keeps the language it was written in, and the call-to-the-office banner is tall on small phones. Spec: `docs/SECTIONS_AND_WEBSITE.md` (Part G and its amendment).
 
+**Phase 2, step 3 — Reception and Office helper positions; cafeteria orders — done (2026-11-23):** two more built-in positions, **Reception** (الاستقبال) and **Office helper** (عامل المكتب); an existing database gets them once at the next start. Everyone on the team can order tea, coffee or food from the app (**Cafeteria** / البوفيه in every section's menu, "Order a drink" on each section home) and say where it should come; the Office helper's home screen is the **orders board** (On the way → Delivered, or "Can't do this one" with a reason) with a **Menu** tab; alerts both ways, a ring on the open board, a switch in Settings to turn it all off. No prices and no tabs (offered, not chosen). **Reception has no section permissions yet: waiting for the school to say what Reception does.** Spec: `docs/SECTIONS_AND_WEBSITE.md` Part J.
+
 **Next:** the opportunity radar, the AI pack (built switched off until the school says so) and studio email addresses (`docs/SECTIONS_AND_WEBSITE.md` Parts E, F and H); then the rest of step 3 — nightly backup (#88), change history with undo (#99), unusual activity alarms in the Alerts bell (#89), team member leaving checklist (#94), vetting folder (#92). Then step 4 (Sheets import).
 
 ## Decisions so far
@@ -39,6 +41,8 @@ What the school asked for, in the order we plan to build it. Update this file as
 | **Video editor** | Ali El Gohary | Editors' work queue; add photos/videos to student packs and actor profiles; sees names and photos only (no contact details, no money). |
 | **Acting coach** | Moaty, plus more coaches (names to come) | Only their own students and classes: attendance, notes (each note can be marked "visible to student"), scores, highlights. |
 | **Finance** | Moaty | Tuition, payments, reminders, totals, commissions; student/guardian contact details for reminders. |
+| **Reception** *(asked 2026-11-23)* | (name to come) | Nothing in the sections yet: **the school will explain what Reception does.** Meanwhile: Team, Messages, Alerts, cafeteria ordering. |
+| **Office helper** *(asked 2026-11-23)* | (name to come) | "Like the cafeteria: food and beverage are on him" — the cafeteria's orders board and menu. |
 
 Rules that hold for every position: owner accounts are visible and editable only by owners; nobody can give someone (or themselves) a permission they don't hold; holding two positions (Moaty: coach + finance) combines both.
 
@@ -89,6 +93,8 @@ Updated 2026-11-23 with the school's picks from the Idea Board. The numbers in b
 ## Waiting on the school
 
 - Names of the other acting coaches.
+- **What Reception does** (asked 2026-11-23: "the reception guy I need to understand what he does before telling you") — the Reception position exists with no section permissions until then. Also the names of the receptionist and the office helper, to make their accounts.
+- Whether the owners (CEO, CFO) want the alert for every new cafeteria order: today they get it, because owner positions hold every permission, the cafeteria's included.
 - A sample Google Sheet they use today (CSV/Excel export), to map the import.
 - The casting sources to watch (sites, pages, channels).
 - An Anthropic account with a small prepaid credit (the key is added through a secure form, never pasted in chat).

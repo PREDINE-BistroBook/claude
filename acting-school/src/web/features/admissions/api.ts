@@ -104,6 +104,8 @@ export function useAdmissionsSettings(): AppSettings & { ready: boolean } {
     weekStartsOn: s?.weekStartsOn ?? DEFAULT_SETTINGS.weekStartsOn,
     interviewCriteria: s?.interviewCriteria ?? DEFAULT_SETTINGS.interviewCriteria,
     defaultCountryCode: s?.defaultCountryCode ?? DEFAULT_SETTINGS.defaultCountryCode,
+    cafeteriaEnabled: s?.cafeteriaEnabled ?? DEFAULT_SETTINGS.cafeteriaEnabled,
+    cafePlaces: s?.cafePlaces ?? DEFAULT_SETTINGS.cafePlaces,
     ready: !settings.isPending,
   };
 }

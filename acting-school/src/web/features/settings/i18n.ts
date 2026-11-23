@@ -43,6 +43,14 @@ const en = {
     countryCodeHint: 'Digits only, without “+” or leading zeros — e.g. 20 for Egypt.',
     example: '{{local}} opens {{link}}',
   },
+  cafeteria: {
+    title: 'Cafeteria',
+    description: 'Team members order tea, coffee or food from the app, and the office helper brings it. No prices.',
+    switch: 'The cafeteria is on',
+    on: 'Everyone sees “Cafeteria” in their menu and can order.',
+    off: 'Off: nothing about the cafeteria shows in the app, and nobody can order.',
+    editMenu: 'Edit the menu and the places',
+  },
   errors: {
     criterionKey: 'This criterion’s key isn’t valid',
     criterionKeyTaken: 'Two criteria have the same key',
@@ -92,6 +100,14 @@ const ar: TranslationOf<typeof en> = {
     countryCode: 'رمز الاتصال الدولي',
     countryCodeHint: 'أرقام فقط، دون «+» أو أصفار في البداية، مثل 20 لمصر.',
     example: 'الرقم {{local}} يفتح {{link}}',
+  },
+  cafeteria: {
+    title: 'البوفيه',
+    description: 'يطلب أعضاء الفريق الشاي أو القهوة أو الطعام من التطبيق، ويوصّله عامل المكتب. بدون أسعار.',
+    switch: 'البوفيه يعمل',
+    on: 'يظهر «البوفيه» في قائمة الجميع ويمكنهم الطلب.',
+    off: 'متوقف: لا يظهر أي شيء عن البوفيه في التطبيق، ولا يمكن لأحد الطلب.',
+    editMenu: 'تعديل القائمة والأماكن',
   },
   errors: {
     criterionKey: 'مفتاح هذا المعيار غير صالح',

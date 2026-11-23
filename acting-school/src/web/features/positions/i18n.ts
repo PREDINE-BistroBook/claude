@@ -72,6 +72,7 @@ const en = {
     admissions: 'Admissions',
     money: 'Money',
     website: 'Website',
+    cafeteria: 'Cafeteria',
   },
   perm: {
     staff: {
@@ -135,6 +136,13 @@ const en = {
       manage: {
         label: 'Edit the website',
         description: 'Change the public website: studio text and contact details, coaches, which workshops are shown, the casting call and the link-in-bio links.',
+      },
+    },
+    cafeteria: {
+      serve: {
+        label: 'Serve cafeteria orders and manage the menu',
+        description:
+          'The orders board: see what people ordered and where, mark an order “On the way” and “Delivered”, or say why it can’t be done. Also add and change what is on the menu and the places. Ordering itself needs no permission: everyone on the team can order.',
       },
     },
   },
@@ -223,6 +231,7 @@ const ar: TranslationOf<typeof en> = {
     admissions: 'القبول',
     money: 'المال',
     website: 'الموقع',
+    cafeteria: 'البوفيه',
   },
   perm: {
     staff: {
@@ -286,6 +295,13 @@ const ar: TranslationOf<typeof en> = {
       manage: {
         label: 'تعديل الموقع',
         description: 'تغيير الموقع العام: نصوص الاستوديو وبيانات التواصل، والمدربون، والورش المعروضة، وإعلان الكاستينج، وروابط صفحة الروابط.',
+      },
+    },
+    cafeteria: {
+      serve: {
+        label: 'تنفيذ طلبات البوفيه وإدارة القائمة',
+        description:
+          'لوحة الطلبات: معرفة ما طُلب وأين يُسلَّم، وتحديد الطلب بـ«في الطريق» ثم «تم التوصيل»، أو ذكر سبب تعذّر تنفيذه. وكذلك إضافة أصناف القائمة والأماكن وتعديلها. الطلب نفسه لا يحتاج إلى صلاحية: كل أعضاء الفريق يمكنهم الطلب.',
       },
     },
   },

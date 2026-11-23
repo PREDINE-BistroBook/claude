@@ -2,14 +2,14 @@ import type { Namespace, TranslationOf } from '@web/i18n/types';
 
 const en = {
   title: 'Home',
-  noAccess: 'Your account can’t see anything yet',
   empty: {
     title: 'Nothing here for you yet',
     hint: 'Use the menu to open the pages your positions allow.',
   },
   start: {
-    noSection: 'Nothing assigned to you yet',
-    noSectionHint: 'Your positions don’t include the School, Casting or Website sections. Ask whoever manages team accounts if you need them.',
+    /** The small home of someone who sees none of the three sections (Reception, until the school says what it does). */
+    noSection: 'You have no section yet',
+    noSectionHint: 'The School, Casting and Website sections are not part of your position yet. Here is what you can use in the meantime.',
   },
   greeting: {
     morning: 'Good morning, {{name}}',
@@ -81,14 +81,13 @@ const en = {
 
 const ar: TranslationOf<typeof en> = {
   title: 'الرئيسية',
-  noAccess: 'لا يمكن لحسابك رؤية أي شيء بعد',
   empty: {
     title: 'لا شيء لك هنا بعد',
     hint: 'استخدم القائمة لفتح الصفحات التي تسمح بها مناصبك.',
   },
   start: {
-    noSection: 'لم يُخصَّص لك شيء بعد',
-    noSectionHint: 'مناصبك لا تشمل أقسام المدرسة أو الكاستينج أو الموقع. اطلبها ممن يدير حسابات الفريق إن احتجت إليها.',
+    noSection: 'لا يوجد قسم لك بعد',
+    noSectionHint: 'أقسام المدرسة والكاستينج والموقع ليست ضمن منصبك بعد. هذا ما يمكن استخدامه في الوقت الحالي.',
   },
   greeting: {
     morning: 'صباح الخير، {{name}}',

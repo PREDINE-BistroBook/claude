@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { UtensilsCrossed } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LOCALES, type Locale } from '@shared/enums';
@@ -6,6 +7,7 @@ import { COUNTRY_CODE_RE, internationalPhone } from '@shared/phone';
 import { settingsInput, type AppSettings, type SettingsInput } from '@shared/schemas/settings';
 import {
   Button,
+  ButtonLink,
   ErrorState,
   Field,
   FormActions,
@@ -23,6 +25,9 @@ import { api } from '@web/lib/api';
 import { ME_KEY } from '@web/lib/auth';
 import { useFormat } from '@web/lib/format';
 import { useForm } from '@web/lib/forms';
+import { CAFE_MENU_PATH } from '../cafe/utils';
+import { teamKeys } from '../team/api';
+import { BigSwitch } from '../website/components/BigSwitch';
 import { CriteriaEditor, type CriterionDraft } from './CriteriaEditor';
 import { fromDrafts, toDrafts } from './utils';
 
@@ -62,6 +67,8 @@ function SettingsForm({ settings }: { settings: AppSettings }) {
   });
   // Criteria are a list, edited beside the plain fields; errors come back as 'interviewCriteria.<i>.<field>'.
   const [criteria, setCriteria] = useState<CriterionDraft[]>(() => toDrafts(settings.interviewCriteria));
+  // The cafeteria's switch is saved with the rest of the form ("Save changes").
+  const [cafeteriaEnabled, setCafeteriaEnabled] = useState(settings.cafeteriaEnabled);
 
   const save = useMutation({
     mutationFn: (data: SettingsInput) => api.patch<AppSettings>('/settings', data),
@@ -71,21 +78,29 @@ function SettingsForm({ settings }: { settings: AppSettings }) {
       setCriteria(toDrafts(saved.interviewCriteria));
       form.set('defaultCountryCode', saved.defaultCountryCode);
       form.set('schoolNameAr', saved.schoolNameAr ?? '');
+      setCafeteriaEnabled(saved.cafeteriaEnabled);
       toast.success(t('saved'));
-      // The school name (and its Arabic name) in the shell comes from /auth/me; the schedule reads the week start from ['settings'].
-      await Promise.all([qc.invalidateQueries({ queryKey: SETTINGS_KEY }), qc.invalidateQueries({ queryKey: ME_KEY })]);
+      // The school name (and its Arabic name) in the shell comes from /auth/me; the schedule reads the week start from ['settings'];
+      // whether the cafeteria shows in the menus comes with the unread poll (and its pages with ['cafe']).
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: SETTINGS_KEY }),
+        qc.invalidateQueries({ queryKey: ME_KEY }),
+        qc.invalidateQueries({ queryKey: teamKeys.unread }),
+        qc.invalidateQueries({ queryKey: ['cafe'] }),
+      ]);
     },
     onError: form.setServerError,
   });
 
   const interviewCriteria = fromDrafts(criteria);
-  const candidate = { ...form.values, weekStartsOn: Number(form.values.weekStartsOn), interviewCriteria };
+  const candidate = { ...form.values, weekStartsOn: Number(form.values.weekStartsOn), interviewCriteria, cafeteriaEnabled };
   const dirty =
     candidate.schoolName.trim() !== settings.schoolName ||
     (candidate.schoolNameAr.trim() || null) !== settings.schoolNameAr ||
     candidate.defaultLocale !== settings.defaultLocale ||
     candidate.weekStartsOn !== settings.weekStartsOn ||
     candidate.defaultCountryCode.replace(/[\s+]/g, '') !== settings.defaultCountryCode ||
+    cafeteriaEnabled !== settings.cafeteriaEnabled ||
     JSON.stringify(interviewCriteria) !== JSON.stringify(settings.interviewCriteria);
   const code = candidate.defaultCountryCode.replace(/[\s+]/g, '');
   const example = COUNTRY_CODE_RE.test(code) ? internationalPhone('01012345678', code) : null;
@@ -168,6 +183,21 @@ function SettingsForm({ settings }: { settings: AppSettings }) {
           error={form.error('defaultCountryCode')}
           hint={example ? t('whatsapp.example', { local: '01012345678', link: `wa.me/${example}` }) : t('whatsapp.countryCodeHint')}
         />
+      </FormSection>
+
+      <FormSection title={t('cafeteria.title')} description={t('cafeteria.description')}>
+        <BigSwitch
+          checked={cafeteriaEnabled}
+          onChange={setCafeteriaEnabled}
+          label={t('cafeteria.switch')}
+          description={cafeteriaEnabled ? t('cafeteria.on') : t('cafeteria.off')}
+        />
+        {/* The menu editor only opens while the cafeteria is switched on (as saved). */}
+        {settings.cafeteriaEnabled && cafeteriaEnabled && (
+          <ButtonLink to={CAFE_MENU_PATH} icon={UtensilsCrossed} size="lg" className="justify-self-start">
+            {t('cafeteria.editMenu')}
+          </ButtonLink>
+        )}
       </FormSection>
 
       <FormActions>

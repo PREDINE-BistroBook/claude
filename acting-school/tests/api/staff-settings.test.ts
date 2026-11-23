@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 import { authSessions, userPositions, users } from '../../src/server/db/schema';
 import { verifyPassword } from '../../src/server/lib/password';
+import { DEFAULT_CAFE_PLACES } from '../../src/shared/schemas/cafe';
 import { DEFAULT_INTERVIEW_CRITERIA, DEFAULT_SETTINGS } from '../../src/shared/schemas/settings';
 import { makeTestContext, type LegacyRole } from '../helpers';
 
@@ -429,6 +430,8 @@ describe('settings', () => {
       weekStartsOn: 1,
       interviewCriteria: DEFAULT_INTERVIEW_CRITERIA,
       defaultCountryCode: '20',
+      cafeteriaEnabled: true,
+      cafePlaces: DEFAULT_CAFE_PLACES,
     });
   });
 

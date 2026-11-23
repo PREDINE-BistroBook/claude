@@ -570,7 +570,7 @@ describe('/api/admin (operator endpoints)', () => {
     expect(t.db.select().from(students).all()).toEqual([]);
     expect(t.db.select().from(users).all()).toEqual([]);
     expect(t.db.select().from(fileChunks).all()).toEqual([]);
-    expect(t.db.select().from(positions).all().length).toBe(8);
+    expect(t.db.select().from(positions).all().length).toBe(10);
     expect((await t.anon.get('/api/auth/me')).body.needsSetup).toBe(true);
     expect((await owner.get('/api/students')).status).toBe(401);
   });

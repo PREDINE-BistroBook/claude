@@ -30,6 +30,14 @@ const en = {
     teamHintSummon: 'Message or call a team member',
     teamHintManage: 'Message team members, add or edit their accounts',
     teamHintManageSummon: 'Message or call team members, add or edit their accounts',
+    /** The cafeteria (Part J): one entry in the account / "More" menu of every section, for everyone. */
+    cafeteria: 'Cafeteria',
+    /** Under "Cafeteria" in the phone's More sheet, by what the person does there. */
+    cafeteriaHint: 'Order tea, coffee or something to eat',
+    cafeteriaHintServe: 'The orders board, the menu, and your own order',
+    /** The Office helper's own menu (someone who serves and has no section): the board and the menu editor. */
+    cafeBoard: 'Orders',
+    cafeMenu: 'Menu',
     messages: 'Messages',
     more: 'More',
     admin: 'Administration',
@@ -277,7 +285,7 @@ const en = {
     whatYouCanDo: 'What you can do',
     whatYouCanDoHint: 'Everything your positions allow, added together.',
     ownerEverything: 'You hold an owner position: you can do everything, including team accounts, positions and all money.',
-    nothingYet: 'Your positions don’t allow anything yet. Ask whoever manages team accounts.',
+    nothingYet: 'Your positions don’t open any section yet. Like everyone on the team, you can still use Team, Messages and Alerts.',
   },
   noAccess: {
     title: 'No access',
@@ -312,6 +320,11 @@ const ar: TranslationOf<typeof en> = {
     teamHintSummon: 'مراسلة عضو في الفريق أو استدعاؤه',
     teamHintManage: 'مراسلة أعضاء الفريق وإضافة حساباتهم وتعديلها',
     teamHintManageSummon: 'مراسلة أعضاء الفريق أو استدعاؤهم، وإضافة حساباتهم وتعديلها',
+    cafeteria: 'البوفيه',
+    cafeteriaHint: 'طلب شاي أو قهوة أو شيء يؤكل',
+    cafeteriaHintServe: 'لوحة الطلبات والقائمة وطلبك الخاص',
+    cafeBoard: 'الطلبات',
+    cafeMenu: 'القائمة',
     messages: 'الرسائل',
     more: 'المزيد',
     admin: 'الإدارة',
@@ -563,7 +576,7 @@ const ar: TranslationOf<typeof en> = {
     whatYouCanDo: 'ما يمكنك فعله',
     whatYouCanDoHint: 'كل ما تسمح به مناصبك مجتمعةً.',
     ownerEverything: 'تشغل منصب مالك: يمكنك فعل كل شيء، بما في ذلك حسابات الفريق والمناصب وكل الأمور المالية.',
-    nothingYet: 'مناصبك لا تسمح بأي شيء بعد. اطلب ذلك ممن يدير حسابات الفريق.',
+    nothingYet: 'مناصبك لا تفتح أي قسم بعد. ومثل كل أعضاء الفريق، يمكن استخدام «الفريق» و«الرسائل» و«التنبيهات».',
   },
   noAccess: {
     title: 'لا توجد صلاحية',
