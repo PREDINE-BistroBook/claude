@@ -1,5 +1,5 @@
 import { Clapperboard, Globe, School, type LucideIcon } from 'lucide-react';
-import type { Permission } from '@shared/permissions';
+import { SECTION_PERMISSIONS, type Permission } from '@shared/permissions';
 
 /**
  * The staff app's three sections, switched with the tabs at the top
@@ -17,7 +17,7 @@ export interface Section {
   icon: LucideIcon;
   /** Key in the common namespace. */
   labelKey: `sections.${SectionKey}`;
-  /** Shown to anyone holding at least one of these. */
+  /** Shown to anyone holding at least one of these (SECTION_PERMISSIONS in shared/permissions.ts: the server reads the same lists). */
   anyPermission: readonly Permission[];
   /** Paths that belong to the section: the prefix itself or anything under it ("/talent", "/talent/12"). */
   prefixes: readonly string[];
@@ -29,7 +29,7 @@ export const SECTIONS: readonly Section[] = [
     home: '/school',
     icon: School,
     labelKey: 'sections.school',
-    anyPermission: ['courses.read', 'students.read', 'admissions.read'],
+    anyPermission: SECTION_PERMISSIONS.school,
     prefixes: ['/school', '/schedule', '/admissions', '/students', '/classes', '/sessions'],
   },
   {
@@ -37,7 +37,7 @@ export const SECTIONS: readonly Section[] = [
     home: '/casting',
     icon: Clapperboard,
     labelKey: 'sections.casting',
-    anyPermission: ['talent.read', 'castings.read'],
+    anyPermission: SECTION_PERMISSIONS.casting,
     // "/casting" covers /casting/schedule and /casting/applications.
     prefixes: ['/casting', '/talent', '/castings'],
   },
@@ -46,7 +46,7 @@ export const SECTIONS: readonly Section[] = [
     home: '/website',
     icon: Globe,
     labelKey: 'sections.website',
-    anyPermission: ['website.manage'],
+    anyPermission: SECTION_PERMISSIONS.website,
     prefixes: ['/website'],
   },
 ];

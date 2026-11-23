@@ -1,20 +1,20 @@
 import clsx from 'clsx';
-import { CircleCheck, CircleX, Coffee, Footprints, Hourglass, MapPin, Minus, Plus, RotateCcw, Send, UtensilsCrossed, type LucideIcon } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { CircleCheck, CircleX, Coffee, Footprints, Hourglass, Info, MapPin, Minus, Plus, RotateCcw, Send, TriangleAlert, UtensilsCrossed, type LucideIcon } from 'lucide-react';
+import { forwardRef, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router';
 import type { CafeOrderStatus } from '@shared/enums';
-import { MAX_CAFE_NOTE, MAX_CAFE_OPTIONS, MAX_CAFE_PLACE, type CafeItem, type CafeMenu, type CafeOrder } from '@shared/schemas/cafe';
+import { CAFE_OPTION_CHIPS, MAX_CAFE_NOTE, MAX_CAFE_OPTIONS, MAX_CAFE_PLACE, type CafeItem, type CafeMenu, type CafeOptionChipKey, type CafeOrder } from '@shared/schemas/cafe';
 import { Button, ButtonLink, Card, ConfirmDialog, EmptyState, ErrorState, FormActions, Input, PageHeader, PageLoader, Textarea, useToast } from '@web/components/ui';
 import { ApiError } from '@web/lib/api';
 import { useAuth } from '@web/lib/auth';
 import { useFormat } from '@web/lib/format';
 import { clockOf, isolate } from '../team/utils';
 import { cafeErrorKey, useCafeMenu, useCancelMyOrder, useMyCafeOrders, useSendOrder } from './api';
-import { CafeGate, CafeTabs, OrderLines, useCafeNames } from './components/CafeParts';
+import { CafeGate, CafeTabs, OrderLines, WRAP_ANYWHERE, useCafeNames } from './components/CafeParts';
 import {
   CAFE_MENU_PATH,
-  OTHER_PLACE,
+  activeOptionChips,
   addOne,
   addVariant,
   canAddLine,
@@ -25,12 +25,14 @@ import {
   initialPlace,
   linesOf,
   menuGroups,
+  optionChipsFor,
   orderIdFrom,
   orderProblem,
   removeOne,
   setOptions,
   splitMyOrders,
   toOrderInput,
+  toggleOptionChip,
   type DraftLine,
   type PlaceChoice,
 } from './utils';
@@ -59,6 +61,7 @@ function OrderScreen() {
   const { t } = useTranslation(['cafe', 'common']);
   const { can } = useAuth();
   const toast = useToast();
+  const { placeLabel } = useCafeNames();
   const { search } = useLocation();
   const menu = useCafeMenu();
   const mine = useMyCafeOrders(true, (orders) => orders.some((o) => o.status === 'new' || o.status === 'on_the_way'));
@@ -70,7 +73,16 @@ function OrderScreen() {
   const [note, setNote] = useState('');
   // Said only after a tap on "Send order" with something missing: no red text before the person has tried.
   const [problemShown, setProblemShown] = useState(false);
+  // A sentence in the sticky bar, right above "Send order" (never a toast over the button it talks about).
+  const [notice, setNotice] = useState<{ tone: 'info' | 'error'; text: string } | null>(null);
   const formRef = useRef<HTMLDivElement>(null);
+  const placeRef = useRef<HTMLElement>(null);
+  /** Brings "Where should we bring it?" to the middle of the screen, with the chosen place (or the first) ready to tap. */
+  const showPlaces = () => {
+    placeRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    const target = placeRef.current?.querySelector<HTMLElement>('[role=radio][aria-checked=true]') ?? placeRef.current?.querySelector<HTMLElement>('[role=radio]');
+    target?.focus({ preventScroll: true });
+  };
 
   const items = menu.data?.items;
   const latestDraft = useRef(draft);
@@ -81,8 +93,8 @@ function OrderScreen() {
     const next = dropUnavailable(latestDraft.current, items);
     if (!next.dropped) return;
     setDraft(next.draft);
-    toast.error(t('order.dropped'));
-  }, [items, toast, t]);
+    setNotice({ tone: 'error', text: t('order.dropped') });
+  }, [items, t]);
 
   if (menu.isPending) return <PageLoader />;
   if (menu.isError || !menu.data) return <ErrorState error={menu.error} onRetry={() => void menu.refetch()} />;
@@ -96,6 +108,9 @@ function OrderScreen() {
     const input = toOrderInput(draft, place, note);
     if (!input) {
       setProblemShown(true);
+      setNotice(null);
+      // Nothing to tap where the person is looking otherwise: the places are below the whole menu.
+      if (problem === 'place') showPlaces();
       return;
     }
     send.mutate(input, {
@@ -104,6 +119,7 @@ function OrderScreen() {
         setDraft([]);
         setNote('');
         setProblemShown(false);
+        setNotice(null);
         window.scrollTo({ top: 0 });
       },
       onError: (err) => {
@@ -111,8 +127,8 @@ function OrderScreen() {
           // Something was switched off a moment ago: off the order it goes, and the menu is read again.
           const gone = new Set((err.details as { itemIds?: number[] } | undefined)?.itemIds ?? []);
           setDraft((lines) => lines.filter((l) => !gone.has(l.itemId)));
-          toast.error(t('order.dropped'));
-        } else toast.error(t(cafeErrorKey(err)));
+          setNotice({ tone: 'error', text: t('order.dropped') });
+        } else setNotice({ tone: 'error', text: t(cafeErrorKey(err)) });
       },
     });
   };
@@ -120,16 +136,17 @@ function OrderScreen() {
   const again = (order: CafeOrder) => {
     const next = draftFromOrder(order, data.items);
     if (!next.draft.length) {
-      toast.error(t('mine.againNothing'));
+      setNotice({ tone: 'error', text: t('mine.againNothing') });
       return;
     }
     setDraft(next.draft);
     setPlaceTouched(initialPlace(order.place, data.places));
     setNote(order.note ?? '');
     setProblemShown(false);
-    toast.success(t(next.skipped ? 'mine.againSome' : 'mine.againAdded'));
+    setNotice({ tone: next.skipped ? 'error' : 'info', text: t(next.skipped ? 'mine.againSome' : 'mine.againAdded') });
     formRef.current?.scrollIntoView({ block: 'start' });
   };
+  const chosen = chosenPlace(place);
 
   return (
     <div className="space-y-6">
@@ -170,7 +187,7 @@ function OrderScreen() {
             ))}
           </Card>
 
-          <PlacePicker places={data.places} value={place} onChange={setPlaceTouched} invalid={problemShown && problem === 'place'} />
+          <PlacePicker ref={placeRef} places={data.places} value={place} onChange={setPlaceTouched} invalid={problemShown && problem === 'place'} />
 
           <Card>
             <label htmlFor="cafe-note" className="mb-1.5 block text-base font-semibold text-ink">
@@ -179,10 +196,26 @@ function OrderScreen() {
             <Textarea id="cafe-note" rows={2} maxLength={MAX_CAFE_NOTE} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('order.notePlaceholder')} dir="auto" />
           </Card>
 
-          <FormActions className="flex-col items-stretch sm:flex-row sm:items-center sm:justify-end">
-            {!canAddLine(draft) && <p className="text-sm font-medium text-ink sm:me-auto">{t('order.full')}</p>}
+          <FormActions className="flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+            {/* Where it goes, always in sight before "Send order" — with the way to change it. */}
+            <div className={clsx('flex min-w-0 items-center justify-between gap-2 sm:me-auto', WRAP_ANYWHERE)}>
+              <p className={clsx('flex min-w-0 items-center gap-1.5 text-base font-semibold', chosen ? 'text-ink' : 'text-muted')}>
+                <MapPin className="size-5 shrink-0" aria-hidden />
+                <span className="min-w-0">{chosen ? t('order.bringTo', { place: isolate(placeLabel(chosen)) }) : t('order.bringToNone')}</span>
+              </p>
+              <Button size="lg" variant="ghost" onClick={showPlaces} className="shrink-0 px-3 text-accent">
+                {chosen ? t('order.change') : t('order.choose')}
+              </Button>
+            </div>
+            {!canAddLine(draft) && <p className="text-sm font-medium text-ink sm:basis-full">{t('order.full')}</p>}
+            {notice && !(problemShown && problem) && (
+              <p role="status" className={clsx('flex items-start gap-2 text-sm font-medium sm:basis-full', notice.tone === 'error' ? 'text-danger' : 'text-ink')}>
+                {notice.tone === 'error' ? <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden /> : <Info className="mt-0.5 size-4 shrink-0 text-accent" aria-hidden />}
+                {notice.text}
+              </p>
+            )}
             {problemShown && problem && (
-              <p role="alert" className="text-sm font-medium text-danger sm:me-auto">
+              <p role="alert" className="text-sm font-medium text-danger sm:basis-full">
                 {t(problem === 'nothing' ? 'order.chooseSomething' : 'order.choosePlace')}
               </p>
             )}
@@ -220,7 +253,7 @@ function StatusCard({ order, onAgain }: { order: CafeOrder; onAgain: () => void 
   const { t } = useTranslation(['cafe', 'common']);
   const f = useFormat();
   const toast = useToast();
-  const { placeLabel } = useCafeNames();
+  const { placeLabel, reasonLabel } = useCafeNames();
   const cancel = useCancelMyOrder();
   const [confirm, setConfirm] = useState(false);
   const look = STATUS_LOOK[order.status];
@@ -228,12 +261,12 @@ function StatusCard({ order, onAgain }: { order: CafeOrder; onAgain: () => void 
 
   let hint: string;
   if (order.status === 'new') hint = t('status.newHint');
-  else if (order.status === 'on_the_way') hint = order.handledBy ? t('status.onTheWayHint', { name: isolate(order.handledBy.name) }) : '';
+  else if (order.status === 'on_the_way') hint = order.handledBy ? t('status.onTheWayHint', { name: isolate(order.handledBy.name) }) : t('status.onTheWayHintNoName');
   else if (order.status === 'delivered') hint = t('status.deliveredHint', { time: f.time(clockOf(order.deliveredAt ?? order.createdAt)) });
-  else hint = order.cancelReason ? t('status.cancelledReason', { reason: isolate(order.cancelReason) }) : t('status.cancelledByYou');
+  else hint = order.cancelReason ? t('status.cancelledReason', { reason: isolate(reasonLabel(order.cancelReason)) }) : t('status.cancelledByYou');
 
   return (
-    <article className={clsx('rounded-2xl border-2 p-4 sm:p-5', look.box)}>
+    <article className={clsx('rounded-2xl border-2 p-4 sm:p-5', look.box, WRAP_ANYWHERE)}>
       <div className="flex items-start gap-3" role="status">
         <span className={clsx('flex size-12 shrink-0 items-center justify-center rounded-xl', look.tile)} aria-hidden>
           <look.icon className="size-6" />
@@ -245,13 +278,12 @@ function StatusCard({ order, onAgain }: { order: CafeOrder; onAgain: () => void 
       </div>
       <div className="mt-4 rounded-xl bg-surface p-3">
         <OrderLines lines={order.items} />
-        <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
-          <span className="inline-flex items-center gap-1">
-            <MapPin className="size-4 shrink-0" aria-hidden />
-            {t('status.to', { place: isolate(placeLabel(order.place)) })}
-          </span>
-          <span>{t('status.sentAt', { time: f.time(clockOf(order.createdAt)) })}</span>
+        {/* Where it is going, as plainly as what: a wrong place is the mistake worth catching. */}
+        <p className="mt-2 flex items-start gap-1.5 text-base font-semibold text-ink">
+          <MapPin className="mt-0.5 size-5 shrink-0 text-muted" aria-hidden />
+          <span className="min-w-0">{t('status.to', { place: isolate(placeLabel(order.place)) })}</span>
         </p>
+        <p className="mt-1 text-sm text-muted">{t('status.sentAt', { time: f.time(clockOf(order.createdAt)) })}</p>
         {order.note && (
           <p className="mt-1 text-sm text-muted">
             {t('status.noteLabel')}: <bdi>{order.note}</bdi>
@@ -273,6 +305,7 @@ function StatusCard({ order, onAgain }: { order: CafeOrder; onAgain: () => void 
         title={t('mine.cancelTitle')}
         message={t('mine.cancelMessage')}
         confirmLabel={t('mine.cancelYes')}
+        cancelLabel={t('mine.keep')}
         loading={cancel.isPending}
         onCancel={() => setConfirm(false)}
         onConfirm={() =>
@@ -294,7 +327,7 @@ function RecentRow({ order, onAgain }: { order: CafeOrder; onAgain: () => void }
   const { placeLabel } = useCafeNames();
   const when = order.deliveredAt ?? order.cancelledAt ?? order.createdAt;
   return (
-    <li className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:px-5">
+    <li className={clsx('flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:px-5', WRAP_ANYWHERE)}>
       <div className="min-w-0 flex-1">
         <OrderLines lines={order.items} />
         <p className="mt-1 text-sm text-muted">
@@ -317,9 +350,11 @@ function RecentRow({ order, onAgain }: { order: CafeOrder; onAgain: () => void }
 /** One menu item: its name, − / +, and once it is on the order how it is wanted — plus a second line for one made differently. */
 function MenuRow({ item, draft, onChange }: { item: CafeItem; draft: DraftLine[]; onChange: (next: DraftLine[]) => void }) {
   const { t } = useTranslation(['cafe', 'common']);
-  const { itemName } = useCafeNames();
+  const { itemName, language } = useCafeNames();
   const name = itemName(item);
   const lines = linesOf(draft, item.id);
+  const chips = optionChipsFor(item.category);
+  const hot = chips.length > 0;
 
   if (!item.available)
     return (
@@ -352,15 +387,16 @@ function MenuRow({ item, draft, onChange }: { item: CafeItem; draft: DraftLine[]
           {line && (
             <div className="mt-2">
               <label htmlFor={`how-${line.key}`} className="mb-1 block text-sm font-medium text-ink">
-                {t('order.how')} <span className="font-normal text-muted">({t('common:states.optional')})</span>
+                {t(hot ? 'order.howHot' : 'order.how')} <span className="font-normal text-muted">({t('common:states.optional')})</span>
                 <span className="sr-only"> {name}</span>
               </label>
+              {chips.length > 0 && <OptionChips line={line} onToggle={(key) => onChange(setOptions(draft, line.key, toggleOptionChip(line.options, key, language)))} />}
               <Input
                 id={`how-${line.key}`}
                 value={line.options}
                 maxLength={MAX_CAFE_OPTIONS}
                 onChange={(e) => onChange(setOptions(draft, line.key, e.target.value))}
-                placeholder={t('order.howPlaceholder')}
+                placeholder={t(hot ? 'order.howHotPlaceholder' : 'order.howPlaceholder')}
                 dir="auto"
               />
             </div>
@@ -378,6 +414,38 @@ function MenuRow({ item, draft, onChange }: { item: CafeItem; draft: DraftLine[]
         </button>
       )}
     </li>
+  );
+}
+
+/**
+ * Sugar and milk in one tap on a hot drink: «سادة», «على الريحة», «مضبوط»,
+ * «سكر زيادة» (one sugar level at a time) and «باللبن». A tap writes the
+ * words into the field below — which stays the person's to edit — and each
+ * reader (the Office helper included) sees them in their own language.
+ */
+function OptionChips({ line, onToggle }: { line: DraftLine; onToggle: (key: CafeOptionChipKey) => void }) {
+  const { t, i18n } = useTranslation(['cafe']);
+  const active = activeOptionChips(line.options);
+  return (
+    <div role="group" aria-label={t('order.quickChoices')} className="mb-2 flex flex-wrap gap-2">
+      {CAFE_OPTION_CHIPS.map((chip) => {
+        const on = active.has(chip.key);
+        return (
+          <button
+            key={chip.key}
+            type="button"
+            aria-pressed={on}
+            onClick={() => onToggle(chip.key)}
+            className={clsx(
+              'inline-flex min-h-12 items-center rounded-full border-2 px-4 text-base font-semibold transition-colors',
+              on ? 'border-accent bg-accent text-accent-ink' : 'border-line-strong bg-surface text-ink hover:bg-surface-2',
+            )}
+          >
+            {i18n.language === 'ar' ? chip.ar : chip.en}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -403,27 +471,39 @@ function Stepper({ name, qty, canAdd, onAdd, onRemove }: { name: string; qty: nu
 
 // ── Where should it come? ───────────────────────────────────────────────────
 
-function PlacePicker({ places, value, onChange, invalid }: { places: CafeMenu['places']; value: PlaceChoice; onChange: (next: PlaceChoice) => void; invalid: boolean }) {
+const PlacePicker = forwardRef<HTMLElement, { places: CafeMenu['places']; value: PlaceChoice; onChange: (next: PlaceChoice) => void; invalid: boolean }>(function PlacePicker(
+  { places, value, onChange, invalid },
+  ref,
+) {
   const { t, i18n } = useTranslation(['cafe']);
   const option = (active: boolean) =>
     clsx(
       'flex min-h-14 items-center justify-center rounded-xl border-2 px-3 py-2 text-center text-base font-semibold leading-tight transition-colors',
+      WRAP_ANYWHERE,
       active ? 'border-accent bg-accent text-accent-ink' : 'border-line-strong bg-surface text-ink hover:bg-surface-2',
     );
-  const other = value.pick === OTHER_PLACE;
+  const other = value.elsewhere;
+  const picked = (p: CafeMenu['places'][number]) => !other && value.pick === p.en;
   return (
-    <section aria-labelledby="cafe-place" className={clsx('rounded-2xl border bg-surface p-4 sm:p-5', invalid ? 'border-danger' : 'border-line')}>
+    <section ref={ref} aria-labelledby="cafe-place" className={clsx('scroll-mb-48 rounded-2xl border bg-surface p-4 sm:p-5', invalid ? 'border-danger' : 'border-line')}>
       <h2 id="cafe-place" className="mb-3 flex items-center gap-2 text-base font-semibold text-ink">
         <MapPin className="size-5 shrink-0 text-muted" aria-hidden />
         {t('order.placeTitle')}
       </h2>
       <div role="radiogroup" aria-labelledby="cafe-place" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {places.map((p, i) => (
-          <button key={`${i}-${p.en}`} type="button" role="radio" aria-checked={value.pick === p.en} onClick={() => onChange({ pick: p.en, other: value.other })} className={option(value.pick === p.en)}>
+          <button
+            key={`${i}-${p.en}`}
+            type="button"
+            role="radio"
+            aria-checked={picked(p)}
+            onClick={() => onChange({ pick: p.en, elsewhere: false, other: value.other })}
+            className={option(picked(p))}
+          >
             <bdi>{i18n.language === 'ar' ? p.ar : p.en}</bdi>
           </button>
         ))}
-        <button type="button" role="radio" aria-checked={other} onClick={() => onChange({ pick: OTHER_PLACE, other: value.other })} className={option(other)}>
+        <button type="button" role="radio" aria-checked={other} onClick={() => onChange({ ...value, elsewhere: true })} className={option(other)}>
           {t('order.somewhereElse')}
         </button>
       </div>
@@ -436,7 +516,7 @@ function PlacePicker({ places, value, onChange, invalid }: { places: CafeMenu['p
             id="cafe-place-other"
             value={value.other}
             maxLength={MAX_CAFE_PLACE}
-            onChange={(e) => onChange({ pick: OTHER_PLACE, other: e.target.value })}
+            onChange={(e) => onChange({ ...value, elsewhere: true, other: e.target.value })}
             placeholder={t('order.placeOtherPlaceholder')}
             dir="auto"
             aria-invalid={invalid && !chosenPlace(value) ? true : undefined}
@@ -445,4 +525,4 @@ function PlacePicker({ places, value, onChange, invalid }: { places: CafeMenu['p
       )}
     </section>
   );
-}
+});

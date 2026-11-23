@@ -11,7 +11,6 @@ import {
   PERMISSIONS,
   effectivePermissions,
   holdsAll,
-  reachOf,
   normalizePermissions,
   type Permission,
 } from '../../shared/permissions';
@@ -185,9 +184,9 @@ export function toSessionUser(db: Pick<DB, 'select'>, u: typeof users.$inferSele
   return { id: u.id, email: u.email, name: u.name, phone: u.phone, locale: u.locale, photoFileId: u.photoFileId, ...loadUserAccess(db, u.id) };
 }
 
-/** Owners may do anything; everyone else may only touch what they could do themselves (their reach: `reachOf` in shared/permissions.ts). */
+/** Owners may do anything; everyone else may only touch what they could do themselves. */
 export function withinAccess(actor: Actor, needed: readonly Permission[]): boolean {
-  return actor.isOwner || holdsAll(reachOf(actor.permissions), needed);
+  return actor.isOwner || holdsAll(actor.permissions, needed);
 }
 
 /**

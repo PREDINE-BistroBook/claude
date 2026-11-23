@@ -8,8 +8,8 @@ import { makeTestContext } from '../helpers';
 
 type Ctx = Awaited<ReturnType<typeof makeTestContext>>;
 const byKey = (items: Position[], key: string) => items.find((p) => p.key === key)!;
-/** The Executive Director's built-in list: everything but money amounts and serving the cafeteria (the Office helper's). */
-const ALL_BUT_MONEY = PERMISSIONS.filter((p) => p !== 'payments.manage' && p !== 'cafeteria.serve');
+/** The Executive Director's built-in list: everything but money amounts and the owners' monthly cafeteria page (she serves the cafeteria since grant v4). */
+const ALL_BUT_MONEY = PERMISSIONS.filter((p) => p !== 'payments.manage' && p !== 'cafeteria.report');
 const POSITION_KEYS = ['id', 'key', 'name', 'nameAr', 'isOwner', 'permissions', 'sortOrder', 'holderCount', 'editable', 'assignable', 'createdAt', 'updatedAt'].sort();
 const holders = (t: Ctx, positionId: number) =>
   t.db.select().from(userPositions).where(eq(userPositions.positionId, positionId)).all().length;

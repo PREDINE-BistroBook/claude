@@ -9,6 +9,7 @@ import { PermissionSummary } from '../features/positions/components/PermissionLi
 import { PositionChips } from '../features/staff/components/bits';
 import { teamErrorKey, teamKeys } from '../features/team/api';
 import { PushCard } from '../features/team/components/PushCard';
+import { useCafeStatus } from '../features/cafe/api';
 import { setLanguage } from '../i18n';
 import { api } from '../lib/api';
 import { discardUpload } from '../lib/files';
@@ -21,6 +22,7 @@ export default function ProfilePage() {
   const { user, refresh } = useAuth();
   const toast = useToast();
   const qc = useQueryClient();
+  const cafeOn = !!useCafeStatus()?.enabled;
   const details = useForm({ name: user?.name ?? '', phone: user?.phone ?? '', locale: (user?.locale ?? 'en') as Locale });
   const pw = useForm({ currentPassword: '', newPassword: '' });
 
@@ -84,7 +86,7 @@ export default function ProfilePage() {
           ) : user.permissions.length ? (
             <PermissionSummary permissions={user.permissions} />
           ) : (
-            <p className="text-sm text-muted">{t('profile.nothingYet')}</p>
+            <p className="text-sm text-muted">{t(cafeOn ? 'profile.nothingYetCafe' : 'profile.nothingYet')}</p>
           )}
         </Card>
 

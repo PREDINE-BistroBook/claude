@@ -35,7 +35,9 @@
  * The cafeteria: an order from start to delivered on the Office helper's
  * board (new → on the way → delivered, one step at a time, alerts both ways),
  * a coach and Reception can order but can't see anyone else's order or move
- * one, an unavailable item, and the Settings switch that turns it all off.
+ * one, only the helper is alerted (not the director or the owners, who can
+ * open the board), the owners' monthly page, an unavailable item, and the
+ * Settings switch that turns it all off.
  * Exit code 1 on the first failure. Local only (scripts/cf-local.ts).
  */
 import { spawnSync } from 'node:child_process';
@@ -491,9 +493,17 @@ export async function runApiSmoke(base: string, opts: { adminToken: string; pass
   check(newOrderAlert?.title === 'طلب جديد من Dalia Fathy' && newOrderAlert.body.includes('استوديو 1') && newOrderAlert.body.includes('شاي'), `the helper’s alert is in Arabic (${newOrderAlert?.title})`);
   check((expectStatus(await helper.get('/api/cafe/orders?status=new'), 200, 'new orders').body.items as { id: number }[]).some((o) => o.id === cafeOrder.id), 'it is on the board');
   // Nobody else sees it or moves it.
-  for (const [who, c] of [['a coach', coach], ['Reception', reception], ['the director', director]] as const) {
+  for (const [who, c] of [['a coach', coach], ['Reception', reception]] as const) {
     expectStatus(await c.get('/api/cafe/orders'), 403, `${who} has no board`);
     expectStatus(await c.post(`/api/cafe/orders/${cafeOrder.id}/status`, { status: 'on_the_way' }), 403, `${who} can’t move an order`);
+  }
+  // The director (cafeteria.serve since grant v4) and the owners can open the board, but only the Office helper is alerted.
+  const directorMe = expectStatus(await director.get('/api/auth/me'), 200, 'director me').body.user;
+  check(directorMe.permissions.includes('cafeteria.serve') && !directorMe.permissions.includes('cafeteria.report'), 'the director serves (grant v4) and has no monthly page');
+  expectStatus(await director.get('/api/cafe/orders'), 200, 'the director can open the board');
+  for (const [who, c] of [['the owner', owner], ['the director', director]] as const) {
+    const items = expectStatus(await c.get('/api/notifications'), 200, `${who} notifications`).body.items as { kind: string }[];
+    check(!items.some((n) => n.kind === 'cafe_order'), `${who} gets no new-order alert`);
   }
   expectStatus(await coach.post(`/api/cafe/orders/${cafeOrder.id}/cancel`), 404, 'a coach can’t cancel someone else’s order');
   check(!(expectStatus(await coach.get('/api/cafe/orders/mine'), 200, 'the coach’s own orders').body.items as { id: number }[]).some((o) => o.id === cafeOrder.id), 'a coach doesn’t see the director’s order');
@@ -529,6 +539,19 @@ export async function runApiSmoke(base: string, opts: { adminToken: string; pass
       'Sorry, the cafeteria is busy right now',
     'a ready-made reason is stored by its English words',
   );
+
+  // The owners' monthly page: the delivered teas are counted for the director; cancelled orders are not; owners only.
+  const report = expectStatus(await owner.get('/api/cafe/report'), 200, 'the monthly page').body as {
+    month: string;
+    people: { person: { name: string }; items: { nameEn: string; qty: number }[] }[];
+    totals: { nameEn: string; qty: number }[];
+  };
+  const dalia = report.people.find((p) => p.person.name === 'Dalia Fathy');
+  check(/^\d{4}-\d{2}$/.test(report.month) && (dalia?.items.find((i) => i.nameEn === 'Tea')?.qty ?? 0) >= 2, `the director’s two teas are on this month’s page (${JSON.stringify(dalia?.items)})`);
+  check(!report.people.some((p) => p.items.some((i) => i.nameEn === 'Juice')), 'the turned-down juice is not counted');
+  check(!JSON.stringify(report).includes('price'), 'no prices on the monthly page');
+  for (const [who, c] of [['the director', director], ['the helper', helper], ['a coach', coach]] as const) expectStatus(await c.get('/api/cafe/report'), 403, `${who} has no monthly page`);
+  expectStatus(await owner.get('/api/cafe/report?month=2026-13'), 400, 'a month that is not one');
 
   // Someone who leaves the team: their open order is cancelled ("No longer on the team") and leaves the board.
   const leaverOrder = expectStatus(await reception.post('/api/cafe/orders', { place: 'Reception', items: [{ itemId: water.id, qty: 1 }] }), 201, 'Reception orders again').body;

@@ -10,6 +10,7 @@ import * as schema from '../../src/server/db/schema';
 import { cafeItems, cafeOrderItems, cafeOrders, notifications, positions, settings, userPositions, users } from '../../src/server/db/schema';
 import { WIPE_ORDER, wipeAllData } from '../../src/server/db/wipe';
 import { builtInGrantsVersion, ensureBuiltInPositions } from '../../src/server/lib/access';
+import { epochAt } from '../../src/server/lib/clock';
 import { generateVapidKeys } from '../../src/server/lib/push/keys';
 import { durableObjectLimits, insertBatches } from '../../src/server/lib/sqlLimits';
 import {
@@ -19,6 +20,8 @@ import {
   LATEST_BUILT_IN_GRANTS_VERSION,
   PERMISSIONS,
   PERMISSION_GROUPS,
+  SECTION_PERMISSIONS,
+  servesFromBoard,
 } from '../../src/shared/permissions';
 import {
   CAFE_ORDERS_PER_HOUR,
@@ -28,15 +31,18 @@ import {
   USUAL_CAFE_ITEMS,
   cafeLinesSummary,
   cafePlaceLabel,
+  shiftCafeMonth,
   storedCafePlace,
   type CafeItem,
   type CafeMenu,
   type CafeOrder,
+  type CafeReport,
+  type CafeReportLine,
 } from '../../src/shared/schemas/cafe';
 import type { ChatUnreadResponse } from '../../src/shared/schemas/chat';
 import type { NotificationsResponse } from '../../src/shared/schemas/notifications';
 import type { Position } from '../../src/shared/schemas/positions';
-import { makeTestContext, type Client } from '../helpers';
+import { makeTestContext, todayISO, type Client } from '../helpers';
 import { fakeBrowser, pushRecorder } from '../pushHelpers';
 
 /**
@@ -75,15 +81,33 @@ describe('Reception and Office helper: two more built-in positions', () => {
     expect(builtIn('office_helper')).toEqual({ key: 'office_helper', name: 'Office helper', nameAr: 'عامل المكتب', isOwner: false, permissions: ['cafeteria.serve'] });
   });
 
-  it('cafeteria.serve: its own group; owners hold it by definition; the Executive Director does not get it; no upgrade grant was needed', () => {
+  it('cafeteria.serve and cafeteria.report: their own group; owners hold both; the Executive Director serves (grant v4, D2) but has no monthly page; nobody else gets either', () => {
     expect(PERMISSIONS).toContain('cafeteria.serve');
-    expect(PERMISSION_GROUPS.find((g) => g.id === 'cafeteria')?.permissions).toEqual(['cafeteria.serve']);
+    expect(PERMISSIONS).toContain('cafeteria.report');
+    expect(PERMISSION_GROUPS.find((g) => g.id === 'cafeteria')?.permissions).toEqual(['cafeteria.serve', 'cafeteria.report']);
     for (const p of BUILT_IN_POSITIONS) {
-      expect((p.permissions as readonly string[]).includes('cafeteria.serve'), p.key).toBe(p.isOwner || p.key === 'office_helper');
+      const held = p.permissions as readonly string[];
+      expect(held.includes('cafeteria.serve'), p.key).toBe(p.isOwner || p.key === 'office_helper' || p.key === 'executive_director');
+      expect(held.includes('cafeteria.report'), p.key).toBe(p.isOwner);
     }
-    // The released grants are untouched: a new position comes with its own list.
-    expect(LATEST_BUILT_IN_GRANTS_VERSION).toBe(3);
-    expect(BUILT_IN_GRANTS.flatMap((g) => Object.values(g.grants).flat())).not.toContain('cafeteria.serve');
+    // The released grants are untouched; the director's cafeteria.serve comes as the next one, for databases that exist.
+    expect(LATEST_BUILT_IN_GRANTS_VERSION).toBe(4);
+    expect(BUILT_IN_GRANTS.map((g) => g.version)).toEqual([1, 2, 3, 4]);
+    expect(BUILT_IN_GRANTS.at(-1)).toEqual({ version: 4, grants: { executive_director: ['cafeteria.serve'] } });
+    expect(BUILT_IN_GRANTS.slice(0, 3).flatMap((g) => Object.values(g.grants).flat())).not.toContain('cafeteria.serve');
+    expect(BUILT_IN_GRANTS.flatMap((g) => Object.values(g.grants).flat())).not.toContain('cafeteria.report');
+  });
+
+  it('who serves from the board (D1): cafeteria.serve and no School, Casting or Website section — the Office helper, never an owner or the director', () => {
+    const allows = (key: string) => BUILT_IN_POSITIONS.find((p) => p.key === key)!.permissions;
+    expect(servesFromBoard(allows('office_helper'))).toBe(true);
+    for (const key of ['ceo', 'cfo', 'executive_director', 'reception', 'acting_coach']) expect(servesFromBoard(allows(key)), key).toBe(false);
+    expect(servesFromBoard(['cafeteria.serve', 'cafeteria.report', 'staff.summon', 'settings.manage'])).toBe(true);
+    // Any one permission that opens a section is enough to work in the sections instead.
+    for (const section of Object.values(SECTION_PERMISSIONS)) {
+      for (const p of section) expect(servesFromBoard(['cafeteria.serve', p]), p).toBe(false);
+    }
+    expect(servesFromBoard([])).toBe(false);
   });
 
   /** A database as the live one is today: every migration before the cafeteria's, the eight positions it has, people holding them. */
@@ -98,7 +122,7 @@ describe('Reception and Office helper: two more built-in positions', () => {
     for (const [i, p] of old.entries()) {
       sqlite
         .prepare('insert into positions (key, name, name_ar, is_owner, permissions, sort_order, created_at, updated_at) values (?, ?, ?, ?, ?, ?, 1, 1)')
-        .run(p.key, p.name, p.nameAr, p.isOwner ? 1 : 0, JSON.stringify(p.permissions.filter((x) => x !== 'cafeteria.serve')), i * 10);
+        .run(p.key, p.name, p.nameAr, p.isOwner ? 1 : 0, JSON.stringify(p.permissions.filter((x) => !x.startsWith('cafeteria.'))), i * 10);
     }
     sqlite.prepare(`insert into settings (key, value) values (?, '3')`).run(BUILT_IN_GRANTS_SETTING);
     const insertUser = sqlite.prepare(`insert into users (email, name, password_hash, created_at, updated_at) values (?, ?, 'x', 1, 1)`);
@@ -127,16 +151,21 @@ describe('Reception and Office helper: two more built-in positions', () => {
     expect(allPositions(db).map((p) => p.key)).toEqual([...before.map((p) => p.key), 'reception', 'office_helper']);
     expect(byKey(db, 'reception')).toMatchObject({ name: 'Reception', nameAr: 'الاستقبال', isOwner: false, permissions: [], sortOrder: 80 });
     expect(byKey(db, 'office_helper')).toMatchObject({ name: 'Office helper', nameAr: 'عامل المكتب', isOwner: false, permissions: ['cafeteria.serve'], sortOrder: 90 });
-    // The eight it had are exactly as they were (the director was not given cafeteria.serve), and so is who holds what.
-    expect(allPositions(db).slice(0, 8)).toEqual(before);
-    expect(byKey(db, 'executive_director')!.permissions).not.toContain('cafeteria.serve');
+    // The eight it had are exactly as they were — except that the director gained cafeteria.serve (grant v4, D2) and
+    // nothing else (not the monthly page) — and so is who holds what.
+    const director = before.find((p) => p.key === 'executive_director')!;
+    expect(allPositions(db).slice(0, 8)).toEqual(before.map((p) => (p.key === 'executive_director' ? { ...p, permissions: [...p.permissions, 'cafeteria.serve'], updatedAt: expect.any(Number) } : p)));
+    expect(byKey(db, 'executive_director')!.permissions).toEqual([...director.permissions, 'cafeteria.serve']);
+    expect(byKey(db, 'executive_director')!.permissions).not.toContain('cafeteria.report');
     expect(db.select().from(userPositions).all()).toEqual(holdersBefore);
-    expect(builtInGrantsVersion(db)).toBe(3);
+    expect(builtInGrantsVersion(db)).toBe(4);
 
-    // Every later start: still ten.
+    // Every later start: still ten, and the grant ran once — an owner who takes cafeteria.serve from the director again keeps it that way.
+    db.update(positions).set({ permissions: director.permissions }).where(eq(positions.key, 'executive_director')).run();
     initDb(db);
     initDb(db);
     expect(allPositions(db)).toHaveLength(10);
+    expect(byKey(db, 'executive_director')!.permissions).toEqual(director.permissions);
   });
 
   it('an owner renames them and changes what they allow: later starts neither create them again nor reset them', () => {
@@ -196,7 +225,7 @@ describe('Reception and Office helper: two more built-in positions', () => {
     expect(gone.body.error.code).toBe('position_built_in');
   });
 
-  it('the Executive Director can give Reception and Office helper: her settings.manage covers cafeteria.serve, though she does not hold it', async () => {
+  it('the Executive Director can give Reception and Office helper: she holds cafeteria.serve (D2) — nobody gives access they don’t hold', async () => {
     const t = await makeTestContext();
     const director = await t.as('executive_director');
     const list = (await director.get<{ items: Position[] }>('/api/positions')).body.items;
@@ -206,8 +235,8 @@ describe('Reception and Office helper: two more built-in positions', () => {
       director.post('/api/staff', { name: 'New Person', email: `${key}@example.com`, password: 'a-long-password', positionIds: [t.positionId(key)] });
     expect((await add('reception')).status).toBe(201);
     expect((await add('office_helper')).status).toBe(201);
-    // Someone who manages the team and the positions but not the settings still can't: nobody gives access beyond their reach.
-    const manager = await t.as({ permissions: ['staff.manage', 'positions.manage'] });
+    // Someone who manages the team, the positions and the settings but doesn't serve still can't: there is no exception to the rule.
+    const manager = await t.as({ permissions: ['staff.manage', 'positions.manage', 'settings.manage'] });
     expect((await manager.get<{ items: Position[] }>('/api/positions')).body.items.find((p) => p.key === 'office_helper')).toMatchObject({ editable: false, assignable: false });
     expect((await manager.post('/api/staff', { name: 'X', email: 'x@example.com', password: 'a-long-password', positionIds: [t.positionId('office_helper')] })).status).toBe(403);
   });
@@ -221,12 +250,19 @@ describe('Reception and Office helper: two more built-in positions', () => {
     expect((await director.patch(`/api/staff/${sayed.id}`, { phone: '+20 100 000 0000' })).status).toBe(200);
     expect((await director.patch(`/api/staff/${sayed.id}`, { active: false })).status).toBe(200);
     expect((await director.patch(`/api/staff/${sayed.id}`, { active: true })).status).toBe(200);
-    // A position with cafeteria.serve is within her reach too — and the reach stays narrow: not money.
+    // She may make a position with cafeteria.serve — not one with what she doesn't hold: money, the monthly page.
     expect((await director.post('/api/positions', { name: 'Kitchen', permissions: ['cafeteria.serve'] })).status).toBe(201);
     expect((await director.post('/api/positions', { name: 'Money', permissions: ['payments.manage'] })).status).toBe(403);
-    // Without settings.manage, the Office helper's account is out of reach.
-    const manager = await t.as({ permissions: ['staff.manage'] });
+    expect((await director.post('/api/positions', { name: 'Accounts', permissions: ['cafeteria.report'] })).status).toBe(403);
+    // Without cafeteria.serve — settings.manage or not — the Office helper's account is out of reach.
+    const manager = await t.as({ permissions: ['staff.manage', 'settings.manage'] });
     expect((await manager.patch(`/api/staff/${sayed.id}`, { password: 'another1234' })).status).toBe(403);
+    // An owner takes cafeteria.serve from the director's position: then his account is out of her reach too.
+    const owner = await t.as('owner');
+    const directorPosition = t.positionId('executive_director');
+    const without = (await owner.get<{ items: Position[] }>('/api/positions')).body.items.find((p) => p.id === directorPosition)!.permissions.filter((p) => p !== 'cafeteria.serve');
+    expect((await owner.patch(`/api/positions/${directorPosition}`, { permissions: without })).status).toBe(200);
+    expect((await director.patch(`/api/staff/${sayed.id}`, { password: 'third-pass-1234' })).status).toBe(403);
   });
 
   it('a receptionist has no section permissions, and still has Team, Messages, Alerts, the profile and cafeteria ordering', async () => {
@@ -603,13 +639,14 @@ describe('an order’s life: new → on the way → delivered, or cancelled', ()
 // ── Who sees what ───────────────────────────────────────────────────────────
 
 describe('privacy: an order is for the person who ordered and for whoever serves', () => {
-  it('the board and the status buttons need cafeteria.serve: the helper and owners, not a coach, not the director', async () => {
+  it('the board and the status buttons need cafeteria.serve: the helper, the director (D2) and owners — not a coach, not Reception', async () => {
     const { t, helper, coach, item } = await cafe();
     const owner = await t.as('owner');
     const director = await t.as('executive_director');
     const other = await t.as('casting_team');
+    const reception = await t.as('reception');
     const o = (await order(coach, [{ itemId: item('Tea').id }])).body;
-    for (const who of [coach, director, other]) {
+    for (const who of [coach, reception, other]) {
       expect((await who.get('/api/cafe/orders')).status).toBe(403);
       expect((await who.get('/api/cafe/orders?status=new')).status).toBe(403);
       expect((await move(who, o.id, 'on_the_way')).status).toBe(403);
@@ -621,7 +658,7 @@ describe('privacy: an order is for the person who ordered and for whoever serves
     for (const who of [director, other, helper, owner]) expect((await who.get<{ items: CafeOrder[] }>('/api/cafe/orders/mine')).body.items).toEqual([]);
     // Whoever serves sees it — with the orderer's name and photo, an owner's too.
     const karim = (await order(owner, [{ itemId: item('Coffee').id }], 'Office')).body;
-    for (const who of [helper, owner]) {
+    for (const who of [helper, owner, director]) {
       const board = await who.get<{ items: CafeOrder[] }>('/api/cafe/orders');
       expect(board.status).toBe(200);
       expect(board.body.items.map((x) => x.id)).toEqual([o.id, karim.id]);
@@ -694,45 +731,61 @@ describe('the orders board (GET /api/cafe/orders)', () => {
 // ── Alerts, push and the poll ───────────────────────────────────────────────
 
 describe('alerts', () => {
-  it('a new order alerts everyone active who serves, in their own language — nobody else, and not the person ordering', async () => {
+  it('a new order alerts only the Office helpers (D1): active, serving, no section — in their own language; not the owners or the director, not the person ordering', async () => {
     const { t, helper, coach, item } = await cafe();
     const owner = await t.as('owner', { name: 'Karim Mansour' });
+    const cfo = await t.as('cfo');
     const director = await t.as('executive_director');
     const gone = await t.createUser('office_helper', { active: false });
+    // A second, English-speaking helper (a custom position: it follows the permissions, never a name) …
+    const barista = await t.as({ permissions: ['cafeteria.serve'], name: 'Barista' });
+    // … and two who serve but work in a section: no order alerts for them.
+    const helperAndCoach = await t.as(['office_helper', 'acting_coach']);
+    const serveAndWebsite = await t.as({ permissions: ['cafeteria.serve', 'website.manage'] });
     const o = (await order(coach, [{ itemId: item('Tea').id, qty: 2, options: 'no sugar' }, { itemId: item('Water').id }], 'Studio 1')).body;
 
     const rows = t.db.select().from(notifications).all();
-    expect(rows.map((n) => n.userId).sort()).toEqual([helper.user.id, owner.user.id].sort());
+    expect(rows.map((n) => n.userId).sort()).toEqual([helper.user.id, barista.user.id].sort());
     expect(rows.every((n) => n.kind === 'cafe_order' && n.link === `/cafeteria/board?order=${o.id}` && n.readAt === null)).toBe(true);
-    expect(rows.some((n) => n.userId === gone.id || n.userId === director.user.id || n.userId === coach.user.id)).toBe(false);
+    for (const who of [owner, cfo, director, helperAndCoach, serveAndWebsite, coach]) {
+      expect((await bell(who)).items, who.user.name).toEqual([]);
+      // They can still open the board from the Cafeteria entry, and its count is there for them.
+      if (who !== coach) expect((await poll(who)).newOrders, who.user.name).toBe(1);
+    }
+    expect(rows.some((n) => n.userId === gone.id)).toBe(false);
     // The helper's account is in Arabic: Arabic words, the items' Arabic names, the place's Arabic name.
     const forHelper = (await bell(helper)).items[0]!;
     // "no sugar" is one of the ready-made words, so the helper reads it in Arabic too.
     expect(forHelper).toMatchObject({ kind: 'cafe_order', title: 'طلب جديد من Layla Haddad', body: '2 × شاي (سادة)، 1 × مياه — إلى استوديو 1', readAt: null });
-    expect((await bell(owner)).items[0]).toMatchObject({ title: 'New order from Layla Haddad', body: '2 × Tea (No sugar), 1 × Water — to Studio 1' });
+    expect((await bell(barista)).items[0]).toMatchObject({ title: 'New order from Layla Haddad', body: '2 × Tea (No sugar), 1 × Water — to Studio 1' });
     expect((await bell(helper)).unread).toBe(1);
-    expect((await bell(coach)).items).toEqual([]);
-    expect((await bell(director)).items).toEqual([]);
     expect(cafeLinesSummary(o.items, 'en')).toBe('2 × Tea (No sugar), 1 × Water');
 
     // Someone who serves and orders for themselves gets no alert about it; the others who serve do.
     await order(helper, [{ itemId: item('Coffee').id }], 'Office');
     expect((await bell(helper)).items).toHaveLength(1);
-    expect((await bell(owner)).items).toHaveLength(2);
+    expect((await bell(barista)).items).toHaveLength(2);
+    // An owner's or the director's own order alerts the helpers like anyone's — and still nothing for the other owners.
+    await order(director, [{ itemId: item('Tea').id }], 'Office');
+    expect((await bell(helper)).items).toHaveLength(2);
+    expect((await bell(owner)).items).toEqual([]);
+    // The person who ordered still hears about their order: on the way, delivered (unchanged by D1).
+    await move(helper, o.id, 'on_the_way');
+    expect((await bell(coach)).items[0]).toMatchObject({ kind: 'cafe_status', title: 'Your order is on the way' });
   });
 
   it('on the way, then delivered: the person who ordered has one alert per order, updated and unread again; whoever serves has the new-order alert cleared', async () => {
     const { t, helper, item } = await cafe();
-    const owner = await t.as('owner');
+    const second = await t.as({ permissions: ['cafeteria.serve'] });
     const dalia = await t.as('executive_director', { name: 'Dalia Fathy', locale: 'ar' });
     const o = (await order(dalia, [{ itemId: item('Turkish coffee').id, options: 'مظبوط' }], 'المكتب')).body;
     expect((await bell(helper)).unread).toBe(1);
-    expect((await bell(owner)).unread).toBe(1);
+    expect((await bell(second)).unread).toBe(1);
 
     await move(helper, o.id, 'on_the_way');
-    // Taken: it leaves every server's bell count, the owner's too.
+    // Taken: it leaves every server's bell count, the second helper's too.
     expect((await bell(helper)).unread).toBe(0);
-    expect((await bell(owner)).unread).toBe(0);
+    expect((await bell(second)).unread).toBe(0);
     let mine = await bell(dalia);
     expect(mine.unread).toBe(1);
     expect(mine.items).toHaveLength(1);
@@ -827,13 +880,17 @@ describe('alerts', () => {
     const vapid = await generateVapidKeys();
     const push = pushRecorder();
     const { t, helper, coach, item } = await cafe({ config: { vapid }, outboundFetch: push.fetch });
-    const owner = await t.as('owner', { name: 'Karim' });
+    // A second helper, in English (the "owner" phone below), and an owner whose phone is subscribed too: D1, nothing to the owner.
+    const owner = await t.as({ permissions: ['cafeteria.serve'], name: 'Karim' });
+    const realOwner = await t.as('owner');
     const helpersPhone = await fakeBrowser('https://fcm.googleapis.com/fcm/send/helper');
     const ownersPhone = await fakeBrowser('https://fcm.googleapis.com/fcm/send/owner');
     const coachesPhone = await fakeBrowser('https://web.push.apple.com/QGrZ-coach');
+    const realOwnersPhone = await fakeBrowser('https://fcm.googleapis.com/fcm/send/real-owner');
     await helper.post('/api/push/subscribe', helpersPhone.subscription);
     await owner.post('/api/push/subscribe', ownersPhone.subscription);
     await coach.post('/api/push/subscribe', coachesPhone.subscription);
+    await realOwner.post('/api/push/subscribe', realOwnersPhone.subscription);
 
     const a = (await order(coach, [{ itemId: item('Tea').id }], 'Office')).body;
     await t.settle();
@@ -900,6 +957,10 @@ describe('alerts', () => {
     await owner.patch(`/api/positions/${officeHelper}`, { permissions: ['cafeteria.serve'] });
     expect((await bell(helper)).unread).toBe(1);
     expect((await bell(helper)).items.map((n) => n.kind)).toEqual(['cafe_order']);
+    // Given a section as well, he works there now (D1): the board is no longer his home, and its alerts leave his bell.
+    await owner.patch(`/api/positions/${officeHelper}`, { permissions: ['cafeteria.serve', 'students.read'] });
+    expect(await bell(helper)).toEqual({ items: [], unread: 0 });
+    expect((await poll(helper)).newOrders).toBe(1);
   });
 
   it('the 20-second poll carries the cafeteria: switched on, orders waiting for whoever serves, my own open orders', async () => {
@@ -922,6 +983,164 @@ describe('alerts', () => {
     // The rest of the poll is as it was.
     const whole = (await helper.get<ChatUnreadResponse>('/api/chat/unread')).body;
     expect(Object.keys(whole).sort()).toEqual(['cafe', 'notifications', 'summons', 'total']);
+  });
+});
+
+// ── The owners' monthly page (D3) ───────────────────────────────────────────
+
+describe('the monthly consumption page (GET /api/cafe/report, cafeteria.report)', () => {
+  const report = async (client: Client, month?: string) => client.get<CafeReport & { error: { code: string } }>(`/api/cafe/report${month ? `?month=${month}` : ''}`);
+  const deliver = async (helper: Client, id: number) => {
+    await move(helper, id, 'on_the_way');
+    return move(helper, id, 'delivered');
+  };
+  const qtys = (lines: CafeReportLine[]) => lines.map((l) => [l.nameEn, l.qty]);
+
+  it('owners only: the CEO and the CFO, or a position given cafeteria.report — not the director, the helper or anyone else; 401 signed out', async () => {
+    const { t, helper, coach } = await cafe();
+    const accounts = await t.as({ permissions: ['cafeteria.report'] });
+    for (const who of [await t.as('owner'), await t.as('cfo'), accounts]) expect((await report(who)).status).toBe(200);
+    for (const who of [await t.as('executive_director'), helper, coach, await t.as('reception'), await t.as({ permissions: ['cafeteria.serve', 'settings.manage', 'staff.manage'] })]) {
+      expect((await report(who)).status).toBe(403);
+    }
+    expect((await t.anon.get('/api/cafe/report')).status).toBe(401);
+  });
+
+  it('opens on the current month at the school; another month by ?month=YYYY-MM; anything else is a 400', async () => {
+    const { t } = await cafe();
+    const owner = await t.as('owner');
+    const now = (await report(owner)).body;
+    expect(now.month).toBe(todayISO().slice(0, 7));
+    expect(now.currentMonth).toBe(now.month);
+    expect(now).toMatchObject({ people: [], totals: [], orders: 0 });
+    expect((await report(owner, '2026-02')).body).toMatchObject({ month: '2026-02', currentMonth: now.month });
+    for (const bad of ['2026-13', '2026-1', '26-11', 'november', '2026-11-01']) expect((await report(owner, bad)).status, bad).toBe(400);
+    expect(shiftCafeMonth('2026-01', -1)).toBe('2025-12');
+    expect(shiftCafeMonth('2026-12', 1)).toBe('2027-01');
+    expect(shiftCafeMonth('2026-11', 0)).toBe('2026-11');
+  });
+
+  it('per person (by name), the delivered items with how many, and a total per item in menu order; cancelled and open orders don’t count; no prices', async () => {
+    const { t, helper, coach, item } = await cafe();
+    const owner = await t.as('owner');
+    const nour = await t.as('reception', { name: 'Nour Hassan' });
+    const a = (await order(coach, [{ itemId: item('Water').id }, { itemId: item('Tea').id, qty: 2 }, { itemId: item('Tea').id, qty: 1, options: 'no sugar' }])).body;
+    await deliver(helper, a.id);
+    const b = (await order(nour, [{ itemId: item('Tea').id }, { itemId: item('Biscuits').id, qty: 3 }], 'Reception')).body;
+    await deliver(helper, b.id);
+    // The helper's own tea, delivered by himself: counted like anyone's.
+    const own = (await order(helper, [{ itemId: item('Tea').id }], 'Office')).body;
+    await deliver(helper, own.id);
+    // Turned down, taken back, still on its way, still new: none of it counts.
+    const juice = (await order(coach, [{ itemId: item('Juice').id, qty: 5 }])).body;
+    await move(helper, juice.id, 'cancelled', 'No juice today');
+    const back = (await order(nour, [{ itemId: item('Coffee').id }], 'Reception')).body;
+    await nour.post(`/api/cafe/orders/${back.id}/cancel`);
+    const coming = (await order(coach, [{ itemId: item('Coffee').id, qty: 4 }])).body;
+    await move(helper, coming.id, 'on_the_way');
+    await order(coach, [{ itemId: item('Sandwich').id }]);
+
+    const res = await report(owner);
+    expect(res.status).toBe(200);
+    const r = res.body;
+    expect(r.orders).toBe(3);
+    expect(r.people.map((p) => [p.person.name, p.orders])).toEqual([
+      ['Layla Haddad', 1],
+      ['Nour Hassan', 1],
+      ['Sayed Ramadan', 1],
+    ]);
+    // The same item on two lines (made differently) is one row: 3 teas.
+    expect(qtys(r.people[0]!.items)).toEqual([
+      ['Tea', 3],
+      ['Water', 1],
+    ]);
+    expect(qtys(r.people[1]!.items)).toEqual([
+      ['Tea', 1],
+      ['Biscuits', 3],
+    ]);
+    expect(r.people[0]!.person).toEqual({ id: coach.user.id, name: 'Layla Haddad', photoFileId: null, active: true });
+    expect(r.people[0]!.items[0]).toEqual({ itemId: item('Tea').id, nameEn: 'Tea', nameAr: 'شاي', qty: 3 });
+    expect(qtys(r.totals)).toEqual([
+      ['Tea', 5],
+      ['Water', 1],
+      ['Biscuits', 3],
+    ]);
+    expect(JSON.stringify(r)).not.toMatch(/price|cost|amount/i);
+  });
+
+  it('a renamed item stays one row under its name now; a deleted one is counted under the names it had, after the menu’s; someone who left is still listed', async () => {
+    const { t, helper, coach, item } = await cafe();
+    const owner = await t.as('owner');
+    const a = (await order(coach, [{ itemId: item('Coffee').id }, { itemId: item('Biscuits').id, qty: 2 }])).body;
+    await deliver(helper, a.id);
+    await helper.patch(`/api/cafe/menu/${item('Coffee').id}`, { nameEn: 'Filter coffee', nameAr: 'قهوة فلتر' });
+    const b = (await order(coach, [{ itemId: item('Coffee').id, qty: 2 }])).body;
+    await deliver(helper, b.id);
+    await helper.delete(`/api/cafe/menu/${item('Biscuits').id}`);
+    expect((await owner.patch(`/api/staff/${coach.user.id}`, { active: false })).status).toBe(200);
+
+    const r = (await report(owner)).body;
+    expect(r.people).toHaveLength(1);
+    expect(r.people[0]!.person).toMatchObject({ id: coach.user.id, active: false });
+    expect(r.people[0]!.orders).toBe(2);
+    expect(r.people[0]!.items).toEqual([
+      { itemId: item('Coffee').id, nameEn: 'Filter coffee', nameAr: 'قهوة فلتر', qty: 3 },
+      { itemId: null, nameEn: 'Biscuits', nameAr: 'بسكويت', qty: 2 },
+    ]);
+    expect(r.totals).toEqual(r.people[0]!.items);
+  });
+
+  it('counts an order in the month it was delivered, at the school’s clock (Cairo), not the server’s (UTC)', async () => {
+    const { t, helper, coach, item } = await cafe();
+    const owner = await t.as('owner');
+    const tz = t.config.timeZone;
+    const ids: number[] = [];
+    for (const qty of [1, 2, 4]) {
+      const o = (await order(coach, [{ itemId: item('Tea').id, qty }])).body;
+      await deliver(helper, o.id);
+      ids.push(o.id);
+    }
+    // 31 October at 23:30 in Cairo; 1 November at 00:30 in Cairo (still 31 October in UTC); 30 November at 23:59 in Cairo.
+    const when = [epochAt(tz, '2026-10-31', '23:30'), epochAt(tz, '2026-11-01', '00:30'), epochAt(tz, '2026-11-30', '23:59')];
+    expect(new Date(when[1]!).toISOString().slice(0, 10)).toBe('2026-10-31');
+    ids.forEach((id, i) => t.db.update(cafeOrders).set({ createdAt: when[i]! - 600_000, deliveredAt: when[i]! }).where(eq(cafeOrders.id, id)).run());
+    expect(qtys((await report(owner, '2026-10')).body.totals)).toEqual([['Tea', 1]]);
+    expect(qtys((await report(owner, '2026-11')).body.totals)).toEqual([['Tea', 6]]);
+    expect((await report(owner, '2026-12')).body.orders).toBe(0);
+  });
+
+  it('a whole team’s month stays within the Durable Object limits (counted in SQL, people read in slices)', async () => {
+    const { t, item } = await cafe();
+    const owner = await t.as('owner');
+    const people = Array.from({ length: 140 }, (_, i) => ({ email: `p${i}@month.test`, name: `Person ${String(i).padStart(3, '0')}`, passwordHash: 'x' }));
+    for (const batch of insertBatches(users, people)) t.db.insert(users).values(batch).run();
+    const ids = t.db.select({ id: users.id }).from(users).all().map((u) => u.id).filter((id) => id !== owner.user.id);
+    const at = Date.now() - 60_000;
+    const orders = ids.flatMap((userId) => [0, 1].map(() => ({ userId, place: 'Office', status: 'delivered' as const, createdAt: at - 60_000, deliveredAt: at })));
+    for (const batch of insertBatches(cafeOrders, orders)) t.db.insert(cafeOrders).values(batch).run();
+    const stored = t.db.select({ id: cafeOrders.id }).from(cafeOrders).all();
+    const lines = stored.flatMap((o) => [
+      { orderId: o.id, itemId: item('Tea').id, nameEn: 'Tea', nameAr: 'شاي', qty: 2 },
+      { orderId: o.id, itemId: item('Water').id, nameEn: 'Water', nameAr: 'مياه', qty: 1 },
+    ]);
+    for (const batch of insertBatches(cafeOrderItems, lines)) t.db.insert(cafeOrderItems).values(batch).run();
+    const res = await report(owner);
+    expect(res.status).toBe(200);
+    expect(res.body.people).toHaveLength(ids.length);
+    expect(res.body.orders).toBe(ids.length * 2);
+    expect(qtys(res.body.totals)).toEqual([
+      ['Tea', ids.length * 4],
+      ['Water', ids.length * 2],
+    ]);
+  });
+
+  it('is part of the cafeteria: 409 cafeteria_off while it is switched off', async () => {
+    const { t } = await cafe();
+    const owner = await t.as('owner');
+    await owner.patch('/api/settings', { cafeteriaEnabled: false });
+    const res = await report(owner);
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('cafeteria_off');
   });
 });
 

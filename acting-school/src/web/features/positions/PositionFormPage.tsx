@@ -2,7 +2,7 @@ import { Info, Lock, Trash2 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router';
-import { PERMISSIONS, reachOf, type Permission } from '@shared/permissions';
+import { PERMISSIONS, type Permission } from '@shared/permissions';
 import { positionInput, type Position, type PositionInput } from '@shared/schemas/positions';
 import {
   Badge,
@@ -74,9 +74,8 @@ function PositionForm({ position }: { position: Position | null }) {
   });
   const v = form.values;
   const mutation = position ? update : create;
-  // You can only give what is within your reach (owners: everything; settings.manage also covers cafeteria.serve).
-  const reach = reachOf(user?.permissions ?? []);
-  const locked = (p: Permission) => !isOwnerUser && !reach.includes(p);
+  // You can only give what you hold (owners hold everything).
+  const locked = (p: Permission) => !isOwnerUser && !user?.permissions.includes(p);
 
   const submit = () => {
     if (readOnly) return;

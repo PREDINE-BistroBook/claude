@@ -1094,7 +1094,7 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
 
   await seedTeam();
 
-  // ── 8. The cafeteria: the usual menu, one order delivered this morning, one waiting on the board ──
+  // ── 8. The cafeteria: the usual menu, a few days of delivered orders, one order delivered this morning, one waiting on the board ──
 
   await seedCafe();
 
@@ -1104,19 +1104,50 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
 
   /**
    * The cafeteria as a working morning: the usual menu ("Add the usual
-   * items"; the places are the defaults), the director's coffee delivered to
-   * the office an hour ago, and Layla's teas for Studio 1 still waiting on the
-   * Office helper's board — through the API, then backdated.
+   * items"; the places are the defaults), a few orders delivered on the days
+   * before (so the owners' monthly page has something to show) and one turned
+   * down, the director's coffee delivered to the office an hour ago, and
+   * Layla's teas for Studio 1 still waiting on the Office helper's board —
+   * through the API, then backdated.
    */
   async function seedCafe() {
     const { items } = await owner.post<{ items: CafeItem[] }>('/cafe/menu/defaults');
     const item = (nameEn: string) => items.find((i) => i.nameEn === nameEn)!.id;
     const helper = await login('helper@demo.school');
+    const reception = await login('reception@demo.school');
+    const tarek = await login('casting@demo.school');
+    const ago = (minutes: number) => Date.now() - minutes * 60_000;
+    const DAY = 24 * 60;
+
+    // The days before: delivered (or turned down) and long read — nothing of it in anyone's bell as new.
+    const past: { client: ReturnType<typeof as>; daysAgo: number; place: string; items: { itemId: number; qty: number; options?: string }[]; turnDown?: string }[] = [
+      { client: reception, daysAgo: 1, place: 'Reception', items: [{ itemId: item('Tea'), qty: 1, options: 'Medium sugar' }] },
+      { client: tarek, daysAgo: 1, place: 'Studio 2', items: [{ itemId: item('Coffee'), qty: 2 }, { itemId: item('Water'), qty: 2 }] },
+      { client: layla, daysAgo: 2, place: 'Studio 1', items: [{ itemId: item('Tea'), qty: 3 }, { itemId: item('Biscuits'), qty: 1 }] },
+      { client: director, daysAgo: 2, place: 'Office', items: [{ itemId: item('Turkish coffee'), qty: 1, options: 'مضبوط' }] },
+      { client: tarek, daysAgo: 3, place: 'Studio 2', items: [{ itemId: item('Sandwich'), qty: 1 }], turnDown: 'Sorry, it is not available now' },
+    ];
+    for (const p of past) {
+      const o = await p.client.post<{ id: number }>('/cafe/orders', { place: p.place, items: p.items });
+      if (p.turnDown) await helper.post(`/cafe/orders/${o.id}/status`, { status: 'cancelled', reason: p.turnDown });
+      else {
+        await helper.post(`/cafe/orders/${o.id}/status`, { status: 'on_the_way' });
+        await helper.post(`/cafe/orders/${o.id}/status`, { status: 'delivered' });
+      }
+      const at = ago(p.daysAgo * DAY + 120);
+      db.update(cafeOrders)
+        .set(p.turnDown ? { createdAt: at, cancelledAt: at + 3 * 60_000 } : { createdAt: at, onTheWayAt: at + 3 * 60_000, deliveredAt: at + 8 * 60_000 })
+        .where(eq(cafeOrders.id, o.id))
+        .run();
+      for (const link of [cafeBoardLink(o.id), cafeOrderLink(o.id)]) {
+        db.update(notifications).set({ createdAt: at, readAt: at + 10 * 60_000 }).where(eq(notifications.link, link)).run();
+      }
+    }
 
     const coffee = await director.post<{ id: number }>('/cafe/orders', {
       place: 'Office',
       items: [
-        { itemId: item('Turkish coffee'), qty: 1, options: 'مظبوط' },
+        { itemId: item('Turkish coffee'), qty: 1, options: 'مضبوط' },
         { itemId: item('Water'), qty: 1 },
       ],
     });
@@ -1132,7 +1163,6 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
       ],
     });
 
-    const ago = (minutes: number) => Date.now() - minutes * 60_000;
     db.update(cafeOrders).set({ createdAt: ago(75), onTheWayAt: ago(72), deliveredAt: ago(68) }).where(eq(cafeOrders.id, coffee.id)).run();
     db.update(notifications).set({ createdAt: ago(75), readAt: ago(72) }).where(and(eq(notifications.kind, 'cafe_order'), eq(notifications.link, cafeBoardLink(coffee.id)))).run();
     db.update(notifications).set({ createdAt: ago(68) }).where(and(eq(notifications.kind, 'cafe_status'), eq(notifications.link, cafeOrderLink(coffee.id)))).run();

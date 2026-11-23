@@ -246,6 +246,60 @@ export interface CafeUnread {
   myOpenOrders: number;
 }
 
+// ── The monthly consumption page (cafeteria.report) ─────────────────────────
+
+/** A month, "YYYY-MM". */
+export const CAFE_MONTH_RE = /^(20\d\d)-(0[1-9]|1[0-2])$/;
+
+/** GET /api/cafe/report?month=YYYY-MM (cafeteria.report). Without `month`: the current month at the school. */
+export const cafeReportQuery = z.object({ month: z.string().regex(CAFE_MONTH_RE, 'errors.invalid').optional() });
+export type CafeReportQuery = z.infer<typeof cafeReportQuery>;
+
+/** The month before or after `month` ("2026-01", -1 → "2025-12"). */
+export function shiftCafeMonth(month: string, delta: number): string {
+  const [y, m] = month.split('-').map(Number) as [number, number];
+  const index = y * 12 + (m - 1) + delta;
+  return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, '0')}`;
+}
+
+/** How many of one item, delivered in the month. */
+export interface CafeReportLine {
+  /** The menu item; null once it was deleted from the menu (counted under the names it had on the orders). */
+  itemId: number | null;
+  /** The item's names now (or, deleted, as on the orders): show with cafeItemName. */
+  nameEn: string;
+  nameAr: string;
+  qty: number;
+}
+
+/** One person's month: what was delivered to them, item by item. */
+export interface CafeReportPerson {
+  /** Name and photo; `active: false` for someone no longer on the team (still listed for the months they ordered in). */
+  person: PersonRef;
+  /** Delivered orders in the month. */
+  orders: number;
+  /** In menu order; items deleted from the menu last. */
+  items: CafeReportLine[];
+}
+
+/**
+ * GET /api/cafe/report — who had what from the cafeteria in one month (the
+ * school's time zone): delivered orders only (cancelled ones don't count),
+ * counted by the day they were delivered. No prices.
+ */
+export interface CafeReport {
+  /** The month shown, "YYYY-MM". */
+  month: string;
+  /** The current month at the school (the picker goes no further). */
+  currentMonth: string;
+  /** Everyone who had something delivered that month, by name. */
+  people: CafeReportPerson[];
+  /** Per item, everyone together, in menu order. */
+  totals: CafeReportLine[];
+  /** Delivered orders in the month, everyone together. */
+  orders: number;
+}
+
 /** Error codes (error.code) of the cafeteria API besides the generic ones. */
 export const CAFE_ERROR_CODES = {
   /** 409 — the cafeteria is switched off in Settings (every /api/cafe route). */

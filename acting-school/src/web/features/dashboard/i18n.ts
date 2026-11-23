@@ -8,8 +8,8 @@ const en = {
   },
   start: {
     /** The small home of someone who sees none of the three sections (Reception, until the school says what it does). */
-    noSection: 'You have no section yet',
-    noSectionHint: 'The School, Casting and Website sections are not part of your position yet. Here is what you can use in the meantime.',
+    noSection: 'Here is what you can use',
+    noSectionHint: 'More will be added to your position later.',
   },
   greeting: {
     morning: 'Good morning, {{name}}',
@@ -86,8 +86,8 @@ const ar: TranslationOf<typeof en> = {
     hint: 'استخدم القائمة لفتح الصفحات التي تسمح بها مناصبك.',
   },
   start: {
-    noSection: 'لا يوجد قسم لك بعد',
-    noSectionHint: 'أقسام المدرسة والكاستينج والموقع ليست ضمن منصبك بعد. هذا ما يمكن استخدامه في الوقت الحالي.',
+    noSection: 'هذا ما يمكنك استخدامه الآن',
+    noSectionHint: 'ستُضاف صفحات أخرى إلى منصبك لاحقًا.',
   },
   greeting: {
     morning: 'صباح الخير، {{name}}',

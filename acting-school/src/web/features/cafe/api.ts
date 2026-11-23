@@ -9,6 +9,7 @@ import {
   type CafeOrder,
   type CafeOrderInput,
   type CafePlace,
+  type CafeReport,
   type CafeUnread,
 } from '@shared/schemas/cafe';
 import type { ListResponse } from '@shared/schemas/common';
@@ -22,6 +23,8 @@ export const cafeKeys = {
   menu: ['cafe', 'menu'] as const,
   mine: ['cafe', 'orders', 'mine'] as const,
   board: ['cafe', 'orders', 'board'] as const,
+  /** The monthly page; `null`: the current month at the school (the server says which). */
+  report: (month: string | null) => ['cafe', 'report', month ?? 'current'] as const,
 };
 
 /** How often the board and an open order of mine are read again while the page is visible. */
@@ -62,6 +65,15 @@ export function useCafeBoard(enabled: boolean) {
     refetchInterval: CAFE_REFRESH_MS,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
+  });
+}
+
+/** GET /api/cafe/report (cafeteria.report): who had what in `month` ("YYYY-MM"), or in the current month at the school (null). */
+export function useCafeReport(month: string | null) {
+  return useQuery({
+    queryKey: cafeKeys.report(month),
+    queryFn: () => api.get<CafeReport>(month ? `/cafe/report?month=${encodeURIComponent(month)}` : '/cafe/report'),
+    placeholderData: (previous) => previous,
   });
 }
 

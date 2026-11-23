@@ -1,22 +1,24 @@
 import clsx from 'clsx';
-import { MapPin, Pencil, Plus, Sparkles, Trash2, UtensilsCrossed } from 'lucide-react';
+import { ArrowUpDown, Check, MapPin, Pencil, Plus, Sparkles, Trash2, UtensilsCrossed } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CAFE_CATEGORIES, type CafeCategory } from '@shared/enums';
-import { MAX_CAFE_ITEM_NAME, MAX_CAFE_ITEMS, MAX_CAFE_PLACE, MAX_CAFE_PLACES, cafeItemInput, type CafeItem, type CafePlace } from '@shared/schemas/cafe';
-import { Button, Card, ConfirmDialog, EmptyState, ErrorState, Input, Modal, PageHeader, PageLoader, Select, Switch, useToast } from '@web/components/ui';
+import { MAX_CAFE_ITEM_NAME, MAX_CAFE_ITEMS, MAX_CAFE_PLACE, MAX_CAFE_PLACES, cafeItemInput, cafePlacesInput, type CafeItem, type CafePlace } from '@shared/schemas/cafe';
+import { Button, Card, ConfirmDialog, EmptyState, ErrorState, FormActions, Input, Modal, PageHeader, PageLoader, Select, Switch, useToast } from '@web/components/ui';
 import { MoveButtons } from '../website/components/MoveButtons';
 import { isolate } from '../team/utils';
 import { cafeErrorKey, useCafeMenu, useMenuEditor } from './api';
 import { CafeGate, CafeTabs, useCafeNames } from './components/CafeParts';
-import { menuGroups, moveInGroup } from './utils';
+import { menuGroups, moveInGroup, nameFieldsInOrder, placeRowErrors } from './utils';
 
 /**
  * /cafeteria/menu — the Menu tab (cafeteria.serve, or settings.manage like the
- * director): add an item, rename it in English and Arabic, move it up or down
- * in its group, switch "Available" off for today, remove it; and the list of
- * places an order can come to. On an empty menu, "Add the usual items" puts
- * tea, coffee, water… there in one tap. No prices.
+ * director): add an item, rename it in English and Arabic, switch "Available"
+ * off for today (the switch says which it is: "Available now" / "Not available
+ * now"), remove it, and — behind "Change the order" on each group, so the page
+ * stays short — move it up or down; and the list of places an order can be
+ * brought to. On an empty menu, "Add the usual items" puts tea, coffee,
+ * water… there in one tap. No prices.
  */
 export default function CafeMenuPage() {
   const { t } = useTranslation(['cafe']);
@@ -39,6 +41,8 @@ function MenuEditor() {
   const { itemName } = useCafeNames();
   /** 'new', or the item being edited. */
   const [editing, setEditing] = useState<CafeItem | 'new' | null>(null);
+  /** The group whose order is being changed (its cards show Move up / Move down). */
+  const [reordering, setReordering] = useState<CafeCategory | null>(null);
 
   if (menu.isPending) return <PageLoader />;
   if (menu.isError || !menu.data) return <ErrorState error={menu.error} onRetry={() => void menu.refetch()} />;
@@ -89,9 +93,23 @@ function MenuEditor() {
           </Button>
           {menuGroups(items).map((group) => (
             <section key={group.category} aria-labelledby={`cafe-group-${group.category}`}>
-              <h2 id={`cafe-group-${group.category}`} className="mb-3 text-lg font-semibold text-ink">
-                {t(`categories.${group.category}`)}
-              </h2>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h2 id={`cafe-group-${group.category}`} className="text-lg font-semibold text-ink">
+                  {t(`categories.${group.category}`)}
+                </h2>
+                {group.items.length > 1 && (
+                  <Button
+                    size="lg"
+                    variant={reordering === group.category ? 'primary' : 'ghost'}
+                    icon={reordering === group.category ? Check : ArrowUpDown}
+                    aria-pressed={reordering === group.category}
+                    onClick={() => setReordering(reordering === group.category ? null : group.category)}
+                  >
+                    {t(reordering === group.category ? 'menu.reorderDone' : 'menu.reorder')}
+                    <span className="sr-only">: {t(`categories.${group.category}`)}</span>
+                  </Button>
+                )}
+              </div>
               <ul className="grid gap-3">
                 {group.items.map((item, index) => {
                   const name = itemName(item);
@@ -115,11 +133,13 @@ function MenuEditor() {
                         </Button>
                       </div>
                       <div className="mt-3 rounded-xl bg-surface-2 px-3 [&_[role=switch]]:h-12 [&_label]:text-base">
-                        <Switch checked={item.available} onChange={(next) => setAvailable(item, next)} label={t('menu.available')} disabled={editor.update.isPending} />
+                        <Switch checked={item.available} onChange={(next) => setAvailable(item, next)} label={<AvailableLabel available={item.available} />} disabled={editor.update.isPending} />
                       </div>
-                      <div className="mt-3">
-                        <MoveButtons name={name} index={index} count={group.items.length} onMove={(delta) => move(item, delta)} disabled={busy} />
-                      </div>
+                      {reordering === group.category && (
+                        <div className="mt-3">
+                          <MoveButtons name={name} index={index} count={group.items.length} onMove={(delta) => move(item, delta)} disabled={busy} />
+                        </div>
+                      )}
                     </li>
                   );
                 })}
@@ -135,9 +155,15 @@ function MenuEditor() {
   );
 }
 
+/** "Available now" in green, or "Not available now" in grey: the switch's state in words, not only its colour. */
+function AvailableLabel({ available }: { available: boolean }) {
+  const { t } = useTranslation(['cafe']);
+  return <span className={clsx('font-semibold', available ? 'text-success' : 'text-muted')}>{t(available ? 'menu.availableNow' : 'menu.notAvailableNow')}</span>;
+}
+
 /** Add an item, or edit one: its two names, its group, Available — and "Remove from the menu" (asked twice). */
 function ItemModal({ editing, onClose }: { editing: CafeItem | 'new' | null; onClose: () => void }) {
-  const { t } = useTranslation(['cafe', 'common']);
+  const { t, i18n } = useTranslation(['cafe', 'common']);
   const toast = useToast();
   const editor = useMenuEditor();
   const { itemName } = useCafeNames();
@@ -192,45 +218,52 @@ function ItemModal({ editing, onClose }: { editing: CafeItem | 'new' | null; onC
         }
       >
         <div className="grid gap-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="cafe-name-en" lang="en" className="text-sm font-medium text-ink">
-                {t('menu.nameEn')}
-              </label>
-              <Input
-                id="cafe-name-en"
-                value={nameEn}
-                maxLength={MAX_CAFE_ITEM_NAME}
-                onChange={(e) => (setNameEn(e.target.value), setError(null))}
-                dir="ltr"
-                lang="en"
-                className="text-start"
-                aria-invalid={error ? true : undefined}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="cafe-name-ar" lang="ar" className="text-sm font-medium text-ink">
-                {t('menu.nameAr')}
-              </label>
-              <Input
-                id="cafe-name-ar"
-                value={nameAr}
-                maxLength={MAX_CAFE_ITEM_NAME}
-                onChange={(e) => (setNameAr(e.target.value), setError(null))}
-                dir="rtl"
-                lang="ar"
-                className="text-start"
-                aria-invalid={error ? true : undefined}
-              />
-            </div>
-          </div>
+          {/* Said before the fields: someone who types only Arabic (or only English) knows that is enough. */}
           {error ? (
-            <p role="alert" className="-mt-2 text-sm text-danger">
+            <p role="alert" className="text-sm text-danger">
               {t(error)}
             </p>
           ) : (
-            <p className="-mt-2 text-xs text-muted">{t('menu.nameHint')}</p>
+            <p className="text-sm text-muted">{t('menu.nameHint')}</p>
           )}
+          {/* The screen's own language first. */}
+          <div className="-mt-1 grid gap-3 sm:grid-cols-2">
+            {nameFieldsInOrder(i18n.language).map((lang) =>
+              lang === 'en' ? (
+                <div key="en" className="flex flex-col gap-1.5">
+                  <label htmlFor="cafe-name-en" lang="en" className="text-sm font-medium text-ink">
+                    {t('menu.nameEn')}
+                  </label>
+                  <Input
+                    id="cafe-name-en"
+                    value={nameEn}
+                    maxLength={MAX_CAFE_ITEM_NAME}
+                    onChange={(e) => (setNameEn(e.target.value), setError(null))}
+                    dir="ltr"
+                    lang="en"
+                    className="text-start"
+                    aria-invalid={error ? true : undefined}
+                  />
+                </div>
+              ) : (
+                <div key="ar" className="flex flex-col gap-1.5">
+                  <label htmlFor="cafe-name-ar" lang="ar" className="text-sm font-medium text-ink">
+                    {t('menu.nameAr')}
+                  </label>
+                  <Input
+                    id="cafe-name-ar"
+                    value={nameAr}
+                    maxLength={MAX_CAFE_ITEM_NAME}
+                    onChange={(e) => (setNameAr(e.target.value), setError(null))}
+                    dir="rtl"
+                    lang="ar"
+                    className="text-start"
+                    aria-invalid={error ? true : undefined}
+                  />
+                </div>
+              ),
+            )}
+          </div>
           <div className="flex flex-col gap-1.5">
             <label htmlFor="cafe-category" className="text-sm font-medium text-ink">
               {t('menu.category')}
@@ -244,7 +277,7 @@ function ItemModal({ editing, onClose }: { editing: CafeItem | 'new' | null; onC
             </Select>
           </div>
           <div className="rounded-xl bg-surface-2 px-3 [&_[role=switch]]:h-12 [&_label]:text-base">
-            <Switch checked={available} onChange={setAvailable} label={t('menu.available')} />
+            <Switch checked={available} onChange={setAvailable} label={<AvailableLabel available={available} />} />
           </div>
           {item && (
             <Button size="lg" variant="danger-ghost" icon={Trash2} onClick={() => setConfirmRemove(true)} className="justify-self-start">
@@ -278,7 +311,13 @@ interface PlaceDraft {
   ar: string;
 }
 
-/** The places an order can come to: each in English and Arabic (one is enough), in order, saved together. */
+/**
+ * The places an order can be brought to: each in English and Arabic (one is
+ * enough, the screen's own language first), in order, saved together. Once
+ * something changed, "Not saved yet" and "Save places" stay in sight at the
+ * bottom of the screen; removing a saved place asks first; two places with
+ * the same name are refused before anything is sent.
+ */
 function PlacesEditor({ places }: { places: CafePlace[] }) {
   const { t, i18n } = useTranslation(['cafe', 'common']);
   const toast = useToast();
@@ -288,11 +327,12 @@ function PlacesEditor({ places }: { places: CafePlace[] }) {
   const [nextId, setNextId] = useState(places.length);
   const [touched, setTouched] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
+  const [removing, setRemoving] = useState<PlaceDraft | null>(null);
 
   const change = (next: PlaceDraft[]) => (setRows(next), setTouched(true));
-  const blank = (r: PlaceDraft) => !r.en.trim() && !r.ar.trim();
+  const errors = placeRowErrors(rows);
   const save = () => {
-    if (rows.some(blank)) {
+    if (errors.size) {
       setShowErrors(true);
       return;
     }
@@ -304,6 +344,27 @@ function PlacesEditor({ places }: { places: CafePlace[] }) {
     );
   };
   const nameOf = (r: PlaceDraft, i: number) => (i18n.language === 'ar' ? r.ar.trim() || r.en.trim() : r.en.trim() || r.ar.trim()) || t('menu.placeN', { n: i + 1 });
+  // A row that came from the saved list (new rows have ids from places.length up): removing it asks first.
+  const saved = (r: PlaceDraft) => r.rowId < places.length;
+  const remove = (row: PlaceDraft) => change(rows.filter((r) => r !== row));
+
+  const field = (row: PlaceDraft, lang: 'en' | 'ar', invalid: boolean) => (
+    <div key={lang} className="flex flex-col gap-1">
+      <label htmlFor={`place-${lang}-${row.rowId}`} lang={lang} className="text-xs font-semibold text-muted">
+        {t(lang === 'en' ? 'menu.placeEn' : 'menu.placeAr')}
+      </label>
+      <Input
+        id={`place-${lang}-${row.rowId}`}
+        value={row[lang]}
+        maxLength={MAX_CAFE_PLACE}
+        dir={lang === 'en' ? 'ltr' : 'rtl'}
+        lang={lang}
+        className="text-start"
+        aria-invalid={invalid ? true : undefined}
+        onChange={(e) => change(rows.map((r) => (r === row ? { ...r, [lang]: e.target.value } : r)))}
+      />
+    </div>
+  );
 
   return (
     <Card
@@ -316,47 +377,17 @@ function PlacesEditor({ places }: { places: CafePlace[] }) {
       description={t('menu.placesHint')}
     >
       {rows.length === 0 && <p className="mb-3 text-sm text-muted">{t('menu.noPlaces')}</p>}
+      {rows.length > 0 && <p className="mb-3 text-sm text-muted">{t('menu.nameHint')}</p>}
       <ul className="grid gap-3">
         {rows.map((row, i) => {
           const name = nameOf(row, i);
-          const invalid = showErrors && blank(row);
+          const problem = showErrors ? errors.get(i) : undefined;
           return (
-            <li key={row.rowId} className={clsx('rounded-xl border p-3', invalid ? 'border-danger' : 'border-line')}>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <div className="flex flex-col gap-1">
-                  <label htmlFor={`place-en-${row.rowId}`} lang="en" className="text-xs font-semibold text-muted">
-                    {t('menu.placeEn')}
-                  </label>
-                  <Input
-                    id={`place-en-${row.rowId}`}
-                    value={row.en}
-                    maxLength={MAX_CAFE_PLACE}
-                    dir="ltr"
-                    lang="en"
-                    className="text-start"
-                    aria-invalid={invalid ? true : undefined}
-                    onChange={(e) => change(rows.map((r) => (r === row ? { ...r, en: e.target.value } : r)))}
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label htmlFor={`place-ar-${row.rowId}`} lang="ar" className="text-xs font-semibold text-muted">
-                    {t('menu.placeAr')}
-                  </label>
-                  <Input
-                    id={`place-ar-${row.rowId}`}
-                    value={row.ar}
-                    maxLength={MAX_CAFE_PLACE}
-                    dir="rtl"
-                    lang="ar"
-                    className="text-start"
-                    aria-invalid={invalid ? true : undefined}
-                    onChange={(e) => change(rows.map((r) => (r === row ? { ...r, ar: e.target.value } : r)))}
-                  />
-                </div>
-              </div>
-              {invalid && (
+            <li key={row.rowId} className={clsx('rounded-xl border p-3', problem ? 'border-danger' : 'border-line')}>
+              <div className="grid gap-2 sm:grid-cols-2">{nameFieldsInOrder(i18n.language).map((lang) => field(row, lang, !!problem))}</div>
+              {problem && (
                 <p role="alert" className="mt-1.5 text-sm text-danger">
-                  {t('errors.placeRequired')}
+                  {t(problem === 'twice' ? 'errors.placeTwice' : 'errors.placeRequired')}
                 </p>
               )}
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
@@ -370,7 +401,7 @@ function PlacesEditor({ places }: { places: CafePlace[] }) {
                     change(next);
                   }}
                 />
-                <Button size="lg" variant="danger-ghost" icon={Trash2} onClick={() => change(rows.filter((r) => r !== row))}>
+                <Button size="lg" variant="danger-ghost" icon={Trash2} onClick={() => (saved(row) ? setRemoving(row) : remove(row))}>
                   {t('common:actions.remove')}
                   <span className="sr-only">: {name}</span>
                 </Button>
@@ -379,22 +410,37 @@ function PlacesEditor({ places }: { places: CafePlace[] }) {
           );
         })}
       </ul>
-      <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-between">
-        <Button
-          size="lg"
-          icon={Plus}
-          disabled={rows.length >= MAX_CAFE_PLACES}
-          onClick={() => {
-            change([...rows, { rowId: nextId, en: '', ar: '' }]);
-            setNextId(nextId + 1);
-          }}
-        >
-          {t('menu.addPlace')}
-        </Button>
-        <Button size="lg" variant="primary" disabled={!touched} loading={editor.savePlaces.isPending} onClick={save}>
-          {t('menu.savePlaces')}
-        </Button>
-      </div>
+      <Button
+        size="lg"
+        icon={Plus}
+        disabled={rows.length >= MAX_CAFE_PLACES}
+        className="mt-4 w-full sm:w-auto"
+        onClick={() => {
+          change([...rows, { rowId: nextId, en: '', ar: '' }]);
+          setNextId(nextId + 1);
+        }}
+      >
+        {t('menu.addPlace')}
+      </Button>
+      {touched && (
+        <FormActions className="mt-4 items-center justify-between">
+          <p className="text-sm font-semibold text-warning">{t('menu.placesUnsaved')}</p>
+          <Button size="lg" variant="primary" loading={editor.savePlaces.isPending} onClick={save}>
+            {t('menu.savePlaces')}
+          </Button>
+        </FormActions>
+      )}
+      <ConfirmDialog
+        open={!!removing}
+        title={removing ? t('menu.removePlaceTitle', { name: isolate(nameOf(removing, rows.indexOf(removing))) }) : undefined}
+        message={t('menu.removePlaceMessage')}
+        confirmLabel={t('menu.removePlaceYes')}
+        onCancel={() => setRemoving(null)}
+        onConfirm={() => {
+          if (removing) remove(removing);
+          setRemoving(null);
+        }}
+      />
     </Card>
   );
 }

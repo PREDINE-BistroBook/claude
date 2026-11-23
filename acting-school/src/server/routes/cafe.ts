@@ -14,13 +14,16 @@ import {
   cafeOrderInput,
   cafeOrdersQuery,
   cafePlacesInput,
+  cafeReportQuery,
   cafeStatusInput,
+  shiftCafeMonth,
   storedCafePlace,
   storedCafeReason,
   type CafeItem,
   type CafeMenu,
   type CafeOrder,
   type CafePlace,
+  type CafeReport,
 } from '../../shared/schemas/cafe';
 import type { ListResponse } from '../../shared/schemas/common';
 import type { PushPayload } from '../../shared/schemas/notifications';
@@ -33,6 +36,7 @@ import {
   cafeOrderBody,
   cafeOrderLines,
   cafeOrderLink,
+  cafeReport,
   cafeServers,
   cafeSettings,
   lastCafePlace,
@@ -64,8 +68,10 @@ import { currentUser, requireAnyPermission, requireAuth, requirePermission } fro
  * Privacy: an order is seen by the person who ordered and by whoever serves —
  * nobody else (someone else's order id answers 404).
  *
- * A new order alerts everyone active who serves; each step alerts the person
- * who ordered (in-app, and by push after the transaction). At most 10 orders
+ * A new order alerts everyone active who serves from the board (the Office
+ * helper: cafeteria.serve and no section — never the owners or the director,
+ * who hold the permission too); each step alerts the person who ordered
+ * (in-app, and by push after the transaction). At most 10 orders
  * an hour per person, 10 lines an order. With the `cafeteriaEnabled` setting
  * off every route here answers 409 cafeteria_off.
  */
@@ -242,7 +248,7 @@ router.post('/orders', async (c) => {
     });
     for (const batch of insertBatches(cafeOrderItems, rows)) tx.insert(cafeOrderItems).values(batch).run();
 
-    // Everyone active who serves — not the person ordering, if they serve too: it is already on their board.
+    // Everyone active who serves from the board (the Office helper) — not the person ordering, if they serve too.
     const toAlert = cafeServers(tx, me.id);
     for (const s of toAlert) {
       notify(
@@ -417,6 +423,25 @@ router.post('/orders/:id/status', canServe, async (c) => {
     queueCafeOrderGone(c, [{ order: updated, by, outcome: input.status === 'cancelled' ? 'cancelled' : 'on_the_way' }]);
   }
   return c.json<CafeOrder>(toCafeOrder(db, updated, me.id));
+});
+
+// ── The monthly consumption page (cafeteria.report) ─────────────────────────
+
+/**
+ * Who had what from the cafeteria in one month (?month=YYYY-MM; without it,
+ * the current month at the school): delivered orders, by the day they were
+ * delivered in the school's time zone, per person and item, with a total per
+ * item. Cancelled orders don't count; someone no longer on the team is still
+ * listed for the months they ordered in. No prices.
+ */
+router.get('/report', requirePermission('cafeteria.report'), (c) => {
+  const q = query(c, cafeReportQuery);
+  const currentMonth = schoolToday(c).slice(0, 7);
+  const month = q.month ?? currentMonth;
+  const tz = c.get('config').timeZone;
+  const from = epochAt(tz, `${month}-01`);
+  const to = epochAt(tz, `${shiftCafeMonth(month, 1)}-01`);
+  return c.json<CafeReport>(cafeReport(c.get('db'), month, currentMonth, from, to));
 });
 
 export default router;

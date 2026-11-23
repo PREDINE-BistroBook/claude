@@ -15,7 +15,11 @@ interface ToastApi {
 
 const ToastContext = createContext<ToastApi | null>(null);
 
-/** Short confirmations ("Saved"). Messages are already-translated strings. */
+/**
+ * Short confirmations ("Saved"). Messages are already-translated strings. A
+ * toast is never in the way: taps go through it (it has nothing to tap), so
+ * one that sits over a sticky "Send" or "Save" bar can't swallow the tap.
+ */
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<ToastItem[]>([]);
   const next = useRef(1);
@@ -37,7 +41,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <div
             key={t.id}
             className={clsx(
-              'pointer-events-auto flex max-w-md items-center gap-2.5 rounded-xl px-4 py-3 text-sm font-medium shadow-lg',
+              'pointer-events-none flex max-w-md items-center gap-2.5 rounded-xl px-4 py-3 text-sm font-medium shadow-lg',
               t.kind === 'success' ? 'bg-ink text-canvas' : 'bg-danger text-danger-ink',
             )}
           >

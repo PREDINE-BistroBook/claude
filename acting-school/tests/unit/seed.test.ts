@@ -105,7 +105,7 @@ describe('npm run seed', () => {
     expect(count(`select count(*) as n from positions where key = 'executive_director' and permissions like '%staff.summon%'`)).toBe(1);
 
     // Reception and Office helper: one account each, holding the built-in position (Reception allows nothing yet;
-    // the Office helper serves the cafeteria, in Arabic). The Executive Director was not given cafeteria.serve.
+    // the Office helper serves the cafeteria, in Arabic). The Executive Director serves too (grant v4), without the monthly page.
     const holds = (email: string, key: string) =>
       count(`select count(*) as n from user_positions up join users u on u.id = up.user_id join positions p on p.id = up.position_id where u.email = '${email}' and p.key = '${key}'`);
     expect(holds('reception@demo.school', 'reception')).toBe(1);
@@ -113,23 +113,32 @@ describe('npm run seed', () => {
     expect(count(`select count(*) as n from positions where key = 'reception' and permissions = '[]' and name_ar = 'الاستقبال'`)).toBe(1);
     expect(count(`select count(*) as n from positions where key = 'office_helper' and permissions = '["cafeteria.serve"]' and name_ar = 'عامل المكتب'`)).toBe(1);
     expect(count(`select count(*) as n from users where email = 'helper@demo.school' and locale = 'ar'`)).toBe(1);
-    expect(count(`select count(*) as n from positions where key = 'executive_director' and permissions like '%cafeteria.serve%'`)).toBe(0);
+    expect(count(`select count(*) as n from positions where key = 'executive_director' and permissions like '%cafeteria.serve%'`)).toBe(1);
+    expect(count(`select count(*) as n from positions where key = 'executive_director' and permissions like '%cafeteria.report%'`)).toBe(0);
     expect(first.stdout).toContain('helper@demo.school');
     expect(first.stdout).toContain('reception@demo.school');
-    // The cafeteria: the usual menu (no prices anywhere), one order delivered by the helper, one waiting on his board
-    // with an alert for everyone who serves (the helper and the two owners).
+    // The cafeteria: the usual menu (no prices anywhere); on the days before, four orders delivered by the helper and one
+    // turned down (for the owners' monthly page), all long read; this morning one delivered, and one waiting on his board
+    // with an alert for the Office helper only (D1: not the owners or the director).
     expect(count('select count(*) as n from cafe_items where available = 1')).toBe(10);
     expect(count('select count(distinct category) as n from cafe_items')).toBe(3);
-    expect(count('select count(*) as n from cafe_orders')).toBe(2);
+    expect(count('select count(*) as n from cafe_orders')).toBe(7);
     expect(
       count(`select count(*) as n from cafe_orders o join users u on u.id = o.handled_by_id
              where o.status = 'delivered' and u.email = 'helper@demo.school' and o.on_the_way_at < o.delivered_at and o.created_at < o.on_the_way_at`),
-    ).toBe(1);
+    ).toBe(5);
+    expect(count(`select count(*) as n from cafe_orders where status = 'cancelled' and cancel_reason = 'Sorry, it is not available now'`)).toBe(1);
+    expect(count(`select count(*) as n from cafe_orders where status = 'delivered' and delivered_at < ${Date.now() - 20 * 60 * 60_000}`)).toBe(4);
     expect(count(`select count(*) as n from cafe_orders o join users u on u.id = o.user_id where o.status = 'new' and o.place = 'Studio 1' and u.email = 'coach@demo.school'`)).toBe(1);
-    expect(count('select count(*) as n from cafe_order_items')).toBe(4);
+    expect(count('select count(*) as n from cafe_order_items')).toBe(11);
     expect(count(`select count(*) as n from cafe_order_items where options = 'no sugar' and name_en = 'Tea' and name_ar = 'شاي'`)).toBe(1);
-    expect(count(`select count(*) as n from notifications where kind = 'cafe_order' and read_at is null`)).toBe(3);
-    expect(count(`select count(*) as n from notifications n join users u on u.id = n.user_id where n.kind = 'cafe_status' and u.email = 'director@demo.school'`)).toBe(1);
+    expect(count(`select count(*) as n from notifications where kind = 'cafe_order' and read_at is null`)).toBe(1);
+    expect(
+      count(`select count(*) as n from notifications n join users u on u.id = n.user_id where n.kind = 'cafe_order' and u.email <> 'helper@demo.school'`),
+    ).toBe(0);
+    expect(count(`select count(*) as n from notifications where kind like 'cafe_%' and read_at is null and created_at < ${Date.now() - 20 * 60 * 60_000}`)).toBe(0);
+    // One alert per order for the person who ordered: the director's two (the day before yesterday, this morning).
+    expect(count(`select count(*) as n from notifications n join users u on u.id = n.user_id where n.kind = 'cafe_status' and u.email = 'director@demo.school'`)).toBe(2);
     expect(count(`select count(*) as n from settings where key in ('cafeteriaEnabled', 'cafePlaces')`)).toBe(0);
 
     const again = seed();
@@ -140,6 +149,6 @@ describe('npm run seed', () => {
     const reset = seed('--reset');
     expect(reset.status).toBe(0);
     expect(count('select count(*) as n from users')).toBe(11);
-    expect(count('select count(*) as n from cafe_orders')).toBe(2);
+    expect(count('select count(*) as n from cafe_orders')).toBe(7);
   }, 90_000);
 });

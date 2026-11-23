@@ -164,7 +164,9 @@ export function AppShell() {
   const tabs = section ? (tabPaths.map((to) => sectionItems.find((i) => i.to === to)).filter(Boolean) as MenuItem[]) : user ? ownItems : [];
   const moreSection = sectionItems.filter((i) => !tabPaths.includes(i.to));
   const teamActive = teamMenuActive(pathname);
-  const cafeActive = cafeOn && cafeMenuActive(pathname, cafeHome);
+  // The Cafeteria entry in the account / "More" menu: for everyone while it is on — except the Office helper, whose own menu has it.
+  const cafeEntry = cafeOn && !cafeHome;
+  const cafeActive = cafeEntry && cafeMenuActive(pathname, cafeHome);
   // The Cafeteria entry carries the count of waiting orders unless the person's own menu already shows it on "Orders".
   const cafeEntryBadge = cafeHome ? 0 : cafeBadge(cafe);
   const moreActive = teamActive || cafeActive || [...moreSection, ...adminItems, PROFILE_ITEM].some((i) => navItemActive(i, pathname));
@@ -233,7 +235,7 @@ export function AppShell() {
             <Languages className="size-5" aria-hidden />
             <span lang={currentLanguage() === 'ar' ? 'en' : 'ar'}>{t('language.switchTo')}</span>
           </button>
-          {cafeOn && (
+          {cafeEntry && (
             <Link
               to={CAFE_ITEM.to}
               aria-current={cafeActive ? 'page' : undefined}
@@ -420,7 +422,7 @@ export function AppShell() {
             )}
             {adminItems.length > 0 && <MoreGroup label={t('nav.admin')} items={adminItems} pathname={pathname} />}
             <div className="mt-2 grid grid-cols-2 gap-2 border-t border-line px-4 py-3">
-              {cafeOn && (
+              {cafeEntry && (
                 <Link
                   to={CAFE_ITEM.to}
                   aria-current={cafeActive ? 'page' : undefined}

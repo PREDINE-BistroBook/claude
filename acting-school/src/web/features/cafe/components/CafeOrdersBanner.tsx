@@ -29,7 +29,7 @@ export function CafeOrdersBanner() {
     const before = last.current;
     last.current = waiting;
     if (before === null || waiting <= before || onBoard) return;
-    ring();
+    void ring();
     vibrateIfAllowed([200, 100, 200]);
   }, [waiting, onBoard]);
 

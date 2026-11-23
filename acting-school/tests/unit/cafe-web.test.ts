@@ -1,18 +1,37 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { BUILT_IN_POSITIONS, type Permission } from '../../src/shared/permissions';
-import { DEFAULT_CAFE_PLACES, MAX_CAFE_ORDER_LINES, MAX_CAFE_QTY, cafeOrderInput, type CafeItem, type CafeOrder } from '../../src/shared/schemas/cafe';
+import { BUILT_IN_POSITIONS, servesFromBoard, type Permission } from '../../src/shared/permissions';
+import {
+  CAFE_OPTION_CHIPS,
+  DEFAULT_CAFE_PLACES,
+  MAX_CAFE_OPTIONS,
+  MAX_CAFE_ORDER_LINES,
+  MAX_CAFE_QTY,
+  cafeLinesSummary,
+  cafeOptionsLabel,
+  cafeOrderInput,
+  cafeReasonLabel,
+  storedCafeReason,
+  type CafeItem,
+  type CafeOrder,
+} from '../../src/shared/schemas/cafe';
 import {
   CAFE_BOARD_PATH,
   CAFE_MENU_PATH,
   CAFE_PATH,
-  OTHER_PLACE,
+  CAFE_REPORT_PATH,
+  BOARD_MOVE_REST_MS,
+  BOARD_REMIND_MS,
+  NO_PLACE,
   STATUS_LINGER_MS,
+  activeOptionChips,
   addOne,
   addVariant,
   agoParts,
   boardIsHome,
+  boardPins,
+  boardResting,
   boardSections,
   cafeBadge,
   cafePageForPath,
@@ -26,15 +45,22 @@ import {
   linesOf,
   menuGroups,
   moveInGroup,
+  nameFieldsInOrder,
   newArrivals,
+  optionChipsFor,
   orderIdFrom,
   orderProblem,
+  placeRowErrors,
   removeOne,
   setOptions,
+  shouldRemind,
   splitMyOrders,
+  staleOrderTags,
   toOrderInput,
+  toggleOptionChip,
   totalQty,
   type DraftLine,
+  type PlaceChoice,
 } from '../../src/web/features/cafe/utils';
 import { CAFE_HOME_ITEMS, CAFE_ITEM, NAV_ITEMS, cafeMenuActive, cafeMenuHint, landingAfterSignIn, mobileTabs } from '../../src/web/layout/nav';
 import { sectionForPath, visibleSections } from '../../src/web/layout/sections';
@@ -48,6 +74,7 @@ const builtIn = (key: string) => BUILT_IN_POSITIONS.find((p) => p.key === key)!.
 const canWith = (permissions: readonly Permission[]) => (p: Permission) => permissions.includes(p);
 const sections = (permissions: readonly Permission[]) => visibleSections(canWith(permissions)).length;
 
+const picked = (place: string): PlaceChoice => ({ pick: place, elsewhere: false, other: '' });
 const item = (id: number, over: Partial<CafeItem> = {}): CafeItem => ({ id, nameEn: `Item ${id}`, nameAr: `صنف ${id}`, category: 'hot', available: true, sortOrder: id, ...over });
 const TEA = 1;
 const COFFEE = 2;
@@ -73,14 +100,17 @@ const order = (id: number, over: Partial<CafeOrder> = {}): CafeOrder => ({
 });
 
 describe('who sees what of the cafeteria', () => {
-  it('everyone orders; whoever serves also has the board and the menu editor; the director the menu editor', () => {
+  it('everyone orders; whoever serves (the helper, the director, owners) also has the board and the menu editor; owners the monthly page too', () => {
     expect(cafePages(canWith(builtIn('acting_coach')), true)).toEqual(['order']);
     expect(cafePages(canWith(builtIn('reception')), true)).toEqual(['order']);
     expect(cafePages(canWith(builtIn('office_helper')), true)).toEqual(['board', 'menu', 'order']);
-    expect(cafePages(canWith(builtIn('ceo')), true)).toEqual(['board', 'menu', 'order']);
-    // settings.manage without cafeteria.serve: her own order first, then the menu.
-    expect(cafePages(canWith(builtIn('executive_director')), true)).toEqual(['order', 'menu']);
+    expect(cafePages(canWith(builtIn('ceo')), true)).toEqual(['board', 'menu', 'order', 'report']);
+    // The director serves since grant v4 (D2), and has no monthly page.
+    expect(cafePages(canWith(builtIn('executive_director')), true)).toEqual(['board', 'menu', 'order']);
+    // settings.manage without cafeteria.serve: their own order first, then the menu.
+    expect(cafePages(canWith(['settings.manage']), true)).toEqual(['order', 'menu']);
     expect(cafePages(canWith(['cafeteria.serve']), true)).toEqual(['board', 'menu', 'order']);
+    expect(cafePages(canWith(['cafeteria.report']), true)).toEqual(['order', 'report']);
   });
 
   it('nothing at all while the cafeteria is switched off, or before the poll has said', () => {
@@ -108,6 +138,20 @@ describe('who sees what of the cafeteria', () => {
     // It follows the permission and the sections, never the position's name: a helper who is also given a section starts there.
     const helperAndCoach = [...helper, ...builtIn('acting_coach')];
     expect(boardIsHome(canWith(helperAndCoach), sections(helperAndCoach), true)).toBe(false);
+    // The director serves too (D2), but works in the sections.
+    const director = builtIn('executive_director');
+    expect(boardIsHome(canWith(director), sections(director), true)).toBe(false);
+  });
+
+  it('the board is home for exactly those the server alerts about new orders (D1: the same rule, servesFromBoard)', () => {
+    const sets: (readonly Permission[])[] = [
+      ...BUILT_IN_POSITIONS.map((p) => p.permissions as readonly Permission[]),
+      [...builtIn('office_helper'), ...builtIn('acting_coach')],
+      ['cafeteria.serve', 'website.manage'],
+      ['cafeteria.serve', 'settings.manage', 'staff.manage', 'cafeteria.report'],
+      ['cafeteria.serve', 'talent.read'],
+    ];
+    for (const held of sets) expect(boardIsHome(canWith(held), sections(held), true), held.join()).toBe(servesFromBoard(held));
   });
 
   it('Reception sees none of the three sections (School, Casting, Website)', () => {
@@ -122,22 +166,26 @@ describe('who sees what of the cafeteria', () => {
   });
 
   it('the cafeteria pages are outside the three sections, and are told apart by their path', () => {
-    for (const p of [CAFE_PATH, CAFE_BOARD_PATH, CAFE_MENU_PATH]) expect(sectionForPath(p), p).toBeNull();
+    for (const p of [CAFE_PATH, CAFE_BOARD_PATH, CAFE_MENU_PATH, CAFE_REPORT_PATH]) expect(sectionForPath(p), p).toBeNull();
     expect(cafePageForPath('/cafeteria')).toBe('order');
     expect(cafePageForPath('/cafeteria/')).toBe('order');
     expect(cafePageForPath('/cafeteria/board')).toBe('board');
     expect(cafePageForPath('/cafeteria/menu')).toBe('menu');
+    expect(cafePageForPath('/cafeteria/report')).toBe('report');
     expect(cafePageForPath('/cafeteria/else')).toBeNull();
     expect(cafePageForPath('/team')).toBeNull();
   });
 
-  it('menus: one Cafeteria entry outside the section menus; the helper’s own menu is the board (with its count) and the menu editor', () => {
+  it('menus: one Cafeteria entry outside the section menus; the helper’s own menu is the board (with its count), the menu editor and his own order', () => {
     expect(NAV_ITEMS.some((i) => i.to.startsWith('/cafeteria'))).toBe(false);
     expect(CAFE_ITEM).toMatchObject({ to: '/cafeteria', label: 'cafeteria', badge: 'cafeNewOrders' });
+    // One navigation for the helper (UX-9): the bottom bar has all three; the pages show no second row of tabs.
     expect(CAFE_HOME_ITEMS.map((i) => [i.to, i.label, i.badge])).toEqual([
       ['/cafeteria/board', 'cafeBoard', 'cafeNewOrders'],
       ['/cafeteria/menu', 'cafeMenu', undefined],
+      ['/cafeteria', 'cafeOrder', undefined],
     ]);
+    expect(CAFE_HOME_ITEMS.find((i) => i.to === '/cafeteria')?.end).toBe(true);
     // The entry is current on every cafeteria page — except for the helper, whose own menu has the other two.
     for (const p of ['/cafeteria', '/cafeteria/board', '/cafeteria/menu']) expect(cafeMenuActive(p), p).toBe(true);
     expect(cafeMenuActive('/cafeteria', true)).toBe(true);
@@ -157,8 +205,12 @@ describe('who sees what of the cafeteria', () => {
     expect(landingAfterSignIn('/cafeteria?order=4', coach)).toBe('/cafeteria?order=4');
     expect(landingAfterSignIn('/cafeteria/board?order=4', helper)).toBe('/cafeteria/board?order=4');
     expect(landingAfterSignIn('/cafeteria/menu', helper)).toBe('/cafeteria/menu');
-    expect(landingAfterSignIn('/cafeteria/board', director)).toBe('/');
+    expect(landingAfterSignIn('/cafeteria/board', director)).toBe('/cafeteria/board');
     expect(landingAfterSignIn('/cafeteria/menu', director)).toBe('/cafeteria/menu');
+    // The monthly page: owners only.
+    expect(landingAfterSignIn('/cafeteria/report', director)).toBe('/');
+    expect(landingAfterSignIn('/cafeteria/report', helper)).toBe('/');
+    expect(landingAfterSignIn('/cafeteria/report', canWith(builtIn('ceo')))).toBe('/cafeteria/report');
   });
 });
 
@@ -231,7 +283,7 @@ describe('putting an order together (− / +)', () => {
       [2, 'no sugar'],
     ]);
     // What is sent validates on the server's own schema.
-    const input = toOrderInput(draft, { pick: 'Studio 1', other: '' }, '')!;
+    const input = toOrderInput(draft, picked('Studio 1'), '')!;
     expect(cafeOrderInput.safeParse(input).success).toBe(true);
     expect(input.items).toEqual([
       { itemId: TEA, qty: 2, options: null },
@@ -252,7 +304,7 @@ describe('putting an order together (− / +)', () => {
     expect(canAddOne(undefined, draft)).toBe(false);
     expect(addOne(draft, COFFEE)).toHaveLength(MAX_CAFE_ORDER_LINES);
     expect(canAddOne(draft[1], draft)).toBe(true);
-    expect(cafeOrderInput.safeParse(toOrderInput(draft, { pick: 'Office', other: '' }, '')).success).toBe(true);
+    expect(cafeOrderInput.safeParse(toOrderInput(draft, picked('Office'), '')).success).toBe(true);
   });
 
   it('nothing is changed in place (React state)', () => {
@@ -301,33 +353,45 @@ describe('putting an order together (− / +)', () => {
 });
 
 describe('where should it come?', () => {
+  const elsewhere = (other: string): PlaceChoice => ({ pick: null, elsewhere: true, other });
+
   it('starts on the person’s last place: a configured one picked, anything else in "Somewhere else"', () => {
-    expect(initialPlace(null, DEFAULT_CAFE_PLACES)).toEqual({ pick: null, other: '' });
-    expect(initialPlace('Studio 1', DEFAULT_CAFE_PLACES)).toEqual({ pick: 'Studio 1', other: '' });
+    expect(initialPlace(null, DEFAULT_CAFE_PLACES)).toEqual(NO_PLACE);
+    expect(initialPlace('Studio 1', DEFAULT_CAFE_PLACES)).toEqual(picked('Studio 1'));
     // Stored in English whichever language it was picked in; an old Arabic text still finds its place.
-    expect(initialPlace('استوديو 2', DEFAULT_CAFE_PLACES)).toEqual({ pick: 'Studio 2', other: '' });
-    expect(initialPlace('The roof', DEFAULT_CAFE_PLACES)).toEqual({ pick: OTHER_PLACE, other: 'The roof' });
+    expect(initialPlace('استوديو 2', DEFAULT_CAFE_PLACES)).toEqual(picked('Studio 2'));
+    expect(initialPlace('The roof', DEFAULT_CAFE_PLACES)).toEqual(elsewhere('The roof'));
     // The place was removed from the list since: it is still offered, as text.
-    expect(initialPlace('Studio 1', [])).toEqual({ pick: OTHER_PLACE, other: 'Studio 1' });
+    expect(initialPlace('Studio 1', [])).toEqual(elsewhere('Studio 1'));
   });
 
   it('"Send order" needs something chosen and a place; the note is optional', () => {
     const draft = addOne([], TEA);
-    expect(orderProblem([], { pick: 'Office', other: '' })).toBe('nothing');
-    expect(orderProblem(draft, { pick: null, other: '' })).toBe('place');
-    expect(orderProblem(draft, { pick: OTHER_PLACE, other: '   ' })).toBe('place');
-    expect(orderProblem(draft, { pick: OTHER_PLACE, other: ' The roof ' })).toBeNull();
-    expect(chosenPlace({ pick: OTHER_PLACE, other: ' The roof ' })).toBe('The roof');
-    // A picked place wins over text left in the "Somewhere else" field.
-    expect(chosenPlace({ pick: 'Office', other: 'The roof' })).toBe('Office');
-    expect(toOrderInput([], { pick: 'Office', other: '' }, 'x')).toBeNull();
-    expect(toOrderInput(draft, { pick: null, other: '' }, 'x')).toBeNull();
-    expect(toOrderInput(setOptions(draft, draft[0]!.key, '  '), { pick: 'Office', other: '' }, '  after 11  ')).toEqual({
+    expect(orderProblem([], picked('Office'))).toBe('nothing');
+    expect(orderProblem(draft, NO_PLACE)).toBe('place');
+    expect(orderProblem(draft, elsewhere('   '))).toBe('place');
+    expect(orderProblem(draft, elsewhere(' The roof '))).toBeNull();
+    expect(chosenPlace(elsewhere(' The roof '))).toBe('The roof');
+    // A picked place wins over text left in the "Somewhere else" field; once "Somewhere else" is tapped, its text counts.
+    expect(chosenPlace({ pick: 'Office', elsewhere: false, other: 'The roof' })).toBe('Office');
+    expect(chosenPlace({ pick: 'Office', elsewhere: true, other: 'The roof' })).toBe('The roof');
+    expect(toOrderInput([], picked('Office'), 'x')).toBeNull();
+    expect(toOrderInput(draft, NO_PLACE, 'x')).toBeNull();
+    expect(toOrderInput(setOptions(draft, draft[0]!.key, '  '), picked('Office'), '  after 11  ')).toEqual({
       place: 'Office',
       note: 'after 11',
       items: [{ itemId: TEA, qty: 1, options: null }],
     });
-    expect(toOrderInput(draft, { pick: 'Office', other: '' }, ' ')!.note).toBeNull();
+    expect(toOrderInput(draft, picked('Office'), ' ')!.note).toBeNull();
+  });
+
+  it('a place called "other" is a place like any other: "Somewhere else" is its own flag (NIT-2)', () => {
+    const places = [...DEFAULT_CAFE_PLACES, { en: 'other', ar: 'أخرى' }];
+    const draft = addOne([], TEA);
+    expect(initialPlace('other', places)).toEqual(picked('other'));
+    expect(chosenPlace(picked('other'))).toBe('other');
+    expect(orderProblem(draft, picked('other'))).toBeNull();
+    expect(toOrderInput(draft, picked('other'), '')!.place).toBe('other');
   });
 });
 
@@ -352,6 +416,16 @@ describe('my orders on the order screen', () => {
     expect(focused.current.map((o) => o.id)).toEqual([5, 4, 3, 1]);
     expect(focused.recent.map((o) => o.id)).toEqual([2]);
     expect(splitMyOrders([], now)).toEqual({ current: [], recent: [] });
+  });
+
+  it('only the latest finished order stays large, so a second one doesn’t push the menu a screen further down (UX-17)', () => {
+    const cancelledJustNow = order(9, { status: 'cancelled', cancelledAt: now - 60_000 });
+    const deliveredBefore = delivered(8, 5);
+    const split = splitMyOrders([cancelledJustNow, deliveredBefore], now);
+    expect(split.current.map((o) => o.id)).toEqual([9]);
+    expect(split.recent.map((o) => o.id)).toEqual([8]);
+    // …unless an alert points at the other one.
+    expect(splitMyOrders([cancelledJustNow, deliveredBefore], now, 8).current.map((o) => o.id)).toEqual([9, 8]);
   });
 
   it('shows the five newest recent orders', () => {
@@ -389,6 +463,52 @@ describe('the orders board', () => {
     expect(boardSections([])).toEqual({ fresh: [], onTheWay: [], done: [] });
   });
 
+  it('after a tap on a step button the cards stay where they were (pinned), so the next order can’t slide under the finger (UX-1)', () => {
+    const items = [order(1, { status: 'new', createdAt: t0 }), order(2, { status: 'new', createdAt: t0 + 10 }), order(3, { status: 'on_the_way', createdAt: t0 - 10 })];
+    const pins = boardPins(items);
+    expect([...pins]).toEqual([
+      [1, 'fresh'],
+      [2, 'fresh'],
+      [3, 'onTheWay'],
+    ]);
+    // Order 1 was taken and order 3 delivered meanwhile: while pinned they keep their places (showing their new state) …
+    const after = [order(1, { status: 'on_the_way', createdAt: t0 }), order(2, { status: 'new', createdAt: t0 + 10 }), order(3, { status: 'delivered', createdAt: t0 - 10, deliveredAt: t0 + 99 })];
+    const pinned = boardSections(after, pins);
+    expect(pinned.fresh.map((o) => o.id)).toEqual([1, 2]);
+    expect(pinned.onTheWay.map((o) => o.id)).toEqual([3]);
+    expect(pinned.done).toEqual([]);
+    // … a new order that came meanwhile goes where it belongs …
+    expect(boardSections([...after, order(4, { createdAt: t0 + 20 })], pins).fresh.map((o) => o.id)).toEqual([1, 2, 4]);
+    // … and once the rest is over, everything moves to its own section.
+    const free = boardSections(after);
+    expect([free.fresh, free.onTheWay, free.done].map((l) => l.map((o) => o.id))).toEqual([[2], [1], [3]]);
+  });
+
+  it('the step buttons rest for two seconds after any tap: a double tap can’t mark an order Delivered at once (UX-1)', () => {
+    const tap = 1_000_000;
+    expect(BOARD_MOVE_REST_MS).toBe(2_000);
+    expect(boardResting(null, tap)).toBe(false);
+    for (const later of [0, 350, 700, 1_200, 1_999]) expect(boardResting(tap, tap + later), String(later)).toBe(true);
+    expect(boardResting(tap, tap + 2_000)).toBe(false);
+  });
+
+  it('rings again once a minute while an order waits and nobody has touched the screen; a tap stops it until the next new order (UX-8)', () => {
+    const rang = 5_000_000;
+    expect(BOARD_REMIND_MS).toBe(60_000);
+    expect(shouldRemind({ waiting: 1, lastRingAt: rang, lastTapAt: null, now: rang + 59_999 })).toBe(false);
+    expect(shouldRemind({ waiting: 1, lastRingAt: rang, lastTapAt: null, now: rang + 60_000 })).toBe(true);
+    expect(shouldRemind({ waiting: 1, lastRingAt: rang, lastTapAt: rang - 5_000, now: rang + 90_000 })).toBe(true);
+    // Touched since the ring, nothing waiting, or never rung (the orders were there when the board opened): quiet.
+    expect(shouldRemind({ waiting: 1, lastRingAt: rang, lastTapAt: rang + 1_000, now: rang + 600_000 })).toBe(false);
+    expect(shouldRemind({ waiting: 0, lastRingAt: rang, lastTapAt: null, now: rang + 600_000 })).toBe(false);
+    expect(shouldRemind({ waiting: 3, lastRingAt: null, lastTapAt: null, now: rang })).toBe(false);
+  });
+
+  it('closes this phone’s “New order” notifications for orders that no longer wait (NIT-3)', () => {
+    expect(staleOrderTags(['cafe-order-1', 'cafe-order-2', 'cafe-5', 'summons-3', 'cafe-order-x'], new Set([2]))).toEqual(['cafe-order-1']);
+    expect(staleOrderTags([], new Set())).toEqual([]);
+  });
+
   it('rings for orders that were not there at the last look — never for what was waiting when the board opened, never twice', () => {
     const first = [order(1), order(2, { status: 'on_the_way' })];
     expect(newArrivals(null, first)).toEqual([]);
@@ -412,6 +532,79 @@ describe('the orders board', () => {
   });
 });
 
+describe('sugar and extras: one tap on a hot drink (UX-3)', () => {
+  const chip = (key: string) => CAFE_OPTION_CHIPS.find((c) => c.key === key)!;
+
+  it('are offered on hot drinks only, with the Egyptian words the helper reads', () => {
+    expect(optionChipsFor('hot').map((c) => c.ar)).toEqual(['سادة', 'على الريحة', 'مضبوط', 'سكر زيادة', 'باللبن']);
+    expect(optionChipsFor('hot').map((c) => c.en)).toEqual(['No sugar', 'A little sugar', 'Medium sugar', 'Sweet', 'With milk']);
+    for (const category of ['cold', 'food', 'other'] as const) expect(optionChipsFor(category)).toEqual([]);
+    // Every chip is 48 px of tappable words, and fits a line's 60 characters with room to spare.
+    for (const c of CAFE_OPTION_CHIPS) expect(c.en.length + c.ar.length).toBeLessThan(MAX_CAFE_OPTIONS);
+  });
+
+  it('a tap writes the words in the screen’s language; one sugar level at a time; a second tap takes it out; typed words stay', () => {
+    let text = toggleOptionChip('', 'medium_sugar', 'ar');
+    expect(text).toBe('مضبوط');
+    text = toggleOptionChip(text, 'milk', 'ar');
+    expect(text).toBe('مضبوط، باللبن');
+    // Another sugar level replaces the first.
+    text = toggleOptionChip(text, 'no_sugar', 'ar');
+    expect(text).toBe('باللبن، سادة');
+    expect([...activeOptionChips(text)].sort()).toEqual(['milk', 'no_sugar']);
+    text = toggleOptionChip(text, 'milk', 'ar');
+    expect(text).toBe('سادة');
+    // English, around what was typed; a chip typed in the other language is still recognised.
+    expect(toggleOptionChip('in a big cup', 'sweet', 'en')).toBe('in a big cup, Sweet');
+    expect(toggleOptionChip('Sweet, in a big cup', 'sweet', 'en')).toBe('in a big cup');
+    expect(activeOptionChips('سكر زيادة, extra hot')).toEqual(new Set(['sweet']));
+    expect(toggleOptionChip('سادة', 'sweet', 'en')).toBe('Sweet');
+    // Never past what a line holds.
+    const long = 'x'.repeat(MAX_CAFE_OPTIONS - 3);
+    expect(toggleOptionChip(long, 'milk', 'en')).toBe(long);
+    expect(chip('milk').group).toBe('extra');
+  });
+
+  it('each reader sees the ready-made words in their own language — the helper in Arabic, an English reader in English; typed words as typed', () => {
+    expect(cafeOptionsLabel('No sugar, with milk', 'ar')).toBe('سادة، باللبن');
+    expect(cafeOptionsLabel('مضبوط، extra hot', 'en')).toBe('Medium sugar, extra hot');
+    expect(cafeOptionsLabel('in a mug', 'ar')).toBe('in a mug');
+    expect(cafeOptionsLabel(null, 'en')).toBe('');
+    expect(cafeLinesSummary([{ nameEn: 'Tea', nameAr: 'شاي', qty: 2, options: 'no sugar' }], 'ar')).toBe('2 × شاي (سادة)');
+  });
+
+  it('a ready-made reason is kept by its English words and read in each reader’s language (UX-12)', () => {
+    expect(storedCafeReason('  نعتذر، البوفيه مشغول الآن ')).toBe('Sorry, the cafeteria is busy right now');
+    expect(cafeReasonLabel('Sorry, the cafeteria is busy right now', 'ar')).toBe('نعتذر، البوفيه مشغول الآن');
+    expect(cafeReasonLabel('The cafeteria is closed now', 'en')).toBe('The cafeteria is closed now');
+    expect(storedCafeReason(' No milk left ')).toBe('No milk left');
+    expect(cafeReasonLabel('No milk left', 'ar')).toBe('No milk left');
+  });
+});
+
+describe('the Menu tab', () => {
+  it('shows the two name fields in the screen’s own language first (UX-14)', () => {
+    expect(nameFieldsInOrder('ar')).toEqual(['ar', 'en']);
+    expect(nameFieldsInOrder('en')).toEqual(['en', 'ar']);
+  });
+
+  it('says which place rows can’t be saved, before anything is sent: a blank row, a name used twice in either language (NIT-2)', () => {
+    expect(placeRowErrors(DEFAULT_CAFE_PLACES)).toEqual(new Map());
+    const rows = [
+      { en: 'Office', ar: 'المكتب' },
+      { en: ' office ', ar: '' },
+      { en: '', ar: '' },
+      { en: 'Roof', ar: 'المكتب' },
+      { en: 'other', ar: 'أخرى' },
+    ];
+    expect([...placeRowErrors(rows)].sort()).toEqual([
+      [1, 'twice'],
+      [2, 'blank'],
+      [3, 'twice'],
+    ]);
+  });
+});
+
 describe('the cafeteria’s words on screen', () => {
   beforeAll(() => {
     vi.stubGlobal('document', { documentElement: {} });
@@ -427,7 +620,17 @@ describe('the cafeteria’s words on screen', () => {
     expect(common.ar.nav.cafeteria).toBe('البوفيه');
     expect(cafe.en.orderDrink).toBe('Order a drink');
     expect(cafe.en.status).toMatchObject({ new: 'Sent — waiting', on_the_way: 'On the way', delivered: 'Delivered ✓' });
-    expect(cafe.en.board).toMatchObject({ setOff: 'On the way', delivered: 'Delivered', cant: 'Can’t do this one' });
+    // The buttons say what the helper does; the card's strip says where the order is (UX-5).
+    expect(cafe.en.board).toMatchObject({ setOff: 'I’m taking it now', delivered: 'I’ve delivered it', cant: 'Can’t do this one', statusNew: 'New order', statusOnTheWay: 'On the way' });
+    expect(cafe.ar.board).toMatchObject({ setOff: 'خرجت بالطلب', delivered: 'سلّمت الطلب', cant: 'اعتذار عن الطلب', fresh: 'طلبات جديدة', done: 'انتهت اليوم' });
+    // Cancelling one's own order: two buttons that can't be mistaken for each other (UX-4).
+    expect(cafe.en.mine).toMatchObject({ cancelYes: 'Yes, cancel the order', keep: 'Keep the order' });
+    expect(cafe.ar.mine).toMatchObject({ cancelYes: 'نعم، إلغاء الطلب', keep: 'إبقاء الطلب', again: 'تكرار الطلب' });
+    expect(cafe.ar.tabs.menu).toBe('المنيو');
+    expect(cafe.en.report.title).toBe('Monthly consumption');
+    expect(cafe.ar.report.title).toBe('الاستهلاك الشهري');
+    expect(positions.en.perm.cafeteria.report.label).toBe('See monthly cafeteria consumption');
+    expect(positions.ar.perm.cafeteria.report.label).toBeTruthy();
     expect(cafe.en.order).toMatchObject({ notAvailable: 'Not available now', somewhereElse: 'Somewhere else', send: 'Send order' });
     expect(cafe.en.mine).toMatchObject({ cancel: 'Cancel order', again: 'Order again' });
     expect(cafe.en.menu.addUsual).toBe('Add the usual items');
@@ -478,12 +681,24 @@ describe('the cafeteria’s words on screen', () => {
     expect(strings(cafe.ar).filter((s) => money.test(s))).toEqual([]);
   });
 
-  it('the route table: ordering for everyone, the board behind cafeteria.serve, the menu editor behind its own guard', async () => {
+  it('the route table: ordering for everyone, the board behind cafeteria.serve, the menu editor behind its own guard, the monthly page behind cafeteria.report', async () => {
     const { cafeRoutes } = await import('../../src/web/features/cafe/routes');
-    expect(cafeRoutes.map((r) => r.path)).toEqual(['cafeteria', 'cafeteria/board', 'cafeteria/menu']);
+    expect(cafeRoutes.map((r) => r.path)).toEqual(['cafeteria', 'cafeteria/board', 'cafeteria/menu', 'cafeteria/report']);
     const element = (p: string) => cafeRoutes.find((r) => r.path === p)!.element as { props: Record<string, unknown>; type: { name?: string } };
     expect(element('cafeteria/board').props.permission).toBe('cafeteria.serve');
     expect(element('cafeteria/menu').type.name).toBe('MenuGuard');
+    expect(element('cafeteria/report').props.permission).toBe('cafeteria.report');
     expect(element('cafeteria').props.permission).toBeUndefined();
+  });
+
+  it('the bell never breaks on an alert of a kind it doesn’t know (an older page, a newer server): the plain bell (NIT-4)', async () => {
+    const { notificationLook } = await import('../../src/web/features/team/components/HeaderButtons');
+    const { Bell } = await import('lucide-react');
+    for (const kind of ['message', 'summon', 'summon_answer', 'cafe_order', 'cafe_status']) {
+      const look = notificationLook(kind);
+      expect(look.icon, kind).toBeTruthy();
+      expect(look.tone, kind).toMatch(/\S/);
+    }
+    expect(notificationLook('something_new')).toEqual({ icon: Bell, tone: 'bg-surface-2 text-muted' });
   });
 });

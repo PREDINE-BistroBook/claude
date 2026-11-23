@@ -4,7 +4,7 @@
  * (GET /api/chat/unread → `cafe`). The routes are in routes/cafe.ts.
  */
 import type { Context } from 'hono';
-import { and, asc, count, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, lt, sql, sum } from 'drizzle-orm';
 import { CAFE_CATEGORIES, LOCALES, OPEN_CAFE_ORDER_STATUSES, type CafeOrderStatus, type Locale, type NotificationKind } from '../../shared/enums';
 import {
   cafeLinesSummary,
@@ -16,11 +16,14 @@ import {
   type CafeOrderLine,
   type CafePlace,
   type CafeReasonKey,
+  type CafeReport,
+  type CafeReportLine,
   type CafeUnread,
 } from '../../shared/schemas/cafe';
 import type { PushPayload } from '../../shared/schemas/notifications';
 import { DEFAULT_SETTINGS } from '../../shared/schemas/settings';
 import type { SessionUser } from '../../shared/schemas/auth';
+import { servesFromBoard } from '../../shared/permissions';
 import type { DB } from '../db/database';
 import { cafeItems, cafeOrderItems, cafeOrders, settings, users } from '../db/schema';
 import type { AppEnv } from '../env';
@@ -120,9 +123,12 @@ export function lastCafePlace(db: Reader, userId: number): string | null {
 // ── Who serves ──────────────────────────────────────────────────────────────
 
 /**
- * Every active account whose positions allow cafeteria.serve (the Office
- * helper; owners hold every permission), with the language their alerts are
- * written in. `exceptUserId` leaves one person out (whoever just ordered).
+ * Who is alerted about new orders (the school's decision, 2026-11-23): every
+ * active account that serves from the board — holds cafeteria.serve and opens
+ * no School, Casting or Website section (servesFromBoard: the Office helper).
+ * Owners and the Executive Director hold cafeteria.serve too, but work in the
+ * sections: no order alerts or pushes for them. With the language their
+ * alerts are written in. `exceptUserId` leaves one person out (whoever just ordered).
  */
 export function cafeServers(db: Reader, exceptUserId?: number): { id: number; locale: Locale }[] {
   const active = db.select({ id: users.id, locale: users.locale }).from(users).where(eq(users.active, true)).orderBy(asc(users.id)).all();
@@ -130,7 +136,74 @@ export function cafeServers(db: Reader, exceptUserId?: number): { id: number; lo
     db,
     active.map((u) => u.id),
   );
-  return active.filter((u) => u.id !== exceptUserId && hasPermission(access.get(u.id), 'cafeteria.serve'));
+  return active.filter((u) => u.id !== exceptUserId && servesFromBoard(access.get(u.id)?.permissions ?? []));
+}
+
+// ── The monthly consumption page ────────────────────────────────────────────
+
+/**
+ * Who had what in one month (GET /api/cafe/report, cafeteria.report):
+ * delivered orders only, by the day they were delivered — [from, to) in epoch
+ * ms, the month's bounds in the school's time zone. Counted in SQL (a handful
+ * of bound parameters however many orders there are), one row per person and
+ * item; an item still on the menu is counted under its id and current names
+ * (renamed mid-month: one row), one deleted since under the names it had.
+ */
+export function cafeReport(db: Reader, month: string, currentMonth: string, from: number, to: number): CafeReport {
+  const delivered = and(eq(cafeOrders.status, 'delivered'), gte(cafeOrders.deliveredAt, from), lt(cafeOrders.deliveredAt, to));
+  const deletedNameEn = sql`case when ${cafeOrderItems.itemId} is null then ${cafeOrderItems.nameEn} end`;
+  const deletedNameAr = sql`case when ${cafeOrderItems.itemId} is null then ${cafeOrderItems.nameAr} end`;
+  const rows = db
+    .select({
+      userId: cafeOrders.userId,
+      itemId: cafeOrderItems.itemId,
+      nameEn: sql<string>`coalesce(${cafeItems.nameEn}, ${cafeOrderItems.nameEn})`,
+      nameAr: sql<string>`coalesce(${cafeItems.nameAr}, ${cafeOrderItems.nameAr})`,
+      category: cafeItems.category,
+      sortOrder: cafeItems.sortOrder,
+      qty: sum(cafeOrderItems.qty).mapWith(Number),
+    })
+    .from(cafeOrderItems)
+    .innerJoin(cafeOrders, eq(cafeOrders.id, cafeOrderItems.orderId))
+    .leftJoin(cafeItems, eq(cafeItems.id, cafeOrderItems.itemId))
+    .where(delivered)
+    .groupBy(cafeOrders.userId, cafeOrderItems.itemId, deletedNameEn, deletedNameAr)
+    .all();
+  const orderCounts = db.select({ userId: cafeOrders.userId, n: count() }).from(cafeOrders).where(delivered).groupBy(cafeOrders.userId).all();
+
+  type Row = (typeof rows)[number];
+  // Menu order (category, then its place in the group); items deleted from the menu after them, by name.
+  const byMenu = (a: Row, b: Row) => {
+    if (a.itemId === null || b.itemId === null) return (a.itemId === null ? 1 : 0) - (b.itemId === null ? 1 : 0) || a.nameEn.localeCompare(b.nameEn);
+    return byMenuOrder({ id: a.itemId, category: a.category!, sortOrder: a.sortOrder! }, { id: b.itemId, category: b.category!, sortOrder: b.sortOrder! });
+  };
+  const line = (r: Row): CafeReportLine => ({ itemId: r.itemId, nameEn: r.nameEn, nameAr: r.nameAr, qty: r.qty });
+  const sorted = [...rows].sort(byMenu);
+
+  const totals = new Map<string, CafeReportLine>();
+  for (const r of sorted) {
+    const key = r.itemId === null ? `deleted:${r.nameEn}\u0000${r.nameAr}` : `item:${r.itemId}`;
+    const total = totals.get(key);
+    if (total) total.qty += r.qty;
+    else totals.set(key, line(r));
+  }
+  const people = loadPersons(
+    db,
+    orderCounts.map((o) => o.userId),
+  );
+  return {
+    month,
+    currentMonth,
+    people: orderCounts
+      .map((o) => ({
+        person: people.get(o.userId) ?? missingPerson(o.userId),
+        orders: o.n,
+        items: sorted.filter((r) => r.userId === o.userId).map(line),
+      }))
+      .sort((a, b) => a.person.name.localeCompare(b.person.name) || a.person.id - b.person.id),
+    totals: [...totals.values()],
+    orders: orderCounts.reduce((n, o) => n + o.n, 0),
+  };
 }
 
 // ── The poll ────────────────────────────────────────────────────────────────
@@ -158,12 +231,13 @@ export const cafeBoardLink = (orderId: number) => `/cafeteria/board?order=${orde
 export const cafeOrderLink = (orderId: number) => `/cafeteria?order=${orderId}`;
 
 /**
- * Alerts this person can't open now, left out of their bell and its count:
- * new-order alerts (`cafe_order`, which open the board) once they no longer
- * hold cafeteria.serve, or while the cafeteria is switched off.
+ * Alerts left out of this person's bell and its count: new-order alerts
+ * (`cafe_order`, which open the board) for anyone who is not — or no longer —
+ * someone who serves from the board (cafeServers: the permission taken away,
+ * or a section given since), and for everyone while the cafeteria is switched off.
  */
 export function hiddenNotificationKinds(db: Reader, user: Pick<SessionUser, 'permissions'>): NotificationKind[] {
-  return cafeSettings(db).enabled && hasPermission(user, 'cafeteria.serve') ? [] : ['cafe_order'];
+  return cafeSettings(db).enabled && servesFromBoard(user.permissions) ? [] : ['cafe_order'];
 }
 
 /** "2 × Tea (no sugar) — to Studio 1", in the reader's language. */

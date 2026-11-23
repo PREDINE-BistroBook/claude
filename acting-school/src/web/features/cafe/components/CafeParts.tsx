@@ -1,22 +1,26 @@
 import clsx from 'clsx';
-import { ClipboardList, Coffee, CupSoda, Settings, UtensilsCrossed, type LucideIcon } from 'lucide-react';
+import { CalendarDays, ClipboardList, Coffee, CupSoda, Settings, UtensilsCrossed, type LucideIcon } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation } from 'react-router';
-import { cafeItemName, cafePlaceLabel, type CafeOrderLine, type CafePlace } from '@shared/schemas/cafe';
+import { cafeItemName, cafeOptionsLabel, cafePlaceLabel, cafeReasonLabel, type CafeOrderLine, type CafePlace } from '@shared/schemas/cafe';
 import { ButtonLink, EmptyState, ErrorState, PageLoader } from '@web/components/ui';
 import { useAuth } from '@web/lib/auth';
 import { useFormat } from '@web/lib/format';
+import { visibleSections } from '../../../layout/sections';
 import { useUnread } from '../../team/api';
 import { useCafeMenu, useCafeStatus } from '../api';
-import { CAFE_PATH, agoParts, cafeBadge, cafePageForPath, cafePagePath, cafePages, type CafePage } from '../utils';
+import { CAFE_PATH, agoParts, boardIsHome, cafeBadge, cafePageForPath, cafePagePath, cafePages, type CafePage } from '../utils';
 
-const PAGE_ICON: Record<CafePage, LucideIcon> = { board: ClipboardList, menu: UtensilsCrossed, order: Coffee };
+const PAGE_ICON: Record<CafePage, LucideIcon> = { board: ClipboardList, menu: UtensilsCrossed, order: Coffee, report: CalendarDays };
 
 /**
- * The cafeteria's pages as big tabs, for people who have more than one (the
- * Office helper: Orders board, Menu, My order; the director: Menu, My order).
- * Everyone else only orders, so they get no tabs.
+ * The cafeteria's pages as big tabs, for people who have more than one (an
+ * owner: Orders, Menu, My order, Monthly; the director: Orders, Menu, My
+ * order). Four tabs put the icon above the word, to fit a phone. Everyone else
+ * only orders, so they get no tabs — and the Office helper, whose home is the
+ * board, has the same three in his own menu (the bottom bar on a phone), so
+ * no second row of them here.
  */
 export function CafeTabs() {
   const { t } = useTranslation(['cafe']);
@@ -25,9 +29,10 @@ export function CafeTabs() {
   const { pathname } = useLocation();
   const cafe = useCafeStatus();
   const pages = cafePages(can, cafe?.enabled);
-  if (pages.length < 2) return null;
+  if (pages.length < 2 || boardIsHome(can, visibleSections(can).length, cafe?.enabled)) return null;
   const current = cafePageForPath(pathname);
   const waiting = cafeBadge(cafe);
+  const stacked = pages.length > 3;
   return (
     <nav aria-label={t('tabs.label')} className="mb-5 grid auto-cols-fr grid-flow-col gap-1 rounded-2xl bg-surface-2 p-1">
       {pages.map((page) => {
@@ -39,14 +44,20 @@ export function CafeTabs() {
             to={cafePagePath(page)}
             aria-current={active ? 'page' : undefined}
             className={clsx(
-              'flex min-h-12 min-w-0 items-center justify-center gap-2 rounded-xl px-2 py-2 text-center text-sm font-semibold leading-tight transition-colors',
+              'relative flex min-h-12 min-w-0 items-center justify-center rounded-xl py-2 text-center text-sm font-semibold leading-tight transition-colors',
+              stacked ? 'flex-col gap-0.5 px-1' : 'gap-2 px-2',
               active ? 'bg-surface text-ink shadow-sm' : 'text-muted hover:text-ink',
             )}
           >
             <Icon className="size-5 shrink-0" aria-hidden />
             <span className="min-w-0">{t(`tabs.${page}`)}</span>
             {page === 'board' && waiting > 0 && (
-              <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-danger px-1.5 text-xs font-bold leading-none text-danger-ink tabular-nums">
+              <span
+                className={clsx(
+                  'inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-danger px-1.5 text-xs font-bold leading-none text-danger-ink tabular-nums',
+                  stacked && 'absolute end-1 top-1',
+                )}
+              >
                 {waiting > 99 ? `${f.number(99)}+` : f.number(waiting)}
               </span>
             )}
@@ -89,7 +100,7 @@ export function CafeGate({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-/** Item and place names in the screen's language (the places come with the cached menu). */
+/** Item and place names, ready-made choices and reasons, in the screen's language (the places come with the cached menu). */
 export function useCafeNames() {
   const { i18n } = useTranslation();
   const menu = useCafeMenu();
@@ -98,23 +109,28 @@ export function useCafeNames() {
     language: i18n.language,
     itemName: (item: { nameEn: string; nameAr: string }) => cafeItemName(item, i18n.language),
     placeLabel: (place: string) => cafePlaceLabel(place, places, i18n.language),
+    optionsLabel: (options: string | null) => cafeOptionsLabel(options, i18n.language),
+    reasonLabel: (reason: string) => cafeReasonLabel(reason, i18n.language),
   };
 }
 
+/** Long words that don't break (a pasted link, "xxxxxxxx…") wrap inside the card instead of widening the page. */
+export const WRAP_ANYWHERE = '[overflow-wrap:anywhere]';
+
 /** An order's lines, one under the other: "2 × Tea", and how each is wanted set apart so it can't be missed. */
 export function OrderLines({ lines, size = 'md' }: { lines: readonly CafeOrderLine[]; size?: 'md' | 'lg' }) {
-  const { itemName } = useCafeNames();
+  const { itemName, optionsLabel } = useCafeNames();
   const f = useFormat();
   return (
     <ul className={clsx('grid', size === 'lg' ? 'gap-2' : 'gap-1')}>
       {lines.map((line) => (
-        <li key={line.id} className={clsx('flex flex-wrap items-baseline gap-x-2 gap-y-1', size === 'lg' ? 'text-lg' : 'text-base')}>
-          <span className="font-semibold text-ink">
+        <li key={line.id} className={clsx('flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1', WRAP_ANYWHERE, size === 'lg' ? 'text-lg' : 'text-base')}>
+          <span className="min-w-0 font-semibold text-ink">
             <span className="tabular-nums">{f.number(line.qty)}</span> × <bdi>{itemName(line)}</bdi>
           </span>
           {line.options && (
-            <span className={clsx('rounded-lg bg-warning-soft px-2 py-0.5 font-medium text-warning', size === 'lg' ? 'text-base' : 'text-sm')}>
-              <bdi>{line.options}</bdi>
+            <span className={clsx('min-w-0 rounded-lg bg-warning-soft px-2 py-0.5 font-medium text-warning', size === 'lg' ? 'text-base' : 'text-sm')}>
+              <bdi>{optionsLabel(line.options)}</bdi>
             </span>
           )}
         </li>

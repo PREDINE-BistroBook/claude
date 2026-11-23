@@ -19,7 +19,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { Permission } from '@shared/permissions';
-import { CAFE_BOARD_PATH, CAFE_MENU_PATH, CAFE_PATH } from '../features/cafe/utils';
+import { CAFE_BOARD_PATH, CAFE_MENU_PATH, CAFE_PATH, CAFE_REPORT_PATH } from '../features/cafe/utils';
 import { sectionByKey, sectionForPath, visibleSections, type SectionKey } from './sections';
 
 export type NavSection = SectionKey | 'admin';
@@ -132,11 +132,14 @@ export const CAFE_ITEM: CafeNavItem = { to: CAFE_PATH, label: 'cafeteria', icon:
 /**
  * The own menu of someone whose home is the orders board (the Office helper:
  * cafeteria.serve and no section — features/cafe/utils boardIsHome): the board
- * with its count, and the menu editor. On phones these are the bottom bar.
+ * with its count, the menu editor, and his own order. On phones these are the
+ * bottom bar — the one navigation he has (no tabs on the pages, and no second
+ * "Cafeteria" entry in "More").
  */
 export const CAFE_HOME_ITEMS: CafeNavItem[] = [
   { to: CAFE_BOARD_PATH, label: 'cafeBoard', icon: ClipboardList, badge: 'cafeNewOrders' },
   { to: CAFE_MENU_PATH, label: 'cafeMenu', icon: UtensilsCrossed },
+  { to: CAFE_PATH, label: 'cafeOrder', icon: Coffee, end: true },
 ];
 
 /**
@@ -180,9 +183,11 @@ export function landingAfterSignIn(next: string, can: (p: Permission) => boolean
   // A team member's account page (/staff/new, /staff/:id) is the Team page's management side: staff.manage.
   // The Team page itself (/team, and /staff, which forwards to it) is everyone's.
   if (pathname.startsWith('/staff/') && !can('staff.manage')) return '/';
-  // The cafeteria: ordering (/cafeteria) is everyone's; the board is for whoever serves, the menu editor for them or settings.manage.
+  // The cafeteria: ordering (/cafeteria) is everyone's; the board is for whoever serves, the menu editor for them or settings.manage,
+  // the monthly page for cafeteria.report.
   if (pathname === CAFE_BOARD_PATH && !can('cafeteria.serve')) return '/';
   if (pathname === CAFE_MENU_PATH && !can('cafeteria.serve') && !can('settings.manage')) return '/';
+  if (pathname === CAFE_REPORT_PATH && !can('cafeteria.report')) return '/';
   return next;
 }
 
