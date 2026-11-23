@@ -834,3 +834,72 @@ Each person is asked to choose their own password the first time they sign in.
 - **Team form and profile:** adding a member, changing a username.
 - **The tool:** dry-run accuracy, confirm code, plan drift, atomicity, no orphan rows in any table (the test walks the schema), files, owner guarantee, website content modes, token rules, the app working afterwards.
 - **`cf:smoke`** covers the whole flow.
+
+---
+
+## Part J — Reception and Office helper positions; cafeteria orders (asked 2026-11-23)
+
+The school asked for two more jobs: **Reception** and **Office helper**. "Office helper is like the cafeteria, so food and beverage are on him." They chose **ordering from the app**. They will explain what Reception does later.
+
+### Positions
+- **Two new built-in positions**, with English and Arabic names, that appear once in existing databases as well as new ones:
+  - `reception` — "Reception" / "الاستقبال". **No section permissions yet**: it waits for the school's description. A receptionist can already use Team, Messages, Alerts, My profile and cafeteria ordering, and can be called to the office.
+  - `office_helper` — "Office helper" / "عامل المكتب". Holds the new permission `cafeteria.serve`.
+- **New permission `cafeteria.serve`** ("Serve cafeteria orders and manage the menu"), in a new "cafeteria" group with EN and AR labels. Owners hold it by definition. The Executive Director does **not** get it by default; they can still edit the menu through `settings.manage`.
+- **Ordering needs no permission:** every signed-in team member can order. A settings switch, `cafeteriaEnabled` (default on, `settings.manage`), turns the whole feature off.
+
+### Data (one new add-only migration)
+- **`cafe_items`:** id, `name_en`, `name_ar`, `category` (`hot` | `cold` | `food` | `other`), `available` (bool), `sort_order`, timestamps.
+- **`cafe_orders`:**
+  - id, `user_id` (who ordered), `place` (≤ 80), `note` (≤ 200);
+  - `status` (`new` | `on_the_way` | `delivered` | `cancelled`);
+  - `handled_by_id`, `created_at`, `on_the_way_at`, `delivered_at`, `cancelled_at`.
+- **`cafe_order_items`:** id, `order_id` (cascade), `item_id` (nullable, set null), `name_en` and `name_ar` (copied at order time), `qty` (1–10), `options` (≤ 60, e.g. "no sugar").
+- **Settings:** `cafeteriaEnabled`, and `cafePlaces` (ordered list of `{ en, ar }` names; defaults Office, Reception, Studio 1, Studio 2).
+- **No prices and no tabs.** That was offered and not chosen.
+
+### For everyone: ordering
+- **Where:** "Cafeteria" / "البوفيه" in the account / "More" menu of every section, plus an "Order a drink" quick action on each section home.
+- **The order screen:**
+  - the menu grouped by category, with big rows and − / + buttons; unavailable items are greyed out with "Not available now";
+  - "Where should it come?": the places as big buttons plus "Somewhere else" with a short text field; the person's last place is remembered;
+  - an optional note;
+  - **Send order**.
+- **After sending:** the screen shows the order's status in large words: "Sent — waiting", "On the way", "Delivered ✓". "Cancel order" is available while it is still new. Recent orders are listed below with "Order again".
+- **Alerts:** the person gets an alert, and a push when alerts are on, when their order is on the way and when it is delivered.
+- **Limits:** 10 orders an hour per person, 10 lines per order.
+
+### For the office helper: the orders board
+- **His home screen.** He sees no School, Casting or Website section, so the start page for someone with `cafeteria.serve` is the board.
+- **New orders** are at the top as big cards: who (photo and name), where, what (quantities, options, note), and how long ago. One big button moves each along: **On the way** → **Delivered**. "Can't do this one" cancels, with a short reason that the orderer sees.
+- **New-order alert:** an alert, a push when alerts are on, and a short sound and vibration on the open board where the browser allows it. The board refreshes every 10 seconds while open.
+- **Today's delivered and cancelled orders** are listed below.
+- **"Menu" tab:** add, rename (EN/AR), reorder (up/down), and switch "Available" on or off per item; a "Places" list editor. When the menu is empty, an "Add the usual items" button creates a default set: tea, coffee, Turkish coffee, Nescafé, green tea, water, juice, soft drink, sandwich, biscuits (EN + AR).
+
+### API (`/api/cafe`)
+- **Any signed-in member:**
+  - `GET /menu`;
+  - `POST /orders`;
+  - `GET /orders/mine`;
+  - `POST /orders/:id/cancel` (own order, while new).
+- **`cafeteria.serve`:**
+  - `GET /orders?status=`;
+  - `POST /orders/:id/status` `{ status, reason? }`;
+  - menu CRUD and ordering.
+- **Places:** `PUT /places` (`cafeteria.serve` or `settings.manage`).
+- **Counts** for the board badge go through the existing unread poll.
+- **Privacy:** orders are visible to the orderer, to people with `cafeteria.serve`, and to owners.
+
+### Tests and checks
+- **API tests:**
+  - permissions;
+  - status rules: only forward, cancel rules;
+  - limits;
+  - copied names survive an item rename or delete;
+  - alerts created for the right people;
+  - the feature switch;
+  - the new positions exist once in an upgraded database and aren't recreated if renamed.
+- **Unit tests:** the board ordering and the order form logic.
+- **Tools:** the clear-demo tool and `wipe.ts` must handle the new tables (their coverage tests enforce it); orders are cleared, and the menu and places are kept.
+- **`cf:smoke`:** an order from start to delivered.
+- **Phone walkthrough** in English and Arabic at 375 px.
