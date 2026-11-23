@@ -196,19 +196,37 @@ describe('Reception and Office helper: two more built-in positions', () => {
     expect(gone.body.error.code).toBe('position_built_in');
   });
 
-  it('the Executive Director can give Reception to someone, but not Office helper: it allows cafeteria.serve, which she does not hold', async () => {
+  it('the Executive Director can give Reception and Office helper: her settings.manage covers cafeteria.serve, though she does not hold it', async () => {
     const t = await makeTestContext();
     const director = await t.as('executive_director');
     const list = (await director.get<{ items: Position[] }>('/api/positions')).body.items;
     expect(list.find((p) => p.key === 'reception')).toMatchObject({ editable: true, assignable: true });
-    expect(list.find((p) => p.key === 'office_helper')).toMatchObject({ editable: false, assignable: false });
+    expect(list.find((p) => p.key === 'office_helper')).toMatchObject({ editable: true, assignable: true });
     const add = (key: 'reception' | 'office_helper') =>
       director.post('/api/staff', { name: 'New Person', email: `${key}@example.com`, password: 'a-long-password', positionIds: [t.positionId(key)] });
     expect((await add('reception')).status).toBe(201);
-    expect((await add('office_helper')).status).toBe(403);
-    // An owner can.
-    const owner = await t.as('owner');
-    expect((await owner.post('/api/staff', { name: 'Sayed', email: 'sayed@example.com', password: 'a-long-password', positionIds: [t.positionId('office_helper')] })).status).toBe(201);
+    expect((await add('office_helper')).status).toBe(201);
+    // Someone who manages the team and the positions but not the settings still can't: nobody gives access beyond their reach.
+    const manager = await t.as({ permissions: ['staff.manage', 'positions.manage'] });
+    expect((await manager.get<{ items: Position[] }>('/api/positions')).body.items.find((p) => p.key === 'office_helper')).toMatchObject({ editable: false, assignable: false });
+    expect((await manager.post('/api/staff', { name: 'X', email: 'x@example.com', password: 'a-long-password', positionIds: [t.positionId('office_helper')] })).status).toBe(403);
+  });
+
+  it('the Executive Director manages the Office helper’s account — password, phone, photo, switching it off — like any other (PERM-1)', async () => {
+    const t = await makeTestContext();
+    const director = await t.as('executive_director');
+    const sayed = await t.createUser('office_helper', { name: 'Sayed Ramadan' });
+    expect((await director.get<{ manageable: boolean }>(`/api/staff/${sayed.id}`)).body.manageable).toBe(true);
+    expect((await director.patch(`/api/staff/${sayed.id}`, { password: 'newpass1234' })).status).toBe(200);
+    expect((await director.patch(`/api/staff/${sayed.id}`, { phone: '+20 100 000 0000' })).status).toBe(200);
+    expect((await director.patch(`/api/staff/${sayed.id}`, { active: false })).status).toBe(200);
+    expect((await director.patch(`/api/staff/${sayed.id}`, { active: true })).status).toBe(200);
+    // A position with cafeteria.serve is within her reach too — and the reach stays narrow: not money.
+    expect((await director.post('/api/positions', { name: 'Kitchen', permissions: ['cafeteria.serve'] })).status).toBe(201);
+    expect((await director.post('/api/positions', { name: 'Money', permissions: ['payments.manage'] })).status).toBe(403);
+    // Without settings.manage, the Office helper's account is out of reach.
+    const manager = await t.as({ permissions: ['staff.manage'] });
+    expect((await manager.patch(`/api/staff/${sayed.id}`, { password: 'another1234' })).status).toBe(403);
   });
 
   it('a receptionist has no section permissions, and still has Team, Messages, Alerts, the profile and cafeteria ordering', async () => {
@@ -689,12 +707,13 @@ describe('alerts', () => {
     expect(rows.some((n) => n.userId === gone.id || n.userId === director.user.id || n.userId === coach.user.id)).toBe(false);
     // The helper's account is in Arabic: Arabic words, the items' Arabic names, the place's Arabic name.
     const forHelper = (await bell(helper)).items[0]!;
-    expect(forHelper).toMatchObject({ kind: 'cafe_order', title: 'طلب جديد من Layla Haddad', body: '2 × شاي (no sugar)، 1 × مياه — إلى استوديو 1', readAt: null });
-    expect((await bell(owner)).items[0]).toMatchObject({ title: 'New order from Layla Haddad', body: '2 × Tea (no sugar), 1 × Water — to Studio 1' });
+    // "no sugar" is one of the ready-made words, so the helper reads it in Arabic too.
+    expect(forHelper).toMatchObject({ kind: 'cafe_order', title: 'طلب جديد من Layla Haddad', body: '2 × شاي (سادة)، 1 × مياه — إلى استوديو 1', readAt: null });
+    expect((await bell(owner)).items[0]).toMatchObject({ title: 'New order from Layla Haddad', body: '2 × Tea (No sugar), 1 × Water — to Studio 1' });
     expect((await bell(helper)).unread).toBe(1);
     expect((await bell(coach)).items).toEqual([]);
     expect((await bell(director)).items).toEqual([]);
-    expect(cafeLinesSummary(o.items, 'en')).toBe('2 × Tea (no sugar), 1 × Water');
+    expect(cafeLinesSummary(o.items, 'en')).toBe('2 × Tea (No sugar), 1 × Water');
 
     // Someone who serves and orders for themselves gets no alert about it; the others who serve do.
     await order(helper, [{ itemId: item('Coffee').id }], 'Office');
@@ -773,19 +792,114 @@ describe('alerts', () => {
 
     await move(helper, o.id, 'on_the_way');
     await t.settle();
-    expect(push.sent.map((s) => s.url)).toEqual([helpersPhone.endpoint, coachesPhone.endpoint]);
-    expect(await coachesPhone.decrypt(push.sent[1]!.body)).toEqual({
+    const toCoach = push.sent.slice(1).filter((s) => s.url === coachesPhone.endpoint);
+    expect(toCoach).toHaveLength(1);
+    expect(await coachesPhone.decrypt(toCoach[0]!.body)).toEqual({
       title: 'Your order is on the way',
       body: '2 × Tea — to Studio 2',
       link: `/cafeteria?order=${o.id}`,
       kind: 'cafe_status',
       tag: `cafe-${o.id}`,
     });
+    // Taken: "New order from …" on the helper's phone is replaced — same tag and topic — quietly (NIT-3).
+    const toHelper = push.sent.slice(1).filter((s) => s.url === helpersPhone.endpoint);
+    expect(toHelper).toHaveLength(1);
+    expect(await helpersPhone.decrypt(toHelper[0]!.body)).toEqual({
+      title: 'طلب Layla Haddad: في الطريق',
+      body: '2 × شاي — إلى استوديو 2',
+      link: `/cafeteria/board?order=${o.id}`,
+      kind: 'cafe_status',
+      tag: `cafe-order-${o.id}`,
+      quiet: true,
+    });
+    expect(toHelper[0]!.headers).toMatchObject({ urgency: 'normal', topic: `cafe-order-${o.id}` });
+    expect(push.sent[0]!.headers.topic).toBe(`cafe-order-${o.id}`);
+
     await move(helper, o.id, 'delivered');
     await t.settle();
-    expect(await coachesPhone.decrypt(push.sent[2]!.body)).toMatchObject({ title: 'Your order was delivered', kind: 'cafe_status', tag: `cafe-${o.id}` });
-    expect(push.sent[2]!.headers.urgency).toBe('normal');
-    expect(push.sent).toHaveLength(3);
+    expect(push.sent).toHaveLength(4);
+    expect(push.sent[3]!.url).toBe(coachesPhone.endpoint);
+    expect(await coachesPhone.decrypt(push.sent[3]!.body)).toMatchObject({ title: 'Your order was delivered', kind: 'cafe_status', tag: `cafe-${o.id}` });
+    expect(push.sent[3]!.headers.urgency).toBe('normal');
+  });
+
+  it('push: an order cancelled by the person who ordered (or turned down) replaces the servers’ "New order" quietly; nothing to the orderer for their own cancel (NIT-3)', async () => {
+    const vapid = await generateVapidKeys();
+    const push = pushRecorder();
+    const { t, helper, coach, item } = await cafe({ config: { vapid }, outboundFetch: push.fetch });
+    const owner = await t.as('owner', { name: 'Karim' });
+    const helpersPhone = await fakeBrowser('https://fcm.googleapis.com/fcm/send/helper');
+    const ownersPhone = await fakeBrowser('https://fcm.googleapis.com/fcm/send/owner');
+    const coachesPhone = await fakeBrowser('https://web.push.apple.com/QGrZ-coach');
+    await helper.post('/api/push/subscribe', helpersPhone.subscription);
+    await owner.post('/api/push/subscribe', ownersPhone.subscription);
+    await coach.post('/api/push/subscribe', coachesPhone.subscription);
+
+    const a = (await order(coach, [{ itemId: item('Tea').id }], 'Office')).body;
+    await t.settle();
+    expect(push.sent.map((s) => s.url).sort()).toEqual([helpersPhone.endpoint, ownersPhone.endpoint].sort());
+    push.sent.length = 0;
+    await coach.post(`/api/cafe/orders/${a.id}/cancel`);
+    await t.settle();
+    expect(push.sent.map((s) => s.url).sort()).toEqual([helpersPhone.endpoint, ownersPhone.endpoint].sort());
+    const toOwner = push.sent.find((s) => s.url === ownersPhone.endpoint)!;
+    expect(await ownersPhone.decrypt(toOwner.body)).toEqual({
+      title: 'Order from Layla Haddad: cancelled',
+      body: '1 × Tea — to Office',
+      link: `/cafeteria/board?order=${a.id}`,
+      kind: 'cafe_status',
+      tag: `cafe-order-${a.id}`,
+      quiet: true,
+    });
+
+    // Turned down by the helper: the orderer is told (loud), the servers' "New order" replaced (quiet).
+    const b = (await order(coach, [{ itemId: item('Tea').id }], 'Office')).body;
+    await t.settle();
+    push.sent.length = 0;
+    await move(helper, b.id, 'cancelled', 'busy now');
+    await t.settle();
+    expect(push.sent.map((s) => s.url).sort()).toEqual([coachesPhone.endpoint, helpersPhone.endpoint, ownersPhone.endpoint].sort());
+    expect(await ownersPhone.decrypt(push.sent.find((s) => s.url === ownersPhone.endpoint)!.body)).toMatchObject({ title: 'Order from Layla Haddad: cancelled', quiet: true });
+    expect(await coachesPhone.decrypt(push.sent.find((s) => s.url === coachesPhone.endpoint)!.body)).toMatchObject({ title: 'Sorry, your order can’t be made', body: 'Reason: busy now' });
+
+    // An order already on the way is no longer on anyone's screen as new: delivering it sends nothing to the servers.
+    const c2 = (await order(coach, [{ itemId: item('Tea').id }], 'Office')).body;
+    await move(helper, c2.id, 'on_the_way');
+    await t.settle();
+    push.sent.length = 0;
+    await move(helper, c2.id, 'delivered');
+    await t.settle();
+    expect(push.sent.map((s) => s.url)).toEqual([coachesPhone.endpoint]);
+  });
+
+  it('ready-made reasons are kept by their English words and read in each reader’s language; a typed reason stays as typed (UX-12)', async () => {
+    const { t, helper, coach, item } = await cafe();
+    const dalia = await t.as('acting_coach', { name: 'Dalia', locale: 'ar' });
+    // The helper's app is in Arabic: he taps «نعتذر، الصنف غير متوفر الآن».
+    const a = (await order(coach, [{ itemId: item('Juice').id }])).body;
+    const turned = await move(helper, a.id, 'cancelled', ' نعتذر، الصنف غير متوفر الآن ');
+    expect(turned.body.cancelReason).toBe('Sorry, it is not available now');
+    expect((await bell(coach)).items[0]).toMatchObject({ body: 'Reason: Sorry, it is not available now' });
+    const b = (await order(dalia, [{ itemId: item('Juice').id }])).body;
+    await move(helper, b.id, 'cancelled', 'Sorry, the cafeteria is busy right now');
+    expect((await bell(dalia)).items[0]).toMatchObject({ title: 'عذرًا، تعذّر تنفيذ طلبك', body: 'السبب: نعتذر، البوفيه مشغول الآن' });
+    const c2 = (await order(dalia, [{ itemId: item('Juice').id }])).body;
+    expect((await move(helper, c2.id, 'cancelled', 'لا يوجد ثلج')).body.cancelReason).toBe('لا يوجد ثلج');
+  });
+
+  it('new-order alerts leave the bell of someone who no longer serves, and come back if they serve again (NIT-1)', async () => {
+    const { t, helper, coach, item } = await cafe();
+    const owner = await t.as('owner');
+    await order(coach, [{ itemId: item('Tea').id }]);
+    expect((await bell(helper)).unread).toBe(1);
+    expect((await helper.get<ChatUnreadResponse>('/api/chat/unread')).body.notifications).toBe(1);
+    const officeHelper = t.positionId('office_helper');
+    expect((await owner.patch(`/api/positions/${officeHelper}`, { permissions: [] })).status).toBe(200);
+    expect((await helper.get<ChatUnreadResponse>('/api/chat/unread')).body).toMatchObject({ notifications: 0, cafe: { newOrders: null } });
+    expect(await bell(helper)).toEqual({ items: [], unread: 0 });
+    await owner.patch(`/api/positions/${officeHelper}`, { permissions: ['cafeteria.serve'] });
+    expect((await bell(helper)).unread).toBe(1);
+    expect((await bell(helper)).items.map((n) => n.kind)).toEqual(['cafe_order']);
   });
 
   it('the 20-second poll carries the cafeteria: switched on, orders waiting for whoever serves, my own open orders', async () => {
@@ -829,7 +943,7 @@ describe('the cafeteriaEnabled setting', () => {
     expect((await director.patch('/api/settings', { cafeteriaEnabled: true })).body.cafeteriaEnabled).toBe(true);
   });
 
-  it('off: every cafeteria route answers 409 cafeteria_off, nobody is alerted, the poll says so — and back on, everything is where it was', async () => {
+  it('off: every cafeteria route answers 409 cafeteria_off, the poll says so — and back on, the menu and places are where they were', async () => {
     const { t, helper, coach, item, menu } = await cafe();
     const director = await t.as('executive_director');
     const o = (await order(coach, [{ itemId: item('Tea').id }])).body;
@@ -863,9 +977,115 @@ describe('the cafeteriaEnabled setting', () => {
 
     await director.patch('/api/settings', { cafeteriaEnabled: true });
     expect((await coach.get<CafeMenu>('/api/cafe/menu')).body.items).toEqual(menu);
-    expect((await helper.get<{ items: CafeOrder[] }>('/api/cafe/orders')).body.items.map((x) => x.id)).toEqual([o.id]);
-    expect(await poll(helper)).toEqual({ enabled: true, newOrders: 1, myOpenOrders: 0 });
-    expect((await move(helper, o.id, 'on_the_way')).status).toBe(200);
+    // The order that was waiting was closed with the switch (below): it doesn't come back as waiting.
+    expect((await helper.get<{ items: CafeOrder[] }>('/api/cafe/orders')).body.items.map((x) => [x.id, x.status])).toEqual([[o.id, 'cancelled']]);
+    expect(await poll(helper)).toEqual({ enabled: true, newOrders: 0, myOpenOrders: 0 });
+    expect((await move(helper, o.id, 'on_the_way')).body.error.code).toBe('order_closed');
+  });
+
+  it('switching it off cancels what was still open, tells each person who ordered in their language, and clears every bell (SWITCH-1)', async () => {
+    const vapid = await generateVapidKeys();
+    const push = pushRecorder();
+    const { t, helper, coach, item } = await cafe({ config: { vapid }, outboundFetch: push.fetch });
+    const owner = await t.as('owner');
+    const director = await t.as('executive_director');
+    const dalia = await t.as('acting_coach', { name: 'Dalia', locale: 'ar' });
+    const coachesPhone = await fakeBrowser('https://web.push.apple.com/QGrZ-coach');
+    await coach.post('/api/push/subscribe', coachesPhone.subscription);
+    const waiting = (await order(coach, [{ itemId: item('Tea').id }])).body;
+    const walking = (await order(dalia, [{ itemId: item('Water').id }])).body;
+    const done = (await order(coach, [{ itemId: item('Coffee').id }])).body;
+    await move(helper, walking.id, 'on_the_way');
+    await move(helper, done.id, 'on_the_way');
+    await move(helper, done.id, 'delivered');
+    expect((await bell(helper)).unread).toBe(1);
+    await t.settle();
+    push.sent.length = 0;
+
+    // Saving other settings while it is on closes nothing.
+    await director.patch('/api/settings', { weekStartsOn: 6 });
+    expect((await poll(helper)).newOrders).toBe(1);
+
+    await director.patch('/api/settings', { cafeteriaEnabled: false });
+    const rows = new Map(t.db.select().from(cafeOrders).all().map((r) => [r.id, r]));
+    expect(rows.get(waiting.id)).toMatchObject({ status: 'cancelled', cancelReason: 'The cafeteria is closed now' });
+    expect(rows.get(walking.id)).toMatchObject({ status: 'cancelled', cancelReason: 'The cafeteria is closed now', handledById: helper.user.id });
+    expect(rows.get(done.id)).toMatchObject({ status: 'delivered', cancelReason: null });
+    expect((await bell(coach)).items[0]).toMatchObject({ kind: 'cafe_status', title: 'Sorry, your order can’t be made', body: 'Reason: The cafeteria is closed now', link: `/cafeteria?order=${waiting.id}`, readAt: null });
+    expect((await bell(dalia)).items[0]).toMatchObject({ title: 'عذرًا، تعذّر تنفيذ طلبك', body: 'السبب: البوفيه مغلق الآن' });
+    // Nothing about new orders is left in a bell: not the helper's, not the owner's.
+    expect(t.db.select().from(notifications).where(eq(notifications.kind, 'cafe_order')).all().every((n) => n.readAt !== null)).toBe(true);
+    expect((await helper.get<ChatUnreadResponse>('/api/chat/unread')).body.notifications).toBe(0);
+    expect((await owner.get<ChatUnreadResponse>('/api/chat/unread')).body.notifications).toBe(0);
+    await t.settle();
+    expect(push.sent.map((s) => s.url)).toEqual([coachesPhone.endpoint]);
+    expect(await coachesPhone.decrypt(push.sent[0]!.body)).toMatchObject({ body: 'Reason: The cafeteria is closed now', kind: 'cafe_status' });
+
+    // Off again while off: nothing more happens.
+    const before = t.db.select().from(notifications).all();
+    await director.patch('/api/settings', { cafeteriaEnabled: false });
+    expect(t.db.select().from(notifications).all()).toEqual(before);
+  });
+
+  it('while it is off, a new-order alert left unread is not shown or counted (NIT-1)', async () => {
+    const { t, helper, coach, item } = await cafe();
+    const director = await t.as('executive_director');
+    await order(coach, [{ itemId: item('Tea').id }]);
+    await director.patch('/api/settings', { cafeteriaEnabled: false });
+    // Even one written by hand, unread: hidden while the cafeteria is off.
+    t.db.insert(notifications).values({ userId: helper.user.id, kind: 'cafe_order', title: 'x', body: 'y', link: '/cafeteria/board?order=99', createdAt: Date.now() }).run();
+    expect(await bell(helper)).toEqual({ items: [], unread: 0 });
+    await director.patch('/api/settings', { cafeteriaEnabled: true });
+    expect((await bell(helper)).unread).toBe(1);
+  });
+});
+
+// ── Leaving the team ────────────────────────────────────────────────────────
+
+describe('an account switched off (ABUSE-1)', () => {
+  it('cancels that person’s open orders — off the board, out of every bell, not to be carried out — and leaves the rest alone', async () => {
+    const { t, helper, coach, item } = await cafe();
+    const owner = await t.as('owner');
+    const other = await t.as('acting_coach', { name: 'Other' });
+    const a = (await order(coach, [{ itemId: item('Tea').id }])).body;
+    const b = (await order(coach, [{ itemId: item('Water').id }])).body;
+    const c2 = (await order(coach, [{ itemId: item('Juice').id }])).body;
+    const theirs = (await order(other, [{ itemId: item('Tea').id }])).body;
+    await move(helper, b.id, 'on_the_way');
+    await move(helper, c2.id, 'on_the_way');
+    await move(helper, c2.id, 'delivered');
+    expect((await poll(helper)).newOrders).toBe(2);
+
+    expect((await owner.patch(`/api/staff/${coach.user.id}`, { active: false })).status).toBe(200);
+    const board = (await helper.get<{ items: CafeOrder[] }>('/api/cafe/orders')).body.items;
+    const status = new Map(board.map((o) => [o.id, o]));
+    expect(status.get(a.id)).toMatchObject({ status: 'cancelled', cancelReason: 'No longer on the team' });
+    expect(status.get(b.id)).toMatchObject({ status: 'cancelled', cancelReason: 'No longer on the team' });
+    expect(status.get(c2.id)?.status).toBe('delivered');
+    expect(status.get(theirs.id)?.status).toBe('new');
+    expect((await poll(helper)).newOrders).toBe(1);
+    expect((await bell(helper)).unread).toBe(1);
+    expect((await move(helper, b.id, 'delivered')).body.error.code).toBe('order_closed');
+    // The person who left is not told (they can't sign in), and switching the account on again brings nothing back.
+    expect(t.db.select().from(notifications).where(eq(notifications.userId, coach.user.id)).all().filter((n) => n.kind === 'cafe_status')).toHaveLength(2);
+    await owner.patch(`/api/staff/${coach.user.id}`, { active: true });
+    expect((await poll(helper)).newOrders).toBe(1);
+  });
+});
+
+// ── The places: one name, one place ─────────────────────────────────────────
+
+describe('the places list (NIT-2)', () => {
+  it('refuses two places with the same name in either language (ignoring case and spaces); "other" is a name like any other', async () => {
+    const { helper } = await cafe();
+    const twice = await helper.put<any>('/api/cafe/places', { places: [{ en: 'Office', ar: 'المكتب' }, { en: ' office ', ar: 'مكتب' }] });
+    expect(twice.status).toBe(400);
+    expect(twice.body.error.issues).toEqual([expect.objectContaining({ path: ['places', 1, 'en'], message: 'cafe:errors.placeTwice' })]);
+    const arabicTwice = await helper.put<any>('/api/cafe/places', { places: [{ en: 'Office', ar: 'المكتب' }, { en: 'Back office', ar: 'المكتب' }] });
+    expect(arabicTwice.body.error.issues[0]).toMatchObject({ path: ['places', 1, 'ar'], message: 'cafe:errors.placeTwice' });
+    // One place's English name used as another's Arabic name is the same name too.
+    expect((await helper.put('/api/cafe/places', { places: [{ en: 'Roof' }, { en: 'Garden', ar: 'roof' }] })).status).toBe(400);
+    expect((await helper.put('/api/cafe/places', { places: [{ en: 'Office', ar: 'المكتب' }, { en: 'other', ar: 'أخرى' }] })).status).toBe(200);
   });
 });
 

@@ -1,6 +1,6 @@
 import { and, asc, count, desc, eq, gt, gte, inArray, max, or, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { LOCALES, OPEN_CAFE_ORDER_STATUSES, isOpenCafeOrder, nextCafeStep, type CafeOrderStatus, type Locale } from '../../shared/enums';
+import { LOCALES, OPEN_CAFE_ORDER_STATUSES, isOpenCafeOrder, nextCafeStep, type CafeOrderStatus } from '../../shared/enums';
 import {
   CAFE_BOARD_DONE_LIMIT,
   CAFE_ERROR_CODES,
@@ -10,14 +10,13 @@ import {
   USUAL_CAFE_ITEMS,
   cafeItemInput,
   cafeItemUpdateInput,
-  cafeLinesSummary,
   cafeMenuOrderInput,
   cafeOrderInput,
   cafeOrdersQuery,
-  cafePlaceLabel,
   cafePlacesInput,
   cafeStatusInput,
   storedCafePlace,
+  storedCafeReason,
   type CafeItem,
   type CafeMenu,
   type CafeOrder,
@@ -28,7 +27,21 @@ import type { PushPayload } from '../../shared/schemas/notifications';
 import type { DB } from '../db/database';
 import { cafeItems, cafeOrderItems, cafeOrders } from '../db/schema';
 import type { AppEnv } from '../env';
-import { cafeBoardLink, cafeOrderLink, cafeServers, cafeSettings, lastCafePlace, loadCafeMenu, toCafeItem, toCafeOrder, toCafeOrders } from '../lib/cafe';
+import {
+  cafeBoardLink,
+  cafeCancelledAlert,
+  cafeOrderBody,
+  cafeOrderLines,
+  cafeOrderLink,
+  cafeServers,
+  cafeSettings,
+  lastCafePlace,
+  loadCafeMenu,
+  queueCafeOrderGone,
+  toCafeItem,
+  toCafeOrder,
+  toCafeOrders,
+} from '../lib/cafe';
 import { epochAt, schoolToday } from '../lib/clock';
 import { ApiError, fieldError, notFound } from '../lib/errors';
 import { localeOf, markNotificationsReadForEveryone, notificationText, notify } from '../lib/notifications';
@@ -70,12 +83,6 @@ type OrderRow = typeof cafeOrders.$inferSelect;
 type Reader = Pick<DB, 'select'>;
 
 const findOrder = (db: Reader, id: number) => db.select().from(cafeOrders).where(eq(cafeOrders.id, id)).get();
-const linesOfOrder = (db: Reader, orderId: number) => db.select().from(cafeOrderItems).where(eq(cafeOrderItems.orderId, orderId)).orderBy(asc(cafeOrderItems.id)).all();
-
-/** "2 × Tea (no sugar) — to Studio 1", in the reader's language. */
-function orderBody(locale: Locale, lines: Parameters<typeof cafeLinesSummary>[0], place: string, places: readonly CafePlace[]): string {
-  return notificationText(locale, 'cafeOrderBody', { items: cafeLinesSummary(lines, locale), place: cafePlaceLabel(place, places, locale) });
-}
 
 /** 409 for a change the order's state doesn't allow, with the order as it is now. */
 function stateError(db: Reader, row: OrderRow, me: number, tried: CafeOrderStatus | 'own_cancel'): ApiError {
@@ -244,7 +251,7 @@ router.post('/orders', async (c) => {
           userId: s.id,
           kind: 'cafe_order',
           title: notificationText(s.locale, 'cafeNewOrderTitle', { name: me.name }),
-          body: orderBody(s.locale, rows, row.place, places),
+          body: cafeOrderBody(s.locale, rows, row.place, places),
           link: cafeBoardLink(row.id),
         },
         now,
@@ -261,7 +268,7 @@ router.post('/orders', async (c) => {
       ids,
       {
         title: notificationText(locale, 'cafeNewOrderTitle', { name: me.name }),
-        body: orderBody(locale, lines, order.place, places),
+        body: cafeOrderBody(locale, lines, order.place, places),
         link: cafeBoardLink(order.id),
         kind: 'cafe_order',
         tag: `cafe-order-${order.id}`,
@@ -301,6 +308,8 @@ router.post('/orders/:id/cancel', (c) => {
     return done ?? null;
   });
   if (!updated) throw stateError(db, findOrder(db, id)!, me, 'own_cancel');
+  // The servers' phones still show "New order from …": replace it, quietly.
+  queueCafeOrderGone(c, [{ order: updated, by: currentUser(c).name, outcome: 'cancelled' }]);
   return c.json<CafeOrder>(toCafeOrder(db, updated, me));
 });
 
@@ -356,22 +365,23 @@ router.post('/orders/:id/status', canServe, async (c) => {
   if (!row) throw notFound('Order not found');
   if (!isOpenCafeOrder(row.status) || (input.status !== 'cancelled' && nextCafeStep(row.status) !== input.status)) throw stateError(db, row, me.id, input.status);
 
+  // A ready-made reason is kept by its English words, so each reader sees it in their own language.
+  const reason = input.status === 'cancelled' ? storedCafeReason(input.reason ?? '') : null;
   // What the person who ordered is told, in their language (nothing when they moved their own order).
   const { places } = cafeSettings(db);
   const locale = localeOf(db, row.userId);
   const alert: PushPayload | null =
     row.userId === me.id
       ? null
-      : {
-          title: notificationText(locale, input.status === 'on_the_way' ? 'cafeOnTheWayTitle' : input.status === 'delivered' ? 'cafeDeliveredTitle' : 'cafeCancelledTitle'),
-          body:
-            input.status === 'cancelled'
-              ? notificationText(locale, 'cafeCancelledBody', { reason: input.reason ?? '' })
-              : orderBody(locale, linesOfOrder(db, id), row.place, places),
-          link: cafeOrderLink(id),
-          kind: 'cafe_status',
-          tag: `cafe-${id}`,
-        };
+      : reason !== null
+        ? cafeCancelledAlert(locale, id, reason)
+        : {
+            title: notificationText(locale, input.status === 'on_the_way' ? 'cafeOnTheWayTitle' : 'cafeDeliveredTitle'),
+            body: cafeOrderBody(locale, cafeOrderLines(db, id), row.place, places),
+            link: cafeOrderLink(id),
+            kind: 'cafe_status',
+            tag: `cafe-${id}`,
+          };
 
   const updated = db.transaction((tx) => {
     const done = tx
@@ -381,7 +391,7 @@ router.post('/orders/:id/status', canServe, async (c) => {
           ? { status: 'on_the_way', onTheWayAt: now, handledById: me.id }
           : input.status === 'delivered'
             ? { status: 'delivered', deliveredAt: now, handledById: me.id }
-            : { status: 'cancelled', cancelledAt: now, cancelReason: input.reason ?? null, handledById: me.id },
+            : { status: 'cancelled', cancelledAt: now, cancelReason: reason, handledById: me.id },
       )
       // Only from the status it was read in: two people tapping the same card can't both move it.
       .where(and(eq(cafeOrders.id, id), eq(cafeOrders.status, row.status)))
@@ -400,6 +410,11 @@ router.post('/orders/:id/status', canServe, async (c) => {
     // "On the way" and "can't be made" are worth waking the phone for; "delivered" is in the person's hands already.
     const opts = input.status === 'delivered' ? ({ ttl: 10 * 60, urgency: 'normal' } as const) : ({ ttl: 60 * 60, urgency: 'high' } as const);
     queuePush(c, [row.userId], alert, { ...opts, topic: `cafe-${id}` });
+  }
+  // It no longer waits: "New order from …" on the servers' phones is replaced, quietly.
+  if (row.status === 'new') {
+    const by = toCafeOrder(db, updated, me.id).by.name;
+    queueCafeOrderGone(c, [{ order: updated, by, outcome: input.status === 'cancelled' ? 'cancelled' : 'on_the_way' }]);
   }
   return c.json<CafeOrder>(toCafeOrder(db, updated, me.id));
 });

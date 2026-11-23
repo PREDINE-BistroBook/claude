@@ -522,14 +522,36 @@ export async function runApiSmoke(base: string, opts: { adminToken: string; pass
   check(refused.body.error.code === 'item_unavailable' && refused.body.error.details.itemIds[0] === juice.id, 'item_unavailable says which');
   expectStatus(await helper.patch(`/api/cafe/menu/${juice.id}`, { available: true }), 200, 'the helper switches it back on');
   expectStatus(await helper.post('/api/cafe/menu/defaults'), 409, '"Add the usual items" only on an empty menu');
-  // The switch.
+  // A ready-made reason tapped in Arabic is kept by its English words, and read in English by the coach.
+  const teaOrder = expectStatus(await coach.post('/api/cafe/orders', { place: 'Office', items: [{ itemId: tea.id, qty: 1, options: 'سادة' }] }), 201, 'a coach orders a tea').body;
+  check(
+    expectStatus(await helper.post(`/api/cafe/orders/${teaOrder.id}/status`, { status: 'cancelled', reason: 'نعتذر، البوفيه مشغول الآن' }), 200, 'turned down with a ready-made reason').body.cancelReason ===
+      'Sorry, the cafeteria is busy right now',
+    'a ready-made reason is stored by its English words',
+  );
+
+  // Someone who leaves the team: their open order is cancelled ("No longer on the team") and leaves the board.
+  const leaverOrder = expectStatus(await reception.post('/api/cafe/orders', { place: 'Reception', items: [{ itemId: water.id, qty: 1 }] }), 201, 'Reception orders again').body;
+  expectStatus(await owner.patch(`/api/staff/${receptionMe.id}`, { active: false }), 200, 'the owner switches Reception’s account off');
+  const leaverRow = (expectStatus(await helper.get('/api/cafe/orders?status=cancelled'), 200, 'cancelled today').body.items as { id: number; cancelReason: string | null }[]).find((o) => o.id === leaverOrder.id);
+  check(leaverRow?.cancelReason === 'No longer on the team', 'the order of someone who left is cancelled');
+
+  // The switch: switching off closes what is still open (the demo's waiting order), tells the person, clears the bells.
   expectStatus(await helper.patch('/api/settings', { cafeteriaEnabled: false }), 403, 'the helper can’t switch the cafeteria off');
+  check(expectStatus(await helper.get('/api/chat/unread'), 200, 'helper poll').body.cafe.newOrders === 1, 'the demo’s waiting order is still waiting');
   check(expectStatus(await director.patch('/api/settings', { cafeteriaEnabled: false }), 200, 'the director switches the cafeteria off').body.cafeteriaEnabled === false, 'switched off');
   check(expectStatus(await coach.get('/api/cafe/menu'), 409, 'the menu while off').body.error.code === 'cafeteria_off', 'cafeteria_off');
   expectStatus(await helper.get('/api/cafe/orders'), 409, 'the board while off');
-  check(expectStatus(await helper.get('/api/chat/unread'), 200, 'poll while off').body.cafe.enabled === false, 'the poll says it is off');
+  const offPoll = expectStatus(await helper.get('/api/chat/unread'), 200, 'poll while off').body;
+  check(offPoll.cafe.enabled === false && offPoll.notifications === 0, `the poll says it is off, and no new-order alert is left in the helper’s bell (${offPoll.notifications})`);
   expectStatus(await director.patch('/api/settings', { cafeteriaEnabled: true }), 200, 'switched on again');
-  check((expectStatus(await helper.get('/api/cafe/orders?status=delivered'), 200, 'delivered today').body.items as { id: number }[]).some((o) => o.id === cafeOrder.id), 'everything is where it was');
+  check((expectStatus(await helper.get('/api/cafe/orders?status=delivered'), 200, 'delivered today').body.items as { id: number }[]).some((o) => o.id === cafeOrder.id), 'the delivered order is where it was');
+  const onPoll = expectStatus(await helper.get('/api/chat/unread'), 200, 'poll after').body.cafe;
+  check(onPoll.newOrders === 0, `nothing comes back as waiting (${onPoll.newOrders})`);
+  check(
+    (expectStatus(await helper.get('/api/cafe/orders?status=cancelled'), 200, 'cancelled today').body.items as { cancelReason: string | null }[]).some((o) => o.cancelReason === 'The cafeteria is closed now'),
+    'the waiting order was closed with the switch',
+  );
 
   step('the last deletes: student, class');
   expectStatus(await owner.delete(`/api/students/${sara.id}`), 204, 'delete student');

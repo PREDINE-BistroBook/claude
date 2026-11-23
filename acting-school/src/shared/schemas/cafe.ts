@@ -101,9 +101,29 @@ export const cafeMenuOrderInput = z.object({
 });
 export type CafeMenuOrderInput = z.infer<typeof cafeMenuOrderInput>;
 
-/** PUT /api/cafe/places (cafeteria.serve or settings.manage): the whole list, in order. Answers { places }. */
+/** A name as it is compared: outer spaces and letter case don't count. */
+const sameName = (name: string | null | undefined) => (name ?? '').trim().toLocaleLowerCase();
+
+/**
+ * PUT /api/cafe/places (cafeteria.serve or settings.manage): the whole list,
+ * in order. Answers { places }. No two places may share a name, in either
+ * language (ignoring case and outer spaces): an order's place is found by its
+ * name, so a second "Office" could never be told from the first.
+ */
 export const cafePlacesInput = z.object({
-  places: z.array(bilingualName(MAX_CAFE_PLACE)).max(MAX_CAFE_PLACES),
+  places: z
+    .array(bilingualName(MAX_CAFE_PLACE))
+    .max(MAX_CAFE_PLACES)
+    .superRefine((places, ctx) => {
+      const seen = new Set<string>();
+      places.forEach((p, i) => {
+        // (Also run on a list with a blank entry, which has its own error: nothing to compare there.)
+        const names = new Set([sameName(p.en), sameName(p.ar)].filter(Boolean));
+        const twice = [...names].find((n) => seen.has(n));
+        if (twice !== undefined) ctx.addIssue({ code: 'custom', path: [i, twice === sameName(p.en) ? 'en' : 'ar'], message: 'cafe:errors.placeTwice' });
+        names.forEach((n) => seen.add(n));
+      });
+    }),
 });
 export type CafePlacesInput = z.infer<typeof cafePlacesInput>;
 
@@ -198,7 +218,11 @@ export interface CafeOrder {
   items: CafeOrderLine[];
   /** Who last moved it (took it, delivered it, or turned it down); null while new, or cancelled by the person who ordered. */
   handledBy: PersonRef | null;
-  /** Why it can't be done, when whoever serves cancelled it; null when the person who ordered cancelled it themselves. */
+  /**
+   * Why it can't be done, when whoever serves (or the server itself) cancelled
+   * it; null when the person who ordered cancelled it themselves. A ready-made
+   * reason is stored by its English words: show it with cafeReasonLabel.
+   */
   cancelReason: string | null;
   createdAt: number;
   onTheWayAt: number | null;
@@ -251,8 +275,8 @@ export function cafeItemName(item: { nameEn: string; nameAr: string }, locale: L
 
 /** A configured place matching `place` in either language (ignoring case and outer spaces), or undefined. */
 export function findCafePlace(place: string, places: readonly CafePlace[]): CafePlace | undefined {
-  const needle = place.trim().toLocaleLowerCase();
-  return places.find((p) => p.en.trim().toLocaleLowerCase() === needle || p.ar.trim().toLocaleLowerCase() === needle);
+  const needle = sameName(place);
+  return places.find((p) => sameName(p.en) === needle || sameName(p.ar) === needle);
 }
 
 /**
@@ -270,8 +294,97 @@ export function cafePlaceLabel(place: string, places: readonly CafePlace[], loca
   return locale === 'ar' ? known.ar : known.en;
 }
 
+/** The list separator in `locale` ("، " in Arabic). */
+export const cafeListSeparator = (locale: Locale | string) => (locale === 'ar' ? '، ' : ', ');
+
+// ── Ready-made words, shown in the reader's language ────────────────────────
+// Like places, these are stored as typed (or tapped) — in whichever language —
+// and shown in the reader's language wherever they match one of these
+// (ignoring case and outer spaces). Anything else stays as typed. They are
+// data, shared by the server's alerts and the web app, so both say the same.
+
+/** A fixed word or phrase in both languages. */
+export interface CafeWords {
+  key: string;
+  en: string;
+  ar: string;
+}
+
+/**
+ * The quick choices under "Sugar and extras" on a hot drink: one sugar level
+ * (tapping another replaces it) and "With milk".
+ */
+export const CAFE_OPTION_CHIPS = [
+  { key: 'no_sugar', group: 'sugar', en: 'No sugar', ar: 'سادة' },
+  { key: 'little_sugar', group: 'sugar', en: 'A little sugar', ar: 'على الريحة' },
+  { key: 'medium_sugar', group: 'sugar', en: 'Medium sugar', ar: 'مضبوط' },
+  { key: 'sweet', group: 'sugar', en: 'Sweet', ar: 'سكر زيادة' },
+  { key: 'milk', group: 'extra', en: 'With milk', ar: 'باللبن' },
+] as const satisfies readonly (CafeWords & { group: 'sugar' | 'extra' })[];
+export type CafeOptionChip = (typeof CAFE_OPTION_CHIPS)[number];
+export type CafeOptionChipKey = CafeOptionChip['key'];
+
+/**
+ * "Can't do this one": the ready-made reasons the board offers in one tap,
+ * and the ones the server gives itself — `closed` when the cafeteria is
+ * switched off, `left` when the person who ordered is no longer on the team.
+ */
+export const CAFE_READY_REASONS = [
+  { key: 'out', en: 'Sorry, it is not available now', ar: 'نعتذر، الصنف غير متوفر الآن' },
+  { key: 'closed', en: 'The cafeteria is closed now', ar: 'البوفيه مغلق الآن' },
+  { key: 'busy', en: 'Sorry, the cafeteria is busy right now', ar: 'نعتذر، البوفيه مشغول الآن' },
+  { key: 'left', en: 'No longer on the team', ar: 'لم يعد ضمن الفريق' },
+] as const satisfies readonly CafeWords[];
+export type CafeReasonKey = (typeof CAFE_READY_REASONS)[number]['key'];
+/** The reasons the board offers to tap (`left` is the server's own). */
+export const CAFE_QUICK_REASONS = ['out', 'closed', 'busy'] as const satisfies readonly CafeReasonKey[];
+
+function findWords<T extends CafeWords>(text: string, words: readonly T[]): T | undefined {
+  const needle = sameName(text);
+  return needle ? words.find((w) => sameName(w.en) === needle || sameName(w.ar) === needle) : undefined;
+}
+
+/** The ready-made option chip this text is (either language), or undefined. */
+export const findCafeOptionChip = (text: string) => findWords(text, CAFE_OPTION_CHIPS);
+/** A ready-made reason by its key. */
+export const cafeReason = (key: CafeReasonKey) => CAFE_READY_REASONS.find((r) => r.key === key)!;
+
+/** How a line is wanted, split into its parts ("Medium sugar, with milk" → two parts). */
+export function cafeOptionParts(options: string | null | undefined): string[] {
+  return (options ?? '')
+    .split(/\s*[,،]\s*/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+}
+
+/** How a line is wanted, in `locale`: each ready-made part in that language, the rest as typed. */
+export function cafeOptionsLabel(options: string | null | undefined, locale: Locale | string): string {
+  const parts = cafeOptionParts(options);
+  if (!parts.length) return options ?? '';
+  return parts.map((p) => cafeWordsIn(findCafeOptionChip(p), locale) ?? p).join(cafeListSeparator(locale));
+}
+
+/** How a reason is stored: a ready-made one by its English words (whichever language it was tapped in), anything else as typed. */
+export function storedCafeReason(reason: string): string {
+  return findWords(reason, CAFE_READY_REASONS)?.en ?? reason.trim();
+}
+
+/** A stored reason in `locale`: a ready-made one in that language, else as typed. */
+export function cafeReasonLabel(reason: string, locale: Locale | string): string {
+  return cafeWordsIn(findWords(reason, CAFE_READY_REASONS), locale) ?? reason;
+}
+
+function cafeWordsIn(words: CafeWords | undefined, locale: Locale | string): string | undefined {
+  if (!words) return undefined;
+  return locale === 'ar' ? words.ar : words.en;
+}
+
 /** "2 × Tea (no sugar), 1 × Water" in `locale`, for alerts and one-line summaries. */
 export function cafeLinesSummary(lines: readonly Pick<CafeOrderLine, 'nameEn' | 'nameAr' | 'qty' | 'options'>[], locale: Locale | string): string {
-  const sep = locale === 'ar' ? '، ' : ', ';
-  return lines.map((l) => `${l.qty} × ${cafeItemName(l, locale)}${l.options ? ` (${l.options})` : ''}`).join(sep);
+  return lines
+    .map((l) => {
+      const options = cafeOptionsLabel(l.options, locale);
+      return `${l.qty} × ${cafeItemName(l, locale)}${options ? ` (${options})` : ''}`;
+    })
+    .join(cafeListSeparator(locale));
 }

@@ -119,6 +119,28 @@ export function holdsAll(held: readonly Permission[], needed: readonly Permissio
   return needed.every((p) => set.has(p));
 }
 
+/**
+ * Reach: "nobody gives, takes or touches access beyond their own" (a password
+ * reset of someone who can do more than you would be a takeover). A few
+ * permissions are within the reach of someone who doesn't hold them, because
+ * another permission they hold already controls most of it:
+ * - `cafeteria.serve` is within the reach of `settings.manage`. Settings
+ *   already edits the cafeteria's menu and places and switches it off; what is
+ *   left (the orders board, moving an order along) opens no school data. So
+ *   the Executive Director can create and manage the Office helper's account —
+ *   reset his password, switch the account off when he leaves — and give the
+ *   Office helper position, without holding cafeteria.serve herself (she still
+ *   doesn't get it by default, nor the new-order alerts).
+ */
+export const REACH_COVERS: Partial<Record<Permission, readonly Permission[]>> = {
+  'settings.manage': ['cafeteria.serve'],
+};
+
+/** What someone holding `held` may give, take or touch in others (their permissions plus what REACH_COVERS adds), in catalogue order. */
+export function reachOf(held: readonly Permission[]): Permission[] {
+  return normalizePermissions([...held, ...held.flatMap((p) => REACH_COVERS[p] ?? [])]);
+}
+
 // ── Built-in positions ──────────────────────────────────────────────────────
 
 /**

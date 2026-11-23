@@ -169,6 +169,7 @@ const en = {
     menuNotEmpty: 'The menu already has items.',
     menuFull: 'The menu is full. Remove an item first.',
     placeRequired: 'Write the place’s name, or remove this line',
+    placeTwice: 'Another place already has this name',
   },
 };
 
@@ -339,6 +340,7 @@ const ar: TranslationOf<typeof en> = {
     menuNotEmpty: 'القائمة فيها أصناف بالفعل.',
     menuFull: 'القائمة ممتلئة. يُرجى حذف صنف أولًا.',
     placeRequired: 'يُرجى كتابة اسم المكان أو حذف هذا السطر',
+    placeTwice: 'هذا الاسم مستخدم لمكان آخر',
   },
 };
 

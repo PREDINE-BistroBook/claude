@@ -23,7 +23,7 @@ import { TEAM_ERROR_KEYS } from '../../shared/schemas/team';
 import type { DB } from '../db/database';
 import { conversationMembers, conversations, files, messageAttachments, messages, notifications, users } from '../db/schema';
 import type { AppEnv } from '../env';
-import { cafeUnread } from '../lib/cafe';
+import { cafeUnread, hiddenNotificationKinds } from '../lib/cafe';
 import { ApiError, fieldError, forbidden, notFound } from '../lib/errors';
 import { claimUploads, deleteStoredFiles, takeUnusedFiles } from '../lib/fileRefs';
 import { conversationLink, localeOf, markNotificationsRead, messagePreview, notificationText, notify, preview, unreadNotificationCount } from '../lib/notifications';
@@ -384,7 +384,7 @@ router.get('/unread', (c) => {
   const total = [...unreadCounts(db, me).values()].reduce((a, b) => a + b, 0);
   const res: ChatUnreadResponse = {
     total,
-    notifications: unreadNotificationCount(db, me),
+    notifications: unreadNotificationCount(db, me, Date.now(), hiddenNotificationKinds(db, user)),
     summons: incomingSummons(db, me, Date.now()),
     cafe: cafeUnread(db, user),
   };
