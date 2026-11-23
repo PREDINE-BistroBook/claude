@@ -15,9 +15,9 @@ import { PasswordInput } from './PasswordInput';
 
 export default function SetupPage() {
   const { t } = useTranslation();
-  const { user, loading, needsSetup, refresh } = useAuth();
+  const { user, loading, needsSetup, setupCodeRequired, refresh } = useAuth();
   const navigate = useNavigate();
-  const form = useForm({ schoolName: '', schoolNameAr: '', name: '', email: '', password: '' });
+  const form = useForm({ schoolName: '', schoolNameAr: '', name: '', email: '', password: '', setupCode: '' });
   usePageTitle(t('auth.setupTitle'));
 
   const setup = useMutation({
@@ -39,12 +39,25 @@ export default function SetupPage() {
         className="grid gap-4"
         onSubmit={(e) => {
           e.preventDefault();
-          const data = form.validate(setupInput, { ...form.values, locale: currentLanguage() });
+          const { setupCode, ...values } = form.values;
+          const data = form.validate(setupInput, { ...values, ...(setupCodeRequired ? { setupCode } : {}), locale: currentLanguage() });
           if (data) setup.mutate(data);
         }}
       >
         <FormError messageKey={form.formError} />
-        <TextField label={t('auth.schoolName')} placeholder={t('auth.schoolNamePlaceholder')} autoFocus {...form.bind('schoolName')} error={form.error('schoolName')} />
+        {setupCodeRequired && (
+          // Where the server is public from its first deploy (Cloudflare), only whoever holds the setup code can create the first account.
+          <Field label={t('auth.setupCode')} htmlFor="f-setupCode" error={form.error('setupCode')} hint={t('auth.setupCodeHint')}>
+            <PasswordInput autoComplete="off" autoFocus {...form.bind('setupCode')} />
+          </Field>
+        )}
+        <TextField
+          label={t('auth.schoolName')}
+          placeholder={t('auth.schoolNamePlaceholder')}
+          autoFocus={!setupCodeRequired}
+          {...form.bind('schoolName')}
+          error={form.error('schoolName')}
+        />
         <TextField
           label={t('auth.schoolNameAr')}
           placeholder={t('auth.schoolNameArPlaceholder')}

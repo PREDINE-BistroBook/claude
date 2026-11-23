@@ -10,7 +10,7 @@ const en = {
   summary_one: '{{count}} person on the team',
   summary_other: '{{count}} people on the team',
   inactiveSection: 'Inactive accounts',
-  inactiveHint: 'They can’t sign in. Their classes and history are kept.',
+  inactiveHint: 'They can’t sign in. Their workshops and history are kept.',
   emptyTitle: 'No staff yet',
   emptyHint: 'Add the people who teach, manage or represent talent.',
   positions: {
@@ -77,7 +77,7 @@ const ar: TranslationOf<typeof en> = {
   summary_many: '{{count}} عضوًا في الفريق',
   summary_other: '{{count}} عضو في الفريق',
   inactiveSection: 'الحسابات غير النشطة',
-  inactiveHint: 'لا يمكنهم تسجيل الدخول، مع الاحتفاظ بصفوفهم وسجلّهم.',
+  inactiveHint: 'لا يمكنهم تسجيل الدخول، مع الاحتفاظ بورشهم وسجلّهم.',
   emptyTitle: 'لا يوجد أعضاء بعد',
   emptyHint: 'أضف من يدرّسون أو يديرون أو يمثّلون المواهب.',
   positions: {

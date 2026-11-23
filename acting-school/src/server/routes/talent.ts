@@ -1,6 +1,5 @@
 import { and, asc, desc, eq, gt, gte, isNotNull, isNull, lte, or, sql, type SQL } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { todayISO } from '../../shared/dates';
 import type { ApiIssue, ListResponse } from '../../shared/schemas/common';
 import {
   TALENT_CONTACT_FIELDS,
@@ -15,12 +14,14 @@ import {
   type TalentPhoto,
   type TalentTags,
 } from '../../shared/schemas/talent';
-import type { DB } from '../db/client';
+import type { DB } from '../db/database';
 import { castingRoles, castings, files, students, submissions, talent, talentPhotos } from '../db/schema';
 import type { AppEnv } from '../env';
 import type { SessionUser } from '../../shared/schemas/auth';
+import { schoolToday } from '../lib/clock';
 import { hasPermission, maySeeStudent, redactContact, withoutContact } from '../lib/access';
 import { ApiError, conflict, notFound } from '../lib/errors';
+import { contains } from '../lib/sqlLimits';
 import { body, paramId, query } from '../lib/validate';
 import { currentUser, requireAuth, requirePermission } from '../middleware/auth';
 
@@ -146,18 +147,15 @@ function assertStudentLinkable(db: Conn, user: SessionUser, studentId: number, e
   }
 }
 
-/** Escape LIKE wildcards so a search for "50%" or "a_b" is taken literally. */
-const escapeLike = (s: string) => s.replace(/[\\%_]/g, (m) => `\\${m}`);
-const likeEscaped = (expr: SQL, pattern: string) => sql`${expr} like ${pattern} escape '\\'`;
-
+/** Names and stage name contain the term (instr, not LIKE: lib/sqlLimits.ts). */
 function searchCondition(q: string): SQL {
-  const pattern = `%${escapeLike(q.replace(/\s+/g, ' '))}%`;
+  const term = q.replace(/\s+/g, ' ');
   return or(
-    likeEscaped(sql`${talent.firstName}`, pattern),
-    likeEscaped(sql`${talent.lastName}`, pattern),
-    likeEscaped(sql`coalesce(${talent.stageName}, '')`, pattern),
-    likeEscaped(sql`(${talent.firstName} || ' ' || ${talent.lastName})`, pattern),
-    likeEscaped(sql`(${talent.lastName} || ' ' || ${talent.firstName})`, pattern),
+    contains(talent.firstName, term),
+    contains(talent.lastName, term),
+    contains(talent.stageName, term),
+    contains(sql`(${talent.firstName} || ' ' || ${talent.lastName})`, term),
+    contains(sql`(${talent.lastName} || ' ' || ${talent.firstName})`, term),
   )!;
 }
 
@@ -166,16 +164,16 @@ function searchCondition(q: string): SQL {
  * "YYYY-MM-DD". ageOn(dob) >= years  ⇔  dob <= birthDateBound(years).
  * Plain string comparison, so it also works across 29 February.
  */
-function birthDateBound(years: number, today = todayISO()): string {
+function birthDateBound(years: number, today: string): string {
   const [y, m, d] = today.split('-') as [string, string, string];
   return `${String(Number(y) - years).padStart(4, '0')}-${m}-${d}`;
 }
 
 /**
- * Who can play `age`: a playing range that contains it (a missing end is open),
+ * Who can play `age` (on the school's `today`): a playing range that contains it (a missing end is open),
  * or — for talent without any playing range — an actual age within ±1 year.
  */
-function ageCondition(age: number): SQL {
+function ageCondition(age: number, today: string): SQL {
   const inRange = and(
     or(isNotNull(talent.playingAgeMin), isNotNull(talent.playingAgeMax)),
     or(isNull(talent.playingAgeMin), lte(talent.playingAgeMin, age)),
@@ -186,9 +184,9 @@ function ageCondition(age: number): SQL {
     isNull(talent.playingAgeMax),
     isNotNull(talent.dateOfBirth),
     // actual age >= age - 1 …
-    lte(talent.dateOfBirth, birthDateBound(age - 1)),
+    lte(talent.dateOfBirth, birthDateBound(age - 1, today)),
     // … and actual age <= age + 1 (i.e. not yet age + 2).
-    gt(talent.dateOfBirth, birthDateBound(age + 2)),
+    gt(talent.dateOfBirth, birthDateBound(age + 2, today)),
   );
   return or(inRange, byActualAge)!;
 }
@@ -206,7 +204,7 @@ router.get('/', canRead, (c) => {
   if (gender) conditions.push(eq(talent.gender, gender));
   if (studentId) conditions.push(eq(talent.studentId, studentId));
   if (q) conditions.push(searchCondition(q));
-  if (age !== undefined) conditions.push(ageCondition(age));
+  if (age !== undefined) conditions.push(ageCondition(age, schoolToday(c)));
 
   let items: TalentListItem[] = db
     .select({
@@ -394,8 +392,8 @@ router.patch('/:id', canWrite, async (c) => {
 router.delete('/:id', canWrite, (c) => {
   const id = paramId(c);
   // Photos and submissions cascade. Image files stay: a student may share them.
-  const result = c.get('db').delete(talent).where(eq(talent.id, id)).run();
-  if (result.changes === 0) throw notFound('Talent not found');
+  const deleted = c.get('db').delete(talent).where(eq(talent.id, id)).returning({ id: talent.id }).get();
+  if (!deleted) throw notFound('Talent not found');
   return c.body(null, 204);
 });
 

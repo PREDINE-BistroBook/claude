@@ -18,6 +18,8 @@ export const setupInput = z.object({
   email,
   password,
   locale: z.enum(LOCALES).optional(),
+  /** Asked for only where MeResponse.setupCodeRequired (Cloudflare): the ADMIN_TOKEN, from whoever deployed the app. */
+  setupCode: z.string().trim().max(200).optional(),
 });
 export type SetupInput = z.infer<typeof setupInput>;
 
@@ -69,6 +71,8 @@ export interface MeResponse {
   user: SessionUser | null;
   /** True only while no staff account exists yet (first run → /setup). */
   needsSetup: boolean;
+  /** Setup asks for the setup code (SetupInput.setupCode); only while needsSetup. */
+  setupCodeRequired: boolean;
   schoolName: string;
   /** Arabic name; show `schoolName` when null. */
   schoolNameAr: string | null;

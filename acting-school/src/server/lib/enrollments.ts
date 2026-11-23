@@ -7,7 +7,7 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { COURSE_ERROR_CODES } from '../../shared/schemas/courses';
 import type { EnrollmentStatus } from '../../shared/enums';
-import type { DB } from '../db/client';
+import type { DB } from '../db/database';
 import { enrollments, type courses } from '../db/schema';
 import { ApiError } from './errors';
 

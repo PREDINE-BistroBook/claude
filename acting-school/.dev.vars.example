@@ -1,0 +1,6 @@
+# Copy to .dev.vars for `wrangler dev` (npm run cf:dev creates one for you).
+# Local only — the deployed Worker gets ADMIN_TOKEN as a secret (README "Cloudflare").
+# ADMIN_TOKEN is also the setup code the empty school's setup screen asks for.
+# Under 24 characters on purpose, so this placeholder is never accepted. Put a long random value here.
+ADMIN_TOKEN=replace-me
+ALLOW_DEMO_RESET=true

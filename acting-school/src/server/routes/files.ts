@@ -2,8 +2,6 @@ import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { randomUUID } from 'node:crypto';
-import fs from 'node:fs/promises';
-import path from 'node:path';
 import { MAX_UPLOAD_BYTES, type UploadedFile } from '../../shared/schemas/files';
 import { files } from '../db/schema';
 import type { AppEnv } from '../env';
@@ -13,7 +11,8 @@ import { currentUser, requireAuth } from '../middleware/auth';
 /**
  * Image uploads (headshots, student photos). Files are private: served only to
  * signed-in staff. The type is decided from the file's first bytes, not from
- * what the browser claims.
+ * what the browser claims. The bytes go to the app's FileStore (a folder on
+ * the Node server, the Durable Object's SQLite or R2 on Cloudflare).
  */
 const router = new Hono<AppEnv>();
 router.use(requireAuth);
@@ -48,9 +47,7 @@ router.post(
 
     const id = randomUUID();
     const storageKey = `${id}.${kind.ext}`;
-    const uploadsDir = c.get('config').uploadsDir;
-    await fs.mkdir(uploadsDir, { recursive: true });
-    await fs.writeFile(path.join(uploadsDir, storageKey), buf);
+    await c.get('files').put(storageKey, buf, kind.mime);
     c.get('db')
       .insert(files)
       .values({ id, originalName: file.name?.slice(0, 200) || null, mime: kind.mime, size: buf.byteLength, storageKey, uploadedBy: currentUser(c).id })
@@ -65,7 +62,7 @@ router.get('/:id', async (c) => {
   if (!/^[0-9a-f-]{36}$/.test(id)) throw notFound();
   const row = c.get('db').select().from(files).where(eq(files.id, id)).get();
   if (!row) throw notFound();
-  const data = await fs.readFile(path.join(c.get('config').uploadsDir, row.storageKey)).catch(() => null);
+  const data = await c.get('files').get(row.storageKey);
   if (!data) throw notFound();
   return c.body(data, 200, {
     'Content-Type': row.mime,

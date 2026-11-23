@@ -42,3 +42,8 @@ export function newToken(): string {
 export function sha256(s: string): string {
   return createHash('sha256').update(s).digest('hex');
 }
+
+/** Compare a secret someone sent with the real one in constant time (both hashed to the same length first). */
+export function sameSecret(given: string, expected: string): boolean {
+  return timingSafeEqual(createHash('sha256').update(given).digest(), createHash('sha256').update(expected).digest());
+}

@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { PERMISSIONS, normalizePermissions } from '../../shared/permissions';
 import type { ListResponse } from '../../shared/schemas/common';
 import { POSITION_ERROR_CODES, positionInput, positionUpdateInput, type Position } from '../../shared/schemas/positions';
-import type { DB } from '../db/client';
+import type { DB } from '../db/database';
 import { positions } from '../db/schema';
 import type { AppEnv } from '../env';
 import {

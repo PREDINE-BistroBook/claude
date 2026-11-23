@@ -15,8 +15,9 @@ import {
   type Permission,
 } from '../../shared/permissions';
 import type { PositionSummary, SessionUser } from '../../shared/schemas/auth';
-import type { DB } from '../db/client';
+import type { DB } from '../db/database';
 import { classSessions, courses, enrollments, positions, settings, students, userPositions, users } from '../db/schema';
+import { inChunks, insertBatches } from './sqlLimits';
 
 /** The database or an open transaction — both have the same query builder. */
 export type Conn = Pick<DB, 'select' | 'insert' | 'update' | 'delete'>;
@@ -42,10 +43,8 @@ export function ensureBuiltInPositions(db: Conn): string[] {
   );
   const missing = BUILT_IN_POSITIONS.map((p, i) => ({ ...p, sortOrder: i * 10 })).filter((p) => !existing.has(p.key));
   if (!missing.length) return [];
-  db.insert(positions)
-    .values(missing.map((p) => ({ key: p.key, name: p.name, nameAr: p.nameAr, isOwner: p.isOwner, permissions: [...p.permissions], sortOrder: p.sortOrder })))
-    .onConflictDoNothing()
-    .run();
+  const rows = missing.map((p) => ({ key: p.key, name: p.name, nameAr: p.nameAr, isOwner: p.isOwner, permissions: [...p.permissions], sortOrder: p.sortOrder }));
+  for (const batch of insertBatches(positions, rows)) db.insert(positions).values(batch).onConflictDoNothing().run();
   return missing.map((p) => p.key);
 }
 
@@ -132,16 +131,17 @@ const positionColumns = {
 /** The positions (with what they allow) of several people, in one query. People without positions get []. */
 export function loadPositionRows(db: Pick<DB, 'select'>, userIds: readonly number[]): Map<number, PositionRow[]> {
   const byUser = new Map<number, PositionRow[]>(userIds.map((id) => [id, []]));
-  if (userIds.length) {
-    const rows = db
+  // In slices: the staff list can name more people than one IN (…) may hold (lib/sqlLimits.ts).
+  const rows = inChunks(userIds, (ids) =>
+    db
       .select({ userId: userPositions.userId, ...positionColumns })
       .from(userPositions)
       .innerJoin(positions, eq(positions.id, userPositions.positionId))
-      .where(inArray(userPositions.userId, [...userIds]))
+      .where(inArray(userPositions.userId, ids))
       .orderBy(...positionOrder)
-      .all();
-    for (const { userId, ...p } of rows) byUser.get(userId)?.push(p);
-  }
+      .all(),
+  );
+  for (const { userId, ...p } of rows) byUser.get(userId)?.push(p);
   return byUser;
 }
 

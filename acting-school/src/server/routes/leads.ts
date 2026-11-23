@@ -1,6 +1,5 @@
 import { and, eq, gte, inArray, ne, or, sql, type SQL } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { todayISO } from '../../shared/dates';
 import { CLOSED_LEAD_STATUSES, OPEN_LEAD_STATUSES, isClosedLeadStatus, type InterviewStatus, type LeadLostReason, type LeadStatus } from '../../shared/enums';
 import {
   ADMISSIONS_ERROR_CODES,
@@ -26,9 +25,10 @@ import {
 } from '../../shared/schemas/admissions';
 import type { SessionUser } from '../../shared/schemas/auth';
 import type { ListResponse } from '../../shared/schemas/common';
-import type { DB } from '../db/client';
+import type { DB } from '../db/database';
 import { courses, interviews, leadActivities, leads, students } from '../db/schema';
 import type { AppEnv } from '../env';
+import { schoolToday } from '../lib/clock';
 import { hasPermission, isVisibleActiveStaff, type Conn } from '../lib/access';
 import {
   findDuplicates,
@@ -48,7 +48,8 @@ import { addEnrollment, ensureEnrolled } from '../lib/enrollments';
 import { ApiError, fieldError, forbidden, notFound } from '../lib/errors';
 import { getSettings } from '../lib/settings';
 import { body, paramId, query } from '../lib/validate';
-import { phoneDigitsSql, phoneSearchDigits } from '../lib/phone';
+import { phoneSearchDigits, withPhoneDigits } from '../lib/phone';
+import { contains } from '../lib/sqlLimits';
 import { currentUser, requireAnyPermission, requireAuth, requirePermission } from '../middleware/auth';
 
 /**
@@ -195,22 +196,21 @@ function moveStatus(tx: Conn, lead: Pick<LeadRow, 'id' | 'status'>, to: LeadStat
 
 // ── Search ──────────────────────────────────────────────────────────────────
 
-const escapeLike = (s: string) => s.replace(/[\\%_]/g, (m) => `\\${m}`);
-const likeEscaped = (expr: SQL, pattern: string) => sql`${expr} like ${pattern} escape '\\'`;
-
-/** Names, email and phone (digits in any format: "010 123" finds "+20 10123…", "+20 100…" finds "0100…"). */
+/**
+ * Names, email and phone (digits in any format: "010 123" finds "+20 10123…", "+20 100…" finds "0100…").
+ * Substring matches with instr, not LIKE (lib/sqlLimits.ts).
+ */
 function searchCondition(q: string, countryCode: string): SQL {
   const term = q.replace(/\s+/g, ' ');
-  const pattern = `%${escapeLike(term)}%`;
   const parts: SQL[] = [
-    likeEscaped(sql`${leads.firstName}`, pattern),
-    likeEscaped(sql`${leads.lastName}`, pattern),
-    likeEscaped(sql`(${leads.firstName} || ' ' || ${leads.lastName})`, pattern),
-    likeEscaped(sql`(${leads.lastName} || ' ' || ${leads.firstName})`, pattern),
-    likeEscaped(sql`${leads.email}`, pattern),
-    likeEscaped(sql`${leads.phone}`, pattern),
+    contains(leads.firstName, term),
+    contains(leads.lastName, term),
+    contains(sql`(${leads.firstName} || ' ' || ${leads.lastName})`, term),
+    contains(sql`(${leads.lastName} || ' ' || ${leads.firstName})`, term),
+    contains(leads.email, term),
+    contains(leads.phone, term),
   ];
-  for (const digits of phoneSearchDigits(term, countryCode) ?? []) parts.push(sql`${phoneDigitsSql(leads.phone)} like ${`%${digits}%`}`);
+  for (const digits of phoneSearchDigits(term, countryCode) ?? []) parts.push(contains(leads.phoneDigits, digits));
   return or(...parts)!;
 }
 
@@ -225,7 +225,7 @@ const GROUP_WHERE: Record<string, (today: string) => SQL | undefined> = {
 
 router.get('/', (c) => {
   const q = query(c, leadListQuery);
-  const today = todayISO();
+  const today = schoolToday(c);
   const where = and(
     q.status ? eq(leads.status, q.status) : undefined,
     q.group ? GROUP_WHERE[q.group]!(today) : undefined,
@@ -237,7 +237,7 @@ router.get('/', (c) => {
 });
 
 router.get('/counts', (c) => {
-  const today = todayISO();
+  const today = schoolToday(c);
   const open = sql.join(
     OPEN_LEAD_STATUSES.map((s) => sql`${s}`),
     sql`, `,
@@ -271,7 +271,7 @@ router.get('/duplicates', (c) => {
 });
 
 router.get('/course-options', (c) => {
-  const today = todayISO();
+  const today = schoolToday(c);
   const items: AdmissionsCourseOption[] = loadCourseListItems(c.get('db'), and(eq(courses.status, 'active'), gte(courses.endDate, today)), today).map(
     ({ description: _d, createdAt: _c, updatedAt: _u, ...course }) => ({
       ...course,
@@ -299,16 +299,18 @@ router.post('/', canWrite, async (c) => {
   const { status: _s, lostReason: _l, nextFollowUpOn: _n, ...fields } = input;
   const created = db
     .insert(leads)
-    .values({
-      ...fields,
-      source: input.source ?? 'other',
-      // The creator unless someone (or nobody: null) was named.
-      assignedToId: input.assignedToId === undefined ? me.id : input.assignedToId,
-      status: plan.status,
-      lostReason: plan.lostReason,
-      nextFollowUpOn: plan.nextFollowUpOn ?? null,
-      createdById: me.id,
-    })
+    .values(
+      withPhoneDigits({
+        ...fields,
+        source: input.source ?? 'other',
+        // The creator unless someone (or nobody: null) was named.
+        assignedToId: input.assignedToId === undefined ? me.id : input.assignedToId,
+        status: plan.status,
+        lostReason: plan.lostReason,
+        nextFollowUpOn: plan.nextFollowUpOn ?? null,
+        createdById: me.id,
+      }),
+    )
     .returning({ id: leads.id })
     .get();
   return c.json(detail(db, created.id, me), 201);
@@ -350,7 +352,7 @@ router.patch('/:id', canWriteOrDecide, async (c) => {
     const { status: _s, lostReason: _l, nextFollowUpOn: _n, ...rest } = input;
     const fields = Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined)) as Partial<typeof leads.$inferInsert>;
     tx.update(leads)
-      .set({ ...fields, ...statusColumns(existing, plan), updatedAt: Date.now() })
+      .set(withPhoneDigits({ ...fields, ...statusColumns(existing, plan), updatedAt: Date.now() }))
       .where(eq(leads.id, id))
       .run();
     applyStatus(tx, existing, plan, me);
@@ -543,7 +545,7 @@ router.post('/:id/enrol', canDecide, async (c) => {
   const db = c.get('db');
   const input = await body(c, enrolInput);
   const countryCode = getSettings(db).defaultCountryCode;
-  const joinedOn = input.joinedOn ?? todayISO();
+  const joinedOn = input.joinedOn ?? schoolToday(c);
 
   const result = db.transaction((tx) => {
     // Read inside the transaction: two enrol requests must not both win.
@@ -576,22 +578,24 @@ router.post('/:id/enrol', canDecide, async (c) => {
     } else {
       studentId = tx
         .insert(students)
-        .values({
-          firstName: lead.firstName,
-          lastName: lead.lastName,
-          phone: lead.phone,
-          email: lead.email,
-          dateOfBirth: lead.dateOfBirth,
-          gender: lead.gender,
-          guardianName: lead.guardianName,
-          guardianPhone: lead.guardianPhone,
-          // Students have no city field: it travels in the notes.
-          notes: lead.city ? `From admissions\nCity: ${lead.city}` : 'From admissions',
-          status: 'active',
-          joinedOn,
-          mediaConsent: false,
-          createdBy: me.id,
-        })
+        .values(
+          withPhoneDigits({
+            firstName: lead.firstName,
+            lastName: lead.lastName,
+            phone: lead.phone,
+            email: lead.email,
+            dateOfBirth: lead.dateOfBirth,
+            gender: lead.gender,
+            guardianName: lead.guardianName,
+            guardianPhone: lead.guardianPhone,
+            // Students have no city field: it travels in the notes.
+            notes: lead.city ? `From admissions\nCity: ${lead.city}` : 'From admissions',
+            status: 'active' as const,
+            joinedOn,
+            mediaConsent: false,
+            createdBy: me.id,
+          }),
+        )
         .returning({ id: students.id })
         .get().id;
       // The classes module's rules: capacity (a new student has no enrollment yet). A refusal rolls everything back.

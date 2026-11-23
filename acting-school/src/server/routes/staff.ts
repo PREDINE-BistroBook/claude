@@ -2,7 +2,7 @@ import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { ListResponse } from '../../shared/schemas/common';
 import { STAFF_ERROR_CODES, staffCreateInput, staffUpdateInput, type StaffDirectoryEntry, type StaffMember } from '../../shared/schemas/staff';
-import type { DB } from '../db/client';
+import type { DB } from '../db/database';
 import { authSessions, positions, userPositions, users } from '../db/schema';
 import type { AppEnv } from '../env';
 import {
@@ -16,6 +16,7 @@ import {
   type Actor,
   type UserAccess,
 } from '../lib/access';
+import { inChunks, insertBatches } from '../lib/sqlLimits';
 import { ApiError, notFound } from '../lib/errors';
 import { hashPassword } from '../lib/password';
 import { getSettings } from '../lib/settings';
@@ -93,11 +94,13 @@ type PositionRow = typeof positions.$inferSelect;
  */
 function findPositions(db: Tx, ids: number[], actor: Actor): PositionRow[] {
   const unique = [...new Set(ids)];
-  const rows = db
-    .select()
-    .from(positions)
-    .where(and(inArray(positions.id, unique), actor.isOwner ? undefined : eq(positions.isOwner, false)))
-    .all();
+  const rows = inChunks(unique, (ids) =>
+    db
+      .select()
+      .from(positions)
+      .where(and(inArray(positions.id, ids), actor.isOwner ? undefined : eq(positions.isOwner, false)))
+      .all(),
+  );
   if (rows.length !== unique.length) {
     throw new ApiError(400, 'validation', 'Some fields are missing or invalid', [
       { path: ['positionIds'], code: 'custom', message: 'staff:errors.positionNotFound' },
@@ -189,9 +192,7 @@ router.post('/', canManage, async (c) => {
       .values({ name: input.name, email: input.email, passwordHash, phone: input.phone ?? null, locale, active: true })
       .returning()
       .get();
-    tx.insert(userPositions)
-      .values(chosen.map((p) => ({ userId: user.id, positionId: p.id })))
-      .run();
+    for (const batch of insertBatches(userPositions, chosen.map((p) => ({ userId: user.id, positionId: p.id })))) tx.insert(userPositions).values(batch).run();
     return user;
   });
   if (!created) throw emailTakenError();
@@ -256,9 +257,7 @@ router.patch('/:id', canManage, async (c) => {
     const row = Object.keys(patch).length ? tx.update(users).set(patch).where(eq(users.id, id)).returning().get()! : target;
     if (nextPositions) {
       tx.delete(userPositions).where(eq(userPositions.userId, id)).run();
-      tx.insert(userPositions)
-        .values(nextPositions.map((p) => ({ userId: id, positionId: p.id })))
-        .run();
+      for (const batch of insertBatches(userPositions, nextPositions.map((p) => ({ userId: id, positionId: p.id })))) tx.insert(userPositions).values(batch).run();
       if (!Object.keys(patch).length) tx.update(users).set({ updatedAt: Date.now() }).where(eq(users.id, id)).run();
     }
     if (signOutEverywhere) {

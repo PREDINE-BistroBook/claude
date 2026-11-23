@@ -4,7 +4,7 @@ import { splitDateTime } from '../../shared/dates';
 import type { SubmissionStatus } from '../../shared/enums';
 import type { ListResponse } from '../../shared/schemas/common';
 import { scheduleRangeQuery, type AuditionEvent, type ClassEvent, type ScheduleEvent } from '../../shared/schemas/schedule';
-import type { DB } from '../db/client';
+import type { DB } from '../db/database';
 import { castingRoles, castings, classSessions, courses, enrollments, submissions, talent, users } from '../db/schema';
 import type { AppEnv } from '../env';
 import { courseScope } from '../lib/access';

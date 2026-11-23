@@ -2,21 +2,44 @@
  * Phone numbers in SQL. Numbers are stored as typed (normalised since the
  * admissions module: Western digits, no invisible marks), but older rows can
  * hold Arabic-Indic digits ("٠١٠…") or bidi marks pasted from WhatsApp, so
- * matching never relies on a fixed list of separators: the `phone_digits()`
- * SQL function is phoneDigits() from shared/phone.ts itself.
+ * matching never relies on a fixed list of separators: students and leads keep
+ * `phone_digits`, phoneDigits() from shared/phone.ts of their phone, written by
+ * the app on every write (withPhoneDigits) and filled in at startup for older
+ * rows (backfillPhoneDigits). A stored column rather than a SQL function:
+ * SQLite on Cloudflare Durable Objects can't register JS functions.
  */
-import type Database from 'better-sqlite3';
-import { sql, type SQL, type SQLWrapper } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull } from 'drizzle-orm';
 import { MIN_PHONE_DIGITS, normalizePhone, phoneDigits } from '../../shared/phone';
+import type { DB } from '../db/database';
+import { leads, students } from '../db/schema';
 
-/** Registers phone_digits(text) on a connection (createDb does it for every database). */
-export function registerPhoneFunctions(sqlite: Database.Database) {
-  sqlite.function('phone_digits', { deterministic: true }, (v: unknown) => (typeof v === 'string' ? phoneDigits(v) : ''));
+/**
+ * Insert/update values with `phoneDigits` in step with `phone`. Every write of
+ * students.phone or leads.phone goes through it; values without a phone key are
+ * returned as they are.
+ */
+export function withPhoneDigits<T extends { phone?: string | null }>(values: T): T & { phoneDigits?: string | null } {
+  if (values.phone === undefined) return values;
+  return { ...values, phoneDigits: values.phone === null ? null : phoneDigits(values.phone) };
 }
 
-/** The digits of a phone column: "+20 (10) ١٢٣-4567" → "20101234567"; '' for NULL. */
-export function phoneDigitsSql(col: SQLWrapper): SQL<string> {
-  return sql<string>`phone_digits(${col})`;
+/** Startup: rows with a phone but no phone_digits yet (written before the column existed) get it. Returns how many. */
+export function backfillPhoneDigits(db: DB): number {
+  let n = 0;
+  db.transaction((tx) => {
+    for (const table of [students, leads] as const) {
+      const rows = tx
+        .select({ id: table.id, phone: table.phone })
+        .from(table)
+        .where(and(isNotNull(table.phone), isNull(table.phoneDigits)))
+        .all();
+      for (const r of rows) {
+        tx.update(table).set({ phoneDigits: phoneDigits(r.phone) }).where(eq(table.id, r.id)).run();
+        n++;
+      }
+    }
+  });
+  return n;
 }
 
 /**

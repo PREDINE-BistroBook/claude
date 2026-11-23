@@ -60,6 +60,10 @@ export function errorMessageKey(err: unknown): string {
         return 'common:errors.fileTooLarge';
       case 'unsupported_type':
         return 'common:errors.fileType';
+      case 'payload_too_large':
+        return 'common:errors.requestTooLarge';
+      case 'setup_locked':
+        return 'common:errors.setupLocked';
       case 'validation':
         return 'common:errors.invalid';
     }

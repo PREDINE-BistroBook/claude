@@ -19,5 +19,7 @@
       "@web/*": ["./src/web/*"]
     }
   },
-  "include": ["src", "tests", "scripts", "*.ts"]
+  "include": ["src", "tests", "scripts", "*.ts"],
+  // The Worker is checked against the Workers runtime types: tsconfig.worker.json.
+  "exclude": ["src/worker"]
 }

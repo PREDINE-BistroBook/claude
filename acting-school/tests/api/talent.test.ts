@@ -1,8 +1,8 @@
 import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { toISODate, todayISO } from '../../src/shared/dates';
+import { toISODate } from '../../src/shared/dates';
 import { castingRoles, castings, students, submissions, talent, talentPhotos, users } from '../../src/server/db/schema';
-import { makeTestContext, uploadPng, type Client } from '../helpers';
+import { makeTestContext, uploadPng, type Client, todayISO } from '../helpers';
 
 type Ctx = Awaited<ReturnType<typeof makeTestContext>>;
 

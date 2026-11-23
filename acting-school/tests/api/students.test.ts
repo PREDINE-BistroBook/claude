@@ -1,9 +1,8 @@
 import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
-import { todayISO } from '../../src/shared/dates';
 import type { Student, StudentDetail, StudentListItem } from '../../src/shared/schemas/students';
 import { attendance, classSessions, courses, enrollments, students, talent } from '../../src/server/db/schema';
-import { makeTestContext, uploadPng } from '../helpers';
+import { makeTestContext, uploadPng, todayISO } from '../helpers';
 
 type Ctx = Awaited<ReturnType<typeof makeTestContext>>;
 

@@ -2,10 +2,11 @@ import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { SUBMISSION_STATUSES } from '../../shared/enums';
 import { isSendingStatus, submissionInput, submissionUpdateInput, type Submission } from '../../shared/schemas/castings';
-import type { DB } from '../db/client';
+import type { DB } from '../db/database';
 import { castingRoles, submissions, talent } from '../db/schema';
 import type { AppEnv } from '../env';
-import { ApiError, notFound } from '../lib/errors';
+import { inChunks } from '../lib/sqlLimits';
+import { ApiError, notFound, sqliteConstraint } from '../lib/errors';
 import { body, paramId } from '../lib/validate';
 import { currentUser, requireAuth, requirePermission, userCan } from '../middleware/auth';
 
@@ -78,10 +79,10 @@ function toSubmission(r: SubmissionRow): Submission {
 export function submissionsForRoles(db: DB, roleIds: number[]): Map<number, Submission[]> {
   const out = new Map<number, Submission[]>();
   if (!roleIds.length) return out;
-  const rows = selectSubmissions(db)
-    .where(inArray(submissions.roleId, roleIds))
-    .orderBy(pipelineOrder, desc(submissions.updatedAt), desc(submissions.id))
-    .all();
+  // In slices of roles (a role's submissions all come in the same slice, so each list keeps its order).
+  const rows = inChunks(roleIds, (ids) =>
+    selectSubmissions(db).where(inArray(submissions.roleId, ids)).orderBy(pipelineOrder, desc(submissions.updatedAt), desc(submissions.id)).all(),
+  );
   for (const r of rows) {
     const list = out.get(r.roleId) ?? [];
     list.push(toSubmission(r));
@@ -131,7 +132,7 @@ router.post('/', canWrite, async (c) => {
       .get()!.id;
   } catch (err) {
     // Two people adding the same talent at once: the unique index decides.
-    if ((err as { code?: string }).code === 'SQLITE_CONSTRAINT_UNIQUE') throw alreadySubmitted();
+    if (sqliteConstraint(err) === 'unique') throw alreadySubmitted();
     throw err;
   }
   return c.json(loadSubmission(db, id), 201);
@@ -156,8 +157,8 @@ router.patch('/:id', canWrite, async (c) => {
 
 router.delete('/:id', canWrite, (c) => {
   const id = paramId(c);
-  const result = c.get('db').delete(submissions).where(eq(submissions.id, id)).run();
-  if (result.changes === 0) throw notFound('Submission not found');
+  const deleted = c.get('db').delete(submissions).where(eq(submissions.id, id)).returning({ id: submissions.id }).get();
+  if (!deleted) throw notFound('Submission not found');
   return c.body(null, 204);
 });
 

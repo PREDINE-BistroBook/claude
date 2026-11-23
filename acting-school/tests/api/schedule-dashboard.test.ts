@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { addDays, todayISO } from '../../src/shared/dates';
+import { addDays } from '../../src/shared/dates';
 import type { CourseColor, EnrollmentStatus, SessionStatus, SubmissionStatus } from '../../src/shared/enums';
 import type { DashboardData } from '../../src/shared/schemas/dashboard';
 import type { ScheduleEvent } from '../../src/shared/schemas/schedule';
@@ -14,7 +14,7 @@ import {
   submissions,
   talent,
 } from '../../src/server/db/schema';
-import { makeTestContext } from '../helpers';
+import { makeTestContext, todayISO, schoolTimeToday } from '../helpers';
 
 type Ctx = Awaited<ReturnType<typeof makeTestContext>>;
 
@@ -243,11 +243,10 @@ describe('GET /api/schedule', () => {
 // ── Dashboard ───────────────────────────────────────────────────────────────
 
 describe('GET /api/dashboard', () => {
-  // Pin the clock to local noon so "today, already ended" is deterministic.
+  // Pin the clock to noon at the school so "today, already ended" is deterministic.
   beforeAll(() => {
     vi.useFakeTimers({ toFake: ['Date'] });
-    const d = new Date();
-    vi.setSystemTime(new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0));
+    vi.setSystemTime(schoolTimeToday('12:00'));
   });
   afterAll(() => {
     vi.useRealTimers();
@@ -582,5 +581,34 @@ describe('class scope on the schedule and dashboard', () => {
     expect(data.attendanceToDoCount).toBeUndefined();
     const coach = await t.as({ permissions: ['attendance.write', 'classes.all', 'courses.read'] });
     expect((await coach.get<DashboardData>('/api/dashboard')).body.attendanceToDoCount).toBe(1);
+  });
+});
+
+describe('dashboard: "new this week" starts at midnight at the school', () => {
+  // Workers (and vitest) run in UTC; the school's Monday starts at 22:00 UTC on Sunday in
+  // winter (Cairo UTC+2) and at 21:00 UTC in summer (UTC+3, Egypt's summer time).
+  it.each([
+    { season: 'winter', sundayLate: '2026-11-22T21:30:00Z', mondayEarly: '2026-11-22T22:30:00Z', now: '2026-11-22T23:00:00Z', today: '2026-11-23' },
+    { season: 'summer', sundayLate: '2026-07-19T20:30:00Z', mondayEarly: '2026-07-19T21:30:00Z', now: '2026-07-19T23:30:00Z', today: '2026-07-20' },
+  ])('counts an enquiry from 00:30 on Monday in Cairo, not one from 23:30 on Sunday ($season)', async ({ sundayLate, mondayEarly, now, today }) => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date(sundayLate));
+      const t = await makeTestContext();
+      const owner = await t.as('owner');
+      expect((await owner.patch('/api/settings', { weekStartsOn: 1 })).status).toBe(200);
+      expect((await owner.post('/api/leads', { firstName: 'Sunday', lastName: 'Night', phone: '0100 111 2222' })).status).toBe(201);
+      vi.setSystemTime(new Date(mondayEarly));
+      expect((await owner.post('/api/leads', { firstName: 'Monday', lastName: 'Early', phone: '0100 333 4444' })).status).toBe(201);
+
+      // 01:00 (winter) / 02:30 (summer) on Monday at the school: the runtime's UTC date is still Sunday.
+      vi.setSystemTime(new Date(now));
+      const res = await owner.get<DashboardData>('/api/dashboard');
+      expect(res.body.today).toBe(today);
+      expect(res.body.counts.newLeadsThisWeek).toBe(1);
+      expect(res.body.counts.openLeads).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

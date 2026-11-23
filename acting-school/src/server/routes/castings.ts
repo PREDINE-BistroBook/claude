@@ -11,10 +11,11 @@ import {
   type CastingRole,
 } from '../../shared/schemas/castings';
 import type { ListResponse } from '../../shared/schemas/common';
-import type { DB } from '../db/client';
+import type { DB } from '../db/database';
 import { castingRoles, castings, submissions } from '../db/schema';
 import type { AppEnv } from '../env';
 import { ApiError, notFound } from '../lib/errors';
+import { contains } from '../lib/sqlLimits';
 import { body, paramId, query } from '../lib/validate';
 import { currentUser, requireAuth, requirePermission } from '../middleware/auth';
 import { submissionsForRoles } from './submissions';
@@ -99,13 +100,10 @@ function orderIssue(field: string, message: string): ApiError {
   return new ApiError(400, 'validation', 'Some fields are missing or invalid', [{ path: [field], code: 'custom', message }]);
 }
 
-/** Escape LIKE wildcards so a search for "50%" or "a_b" is taken literally. */
-const escapeLike = (s: string) => s.replace(/[\\%_]/g, (m) => `\\${m}`);
-
+/** Title, production or casting director contains the term (instr, not LIKE: lib/sqlLimits.ts). */
 function searchCondition(q: string): SQL {
-  const pattern = `%${escapeLike(q.replace(/\s+/g, ' '))}%`;
-  const like = (col: SQL) => sql`${col} like ${pattern} escape '\\'`;
-  return or(like(sql`${castings.title}`), like(sql`${castings.production}`), like(sql`${castings.castingDirector}`))!;
+  const term = q.replace(/\s+/g, ' ');
+  return or(contains(castings.title, term), contains(castings.production, term), contains(castings.castingDirector, term))!;
 }
 
 // ── List ────────────────────────────────────────────────────────────────────
@@ -204,8 +202,8 @@ router.patch('/:id', canWrite, async (c) => {
 router.delete('/:id', canWrite, (c) => {
   const id = paramId(c);
   // Roles and their submissions go with it (ON DELETE CASCADE).
-  const result = c.get('db').delete(castings).where(eq(castings.id, id)).run();
-  if (result.changes === 0) throw notFound('Casting not found');
+  const deleted = c.get('db').delete(castings).where(eq(castings.id, id)).returning({ id: castings.id }).get();
+  if (!deleted) throw notFound('Casting not found');
   return c.body(null, 204);
 });
 

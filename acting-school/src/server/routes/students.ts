@@ -1,6 +1,5 @@
 import { and, asc, desc, eq, or, sql, type SQL } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { todayISO } from '../../shared/dates';
 import type { ListResponse } from '../../shared/schemas/common';
 import {
   STUDENT_CONTACT_FIELDS,
@@ -12,13 +11,15 @@ import {
   type StudentListItem,
 } from '../../shared/schemas/students';
 import type { SessionUser } from '../../shared/schemas/auth';
-import type { DB } from '../db/client';
+import type { DB } from '../db/database';
 import { attendance, classSessions, courses, enrollments, files, students, talent } from '../db/schema';
 import type { AppEnv } from '../env';
+import { schoolToday } from '../lib/clock';
 import { courseScope, hasPermission, ownCourseIds, redactContact, seesAllClasses, studentScope, withoutContact } from '../lib/access';
 import { reopenLeadsOfStudent } from '../lib/admissions';
 import { ApiError, notFound } from '../lib/errors';
-import { phoneDigitsSql, phoneSearchDigits } from '../lib/phone';
+import { phoneSearchDigits, withPhoneDigits } from '../lib/phone';
+import { contains } from '../lib/sqlLimits';
 import { getSettings } from '../lib/settings';
 import { body, paramId, query } from '../lib/validate';
 import { currentUser, requireAuth, requirePermission } from '../middleware/auth';
@@ -93,24 +94,22 @@ function findStudent(db: DB, id: number, user: SessionUser): StudentRow {
   return row;
 }
 
-/** Escape LIKE wildcards so a search for "50%" or "a_b" is taken literally. */
-const escapeLike = (s: string) => s.replace(/[\\%_]/g, (m) => `\\${m}`);
-const likeEscaped = (expr: SQL, pattern: string) => sql`${expr} like ${pattern} escape '\\'`;
-
-/** Name search; email and phone too only for someone who may see them (otherwise a search would reveal them). */
+/**
+ * Name search; email and phone too only for someone who may see them (otherwise a search would reveal them).
+ * Substring matches with instr, not LIKE (no pattern-length limit on Durable Objects: lib/sqlLimits.ts).
+ */
 function searchCondition(q: string, withContact: boolean, countryCode: string): SQL {
   const term = q.replace(/\s+/g, ' ');
-  const pattern = `%${escapeLike(term)}%`;
   const parts: SQL[] = [
-    likeEscaped(sql`${students.firstName}`, pattern),
-    likeEscaped(sql`${students.lastName}`, pattern),
-    likeEscaped(sql`(${students.firstName} || ' ' || ${students.lastName})`, pattern),
-    likeEscaped(sql`(${students.lastName} || ' ' || ${students.firstName})`, pattern),
+    contains(students.firstName, term),
+    contains(students.lastName, term),
+    contains(sql`(${students.firstName} || ' ' || ${students.lastName})`, term),
+    contains(sql`(${students.lastName} || ' ' || ${students.firstName})`, term),
   ];
   if (withContact) {
-    parts.push(likeEscaped(sql`${students.email}`, pattern), likeEscaped(sql`${students.phone}`, pattern));
+    parts.push(contains(students.email, term), contains(students.phone, term));
     // Phone digits in any format ("050 123 4567" finds "0501234567", Arabic digits too).
-    for (const digits of phoneSearchDigits(term, countryCode) ?? []) parts.push(sql`${phoneDigitsSql(students.phone)} like ${`%${digits}%`}`);
+    for (const digits of phoneSearchDigits(term, countryCode) ?? []) parts.push(contains(students.phoneDigits, digits));
   }
   return or(...parts)!;
 }
@@ -169,13 +168,15 @@ router.post('/', canWrite, async (c) => {
   assertPhotoExists(db, input.photoFileId);
   const created = db
     .insert(students)
-    .values({
-      ...input,
-      status: input.status ?? 'active',
-      joinedOn: input.joinedOn ?? todayISO(),
-      mediaConsent: input.mediaConsent ?? false,
-      createdBy: me.id,
-    })
+    .values(
+      withPhoneDigits({
+        ...input,
+        status: input.status ?? 'active',
+        joinedOn: input.joinedOn ?? schoolToday(c),
+        mediaConsent: input.mediaConsent ?? false,
+        createdBy: me.id,
+      }),
+    )
     .returning()
     .get();
   return c.json(toStudent(created, me), 201);
@@ -243,7 +244,7 @@ router.patch('/:id', canWrite, async (c) => {
 
   const patch = Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined)) as Partial<typeof students.$inferInsert>;
   if (!Object.keys(patch).length) return c.json(toStudent(existing, me));
-  const updated = db.update(students).set(patch).where(eq(students.id, id)).returning().get();
+  const updated = db.update(students).set(withPhoneDigits(patch)).where(eq(students.id, id)).returning().get();
   if (!updated) throw notFound('Student not found');
   return c.json(toStudent(updated, me));
 });
@@ -259,8 +260,8 @@ router.delete('/:id', canWrite, (c) => {
     // An enquiry enrolled as this student goes back to 'accepted' (admissions), so it can be enrolled again.
     reopenLeadsOfStudent(tx, id, me.id);
     // Enrollments and attendance cascade; talent.student_id is set to NULL (see db/schema.ts).
-    const result = tx.delete(students).where(eq(students.id, id)).run();
-    if (result.changes === 0) throw notFound('Student not found');
+    const deleted = tx.delete(students).where(eq(students.id, id)).returning({ id: students.id }).get();
+    if (!deleted) throw notFound('Student not found');
   });
   return c.body(null, 204);
 });

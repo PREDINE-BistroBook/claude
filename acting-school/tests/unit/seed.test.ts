@@ -4,6 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
+import { addDays } from '../../src/shared/dates';
+import { todayISO } from '../helpers';
 
 /**
  * The demo seed goes through the real API, so it breaks whenever a route's rules
@@ -16,7 +18,9 @@ const tsx = path.join(root, 'node_modules/.bin/tsx');
 function seed(...args: string[]) {
   return spawnSync(tsx, ['src/server/db/seed.ts', ...args], {
     cwd: root,
-    env: { ...process.env, DATA_DIR: dataDir, NODE_ENV: 'test' },
+    // ACTING_SCHOOL_DO_LIMITS=1 (vitest.config.ts) carries over: the seed's own database fails
+    // any query over the Durable Object limits too.
+    env: { ...process.env, ACTING_SCHOOL_DO_LIMITS: '1', DATA_DIR: dataDir, NODE_ENV: 'test' },
     encoding: 'utf8',
     timeout: 60_000,
   });
@@ -59,14 +63,14 @@ describe('npm run seed', () => {
     expect(count(`select count(distinct status) as n from interviews where status in ('scheduled', 'done', 'no_show')`)).toBe(3);
     expect(count(`select count(*) as n from leads l join students s on s.id = l.student_id where l.status = 'enrolled'`)).toBe(1);
     expect(count(`select count(*) as n from leads where status = 'lost' and lost_reason is not null`)).toBe(2);
-    // The enrolled lead joined yesterday everywhere: timeline, student profile and class roster.
+    // The enrolled lead joined yesterday (at the school: Africa/Cairo) everywhere: timeline, student profile and class roster.
     expect(
       count(`select count(*) as n from leads l join students s on s.id = l.student_id join enrollments e on e.student_id = s.id
-             where l.status = 'enrolled' and s.joined_on = date('now', 'localtime', '-1 day') and e.enrolled_on = s.joined_on`),
+             where l.status = 'enrolled' and s.joined_on = '${addDays(todayISO(), -1)}' and e.enrolled_on = s.joined_on`),
     ).toBe(1);
 
     expect(count(`select count(*) as n from leads where status in ('enrolled', 'declined', 'lost') and next_follow_up_on is not null`)).toBe(0);
-    expect(count(`select count(*) as n from leads where next_follow_up_on < date('now', 'localtime')`)).toBeGreaterThan(0);
+    expect(count(`select count(*) as n from leads where next_follow_up_on < '${todayISO()}'`)).toBeGreaterThan(0);
     expect(count('select count(*) as n from lead_activities')).toBeGreaterThan(30);
     // The director's stored position has the admissions permissions (built in), and the grants version is recorded.
     expect(count(`select count(*) as n from positions where key = 'executive_director' and permissions like '%admissions.decide%'`)).toBe(1);

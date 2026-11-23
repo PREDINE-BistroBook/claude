@@ -1,25 +1,87 @@
-import path from 'node:path';
+import { DEFAULT_TIME_ZONE, isValidTimeZone } from './lib/clock';
 
+/**
+ * Settings the API needs on either runtime. Built from process.env on the Node
+ * server (nodeConfig.ts) and from the Worker's vars/secrets on Cloudflare
+ * (src/worker/) — both through configFromVars, so a variable means the same
+ * thing everywhere.
+ */
 export interface AppConfig {
-  /** Where app.db and uploads/ live. */
-  dataDir: string;
-  uploadsDir: string;
   /** Send the session cookie with `Secure` (on behind HTTPS). */
   cookieSecure: boolean;
   sessionDays: number;
   isProduction: boolean;
+  /** IANA time zone of the school: the server's "today" and "now" (lib/clock.ts). SCHOOL_TIME_ZONE, default Africa/Cairo. */
+  timeZone: string;
+  /** Bearer token for /api/admin/* (ADMIN_TOKEN). null: those routes don't exist (404 like any unknown route). */
+  adminToken: string | null;
+  /** POST /api/admin/reset may wipe the data (ALLOW_DEMO_RESET=true; demo deployments only). */
+  allowDemoReset: boolean;
+  /**
+   * First-run setup (POST /api/auth/setup) asks for the setup code — the
+   * ADMIN_TOKEN — so nobody else can claim an empty school. Always on
+   * Cloudflare, where the Worker is public on the internet from the first
+   * deploy (and again after a demo reset); on Node with REQUIRE_SETUP_CODE=true.
+   * Without an ADMIN_TOKEN, setup is then impossible until one is set.
+   */
+  requireSetupCode: boolean;
 }
 
-export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
-  const dataDir = path.resolve(env.DATA_DIR ?? 'data');
-  const isProduction = env.NODE_ENV === 'production';
+/** Shortest ADMIN_TOKEN accepted; a shorter one is ignored (admin routes stay off) so a weak token can't be guessed. */
+export const MIN_ADMIN_TOKEN_LENGTH = 24;
+
+export type ConfigVars = Record<string, string | undefined>;
+
+export interface RuntimeDefaults {
+  cookieSecure: boolean;
+  isProduction: boolean;
+  requireSetupCode: boolean;
+}
+
+/** What Cloudflare implies (src/worker/school.ts): always HTTPS, and public on the internet from the first deploy. */
+export const CLOUDFLARE_DEFAULTS: RuntimeDefaults = { cookieSecure: true, isProduction: true, requireSetupCode: true };
+
+/**
+ * AppConfig from string variables. `defaults` are what the runtime implies
+ * when a variable is unset (Cloudflare always serves HTTPS, so cookies are
+ * Secure there by default; the Node server only in production; setup needs
+ * the setup code on Cloudflare).
+ */
+export function configFromVars(vars: ConfigVars, defaults: RuntimeDefaults): AppConfig {
+  let timeZone = vars.SCHOOL_TIME_ZONE?.trim() || DEFAULT_TIME_ZONE;
+  if (!isValidTimeZone(timeZone)) {
+    console.error(`SCHOOL_TIME_ZONE "${timeZone}" is not a time zone this runtime knows; using ${DEFAULT_TIME_ZONE}.`);
+    timeZone = DEFAULT_TIME_ZONE;
+  }
+  const token = vars.ADMIN_TOKEN?.trim() || null;
+  if (token && token.length < MIN_ADMIN_TOKEN_LENGTH) {
+    // Never print the token itself.
+    console.error(`ADMIN_TOKEN is shorter than ${MIN_ADMIN_TOKEN_LENGTH} characters, so the admin routes stay off.`);
+  }
+  const sessionDays = Number(vars.SESSION_DAYS ?? 30);
   return {
-    dataDir,
-    uploadsDir: path.join(dataDir, 'uploads'),
-    // Default: secure cookies in production. Set COOKIE_SECURE=false only to try a
-    // production build over plain http on a private network.
-    cookieSecure: env.COOKIE_SECURE ? env.COOKIE_SECURE === 'true' : isProduction,
-    sessionDays: Number(env.SESSION_DAYS ?? 30),
-    isProduction,
+    // COOKIE_SECURE=false only to try a production build over plain http on a private network.
+    cookieSecure: vars.COOKIE_SECURE ? vars.COOKIE_SECURE === 'true' : defaults.cookieSecure,
+    sessionDays: Number.isFinite(sessionDays) && sessionDays > 0 ? sessionDays : 30,
+    isProduction: defaults.isProduction,
+    timeZone,
+    adminToken: token && token.length >= MIN_ADMIN_TOKEN_LENGTH ? token : null,
+    allowDemoReset: vars.ALLOW_DEMO_RESET === 'true',
+    // Can be switched on, never off where the runtime requires it (Cloudflare).
+    requireSetupCode: defaults.requireSetupCode || vars.REQUIRE_SETUP_CODE === 'true',
+  };
+}
+
+/** A complete config for tests and scripts: development defaults plus `overrides`. */
+export function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
+  return {
+    cookieSecure: false,
+    sessionDays: 30,
+    isProduction: false,
+    timeZone: DEFAULT_TIME_ZONE,
+    adminToken: null,
+    allowDemoReset: false,
+    requireSetupCode: false,
+    ...overrides,
   };
 }

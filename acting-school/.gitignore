@@ -6,3 +6,6 @@ test-results/
 playwright-report/
 *.log
 .env
+# Cloudflare local dev (wrangler): local state and the throwaway local secrets
+.wrangler/
+.dev.vars

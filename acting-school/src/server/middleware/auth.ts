@@ -13,6 +13,17 @@ export const SESSION_COOKIE = 'as_session';
 const DAY = 24 * 60 * 60 * 1000;
 
 /**
+ * The session cookie's name. Over HTTPS (cookieSecure — always on Cloudflare)
+ * it carries the __Host- prefix: the browser then only accepts it from this
+ * exact host, Secure, Path=/ and without a Domain, so a page on a sibling
+ * subdomain (another Worker on the same workers.dev account subdomain) can't
+ * plant or overwrite it. Plain http (local development) can't use the prefix.
+ */
+export function sessionCookieName(config: { cookieSecure: boolean }): string {
+  return config.cookieSecure ? `__Host-${SESSION_COOKIE}` : SESSION_COOKIE;
+}
+
+/**
  * Loads the signed-in user (if any) from the session cookie. Never rejects.
  * Positions and permissions are read fresh on every request (one joined query),
  * so a change to someone's positions applies on their next request.
@@ -20,7 +31,7 @@ const DAY = 24 * 60 * 60 * 1000;
 export const loadSession: MiddlewareHandler<AppEnv> = async (c, next) => {
   c.set('user', null);
   c.set('sessionId', null);
-  const token = getCookie(c, SESSION_COOKIE);
+  const token = getCookie(c, sessionCookieName(c.get('config')));
   if (token) {
     const db = c.get('db');
     const id = sha256(token);
@@ -117,7 +128,7 @@ export function userCan(c: Context<AppEnv>, permission: Permission): boolean {
 }
 
 function writeCookie(c: Context<AppEnv>, token: string, expiresAt: number) {
-  setCookie(c, SESSION_COOKIE, token, {
+  setCookie(c, sessionCookieName(c.get('config')), token, {
     httpOnly: true,
     secure: c.get('config').cookieSecure,
     sameSite: 'Lax',
@@ -137,5 +148,5 @@ export function startSession(c: Context<AppEnv>, userId: number) {
 export function endSession(c: Context<AppEnv>) {
   const id = c.get('sessionId');
   if (id) c.get('db').delete(authSessions).where(eq(authSessions.id, id)).run();
-  deleteCookie(c, SESSION_COOKIE, { path: '/', secure: c.get('config').cookieSecure });
+  deleteCookie(c, sessionCookieName(c.get('config')), { path: '/', secure: c.get('config').cookieSecure });
 }

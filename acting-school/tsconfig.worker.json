@@ -1,0 +1,11 @@
+{
+  // The Cloudflare Worker (src/worker) and everything it imports, against the
+  // Workers runtime types instead of the DOM. `npm run typecheck` runs both configs.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": ["@cloudflare/workers-types", "node"]
+  },
+  "include": ["src/worker"],
+  "exclude": []
+}

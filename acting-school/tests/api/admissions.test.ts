@@ -1,11 +1,12 @@
 import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
-import { addDays, todayISO } from '../../src/shared/dates';
+import { addDays } from '../../src/shared/dates';
 import type { DashboardData } from '../../src/shared/schemas/dashboard';
 import type { AdmissionsCourseOption, EnrolResult, Interview, LeadActivity, LeadDetail, LeadListItem } from '../../src/shared/schemas/admissions';
 import type { ScheduleEvent } from '../../src/shared/schemas/schedule';
 import { courses, enrollments, interviews, leadActivities, leads, students } from '../../src/server/db/schema';
-import { makeTestContext, type Client } from '../helpers';
+import { backfillPhoneDigits, withPhoneDigits } from '../../src/server/lib/phone';
+import { makeTestContext, type Client, todayISO } from '../helpers';
 
 type Ctx = Awaited<ReturnType<typeof makeTestContext>>;
 
@@ -83,8 +84,9 @@ function mkCourse(t: Ctx, o: Partial<typeof courses.$inferInsert> = {}) {
     .get()!;
 }
 
+/** A student row written directly (phone_digits filled the way the app's writes fill it). */
 function mkStudent(t: Ctx, o: Partial<typeof students.$inferInsert> = {}) {
-  return t.db.insert(students).values({ firstName: 'Existing', lastName: 'Student', ...o }).returning().get()!;
+  return t.db.insert(students).values(withPhoneDigits({ firstName: 'Existing', lastName: 'Student', ...o })).returning().get()!;
 }
 
 const getLead = async (client: Client, id: number) => (await client.get<LeadDetail>(`/api/leads/${id}`)).body;
@@ -1172,6 +1174,8 @@ describe('phone matching: Arabic-Indic digits, invisible marks, international se
 
     const marked = t.db.insert(leads).values({ firstName: 'Bidi', lastName: 'Marks', phone: '\u202A+20 122 555 6677\u202C', source: 'whatsapp' }).returning().get()!;
     const arabic = t.db.insert(leads).values({ firstName: 'Arabic', lastName: 'Digits', phone: '٠١١٢٢٢٣٣٣٤٤', source: 'whatsapp' }).returning().get()!;
+    // Written outside the app (no phone_digits): startup fills it in, as for rows older than the column.
+    expect(backfillPhoneDigits(t.db)).toBe(2);
     expect((await director.get('/api/leads/duplicates?phone=01225556677')).body.items).toEqual([{ kind: 'lead', id: marked.id, name: 'Bidi Marks', status: 'new' }]);
     const ids = async (q: string) => (await director.get<{ items: LeadListItem[] }>(`/api/leads?q=${encodeURIComponent(q)}`)).body.items.map((i) => i.id);
     expect(await ids('01122233344')).toEqual([arabic.id]);

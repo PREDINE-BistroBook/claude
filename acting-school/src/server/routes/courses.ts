@@ -1,6 +1,5 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { todayISO } from '../../shared/dates';
 import {
   COURSE_ERROR_CODES,
   MAX_COURSE_SPAN_DAYS,
@@ -14,7 +13,7 @@ import {
 } from '../../shared/schemas/courses';
 import type { ListResponse } from '../../shared/schemas/common';
 import type { CourseListItem } from '../../shared/schemas/courses';
-import type { DB } from '../db/client';
+import type { DB } from '../db/database';
 import { attendance, classSessions, courseSlots, courses, enrollments, students } from '../db/schema';
 import type { AppEnv } from '../env';
 import {
@@ -28,6 +27,8 @@ import {
   sameSchedule,
 } from '../lib/classSessions';
 import type { SessionUser } from '../../shared/schemas/auth';
+import { chunk, IN_LIST_CHUNK, insertBatches } from '../lib/sqlLimits';
+import { schoolToday } from '../lib/clock';
 import { canSeeStudent, courseScope, isVisibleActiveStaff, type Actor } from '../lib/access';
 import { addEnrollment, setEnrollmentStatus } from '../lib/enrollments';
 import { ApiError, fieldError, notFound } from '../lib/errors';
@@ -85,7 +86,7 @@ router.get('/', read, (c) => {
     q.status ? eq(courses.status, q.status) : undefined,
     q.teacherId ? eq(courses.teacherId, q.teacherId) : undefined,
   ];
-  const items: CourseListItem[] = loadCourseListItems(c.get('db'), and(...filters), todayISO()).map(
+  const items: CourseListItem[] = loadCourseListItems(c.get('db'), and(...filters), schoolToday(c)).map(
     ({ description: _d, createdAt: _c, updatedAt: _u, ...item }) => item,
   );
   return c.json<ListResponse<CourseListItem>>({ items });
@@ -117,15 +118,18 @@ router.post('/', write, async (c) => {
       })
       .returning({ id: courses.id })
       .get();
-    if (input.schedule.length) tx.insert(courseSlots).values(input.schedule.map((s) => ({ ...s, courseId: course.id }))).run();
-    if (occurrences.length) tx.insert(classSessions).values(occurrences.map((o) => ({ ...o, courseId: course.id, extra: false }))).run();
+    // Batched inserts: a long course has hundreds of sessions (100 bound parameters per statement, lib/sqlLimits.ts).
+    for (const batch of insertBatches(courseSlots, input.schedule.map((s) => ({ ...s, courseId: course.id })))) tx.insert(courseSlots).values(batch).run();
+    for (const batch of insertBatches(classSessions, occurrences.map((o) => ({ ...o, courseId: course.id, extra: false })))) {
+      tx.insert(classSessions).values(batch).run();
+    }
     return course.id;
   });
-  return c.json(loadCourseDetail(db, id, todayISO()), 201);
+  return c.json(loadCourseDetail(db, id, schoolToday(c)), 201);
 });
 
 router.get('/:id', read, (c) => {
-  const detail = loadCourseDetail(c.get('db'), paramId(c), todayISO(), courseScope(currentUser(c)));
+  const detail = loadCourseDetail(c.get('db'), paramId(c), schoolToday(c), courseScope(currentUser(c)));
   if (!detail) throw notFound('Class not found');
   return c.json(detail);
 });
@@ -150,7 +154,7 @@ router.patch('/:id', write, async (c) => {
   const slots = input.schedule ?? storedSlots;
   const scheduleChanged = input.schedule !== undefined && !sameSchedule(input.schedule, storedSlots);
   const regenerate = scheduleChanged || startDate !== course.startDate || endDate !== course.endDate;
-  const today = todayISO();
+  const today = schoolToday(c);
 
   const { schedule: _schedule, ...fields } = input;
   db.transaction((tx) => {
@@ -159,7 +163,7 @@ router.patch('/:id', write, async (c) => {
 
     if (scheduleChanged) {
       tx.delete(courseSlots).where(eq(courseSlots.courseId, id)).run();
-      if (slots.length) tx.insert(courseSlots).values(slots.map((s) => ({ ...s, courseId: id }))).run();
+      for (const batch of insertBatches(courseSlots, slots.map((s) => ({ ...s, courseId: id })))) tx.insert(courseSlots).values(batch).run();
     }
     if (!regenerate) return;
 
@@ -177,12 +181,12 @@ router.patch('/:id', write, async (c) => {
       .where(eq(classSessions.courseId, id))
       .all();
     const plan = planRegeneration(existing, slots, { startDate, endDate, today });
-    // Chunk deletes so a long course never exceeds SQLite's variable limit.
-    for (let i = 0; i < plan.deleteIds.length; i += 500) {
-      tx.delete(classSessions).where(inArray(classSessions.id, plan.deleteIds.slice(i, i + 500))).run();
-    }
+    // Chunked deletes and batched inserts: a long course never exceeds the bound-parameter limit (lib/sqlLimits.ts).
+    for (const ids of chunk(plan.deleteIds, IN_LIST_CHUNK)) tx.delete(classSessions).where(inArray(classSessions.id, ids)).run();
     for (const u of plan.updates) tx.update(classSessions).set({ endTime: u.endTime }).where(eq(classSessions.id, u.id)).run();
-    if (plan.inserts.length) tx.insert(classSessions).values(plan.inserts.map((o) => ({ ...o, courseId: id, extra: false }))).run();
+    for (const batch of insertBatches(classSessions, plan.inserts.map((o) => ({ ...o, courseId: id, extra: false })))) {
+      tx.insert(classSessions).values(batch).run();
+    }
   });
 
   return c.json(loadCourseDetail(db, id, today));
@@ -205,7 +209,7 @@ router.post('/:id/enrollments', write, async (c) => {
   const input = await body(c, enrollmentInput);
   const student = db.select({ id: students.id }).from(students).where(eq(students.id, input.studentId)).get();
   if (!student || !canSeeStudent(db, currentUser(c), input.studentId)) throw fieldError(['studentId'], 'classes:errors.studentNotFound');
-  const today = todayISO();
+  const today = schoolToday(c);
 
   const enrollmentId = db.transaction((tx) => addEnrollment(tx, course, input.studentId, today));
   return c.json(loadEnrollments(db, id, today, enrollmentId)[0], 201);
@@ -221,7 +225,7 @@ router.patch('/:id/enrollments/:enrollmentId', write, async (c) => {
   db.transaction((tx) => {
     if (!setEnrollmentStatus(tx, course, enrollmentId, input.status)) throw notFound('Enrollment not found');
   });
-  return c.json(loadEnrollments(db, id, todayISO(), enrollmentId)[0]);
+  return c.json(loadEnrollments(db, id, schoolToday(c), enrollmentId)[0]);
 });
 
 router.delete('/:id/enrollments/:enrollmentId', write, (c) => {
@@ -229,11 +233,12 @@ router.delete('/:id/enrollments/:enrollmentId', write, (c) => {
   const enrollmentId = paramId(c, 'enrollmentId');
   const db = c.get('db');
   requireCourse(db, id, currentUser(c));
-  const res = db
+  const deleted = db
     .delete(enrollments)
     .where(and(eq(enrollments.id, enrollmentId), eq(enrollments.courseId, id)))
-    .run();
-  if (res.changes === 0) throw notFound('Enrollment not found');
+    .returning({ id: enrollments.id })
+    .get();
+  if (!deleted) throw notFound('Enrollment not found');
   return c.body(null, 204);
 });
 

@@ -1,13 +1,41 @@
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { createApp } from '../src/server/app';
-import type { AppConfig } from '../src/server/config';
+import { createApp, type AppDeps } from '../src/server/app';
+import { testConfig, type AppConfig } from '../src/server/config';
 import { PHASE_ONE_ROLE_POSITIONS, createDb, type DB } from '../src/server/db/client';
 import { eq, inArray } from 'drizzle-orm';
 import { positions, userPositions, users } from '../src/server/db/schema';
+import { sqliteFileStore, type FileStore } from '../src/server/lib/fileStore';
 import { hashPassword } from '../src/server/lib/password';
+import { durableObjectLimits } from '../src/server/lib/sqlLimits';
+import { DEFAULT_TIME_ZONE, epochAt, nowTimeIn, todayIn } from '../src/server/lib/clock';
 import type { BuiltInPositionKey, Permission } from '../src/shared/permissions';
+
+/**
+ * Fails any query a Cloudflare Durable Object would refuse but better-sqlite3
+ * accepts (lib/sqlLimits.ts). createDb attaches it to every database opened
+ * under Vitest (ACTING_SCHOOL_DO_LIMITS=1 in vitest.config.ts).
+ */
+export { durableObjectLimits };
+
+/**
+ * The server's clock, for expectations: the school's time zone (Africa/Cairo by
+ * default), like the API — not the test runner's (vitest runs in UTC, like
+ * Cloudflare Workers).
+ */
+export const SCHOOL_TZ = DEFAULT_TIME_ZONE;
+export const todayISO = (instant: Date = new Date()) => todayIn(SCHOOL_TZ, instant);
+export const nowTime = (instant: Date = new Date()) => nowTimeIn(SCHOOL_TZ, instant);
+/** Epoch ms of `time` today at the school (for vi.setSystemTime). */
+export const schoolTimeToday = (time: string) => epochAt(SCHOOL_TZ, todayISO(), time);
+
+/** An in-memory database with the Durable Object limits enforced (see durableObjectLimits). */
+export function testDb() {
+  return createDb(':memory:', { logger: durableObjectLimits });
+}
+
+/** Fails the run when Vitest isn't enforcing the Durable Object limits on every database (vitest.config.ts). */
+if (process.env.VITEST && process.env.ACTING_SCHOOL_DO_LIMITS !== '1') {
+  throw new Error('Run the tests with ACTING_SCHOOL_DO_LIMITS=1 (vitest.config.ts sets it)');
+}
 
 /** Old role names from phase 1, kept so tests read naturally: each maps to the position an upgrade gives (db/client.ts). */
 export const LEGACY_ROLES = PHASE_ONE_ROLE_POSITIONS;
@@ -83,11 +111,12 @@ let hashed: Promise<string> | null = null;
  *   const custom = await t.as({ permissions: ['students.read'] });
  *   const res = await admin.post('/api/students', { firstName: 'A', lastName: 'B' });
  */
-export async function makeTestContext() {
-  const uploadsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'acting-school-test-'));
-  const config: AppConfig = { dataDir: uploadsDir, uploadsDir, cookieSecure: false, sessionDays: 30, isProduction: false };
-  const db: DB = createDb(':memory:');
-  const app = createApp({ db, config });
+export async function makeTestContext(opts: { config?: Partial<AppConfig>; files?: FileStore; clientIp?: AppDeps['clientIp'] } = {}) {
+  const config: AppConfig = testConfig(opts.config);
+  const db: DB = testDb();
+  // Files go into the database itself, as on Cloudflare without R2 (lib/fileStore.ts).
+  const files = opts.files ?? sqliteFileStore(db);
+  const app = createApp({ db, config, files, clientIp: opts.clientIp });
   hashed ??= hashPassword(PASSWORD);
   let n = 0;
 
@@ -158,6 +187,7 @@ export async function makeTestContext() {
     app,
     db,
     config,
+    files,
     anon: makeClient(app),
     createUser,
     setPositions,
@@ -165,7 +195,7 @@ export async function makeTestContext() {
     login,
     as,
     password: PASSWORD,
-    cleanup: () => fs.rmSync(uploadsDir, { recursive: true, force: true }),
+    cleanup: () => {},
   };
 }
 

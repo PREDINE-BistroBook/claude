@@ -8,6 +8,8 @@ import path from 'node:path';
 import { eq } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../src/server/app';
+import { testConfig } from '../../src/server/config';
+import { memoryFileStore } from '../../src/server/lib/fileStore';
 import { createDb } from '../../src/server/db/client';
 import { positions, users } from '../../src/server/db/schema';
 import { activeOwnerCount, loadUserAccess } from '../../src/server/lib/access';
@@ -16,7 +18,7 @@ import { hashPassword } from '../../src/server/lib/password';
 /**
  * `npm run owner -- email` is the way back in after a lockout. Run it for real.
  * Also: opening a phase-1 database (fixed roles, no positions) carries each
- * role over to the matching position (db/client.ts).
+ * role over to the matching position (db/database.ts initDb).
  */
 const root = path.resolve(__dirname, '../..');
 const tsx = path.join(root, 'node_modules/.bin/tsx');
@@ -167,8 +169,7 @@ describe('upgrading a phase-1 database', () => {
       ]);
       expect(activeOwnerCount(db)).toBe(2);
       // Former owners are owners again, so they stay out of the director's reach.
-      const config = { dataDir, uploadsDir: dataDir, cookieSecure: false, sessionDays: 30, isProduction: false };
-      const app = createApp({ db, config });
+      const app = createApp({ db, config: testConfig(), files: memoryFileStore() });
       const login = await app.request('/api/auth/login', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-requested-with': 'fetch' },

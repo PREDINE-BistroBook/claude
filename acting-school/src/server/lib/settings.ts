@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { DEFAULT_SETTINGS, type AppSettings } from '../../shared/schemas/settings';
-import type { DB } from '../db/client';
+import type { DB } from '../db/database';
 import { settings } from '../db/schema';
 
 export function getSettings(db: DB): AppSettings {

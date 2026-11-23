@@ -1,5 +1,6 @@
 /**
- * The whole database. One SQLite file (data/app.db). Conventions:
+ * The whole database. One SQLite database: a file (data/app.db) on the Node
+ * server, the Durable Object's own SQLite on Cloudflare. Conventions:
  * - dates "YYYY-MM-DD", times "HH:MM", date-times "YYYY-MM-DDTHH:MM" as TEXT,
  *   local to the school, no time zone (see src/shared/dates.ts);
  * - created_at / updated_at are epoch milliseconds;
@@ -9,7 +10,7 @@
  *
  * After changing this file run `npm run db:generate` to add a migration.
  */
-import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { blob, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import {
   ATTENDANCE_STATUSES,
   CASTING_STATUSES,
@@ -106,7 +107,11 @@ export const settings = sqliteTable('settings', {
   value: text('value', { mode: 'json' }).notNull(),
 });
 
-/** Uploaded images. Bytes live on disk under DATA_DIR/uploads/<storage_key>. */
+/**
+ * Uploaded images. The bytes live in the app's FileStore under `storage_key`
+ * (lib/fileStore.ts): DATA_DIR/uploads/ on the Node server; file_chunks below
+ * (or R2 when bound) on Cloudflare.
+ */
 export const files = sqliteTable('files', {
   id: text('id').primaryKey(),
   originalName: text('original_name'),
@@ -116,6 +121,41 @@ export const files = sqliteTable('files', {
   uploadedBy: integer('uploaded_by').references(() => users.id, { onDelete: 'set null' }),
   createdAt: integer('created_at').notNull().$defaultFn(now),
 });
+
+/**
+ * File bytes stored in the database itself (the Cloudflare FileStore without
+ * R2): each file is split into chunks well under SQLite's row limit, written
+ * and deleted in one transaction (lib/fileStore.ts sqliteFileStore).
+ */
+export const fileChunks = sqliteTable(
+  'file_chunks',
+  {
+    storageKey: text('storage_key').notNull(),
+    seq: integer('seq').notNull(),
+    data: blob('data', { mode: 'buffer' }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.storageKey, t.seq] })],
+);
+
+/**
+ * The sign-in brakes (lib/signInBrake.ts): failed sign-ins counted per key —
+ * an email from one address, an email from anywhere, one address, the whole
+ * school — within each brake's window. In the database so a restart (or a
+ * Durable Object being evicted) doesn't reset them.
+ */
+export const loginFailures = sqliteTable(
+  'login_failures',
+  {
+    /** "account:<email>|<address>", "account:<email>", "address:<address>" or "school". */
+    key: text('key').primaryKey(),
+    /** Lower-cased email as typed at sign-in (the account may not exist); null for the address and school brakes. */
+    email: text('email'),
+    count: integer('count').notNull(),
+    /** Epoch ms of the first failure in the window. */
+    firstAt: integer('first_at').notNull(),
+  },
+  (t) => [index('login_failures_email_idx').on(t.email)],
+);
 
 // ── School ──────────────────────────────────────────────────────────────────
 
@@ -127,6 +167,8 @@ export const students = sqliteTable(
     lastName: text('last_name').notNull(),
     email: text('email'),
     phone: text('phone'),
+    /** phoneDigits(phone), kept in step on every write (lib/phone.ts withPhoneDigits): phone matching and search. */
+    phoneDigits: text('phone_digits'),
     dateOfBirth: text('date_of_birth'),
     gender: text('gender', { enum: GENDERS }),
     status: text('status', { enum: STUDENT_STATUSES }).notNull().default('active'),
@@ -144,7 +186,11 @@ export const students = sqliteTable(
     createdBy: integer('created_by').references(() => users.id, { onDelete: 'set null' }),
     ...timestamps(),
   },
-  (t) => [index('students_name_idx').on(t.lastName, t.firstName), index('students_status_idx').on(t.status)],
+  (t) => [
+    index('students_name_idx').on(t.lastName, t.firstName),
+    index('students_status_idx').on(t.status),
+    index('students_phone_digits_idx').on(t.phoneDigits),
+  ],
 );
 
 export const courses = sqliteTable(
@@ -381,6 +427,8 @@ export const leads = sqliteTable(
     firstName: text('first_name').notNull(),
     lastName: text('last_name').notNull(),
     phone: text('phone').notNull(),
+    /** phoneDigits(phone), kept in step on every write (lib/phone.ts withPhoneDigits): duplicates and search. */
+    phoneDigits: text('phone_digits'),
     email: text('email'),
     dateOfBirth: text('date_of_birth'),
     gender: text('gender', { enum: GENDERS }),
@@ -407,7 +455,12 @@ export const leads = sqliteTable(
     notes: text('notes'),
     ...timestamps(),
   },
-  (t) => [index('leads_status_idx').on(t.status), index('leads_follow_up_idx').on(t.nextFollowUpOn), index('leads_phone_idx').on(t.phone)],
+  (t) => [
+    index('leads_status_idx').on(t.status),
+    index('leads_follow_up_idx').on(t.nextFollowUpOn),
+    index('leads_phone_idx').on(t.phone),
+    index('leads_phone_digits_idx').on(t.phoneDigits),
+  ],
 );
 
 /** A lead's timeline: contacts logged by staff, plus status changes, interviews and enrolment written by the app. */

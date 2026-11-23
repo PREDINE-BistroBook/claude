@@ -1,6 +1,6 @@
 import { and, asc, count, desc, eq, gte, lte, sql, type SQL } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { addDays, nowTime, parseDate, startOfWeek, todayISO } from '../../shared/dates';
+import { addDays, startOfWeek } from '../../shared/dates';
 import type { ClassSession } from '../../shared/schemas/courses';
 import {
   ATTENDANCE_TODO_LOOKBACK_DAYS,
@@ -13,9 +13,10 @@ import {
   UPCOMING_INTERVIEWS_MAX,
   type DashboardData,
 } from '../../shared/schemas/dashboard';
-import type { DB } from '../db/client';
+import type { DB } from '../db/database';
 import { attendance, castings, classSessions, courses, enrollments, leads, students, talent, users } from '../db/schema';
 import type { AppEnv } from '../env';
+import { epochAt, schoolNowTime, schoolToday } from '../lib/clock';
 import { courseScope, seesAllClasses, studentScope, takesAttendance } from '../lib/access';
 import { followUpDue, leadIsOpen, loadInterviewEvents, loadLeadListItems } from '../lib/admissions';
 import { getSettings } from '../lib/settings';
@@ -72,8 +73,8 @@ const countWhere = (db: DB, table: typeof students | typeof courses | typeof tal
 router.get('/', (c) => {
   const db = c.get('db');
   const me = currentUser(c);
-  const today = todayISO();
-  const now = nowTime();
+  const today = schoolToday(c);
+  const now = schoolNowTime(c);
   // Without classes.all: only your own teaching — the substitute if set, else the course's teacher.
   const mine = seesAllClasses(me) ? undefined : sql`${effectiveTeacherId} = ${me.id}`;
 
@@ -136,8 +137,9 @@ router.get('/', (c) => {
 
   if (userCan(c, 'admissions.read')) {
     data.counts.openLeads = countWhere(db, leads, leadIsOpen);
-    // Since local midnight on the first day of this week (the school's week start).
-    const weekStart = parseDate(startOfWeek(today, getSettings(db).weekStartsOn)).getTime();
+    // Since midnight at the school (its time zone, not the runtime's: Workers run in UTC) on the
+    // first day of this week (the school's week start).
+    const weekStart = epochAt(c.get('config').timeZone, startOfWeek(today, getSettings(db).weekStartsOn));
     data.counts.newLeadsThisWeek = countWhere(db, leads, gte(leads.createdAt, weekStart));
     data.followUpsDue = loadLeadListItems(db, followUpDue(today), {
       // Most overdue first.

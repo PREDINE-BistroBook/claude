@@ -83,19 +83,19 @@ const en = {
       manage: { label: 'School settings', description: 'School name, default language, first day of the week, admissions interview criteria and the country code for WhatsApp links.' },
     },
     students: {
-      read: { label: 'See students', description: 'Only students in your own classes and students you added — unless “All classes” is allowed too.' },
+      read: { label: 'See students', description: 'Only students in your own workshops and students you added — unless “All workshops” is allowed too.' },
       contact: { label: 'Students’ contact details', description: 'Phone, email, guardian and emergency contacts.' },
-      write: { label: 'Edit students', description: 'Add, edit and delete students — without “All classes”, only the students you can see.' },
+      write: { label: 'Edit students', description: 'Add, edit and delete students — without “All workshops”, only the students you can see.' },
     },
     courses: {
-      read: { label: 'See classes', description: 'Classes and their sessions: only your own (ones you teach, cover or set up), unless “All classes” is allowed too.' },
-      write: { label: 'Edit classes', description: 'Create, edit and delete classes, schedules, enrollments and sessions — without “All classes”, only your own classes.' },
+      read: { label: 'See workshops', description: 'Workshops and their sessions: only your own (ones you teach, cover or set up), unless “All workshops” is allowed too.' },
+      write: { label: 'Edit workshops', description: 'Create, edit and delete workshops, schedules, enrollments and sessions — without “All workshops”, only your own workshops.' },
     },
     classes: {
-      all: { label: 'All classes', description: 'See every class, session and student, not only your own.' },
+      all: { label: 'All workshops', description: 'See every workshop, session and student, not only your own.' },
     },
     attendance: {
-      write: { label: 'Take attendance', description: 'Mark attendance: only for sessions you teach, unless “All classes” is allowed too. Needs “See classes” as well.' },
+      write: { label: 'Take attendance', description: 'Mark attendance: only for sessions you teach, unless “All workshops” is allowed too. Needs “See workshops” as well.' },
     },
     talent: {
       read: { label: 'See actors', description: 'The actor database: profiles, photos and skills.' },
@@ -119,7 +119,7 @@ const en = {
       decide: {
         label: 'Admissions decisions',
         description:
-          'Record interview assessments, accept or decline, choose the class (and so the coach) and enrol. Enrolling creates the student and their enrollment even without “Edit students” or “Edit classes”.',
+          'Record interview assessments, accept or decline, choose the workshop (and so the coach) and enrol. Enrolling creates the student and their enrollment even without “Edit students” or “Edit workshops”.',
       },
     },
     payments: {
@@ -223,19 +223,19 @@ const ar: TranslationOf<typeof en> = {
       manage: { label: 'إعدادات المدرسة', description: 'اسم المدرسة واللغة الافتراضية وأول أيام الأسبوع ومعايير مقابلات القبول ورمز الدولة لروابط واتساب.' },
     },
     students: {
-      read: { label: 'عرض الطلاب', description: 'الطلاب في صفوفك والطلاب الذين أضفتهم فقط، ما لم يُسمح أيضًا بـ«كل الصفوف».' },
+      read: { label: 'عرض الطلاب', description: 'الطلاب في ورشك والطلاب الذين أضفتهم فقط، ما لم يُسمح أيضًا بـ«كل الورش».' },
       contact: { label: 'بيانات تواصل الطلاب', description: 'الهاتف والبريد الإلكتروني وبيانات وليّ الأمر وجهة الاتصال في الطوارئ.' },
-      write: { label: 'تعديل الطلاب', description: 'إضافة الطلاب وتعديل بياناتهم وحذفهم، ودون «كل الصفوف» يقتصر ذلك على الطلاب الذين يمكنك رؤيتهم.' },
+      write: { label: 'تعديل الطلاب', description: 'إضافة الطلاب وتعديل بياناتهم وحذفهم، ودون «كل الورش» يقتصر ذلك على الطلاب الذين يمكنك رؤيتهم.' },
     },
     courses: {
-      read: { label: 'عرض الصفوف', description: 'الصفوف وحصصها: صفوفك فقط (التي تدرّسها أو تنوب فيها أو أنشأتها)، ما لم يُسمح أيضًا بـ«كل الصفوف».' },
-      write: { label: 'تعديل الصفوف', description: 'إنشاء الصفوف وتعديلها وحذفها، والجداول، والتسجيل، والحصص، ودون «كل الصفوف» يقتصر ذلك على صفوفك.' },
+      read: { label: 'عرض الورش', description: 'الورش وحصصها: ورشك فقط (التي تدرّسها أو تنوب فيها أو أنشأتها)، ما لم يُسمح أيضًا بـ«كل الورش».' },
+      write: { label: 'تعديل الورش', description: 'إنشاء الورش وتعديلها وحذفها، والجداول، والتسجيل، والحصص، ودون «كل الورش» يقتصر ذلك على ورشك.' },
     },
     classes: {
-      all: { label: 'كل الصفوف', description: 'عرض كل الصفوف والحصص والطلاب، لا صفوفك وطلابك فقط.' },
+      all: { label: 'كل الورش', description: 'عرض كل الورش والحصص والطلاب، لا ورشك وطلابك فقط.' },
     },
     attendance: {
-      write: { label: 'تسجيل الحضور', description: 'تسجيل الحضور في الحصص التي تدرّسها فقط، ما لم يُسمح أيضًا بـ«كل الصفوف». تحتاج أيضًا إلى «عرض الصفوف».' },
+      write: { label: 'تسجيل الحضور', description: 'تسجيل الحضور في الحصص التي تدرّسها فقط، ما لم يُسمح أيضًا بـ«كل الورش». تحتاج أيضًا إلى «عرض الورش».' },
     },
     talent: {
       read: { label: 'عرض الممثلين', description: 'قاعدة بيانات الممثلين: الملفات الشخصية والصور والمهارات.' },
@@ -259,7 +259,7 @@ const ar: TranslationOf<typeof en> = {
       decide: {
         label: 'قرارات القبول',
         description:
-          'تسجيل تقييم المقابلات، والقبول أو الرفض، واختيار الصف (ومن ثَمّ المدرب)، وتسجيل الطالب. التسجيل يُنشئ الطالب وتسجيله في الصف حتى دون «تعديل الطلاب» أو «تعديل الصفوف».',
+          'تسجيل تقييم المقابلات، والقبول أو الرفض، واختيار الورشة (ومن ثَمّ المدرب)، وتسجيل الطالب. التسجيل يُنشئ الطالب وتسجيله في الورشة حتى دون «تعديل الطلاب» أو «تعديل الورش».',
       },
     },
     payments: {

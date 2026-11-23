@@ -10,6 +10,8 @@ import { api, setForbiddenHandler, setUnauthorizedHandler } from './api';
 interface AuthState {
   user: SessionUser | null;
   needsSetup: boolean;
+  /** Setup asks for the setup code (on Cloudflare). */
+  setupCodeRequired: boolean;
   schoolName: string;
   /** Arabic name, when the school has one. For display use useSchoolName() (picks by language). */
   schoolNameAr: string | null;
@@ -82,6 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       needsSetup: me.data?.needsSetup ?? false,
+      setupCodeRequired: me.data?.setupCodeRequired ?? false,
       schoolName: me.data?.schoolName ?? '',
       schoolNameAr: me.data?.schoolNameAr ?? null,
       loading: me.isPending,

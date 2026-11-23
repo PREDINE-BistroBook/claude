@@ -21,6 +21,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261116.1",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/vite": "^4.3.5",
     "@types/better-sqlite3": "^9.6.0",
@@ -38,7 +39,8 @@
     "vite-plugin-pwa": "^2.0.0",
     "vitest": "^5.1.1",
     "workbox-build": "^7.4.1",
-    "workbox-window": "^7.4.1"
+    "workbox-window": "^7.4.1",
+    "wrangler": "^4.162.0"
   },
   "scripts": {
     "dev": "concurrently -k -n api,web -c blue,magenta \"tsx watch --clear-screen=false src/server/index.ts\" \"vite\"",
@@ -47,10 +49,13 @@
     "start": "NODE_ENV=production node dist/server/index.js",
     "seed": "tsx src/server/db/seed.ts",
     "owner": "tsx src/server/db/grantOwner.ts",
-    "db:generate": "drizzle-kit generate",
-    "typecheck": "tsc -p tsconfig.json",
+    "db:generate": "drizzle-kit generate && npm run db:bundle",
+    "db:bundle": "tsx scripts/bundle-migrations.ts",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.worker.json",
     "test": "vitest run",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "cf:dev": "tsx scripts/cf-dev.ts",
+    "cf:smoke": "tsx scripts/cf-smoke.ts"
   },
   "engines": {
     "node": ">=22"

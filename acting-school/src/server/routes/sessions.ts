@@ -103,8 +103,8 @@ router.delete('/:id', requirePermission('courses.write'), (c) => {
   const id = paramId(c);
   const db = c.get('db');
   requireVisibleSession(db, id, currentUser(c));
-  const res = db.delete(classSessions).where(eq(classSessions.id, id)).run();
-  if (res.changes === 0) throw notFound('Session not found');
+  const deleted = db.delete(classSessions).where(eq(classSessions.id, id)).returning({ id: classSessions.id }).get();
+  if (!deleted) throw notFound('Session not found');
   return c.body(null, 204);
 });
 

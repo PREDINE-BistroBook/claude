@@ -1,16 +1,36 @@
 import { serve } from '@hono/node-server';
+import { getConnInfo } from '@hono/node-server/conninfo';
 import { serveStatic } from '@hono/node-server/serve-static';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createApp } from './app';
-import { loadConfig } from './config';
 import { createDb } from './db/client';
 import { users } from './db/schema';
 import { activeOwnerCount } from './lib/access';
+import { loadConfig } from './nodeConfig';
+import { folderFileStore } from './nodeFileStore';
 
+/**
+ * The Node server: the API (app.ts) on a better-sqlite3 file plus, in
+ * production, the built web app. The Cloudflare equivalent is src/worker/
+ * (static assets + the same API inside a Durable Object); public/_headers
+ * carries the headers set here for the web app.
+ */
 const config = loadConfig();
 const db = createDb(path.join(config.dataDir, 'app.db'));
-const app = createApp({ db, config });
+const app = createApp({
+  db,
+  config,
+  files: folderFileStore(config.uploadsDir),
+  // The socket's address, for the sign-in brakes (behind a reverse proxy: the proxy's).
+  clientIp: (c) => {
+    try {
+      return getConnInfo(c).remote.address;
+    } catch {
+      return null;
+    }
+  },
+});
 
 // Staff exist but nobody active holds an owner position (e.g. every former owner deactivated):
 // owner-only actions are out of reach until someone runs the recovery script.
@@ -46,6 +66,8 @@ if (fs.existsSync(webRoot)) {
       else c.header('Cache-Control', 'no-cache');
     }
   });
+  // Cloudflare's header rules (src/web/public/_headers) are config, not a page.
+  app.get('/_headers', (c) => c.text('Not found', 404));
   app.use('*', serveStatic({ root: path.relative(process.cwd(), webRoot) || '.' }));
   // A missing hashed asset (an old tab after a deploy) is a 404, not the HTML shell
   // served as JavaScript.

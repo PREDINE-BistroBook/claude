@@ -19,7 +19,7 @@ const en = {
     defaultLanguage: 'Default language',
     defaultLanguageHint: 'New staff accounts start in this language. Each person can switch in My profile.',
     weekStartsOn: 'Week starts on',
-    weekStartsOnHint: 'The first day of the week in the schedule and class calendars.',
+    weekStartsOnHint: 'The first day of the week in the schedule and workshop calendars.',
   },
   criteria: {
     title: 'Interview criteria',
@@ -69,7 +69,7 @@ const ar: TranslationOf<typeof en> = {
     defaultLanguage: 'اللغة الافتراضية',
     defaultLanguageHint: 'تبدأ حسابات الفريق الجديدة بهذه اللغة، ويمكن لكل شخص تغييرها من «ملفي الشخصي».',
     weekStartsOn: 'بداية الأسبوع',
-    weekStartsOnHint: 'أول يوم في الأسبوع في الجدول وتقويم الصفوف.',
+    weekStartsOnHint: 'أول يوم في الأسبوع في الجدول وتقويم الورش.',
   },
   criteria: {
     title: 'معايير المقابلات',

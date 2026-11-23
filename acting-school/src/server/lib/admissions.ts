@@ -9,10 +9,10 @@ import { internationalPhone } from '../../shared/phone';
 import type { DuplicateMatch, Interview, LeadActivity, LeadDetail, LeadListItem } from '../../shared/schemas/admissions';
 import type { SessionUser } from '../../shared/schemas/auth';
 import type { InterviewEvent } from '../../shared/schemas/schedule';
-import type { DB } from '../db/client';
+import type { DB } from '../db/database';
 import { courses, interviews, leadActivities, leads, students, users } from '../db/schema';
 import { maySeeStudent, type Conn } from './access';
-import { phoneDigitsSql } from './phone';
+import { inChunks } from './sqlLimits';
 
 export type LeadRow = typeof leads.$inferSelect;
 export type InterviewRow = typeof interviews.$inferSelect;
@@ -30,14 +30,7 @@ export const followUpDue = (today: string) => and(leadIsOpen, lte(leads.nextFoll
 export function userNames(db: Pick<DB, 'select'>, ids: readonly (number | null)[]): Map<number, string> {
   const unique = [...new Set(ids.filter((v): v is number => v !== null))];
   if (!unique.length) return new Map();
-  return new Map(
-    db
-      .select({ id: users.id, name: users.name })
-      .from(users)
-      .where(inArray(users.id, unique))
-      .all()
-      .map((u) => [u.id, u.name]),
-  );
+  return new Map(inChunks(unique, (ids) => db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, ids)).all()).map((u) => [u.id, u.name]));
 }
 
 // ── Lists ───────────────────────────────────────────────────────────────────
@@ -122,12 +115,7 @@ function courseNameMap(db: Pick<DB, 'select'>, ids: readonly (number | null)[]):
   const unique = [...new Set(ids.filter((v): v is number => v !== null))];
   if (!unique.length) return new Map();
   return new Map(
-    db
-      .select({ id: courses.id, name: courses.name })
-      .from(courses)
-      .where(inArray(courses.id, unique))
-      .all()
-      .map((c) => [c.id, c.name]),
+    inChunks(unique, (ids) => db.select({ id: courses.id, name: courses.name }).from(courses).where(inArray(courses.id, ids)).all()).map((c) => [c.id, c.name]),
   );
 }
 
@@ -173,8 +161,10 @@ export function toActivity(r: typeof leadActivities.$inferSelect, names: Map<num
 
 /** The lead with interviews, timeline and names; null when missing. */
 export function loadLeadDetail(db: DB, id: number, viewer: Pick<SessionUser, 'id' | 'permissions'>): LeadDetail | null {
-  const lead = db.select().from(leads).where(eq(leads.id, id)).get();
-  if (!lead) return null;
+  const row = db.select().from(leads).where(eq(leads.id, id)).get();
+  if (!row) return null;
+  // phone_digits is for matching in SQL only, not part of the API shape.
+  const { phoneDigits: _digits, ...lead } = row;
   const activityRows = db
     .select()
     .from(leadActivities)
@@ -212,7 +202,7 @@ export function loadLeadDetail(db: DB, id: number, viewer: Pick<SessionUser, 'id
 
 /**
  * Students with the same phone (as international digits) or email. SQL narrows
- * by the last 7 digits (phone_digits() reads Arabic digits and ignores marks);
+ * by the last 7 digits (the stored phone_digits: Arabic digits read, marks ignored);
  * the exact comparison runs here, so "010…" matches "+20 10…". Names only.
  */
 export function findStudentMatches(
@@ -224,7 +214,7 @@ export function findStudentMatches(
   const intl = internationalPhone(phone, countryCode);
   const mail = email?.trim().toLowerCase() || null;
   const conds: SQL[] = [];
-  if (intl) conds.push(sql`${phoneDigitsSql(students.phone)} like ${`%${intl.slice(-7)}`}`);
+  if (intl) conds.push(sql`${students.phoneDigits} like ${`%${intl.slice(-7)}`}`);
   if (mail) conds.push(sql`lower(${students.email}) = ${mail}`);
   if (!conds.length) return [];
   return db
@@ -248,7 +238,7 @@ export function findDuplicates(
   const intl = internationalPhone(opts.phone, opts.countryCode);
   const mail = opts.email?.trim().toLowerCase() || null;
   const conds: SQL[] = [];
-  if (intl) conds.push(sql`${phoneDigitsSql(leads.phone)} like ${`%${intl.slice(-7)}`}`);
+  if (intl) conds.push(sql`${leads.phoneDigits} like ${`%${intl.slice(-7)}`}`);
   if (mail) conds.push(sql`lower(${leads.email}) = ${mail}`);
   const leadMatches: DuplicateMatch[] = conds.length
     ? db

@@ -1,10 +1,10 @@
 import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { addDays, todayISO, weekdayOf } from '../../src/shared/dates';
+import { addDays, weekdayOf } from '../../src/shared/dates';
 import { BUILT_IN_POSITIONS } from '../../src/shared/permissions';
 import { classSessions, enrollments, students, users } from '../../src/server/db/schema';
 import { daysBetween, generateDates, mayMarkAttendance, planRegeneration, sameSchedule } from '../../src/server/lib/classSessions';
-import { makeTestContext, type Client } from '../helpers';
+import { makeTestContext, type Client, todayISO } from '../helpers';
 
 type Ctx = Awaited<ReturnType<typeof makeTestContext>>;
 

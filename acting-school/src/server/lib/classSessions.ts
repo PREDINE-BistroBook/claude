@@ -13,9 +13,10 @@ import { and, asc, eq, inArray, sql, type AnyColumn, type SQL } from 'drizzle-or
 import { addDays, parseDate, weekdayOf } from '../../shared/dates';
 import type { SessionUser } from '../../shared/schemas/auth';
 import type { ClassSession, CourseDetail, CourseEnrollment, CourseListItem, ScheduleSlot, SessionDetail } from '../../shared/schemas/courses';
-import type { DB } from '../db/client';
+import type { DB } from '../db/database';
 import { attendance, classSessions, courseSlots, courses, enrollments, students, users } from '../db/schema';
 import { mayMarkAttendance } from './access';
+import { inChunks } from './sqlLimits';
 
 export { mayMarkAttendance };
 
@@ -233,12 +234,15 @@ export function loadSessionDetail(db: DB, id: number, user: Pick<SessionUser, 'i
 function loadSlots(db: DB, courseIds: number[]): Map<number, ScheduleSlot[]> {
   const out = new Map<number, ScheduleSlot[]>();
   if (!courseIds.length) return out;
-  const rows = db
-    .select({ courseId: courseSlots.courseId, weekday: courseSlots.weekday, startTime: courseSlots.startTime, endTime: courseSlots.endTime })
-    .from(courseSlots)
-    .where(inArray(courseSlots.courseId, courseIds))
-    .orderBy(asc(courseSlots.weekday), asc(courseSlots.startTime), asc(courseSlots.id))
-    .all();
+  // In slices: a school can have more classes than one IN (…) may hold (lib/sqlLimits.ts). Order is per course.
+  const rows = inChunks(courseIds, (ids) =>
+    db
+      .select({ courseId: courseSlots.courseId, weekday: courseSlots.weekday, startTime: courseSlots.startTime, endTime: courseSlots.endTime })
+      .from(courseSlots)
+      .where(inArray(courseSlots.courseId, ids))
+      .orderBy(asc(courseSlots.weekday), asc(courseSlots.startTime), asc(courseSlots.id))
+      .all(),
+  );
   for (const { courseId, ...slot } of rows) {
     const list = out.get(courseId) ?? [];
     list.push(slot);
@@ -251,18 +255,21 @@ function loadSlots(db: DB, courseIds: number[]): Map<number, ScheduleSlot[]> {
 function loadNextSessions(db: DB, courseIds: number[], today: string): Map<number, CourseListItem['nextSession']> {
   const out = new Map<number, CourseListItem['nextSession']>();
   if (!courseIds.length) return out;
-  const rows = db.all<{ courseId: number; id: number; date: string; startTime: string }>(sql`
-    select course_id as courseId, id, date, start_time as startTime from (
-      select s.course_id, s.id, s.date, s.start_time,
-        row_number() over (partition by s.course_id order by s.date, s.start_time) as rn
-      from ${classSessions} s
-      where s.status = 'scheduled' and s.date >= ${today}
-        and s.course_id in (${sql.join(
-          courseIds.map((cid) => sql`${cid}`),
-          sql`, `,
-        )})
-    ) where rn = 1
-  `);
+  // In slices of courses (lib/sqlLimits.ts); the window is per course, so slicing changes nothing.
+  const rows = inChunks(courseIds, (ids) =>
+    db.all<{ courseId: number; id: number; date: string; startTime: string }>(sql`
+      select course_id as courseId, id, date, start_time as startTime from (
+        select s.course_id, s.id, s.date, s.start_time,
+          row_number() over (partition by s.course_id order by s.date, s.start_time) as rn
+        from ${classSessions} s
+        where s.status = 'scheduled' and s.date >= ${today}
+          and s.course_id in (${sql.join(
+            ids.map((cid) => sql`${cid}`),
+            sql`, `,
+          )})
+      ) where rn = 1
+    `),
+  );
   for (const r of rows) out.set(r.courseId, { id: r.id, date: r.date, startTime: r.startTime });
   return out;
 }
