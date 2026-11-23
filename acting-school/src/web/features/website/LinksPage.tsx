@@ -1,5 +1,6 @@
-import { Camera, GraduationCap, Link2, Megaphone, MessageCircle, Pencil, Plus, Trash2, type LucideIcon } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { Camera, GraduationCap, Link2, Megaphone, MessageCircle, Pencil, Trash2, type LucideIcon } from 'lucide-react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { MAX_SITE_LINKS, siteLinkInput, type SiteContent, type SiteLink } from '@shared/schemas/site';
 import {
@@ -17,6 +18,7 @@ import {
   TextField,
   useToast,
 } from '@web/components/ui';
+import { ScreenAddAction, ScreenEmptyAdd } from '@web/layout/ScreenAdd';
 import { errorMessageKey, useForm } from '@web/lib/forms';
 import { useSiteContent, useSiteSummary, useSiteWorkshops, useUpdateSiteContent } from './api';
 import { BigSwitch } from './components/BigSwitch';
@@ -130,8 +132,13 @@ function CustomLinks({ links }: { links: SiteLink[] }) {
   const { t, i18n } = useTranslation(['website', 'common']);
   const toast = useToast();
   const update = useUpdateSiteContent();
-  const [editing, setEditing] = useState<SiteLink | 'new' | null>(null);
+  // "Add link" on the Website home opens the form straight away (?add=1); the address is cleaned at once.
+  const [params, setParams] = useSearchParams();
+  const [editing, setEditing] = useState<SiteLink | 'new' | null>(() => (params.get('add') === '1' && links.length < MAX_SITE_LINKS ? 'new' : null));
   const [deleting, setDeleting] = useState<SiteLink | null>(null);
+  useEffect(() => {
+    if (params.has('add')) setParams((prev) => (prev.delete('add'), prev), { replace: true });
+  }, [params, setParams]);
 
   const saveLinks = (change: (current: SiteLink[]) => SiteLink[], message?: string, after?: () => void) =>
     update.mutate((current) => ({ links: change(current.links) }), {
@@ -149,16 +156,16 @@ function CustomLinks({ links }: { links: SiteLink[] }) {
     }, t('move.saved'));
 
   const full = links.length >= MAX_SITE_LINKS;
-  const add = (
-    <Button variant="primary" size="lg" icon={Plus} onClick={() => setEditing('new')} disabled={full}>
-      {t('linkPage.add')}
-    </Button>
-  );
 
   return (
-    <Card title={t('linkPage.custom')} description={t('linkPage.customHint')} actions={links.length > 0 ? <span className="hidden sm:block">{add}</span> : undefined}>
+    <Card
+      title={t('linkPage.custom')}
+      description={t('linkPage.customHint')}
+      // The links page's "+ Add link": here on desktop, the fixed button above the tab bar on phones.
+      actions={<ScreenAddAction screen="website/links" onClick={() => setEditing('new')} disabled={full} />}
+    >
       {links.length === 0 ? (
-        <EmptyState icon={Link2} title={t('linkPage.empty')} description={t('linkPage.emptyHint')} action={add} className="py-8" />
+        <EmptyState icon={Link2} title={t('linkPage.empty')} description={t('linkPage.emptyHint')} action={<ScreenEmptyAdd screen="website/links" onClick={() => setEditing('new')} />} className="py-8" />
       ) : (
         <>
           <ol className="grid gap-3">
@@ -208,7 +215,6 @@ function CustomLinks({ links }: { links: SiteLink[] }) {
               );
             })}
           </ol>
-          <div className="mt-4 grid sm:hidden">{add}</div>
           {full && <p className="mt-3 text-sm text-muted">{t('linkPage.max', { max: MAX_SITE_LINKS })}</p>}
         </>
       )}

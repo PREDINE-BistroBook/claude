@@ -1,5 +1,6 @@
 import {
   BadgeCheck,
+  Binoculars,
   CalendarDays,
   Clapperboard,
   ClipboardList,
@@ -26,10 +27,10 @@ export type NavSection = SectionKey | 'admin';
 
 /**
  * A count shown next to a menu entry: things waiting for someone. New casting
- * applications are fetched by AppShell only in that entry's section; cafeteria
+ * applications and new casting opportunities are fetched by AppShell only in that entry's section; cafeteria
  * orders nobody has taken yet come with the 20-second poll.
  */
-export type NavBadge = 'newCastingApplications' | 'cafeNewOrders';
+export type NavBadge = 'newCastingApplications' | 'newOpportunities' | 'cafeNewOrders';
 
 export interface NavItem {
   to: string;
@@ -68,6 +69,8 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/talent', label: 'talent', icon: Star, permission: 'talent.read', section: 'casting' },
   { to: '/castings', label: 'castings', icon: Clapperboard, permission: 'castings.read', section: 'casting' },
   { to: '/casting/applications', label: 'applications', icon: UserRoundPlus, permission: 'talent.read', section: 'casting', badge: 'newCastingApplications' },
+  // Casting calls the team saw elsewhere and added by hand (Part K1), with the count of new ones.
+  { to: '/casting/opportunities', label: 'opportunities', icon: Binoculars, permission: 'castings.read', section: 'casting', badge: 'newOpportunities' },
   { to: '/casting/schedule', label: 'schedule', icon: CalendarDays, permission: 'castings.read', section: 'casting' },
   // ── Website ──
   home('website'),

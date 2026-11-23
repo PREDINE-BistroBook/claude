@@ -22,6 +22,7 @@ import { isClosedLeadStatus } from '@shared/enums';
 import { telLink } from '@shared/phone';
 import type { Interview, LeadDetail } from '@shared/schemas/admissions';
 import {
+  AddButton,
   Avatar,
   BidiText,
   Button,
@@ -374,12 +375,7 @@ function LeadView({ lead, del }: { lead: LeadDetail; del: ReturnType<typeof useD
             title={t('detail.interviews')}
             padded={false}
             actions={
-              canWrite &&
-              canScheduleInterview(lead.status) && (
-                <Button size="sm" icon={CalendarPlus} onClick={() => setDialog({ kind: 'schedule' })}>
-                  {t('interview.schedule')}
-                </Button>
-              )
+              canWrite && canScheduleInterview(lead.status) && <AddButton label={t('common:add.interview')} onClick={() => setDialog({ kind: 'schedule' })} />
             }
           >
             {lead.interviews.length ? (
@@ -403,7 +399,7 @@ function LeadView({ lead, del }: { lead: LeadDetail; del: ReturnType<typeof useD
             )}
           </Card>
 
-          <Card title={t('detail.timeline')}>
+          <Card title={t('detail.timeline')} actions={canWrite && <AddButton label={t('common:add.contact')} onClick={() => setDialog({ kind: 'log' })} />}>
             <Timeline activities={lead.activities} />
           </Card>
         </div>

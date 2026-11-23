@@ -1,11 +1,12 @@
 import { useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
-import { FileText, Image, MessageCirclePlus, MessagesSquare } from 'lucide-react';
+import { FileText, Image, MessagesSquare } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router';
 import type { ConversationSummary } from '@shared/schemas/chat';
-import { Avatar, Button, ButtonLink, EmptyState, ErrorState, Modal, PageHeader, PageLoader, SearchInput, Spinner, useToast } from '@web/components/ui';
+import { AddButton, Avatar, ButtonLink, EmptyState, ErrorState, Modal, PageHeader, PageLoader, SearchInput, Spinner, useToast } from '@web/components/ui';
+import { ScreenAddAction } from '@web/layout/ScreenAdd';
 import { useFormat } from '@web/lib/format';
 import { teamErrorKey, useOpenConversation, useTeam, useUnread } from '../team/api';
 import { clockOf, filterTeam } from '../team/utils';
@@ -27,11 +28,6 @@ export default function MessagesPage() {
   }, [total, qc]);
 
   const items = list.data?.items ?? [];
-  const newButton = (
-    <Button variant="primary" size="lg" icon={MessageCirclePlus} onClick={() => setPicking(true)}>
-      {t('newMessage')}
-    </Button>
-  );
 
   let body;
   if (list.isPending) body = <PageLoader />;
@@ -45,7 +41,7 @@ export default function MessagesPage() {
         className="rounded-2xl border border-dashed border-line-strong"
         action={
           <div className="flex flex-wrap justify-center gap-2">
-            {newButton}
+            <AddButton variant="primary" label={t('common:add.message')} onClick={() => setPicking(true)} />
             <ButtonLink to="/team" size="lg">
               {t('openTeam')}
             </ButtonLink>
@@ -64,7 +60,7 @@ export default function MessagesPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <PageHeader title={t('title')} subtitle={t('subtitle')} actions={items.length > 0 ? newButton : undefined} />
+      <PageHeader title={t('title')} subtitle={t('subtitle')} actions={<ScreenAddAction screen="messages" onClick={() => setPicking(true)} />} />
       {body}
       <PersonPicker open={picking} onClose={() => setPicking(false)} />
     </div>

@@ -1035,6 +1035,20 @@ One consistent pattern, so nobody has to hunt for it:
 - **`cf:smoke`:** an opportunity from add to casting.
 - **Phone walkthrough** at 375 px in English and Arabic, checking that the fixed Add button never covers content or other fixed bars.
 
+### Built (2026-11-23) — and what waits for the school
+- **K1** as above, plus: a new opportunity turned into a casting moves to *Interested* (someone has looked at it); its screenshots are copied into the casting's files; the casting's notes carry the roles, link, contact and where it was seen, written in the language of the person who turned it. Migration `0009_opportunities` (add-only, two tables).
+- **K2**: one component (`components/ui/AddAction.tsx`), one table of what every screen adds (`layout/addActions.ts`, checked against the route table by `tests/unit/add-actions.test.ts`). Built from the candidates: an extra session from the School schedule (pick the workshop, then the workshop's own session form); enrolling a student from the student's page ("+ Add to a workshop"); a **new** student from a workshop's "Add student" (created, then enrolled there); "Set follow-up" on each open enquiry in the list; "+ Add a place" and "+ Add item" at the top of their blocks on the cafeteria's Menu page; adding a custom position already existed and now follows the pattern. Also "+ Log a contact" / "+ Add interview" at the top of an enquiry's blocks, "+ Add talent" at the top of each role's submissions, 48 px everywhere.
+- **Needs a product decision (not built):**
+  - Coaches have no Add for students or sessions on their own workshops (they hold neither `students.write` nor `courses.write`). Should a coach add a student to their own workshop, or an extra session?
+  - Reception has no permissions yet, so no Add anywhere. Should Reception add enquiries (`admissions.write`)?
+  - Workshops on the website: someone with only `website.manage` can't create a school workshop. The list says where workshops are added; a "+ Add workshop" there would need `courses.write` too.
+  - The Casting schedule has nothing to add: an audition belongs to a talent's submission on a role. Booking one from the schedule would need a three-step picker (casting, role, talent).
+  - Casting applications only come from the website form. A walk-in is added as talent. Should the team hand-enter applications too?
+  - "Turn into a casting" doesn't create roles from the free-text roles; they are copied into the casting's notes. Should it try?
+  - Messages are one-to-one; a group conversation would need a data-model change.
+  - The interview criteria's move/remove icons in Settings are still 32 px (outside this part).
+- **At the merge with Part L:** the video routes (`videos`, `videos/:id`) must be added to `SCREENS`, or the route-table test fails. Suggested: the queue is a list with nothing to add (videos are added from a session's or workshop's "Videos" block); the session page's `subLists` gains "Videos — + Add video (videos.add, class scope)".
+
 ---
 
 ## Part L — The video pipeline: coach → editor → reviewer (asked 2026-11-23)

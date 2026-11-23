@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { CalendarClock, ChevronRight, Clapperboard, Plus, SearchX } from 'lucide-react';
+import { CalendarClock, ChevronRight, Clapperboard, SearchX } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router';
@@ -7,7 +7,6 @@ import { CASTING_STATUSES, type CastingStatus } from '@shared/enums';
 import type { CastingListItem } from '@shared/schemas/castings';
 import {
   Button,
-  ButtonLink,
   EmptyState,
   ErrorState,
   List,
@@ -18,6 +17,7 @@ import {
   StatusBadge,
   useEnumLabel,
 } from '@web/components/ui';
+import { ScreenAddAction, ScreenEmptyAdd } from '@web/layout/ScreenAdd';
 import { useAuth } from '@web/lib/auth';
 import { useFormat } from '@web/lib/format';
 import { useDebounced } from '@web/lib/hooks';
@@ -94,11 +94,6 @@ export default function CastingsPage() {
   const items = castings.data?.items ?? [];
   const canWrite = can('castings.write');
 
-  const newButton = canWrite ? (
-    <ButtonLink to="/castings/new" variant="primary" icon={Plus}>
-      {t('newCasting')}
-    </ButtonLink>
-  ) : null;
 
   const emptyTitle = {
     open: t('list.emptyOpenTitle'),
@@ -125,7 +120,7 @@ export default function CastingsPage() {
         icon={Clapperboard}
         title={emptyTitle}
         description={status === 'open' || status === 'all' ? (canWrite ? t('list.emptyOpenHint') : t('list.emptyHintReadOnly')) : undefined}
-        action={status === 'open' || status === 'all' ? newButton : undefined}
+        action={status === 'open' || status === 'all' ? <ScreenEmptyAdd screen="castings" /> : undefined}
         className="rounded-2xl border border-dashed border-line-strong"
       />
     );
@@ -145,7 +140,7 @@ export default function CastingsPage() {
 
   return (
     <div>
-      <PageHeader title={t('title')} actions={newButton} />
+      <PageHeader title={t('title')} actions={<ScreenAddAction screen="castings" />} />
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <SearchInput value={text} onChange={setText} placeholder={t('list.searchPlaceholder')} className="w-full md:max-w-sm" />
         <Segmented<StatusFilter>

@@ -286,6 +286,7 @@ describe('GET /api/dashboard', () => {
       activeCourses: 1,
       activeTalent: 1,
       openCastings: 2,
+      newOpportunities: 0,
       openLeads: 0,
       newLeadsThisWeek: 0,
       newWebsiteLeads: 0,
@@ -353,6 +354,7 @@ describe('GET /api/dashboard', () => {
         'activeTalent',
         'newCastingApplications',
         'newLeadsThisWeek',
+        'newOpportunities',
         'newWebsiteLeads',
         'openCastings',
         'openLeads',
@@ -381,7 +383,7 @@ describe('GET /api/dashboard', () => {
     const ab = (await agent.get('/api/dashboard')).body;
     expect(Object.keys(ab).sort()).toEqual(['closingCastings', 'counts', 'today', 'todaySessions', 'upcomingAuditions']);
     expect('attendanceToDo' in ab).toBe(false);
-    expect(Object.keys(ab.counts).sort()).toEqual(['activeCourses', 'activeStudents', 'activeTalent', 'newCastingApplications', 'newWebsiteLeads', 'openCastings']);
+    expect(Object.keys(ab.counts).sort()).toEqual(['activeCourses', 'activeStudents', 'activeTalent', 'newCastingApplications', 'newOpportunities', 'newWebsiteLeads', 'openCastings']);
     // The website counts are always there: null when the position can't see them.
     expect(ab.counts.newWebsiteLeads).toBeNull();
     expect(ab.counts.newCastingApplications).toBe(0);

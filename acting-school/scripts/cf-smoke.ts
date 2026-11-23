@@ -352,6 +352,35 @@ export async function runApiSmoke(base: string, opts: { adminToken: string; pass
   expectStatus(await head.delete(`/api/talent/${actor.id}`), 204, 'delete talent');
   expectStatus(await head.delete(`/api/talent/${actor.id}`), 404, 'delete talent again');
 
+  step('casting opportunities: the demo’s five, one added with a screenshot, a bad link refused, turned into a casting, freed on delete');
+  {
+    const demo = expectStatus(await head.get('/api/opportunities'), 200, 'opportunities list').body.items as { asksForPayment: boolean; files: unknown[] }[];
+    check(demo.length === 5 && demo.filter((o) => o.asksForPayment).length === 1, 'the demo has five opportunities, one asking for money');
+    const before = expectStatus(await head.get('/api/opportunities/counts'), 200, 'opportunity counts').body as Record<string, number>;
+    expectStatus(await coach.get('/api/opportunities'), 403, 'a coach can’t see opportunities');
+    const badLink = expectStatus(await head.post('/api/opportunities', { title: 'Bad link', link: 'javascript:alert(1)' }), 400, 'a javascript: link is refused');
+    check(badLink.body.error.issues[0].path[0] === 'link', 'the bad link is named');
+    const shot = await upload(head, noisePng(64), 'post-screenshot.png');
+    const opp = expectStatus(
+      await head.post('/api/opportunities', { title: 'Smoke series — the grandmother', projectType: 'series', deadline: today, link: 'https://example.com/post', contact: 'WhatsApp 0100', fileIds: [shot] }),
+      201,
+      'add an opportunity with a screenshot',
+    ).body;
+    check(opp.files.length === 1 && opp.files[0].fileId === shot && opp.status === 'new', 'the opportunity holds its screenshot');
+    check(expectStatus(await head.get('/api/opportunities/counts'), 200, 'counts after').body.new === before.new + 1, 'the new count went up');
+    const dash = expectStatus(await head.get('/api/dashboard'), 200, 'dashboard').body;
+    check(dash.counts.newOpportunities === before.new + 1, 'the dashboard counts it');
+    const turned = expectStatus(await head.post(`/api/opportunities/${opp.id}/to-casting`), 201, 'turn it into a casting').body;
+    const made = expectStatus(await head.get(`/api/castings/${turned.castingId}`), 200, 'the new casting').body;
+    check(made.title === opp.title && made.type === 'tv' && made.submissionDeadline === today && made.description.includes('https://example.com/post'), 'the casting is prefilled');
+    expectStatus(await head.post(`/api/opportunities/${opp.id}/to-casting`), 409, 'only once');
+    check(expectStatus(await head.get(`/api/opportunities/${opp.id}`), 200, 'opportunity after').body.castingId === turned.castingId, 'linked to its casting');
+    expectStatus(await head.delete(`/api/opportunities/${opp.id}`), 204, 'delete the opportunity');
+    expectStatus(await head.get(`/api/files/${shot}`), 200, 'its screenshot stays: the casting uses it');
+    expectStatus(await head.delete(`/api/castings/${turned.castingId}`), 204, 'delete that casting');
+    expectStatus(await head.get(`/api/files/${shot}`), 404, 'now the screenshot is gone');
+  }
+
   step('admissions: Arabic digits, duplicates, interview, enrol');
   const lead = expectStatus(
     await director.post('/api/leads', { firstName: 'Smoke', lastName: 'Lead', phone: '٠١٠٩٨٧٦٥٤٣٢', source: 'whatsapp' }),

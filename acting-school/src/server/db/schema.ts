@@ -32,6 +32,8 @@ import {
   LEAD_STATUSES,
   LOCALES,
   NOTIFICATION_KINDS,
+  OPPORTUNITY_PROJECT_TYPES,
+  OPPORTUNITY_STATUSES,
   SESSION_STATUSES,
   STUDENT_STATUSES,
   SUBMISSION_STATUSES,
@@ -923,4 +925,60 @@ export const cafeOrderItems = sqliteTable(
     options: text('options'),
   },
   (t) => [index('cafe_order_items_order_idx').on(t.orderId)],
+);
+
+// ── Casting opportunities (Part K) ──────────────────────────────────────────
+
+/**
+ * Casting opportunities the team saw elsewhere (Instagram, Facebook, WhatsApp
+ * groups, websites) and added by hand: castings.read sees them, castings.write
+ * adds, edits, moves and deletes them, and turns one into a casting (casting_id).
+ * If the opportunity radar (Part E) is built later, it writes into this table.
+ */
+export const castingOpportunities = sqliteTable(
+  'casting_opportunities',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    title: text('title').notNull(),
+    details: text('details'),
+    projectType: text('project_type', { enum: OPPORTUNITY_PROJECT_TYPES }),
+    /** Free text (≤ 1000): the roles they are looking for. */
+    roles: text('roles'),
+    location: text('location'),
+    /** YYYY-MM-DD, school-local. */
+    deadline: text('deadline'),
+    /** How to reach them, as written in the post. */
+    contact: text('contact'),
+    /** The post itself (http/https only). */
+    link: text('link'),
+    /** Where it was seen (≤ 120), e.g. "Instagram — Frame Casting". */
+    source: text('source'),
+    /** The post asks the actors for money: shown with a red warning. */
+    asksForPayment: integer('asks_for_payment', { mode: 'boolean' }).notNull().default(false),
+    involvesMinors: integer('involves_minors', { mode: 'boolean' }).notNull().default(false),
+    status: text('status', { enum: OPPORTUNITY_STATUSES }).notNull().default('new'),
+    /** The casting made from it ("Turn into a casting"). */
+    castingId: integer('casting_id').references(() => castings.id, { onDelete: 'set null' }),
+    createdById: integer('created_by_id').references(() => users.id, { onDelete: 'set null' }),
+    /** Who last moved it out of (or back to) new. */
+    reviewedById: integer('reviewed_by_id').references(() => users.id, { onDelete: 'set null' }),
+    ...timestamps(),
+  },
+  (t) => [index('casting_opportunities_status_idx').on(t.status, t.createdAt)],
+);
+
+/** Up to three screenshots or photos of the post (OPPORTUNITY_MAX_FILES), in the order the team put them. */
+export const castingOpportunityFiles = sqliteTable(
+  'casting_opportunity_files',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    opportunityId: integer('opportunity_id')
+      .notNull()
+      .references(() => castingOpportunities.id, { onDelete: 'cascade' }),
+    fileId: text('file_id')
+      .notNull()
+      .references(() => files.id, { onDelete: 'cascade' }),
+    sortOrder: integer('sort_order').notNull().default(0),
+  },
+  (t) => [index('casting_opportunity_files_opp_idx').on(t.opportunityId, t.sortOrder), index('casting_opportunity_files_file_idx').on(t.fileId)],
 );

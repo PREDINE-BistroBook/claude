@@ -17,6 +17,8 @@ export const WIPE_ORDER: SQLiteTable[] = [
   t.messages,
   t.conversationMembers,
   t.conversations,
+  t.castingOpportunityFiles,
+  t.castingOpportunities,
   t.castingFiles,
   t.courseFiles,
   t.castingApplicationPhotos,

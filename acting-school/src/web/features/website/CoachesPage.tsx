@@ -1,7 +1,8 @@
-import { ChevronRight, Plus, Presentation } from 'lucide-react';
+import { ChevronRight, Presentation } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
-import { Avatar, Badge, ButtonLink, EmptyState, ErrorState, PageHeader, PageLoader, useToast } from '@web/components/ui';
+import { Avatar, Badge, EmptyState, ErrorState, PageHeader, PageLoader, useToast } from '@web/components/ui';
+import { ScreenAddAction, ScreenEmptyAdd } from '@web/layout/ScreenAdd';
 import { errorMessageKey } from '@web/lib/forms';
 import { useOrderSiteCoaches, useSiteCoaches } from './api';
 import { MoveButtons } from './components/MoveButtons';
@@ -20,15 +21,10 @@ export default function CoachesPage() {
     order.mutate(ids, { onSuccess: () => toast.success(t('move.saved')), onError: (err) => toast.error(t(errorMessageKey(err))) });
   };
 
-  const add = (
-    <ButtonLink to="/website/coaches/new" variant="primary" size="lg" icon={Plus}>
-      {t('coaches.add')}
-    </ButtonLink>
-  );
 
   return (
     <div>
-      <PageHeader title={t('coaches.title')} subtitle={t('coaches.subtitle')} actions={items.length > 0 ? add : undefined} />
+      <PageHeader title={t('coaches.title')} subtitle={t('coaches.subtitle')} actions={<ScreenAddAction screen="website/coaches" />} />
       {coaches.isPending ? (
         <PageLoader />
       ) : coaches.isError ? (
@@ -38,7 +34,7 @@ export default function CoachesPage() {
           icon={Presentation}
           title={t('coaches.empty')}
           description={t('coaches.emptyHint')}
-          action={add}
+          action={<ScreenEmptyAdd screen="website/coaches" />}
           className="rounded-2xl border border-dashed border-line-strong"
         />
       ) : (

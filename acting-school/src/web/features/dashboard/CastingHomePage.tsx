@@ -1,7 +1,8 @@
-import { BellRing, Clapperboard, LayoutDashboard, Plus, Star, UserPlus, UserRoundPlus } from 'lucide-react';
+import { Binoculars, Clapperboard, LayoutDashboard, Star, UserRoundPlus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { todayISO } from '@shared/dates';
 import { EmptyState, ErrorState, PageLoader } from '@web/components/ui';
+import { HOME_QUICK_ACTIONS } from '@web/layout/addActions';
 import { SectionHomeHeader } from '@web/layout/SectionHomeHeader';
 import { useDashboard } from './api';
 import { CardGrid, QuickActions, StatGrid, useAllowedCount, useGreetingLine, type HomeStat, type QuickAction } from './components/HomeParts';
@@ -12,17 +13,17 @@ const STATS: HomeStat[] = [
   { key: 'openCastings', to: '/castings', icon: Clapperboard },
   // Casting-call applications from the website still waiting for someone.
   { key: 'newCastingApplications', to: '/casting/applications', icon: UserRoundPlus },
+  // Casting calls the team saw elsewhere and nobody has looked at yet (Part K1).
+  { key: 'newOpportunities', to: '/casting/opportunities', icon: Binoculars },
 ];
 
-const ACTIONS: QuickAction[] = [
-  { key: 'addTalent', to: '/talent/new', icon: UserPlus, permission: 'talent.write' },
-  { key: 'newCasting', to: '/castings/new', icon: Plus, permission: 'castings.write' },
-  { key: 'callToOffice', to: '/team', icon: BellRing, permission: 'staff.summon' },
-];
+/** New talent, New casting, Add opportunity, then Call to the office (layout/addActions.ts). */
+const ACTIONS: QuickAction[] = [...HOME_QUICK_ACTIONS.casting];
 
 /**
  * /casting — the Casting section's home: upcoming auditions, castings closing
- * soon, the roster size, open castings and new casting-call applications.
+ * soon, the roster size, open castings, new casting-call applications and new
+ * opportunities.
  * Nothing from the school.
  */
 export default function CastingHomePage() {

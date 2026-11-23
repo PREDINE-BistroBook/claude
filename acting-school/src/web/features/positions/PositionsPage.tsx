@@ -1,7 +1,8 @@
-import { BadgeCheck, Crown, Lock, Plus } from 'lucide-react';
+import { BadgeCheck, Crown, Lock } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { Position } from '@shared/schemas/positions';
-import { Badge, ButtonLink, EmptyState, ErrorState, List, ListRow, PageHeader, PageLoader } from '@web/components/ui';
+import { Badge, EmptyState, ErrorState, List, ListRow, PageHeader, PageLoader } from '@web/components/ui';
+import { ScreenAddAction, ScreenEmptyAdd } from '@web/layout/ScreenAdd';
 import { useAuth } from '@web/lib/auth';
 import { usePositionName } from '@web/lib/positions';
 import { usePositions } from './api';
@@ -12,22 +13,17 @@ export default function PositionsPage() {
   const positions = usePositions();
   const items = positions.data?.items ?? [];
 
-  const newButton = (
-    <ButtonLink to="/positions/new" variant="primary" icon={Plus}>
-      {t('newPosition')}
-    </ButtonLink>
-  );
 
   return (
     <div className="mx-auto max-w-3xl">
-      <PageHeader title={t('title')} subtitle={positions.isSuccess ? t('summary', { count: items.length }) : undefined} actions={newButton} />
+      <PageHeader title={t('title')} subtitle={positions.isSuccess ? t('summary', { count: items.length }) : undefined} actions={<ScreenAddAction screen="positions" />} />
       <p className="mb-5 max-w-prose text-sm text-muted">{t('intro')}</p>
       {positions.isPending ? (
         <PageLoader />
       ) : positions.isError ? (
         <ErrorState error={positions.error} onRetry={() => void positions.refetch()} />
       ) : !items.length ? (
-        <EmptyState icon={BadgeCheck} title={t('emptyTitle')} action={newButton} className="rounded-2xl border border-dashed border-line-strong" />
+        <EmptyState icon={BadgeCheck} title={t('emptyTitle')} action={<ScreenEmptyAdd screen="positions" />} className="rounded-2xl border border-dashed border-line-strong" />
       ) : (
         <List>
           {items.map((p) => (

@@ -121,7 +121,9 @@ export const CLEAR_DEMO_TABLES: readonly ClearDemoTable[] = [
   { table: t.interviews, rows: 'all' },
   { table: t.leadActivities, rows: 'all' },
   { table: t.leads, rows: 'all' },
-  // Casting
+  // Casting (opportunities point at castings: before them)
+  { table: t.castingOpportunityFiles, rows: 'all' },
+  { table: t.castingOpportunities, rows: 'all' },
   { table: t.submissions, rows: 'all' },
   { table: t.castingRoles, rows: 'all' },
   { table: t.castings, rows: 'all' },

@@ -1,10 +1,10 @@
 import clsx from 'clsx';
-import { CalendarCheck, CalendarDays, Inbox, Plus, SearchX, Sparkles } from 'lucide-react';
+import { CalendarCheck, CalendarDays, CalendarPlus, Inbox, SearchX, Sparkles } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 import { todayISO } from '@shared/dates';
-import { LEAD_SOURCES } from '@shared/enums';
+import { LEAD_SOURCES, isClosedLeadStatus } from '@shared/enums';
 import type { LeadListItem } from '@shared/schemas/admissions';
 import {
   BidiText,
@@ -22,11 +22,13 @@ import {
   StatusBadge,
   Tabs,
 } from '@web/components/ui';
+import { ScreenAddAction, ScreenEmptyAdd } from '@web/layout/ScreenAdd';
 import { useAuth } from '@web/lib/auth';
 import { fullName, useFormat } from '@web/lib/format';
 import { useDebounced } from '@web/lib/hooks';
 import { useLeadCounts, useLeads } from './api';
 import { FollowUpLabel, SourceTile } from './components/bits';
+import { FollowUpModal } from './components/LeadModals';
 import { LEAD_TABS, TAB_COUNT, parseSource, parseTab, tabFilter, type LeadTab } from './utils';
 
 const EMPTY_ICONS = { follow_up: CalendarCheck, new: Sparkles, interviews: CalendarDays, open: Inbox, closed: Inbox } as const;
@@ -36,6 +38,9 @@ export default function LeadsPage() {
   const { can, user } = useAuth();
   const [params, setParams] = useSearchParams();
   const tab = parseTab(params.get('tab'));
+  // "Follow-up" on a row (admissions.write, open enquiries): set the next follow-up without opening the enquiry.
+  const [followUp, setFollowUp] = useState<LeadListItem | null>(null);
+  const canWrite = can('admissions.write');
   const source = parseSource(params.get('source'));
   const mine = params.get('mine') === '1';
   const q = params.get('q') ?? '';
@@ -83,13 +88,7 @@ export default function LeadsPage() {
   const leads = useLeads({ q: q || undefined, source, assignedToId: mine && user ? user.id : undefined, ...tabFilter(tab) });
   const items = leads.data?.items ?? [];
   const filtered = !!q || !!source || mine;
-  const canWrite = can('admissions.write');
 
-  const newButton = canWrite ? (
-    <ButtonLink to="/admissions/new" variant="primary" icon={Plus}>
-      {t('newLead')}
-    </ButtonLink>
-  ) : null;
 
   let body;
   if (leads.isPending) body = <PageLoader />;
@@ -102,7 +101,7 @@ export default function LeadsPage() {
         description={t(`list.empty.${tab}.hint`)}
         action={
           tab === 'open' || tab === 'new'
-            ? newButton
+            ? <ScreenEmptyAdd screen="admissions" />
             : tab !== 'closed' && (
                 <ButtonLink to="/admissions?tab=open" replace>
                   {t('list.seeOpen')}
@@ -129,7 +128,7 @@ export default function LeadsPage() {
         </p>
         <List className={clsx('transition-opacity', leads.isPlaceholderData && 'opacity-60')}>
           {items.map((l) => (
-            <LeadRow key={l.id} lead={l} tab={tab} />
+            <LeadRow key={l.id} lead={l} tab={tab} onFollowUp={canWrite && !isClosedLeadStatus(l.status) ? () => setFollowUp(l) : undefined} />
           ))}
         </List>
       </>
@@ -137,7 +136,7 @@ export default function LeadsPage() {
 
   return (
     <div>
-      <PageHeader title={t('title')} subtitle={t('subtitle')} actions={newButton} />
+      <PageHeader title={t('title')} subtitle={t('subtitle')} actions={<ScreenAddAction screen="admissions" />} />
       <Tabs<LeadTab>
         tabs={LEAD_TABS.map((id) => ({ id, label: t(`tabs.${id}`), count: counts.data?.[TAB_COUNT[id]] }))}
         value={tab}
@@ -164,11 +163,12 @@ export default function LeadsPage() {
         </div>
       </div>
       {body}
+      <FollowUpModal open={!!followUp} onClose={() => setFollowUp(null)} lead={followUp ?? { id: 0, nextFollowUpOn: null, firstName: '', lastName: '' }} />
     </div>
   );
 }
 
-function LeadRow({ lead: l, tab }: { lead: LeadListItem; tab: LeadTab }) {
+function LeadRow({ lead: l, tab, onFollowUp }: { lead: LeadListItem; tab: LeadTab; onFollowUp?: () => void }) {
   const { t } = useTranslation(['admissions', 'common']);
   const f = useFormat();
   const today = todayISO();
@@ -211,6 +211,20 @@ function LeadRow({ lead: l, tab }: { lead: LeadListItem; tab: LeadTab }) {
           <StatusBadge group="leadStatus" value={l.status} />
           {next}
         </span>
+      }
+      aside={
+        onFollowUp && (
+          <button
+            type="button"
+            onClick={onFollowUp}
+            className="inline-flex min-h-12 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-medium text-accent hover:bg-accent-soft"
+            data-testid="row-follow-up"
+          >
+            <CalendarPlus className="size-5" aria-hidden />
+            {t('common:add.followUp')}
+            <span className="sr-only">: {name}</span>
+          </button>
+        )
       }
     />
   );

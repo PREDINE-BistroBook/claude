@@ -2,7 +2,7 @@ import clsx from 'clsx';
 import { Lock, TriangleAlert } from 'lucide-react';
 import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { todayISO } from '@shared/dates';
 import { GENDERS, STUDENT_STATUSES, type StudentStatus } from '@shared/enums';
 import { STUDENT_CONTACT_FIELDS, studentInput, type Student } from '@shared/schemas/students';
@@ -26,6 +26,8 @@ import {
 import { useAuth } from '@web/lib/auth';
 import { ageOn } from '@web/lib/format';
 import { useForm } from '@web/lib/forms';
+import { api } from '@web/lib/api';
+import { classesErrorKey, useCourse, useInvalidateClasses } from '../../classes/api';
 import { useSaveStudent } from '../api';
 
 interface StudentFormValues extends Record<string, unknown> {
@@ -91,6 +93,12 @@ export function StudentForm({ student }: { student?: Student }) {
   // and sending them after a permission was granted meanwhile would wipe the real contacts.
   const { can } = useAuth();
   const withContact = can('students.contact') && !student?.contactHidden;
+  // Added from a workshop's "Add student" (/students/new?courseId=…): enrolled there once saved (courses.write).
+  const [params] = useSearchParams();
+  const rawCourse = params.get('courseId');
+  const enrolIn = !student && rawCourse && /^\d+$/.test(rawCourse) && can('courses.write') ? Number(rawCourse) : null;
+  const course = useCourse(enrolIn ?? 0, enrolIn !== null);
+  const invalidateClasses = useInvalidateClasses();
 
   const age = ageOn(v.dateOfBirth || null);
   const isMinor = age !== null && age < 18;
@@ -101,7 +109,20 @@ export function StudentForm({ student }: { student?: Student }) {
     if (!data) return focusFirstError();
     if (!withContact) for (const f of STUDENT_CONTACT_FIELDS) delete data[f];
     save.mutate(data, {
-      onSuccess: (saved) => {
+      onSuccess: async (saved) => {
+        if (enrolIn !== null && course.data) {
+          try {
+            await api.post(`/courses/${enrolIn}/enrollments`, { studentId: saved.id });
+            invalidateClasses({ students: true });
+            toast.success(t('enrol.enrolledIn', { name: course.data.name }));
+            navigate(`/classes/${enrolIn}`, { replace: true });
+          } catch (err) {
+            // The student is saved; only the enrolment failed (a full workshop…): say so on the new student's page.
+            toast.error(t(classesErrorKey(err)));
+            navigate(`/students/${saved.id}`, { replace: true });
+          }
+          return;
+        }
         toast.success(student ? t('form.saved') : t('form.created'));
         navigate(`/students/${saved.id}`, { replace: true });
       },
@@ -117,6 +138,11 @@ export function StudentForm({ student }: { student?: Student }) {
   return (
     <FormPage onSubmit={submit}>
       <FormError messageKey={form.formError} />
+      {enrolIn !== null && course.data && (
+        <p role="note" className="rounded-xl bg-info-soft px-3.5 py-3 text-sm text-info">
+          {t('enrol.fromWorkshop', { name: course.data.name })}
+        </p>
+      )}
 
       <FormSection title={t('form.photo')} description={t('form.photoHint')}>
         <PhotoInput value={v.photoFileId} onChange={(id) => form.set('photoFileId', id)} name={displayName} discardReplaced />

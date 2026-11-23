@@ -131,6 +131,7 @@ export function Composer({ conversationId, onSent }: { conversationId: number; o
   return (
     <form
       onSubmit={submit}
+      data-sticky-bottom
       className="sticky bottom-[calc(4.25rem+env(safe-area-inset-bottom))] z-20 -mx-4 mt-4 border-t max-lg:-mb-6 border-line bg-surface/95 px-2 pb-2 pt-2 backdrop-blur sm:-mx-6 sm:px-4 lg:bottom-0 lg:mx-0 lg:rounded-2xl lg:border lg:shadow-sm"
     >
       {pending.length > 0 && (

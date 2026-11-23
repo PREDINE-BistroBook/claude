@@ -15,6 +15,13 @@ interface Props {
   lead: LeadDetail;
 }
 
+/** The follow-up dialog needs only the enquiry's id, name and date — the list's rows open it too. */
+interface FollowUpProps {
+  open: boolean;
+  onClose: () => void;
+  lead: Pick<LeadDetail, 'id' | 'nextFollowUpOn' | 'firstName' | 'lastName'>;
+}
+
 /** Close a lead as lost: a reason (required) and an optional note for the timeline. Mounted only while open. */
 export function LostModal(props: Props) {
   return props.open ? <LostDialog {...props} /> : null;
@@ -81,12 +88,12 @@ function LostDialog({ onClose, lead }: Props) {
   );
 }
 
-/** Change just the next follow-up date (quick chips or a date). Mounted only while open. */
-export function FollowUpModal(props: Props) {
+/** Change just the next follow-up date (quick chips or a date). Mounted only while open. Opened from an enquiry's page and from its row in the list. */
+export function FollowUpModal(props: FollowUpProps) {
   return props.open ? <FollowUpDialog {...props} /> : null;
 }
 
-function FollowUpDialog({ onClose, lead }: Props) {
+function FollowUpDialog({ onClose, lead }: FollowUpProps) {
   const { t } = useTranslation(['admissions', 'common']);
   const toast = useToast();
   const update = useUpdateLead(lead.id);
@@ -111,6 +118,7 @@ function FollowUpDialog({ onClose, lead }: Props) {
       onClose={onClose}
       size="sm"
       title={t('followUp.title')}
+      description={fullName(lead)}
       footer={
         <>
           <Button onClick={onClose}>{t('common:actions.cancel')}</Button>

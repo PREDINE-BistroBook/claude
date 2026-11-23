@@ -216,6 +216,23 @@ html[lang="ar"] {
   }
 }
 
+/* A list screen's "+ Add …" on phones (components/ui/AddAction.tsx ListAddAction): a button fixed at the
+   bottom-end, 0.75rem above the tab bar (4.25rem + 1px) and 3.5rem tall. While one is on screen the page
+   gets room enough at its end that the last row scrolls clear of it, and toasts sit above it. A sticky bar
+   at the bottom (a form's Save row — the cafeteria's "Send order" and "Save places" too —, a chat's
+   composer) owns that spot: the button steps aside while one is there. */
+@media (width < 64rem) {
+  body:has([data-add-fab]) [data-app-main] {
+    padding-bottom: calc(10rem + env(safe-area-inset-bottom));
+  }
+  body:has([data-add-fab]) [data-toasts] {
+    bottom: calc(9.5rem + env(safe-area-inset-bottom));
+  }
+  body:has([data-sticky-bottom]) [data-add-fab] {
+    display: none;
+  }
+}
+
 /* iOS: keep content clear of the home indicator / notch. */
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom);

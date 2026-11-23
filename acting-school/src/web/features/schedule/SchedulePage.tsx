@@ -1,12 +1,14 @@
 import { CalendarOff, ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 import { addDays, todayISO } from '@shared/dates';
 import type { ScheduleFilter } from '@shared/schemas/schedule';
 import { Button, EmptyState, ErrorState, PageHeader, PageLoader, Segmented, Spinner } from '@web/components/ui';
+import { ScreenAddAction } from '@web/layout/ScreenAdd';
 import { useAuth } from '@web/lib/auth';
 import { usePrefetchAdjacentWeeks, useSchedule, useWeekStart } from './api';
+import { AddSessionModal } from './components/AddSessionModal';
 import { DayAgenda } from './components/DayAgenda';
 import { WeekGrid } from './components/WeekGrid';
 import { WeekStrip } from './components/WeekStrip';
@@ -48,6 +50,9 @@ export default function SchedulePage({ kinds: sectionKinds }: { kinds: readonly 
   // The All / Workshops / Interviews switch only makes sense to someone who sees several kinds.
   const canFilter = kinds.length > 1;
   const titleKey = sectionKinds.length === 1 ? sectionKinds[0]! : 'mixed';
+  // "+ Add a session" (an extra session of a workshop) on the School schedule only: the Casting one shows auditions, set inside a casting.
+  const showsClasses = sectionKinds.includes('class');
+  const [addingSession, setAddingSession] = useState(false);
   const hintKey = [...sectionKinds].sort().join('_');
 
   const today = todayISO();
@@ -119,7 +124,7 @@ export default function SchedulePage({ kinds: sectionKinds }: { kinds: readonly 
 
   return (
     <div>
-      <PageHeader title={t(`titles.${titleKey}`)} subtitle={subtitle} />
+      <PageHeader title={t(`titles.${titleKey}`)} subtitle={subtitle} actions={showsClasses ? <ScreenAddAction screen="schedule" onClick={() => setAddingSession(true)} /> : undefined} />
 
       {canSeeAnything && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -147,6 +152,7 @@ export default function SchedulePage({ kinds: sectionKinds }: { kinds: readonly 
       )}
 
       {body}
+      {showsClasses && <AddSessionModal open={addingSession} onClose={() => setAddingSession(false)} date={selected < today ? today : selected} />}
     </div>
   );
 }

@@ -64,6 +64,7 @@ import type { DB } from './database';
 import {
   cafeOrders,
   castingApplications,
+  castingOpportunities,
   conversations,
   courses,
   enrollments,
@@ -1108,9 +1109,113 @@ export async function seedDemo(opts: SeedDemoOptions): Promise<SeedDemoResult> {
 
   await seedCafe();
 
-  // ── 9. The public website ──────────────────────────────────────────────────
+  // ── 9. Casting opportunities the team saw this week (one asks the actors for money) ──
+
+  await seedOpportunities();
+
+  // ── 10. The public website ─────────────────────────────────────────────────
 
   await seedDemoWebsite({ db, files: opts.files, timeZone, today });
+
+  /**
+   * Casting › Opportunities (Part K1): five posts the casting team saw on
+   * Instagram, Facebook, a WhatsApp group and a theatre's website, in English
+   * and Arabic — three still new (one of them asks the actors for money, so it
+   * carries the red warning), one the team is interested in (its deadline has
+   * passed) and one they applied to. Two have screenshots. No amounts anywhere
+   * (no prices in the demo).
+   */
+  async function seedOpportunities() {
+    const tarek = await login('casting');
+    async function screenshot(person: number, gender: Gender, hair: string, name: string, variant: number): Promise<string> {
+      const form = new FormData();
+      form.append('file', new Blob([renderPortrait(lookFor(person, gender, { hair, variant }))], { type: 'image/png' }), name);
+      return (await tarek.post<{ id: string }>('/files', form)).id;
+    }
+    const spec: { hoursAgo: number; input: Record<string, unknown>; shots?: [number, Gender, string][] }[] = [
+      {
+        hoursAgo: 3,
+        input: {
+          title: 'Feature film — lead actress, 25 to 35',
+          projectType: 'film',
+          roles: 'Lead actress (25–35), her younger brother (18–22)',
+          location: 'Cairo',
+          deadline: addDays(today, 2),
+          contact: 'WhatsApp +20 100 123 4567',
+          link: 'https://www.instagram.com/p/demo-frame-casting/',
+          source: 'Instagram — Frame Casting',
+          details: 'Independent feature, shooting in the spring. Send a self-tape and two photos.',
+        },
+        shots: [[420, 'female', 'Black']],
+      },
+      {
+        hoursAgo: 20,
+        input: {
+          title: 'إعلان تلفزيوني لشركة عصائر',
+          projectType: 'ad',
+          roles: 'عائلة: أب وأم وطفلان (من 8 إلى 12 سنة)',
+          location: 'الشيخ زايد',
+          deadline: addDays(today, 9),
+          contact: 'casting@juice-ad.example',
+          link: 'https://www.facebook.com/groups/demo-casting-masr/posts/1',
+          source: 'فيسبوك — مجموعة كاستينج مصر',
+          involvesMinors: true,
+          details: 'تصوير يوم واحد في استوديو. يرجى إرسال صور حديثة للعائلة كاملة.',
+        },
+        shots: [
+          [421, 'male', 'Black'],
+          [422, 'female', 'Dark brown'],
+        ],
+      },
+      {
+        hoursAgo: 30,
+        input: {
+          title: 'Web series: “new faces wanted”',
+          projectType: 'online',
+          roles: 'All ages, no experience needed',
+          contact: 'A WhatsApp number only, no company name',
+          source: 'WhatsApp group — Actors Egypt',
+          asksForPayment: true,
+          details: 'They ask every actor to pay a “registration fee” before the audition. Probably not a real casting.',
+        },
+      },
+      {
+        hoursAgo: 96,
+        input: {
+          title: 'مسرحية «الليلة الكبيرة» — تجارب أداء',
+          projectType: 'theatre',
+          roles: 'مغنون وممثلون (من 18 إلى 40 سنة)',
+          location: 'مسرح الجمهورية، وسط البلد',
+          deadline: addDays(today, -3),
+          link: 'https://example.org/demo-theatre/auditions',
+          source: 'موقع مسرح الجمهورية',
+          status: 'interested',
+        },
+      },
+      {
+        hoursAgo: 72,
+        input: {
+          title: 'Music video — dancers and extras',
+          projectType: 'music_video',
+          roles: 'Dancers (18–30), 20 extras',
+          location: 'Downtown Cairo',
+          deadline: addDays(today, 5),
+          contact: '@mv.casting.cairo',
+          link: 'https://www.instagram.com/p/demo-mv-casting/',
+          source: 'Instagram — @mv.casting.cairo',
+          status: 'applied',
+        },
+      },
+    ];
+    let shot = 0;
+    for (const o of spec) {
+      const fileIds: string[] = [];
+      for (const [person, gender, hair] of o.shots ?? []) fileIds.push(await screenshot(person, gender, hair, `screenshot-${++shot}.png`, shot));
+      const created = await tarek.post<{ id: number }>('/opportunities', { ...o.input, fileIds });
+      const at = Date.now() - o.hoursAgo * 3_600_000;
+      db.update(castingOpportunities).set({ createdAt: at, updatedAt: at }).where(eq(castingOpportunities.id, created.id)).run();
+    }
+  }
 
   /**
    * The cafeteria as a working morning: the usual menu ("Add the usual

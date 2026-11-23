@@ -14,7 +14,7 @@ import {
   type DashboardData,
 } from '../../shared/schemas/dashboard';
 import type { DB } from '../db/database';
-import { attendance, castingApplications, castings, classSessions, courses, enrollments, leads, students, talent, users } from '../db/schema';
+import { attendance, castingApplications, castingOpportunities, castings, classSessions, courses, enrollments, leads, students, talent, users } from '../db/schema';
 import type { AppEnv } from '../env';
 import { epochAt, schoolNowTime, schoolToday } from '../lib/clock';
 import { courseScope, seesAllClasses, studentScope, takesAttendance } from '../lib/access';
@@ -69,7 +69,11 @@ function loadClassSessions(db: DB, where: SQL | undefined, order: SQL[]): ClassS
     .all();
 }
 
-const countWhere = (db: DB, table: typeof students | typeof courses | typeof talent | typeof castings | typeof leads | typeof castingApplications, where: SQL) =>
+const countWhere = (
+  db: DB,
+  table: typeof students | typeof courses | typeof talent | typeof castings | typeof leads | typeof castingApplications | typeof castingOpportunities,
+  where: SQL,
+) =>
   db.select({ n: count() }).from(table).where(where).get()?.n ?? 0;
 
 router.get('/', (c) => {
@@ -92,7 +96,11 @@ router.get('/', (c) => {
   if (userCan(c, 'students.read')) data.counts.activeStudents = countWhere(db, students, and(eq(students.status, 'active'), studentScope(me))!);
   if (userCan(c, 'courses.read')) data.counts.activeCourses = countWhere(db, courses, and(eq(courses.status, 'active'), courseScope(me))!);
   if (userCan(c, 'talent.read')) data.counts.activeTalent = countWhere(db, talent, eq(talent.status, 'active'));
-  if (userCan(c, 'castings.read')) data.counts.openCastings = countWhere(db, castings, eq(castings.status, 'open'));
+  if (userCan(c, 'castings.read')) {
+    data.counts.openCastings = countWhere(db, castings, eq(castings.status, 'open'));
+    // Casting opportunities the team added and nobody has looked at yet (Part K1).
+    data.counts.newOpportunities = countWhere(db, castingOpportunities, eq(castingOpportunities.status, 'new'));
+  }
 
   if (userCan(c, 'courses.read')) {
     data.todaySessions = loadClassSessions(db, and(eq(classSessions.date, today), mine), [

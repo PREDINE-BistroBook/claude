@@ -173,3 +173,28 @@ export function isOpenCafeOrder(status: CafeOrderStatus): boolean {
 export function nextCafeStep(status: CafeOrderStatus): 'on_the_way' | 'delivered' | null {
   return status === 'new' ? 'on_the_way' : status === 'on_the_way' ? 'delivered' : null;
 }
+
+// ── Casting opportunities (Part K) ──────────────────────────────────────────
+
+/** What kind of project a casting opportunity the team saw is for. */
+export const OPPORTUNITY_PROJECT_TYPES = ['film', 'series', 'ad', 'theatre', 'music_video', 'online', 'other'] as const;
+export type OpportunityProjectType = (typeof OPPORTUNITY_PROJECT_TYPES)[number];
+
+/**
+ * A casting opportunity the team saw (Instagram, Facebook, a WhatsApp group, a
+ * website) and added by hand: new (nobody has looked yet) → interested →
+ * applied, or dismissed ("Not for us"). Any move is allowed: it is a to-do list.
+ */
+export const OPPORTUNITY_STATUSES = ['new', 'interested', 'applied', 'dismissed'] as const;
+export type OpportunityStatus = (typeof OPPORTUNITY_STATUSES)[number];
+
+/** The casting type a project type becomes when an opportunity is turned into a casting. */
+export const OPPORTUNITY_CASTING_TYPE: Record<OpportunityProjectType, CastingType> = {
+  film: 'film',
+  series: 'tv',
+  ad: 'commercial',
+  theatre: 'theatre',
+  music_video: 'music_video',
+  online: 'other',
+  other: 'other',
+};

@@ -17,6 +17,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useOnline, useSchoolName } from '../lib/hooks';
 import { useApplicationCounts } from '../features/applications/api';
+import { useOpportunityCounts } from '../features/opportunities/api';
 import { legacyScheduleRedirect } from '../features/schedule/utils';
 import { usePositionNames } from '../lib/positions';
 import { useFormat } from '../lib/format';
@@ -146,12 +147,15 @@ export function AppShell() {
   // The Office helper (serves, no section): the board and the menu editor are their own menu.
   const cafeHome = !!user && boardIsHome(can, visible.length, cafe?.enabled);
 
-  // Count badges. New casting applications: fetched only while the person is in the section that lists
+  // Count badges. New casting applications and new opportunities: fetched only while the person is in the section that lists
   // them. Cafeteria orders nobody has taken yet: with the poll, for whoever serves.
   const applicationBadge = section === 'casting' && can('talent.read');
   const applicationCounts = useApplicationCounts(applicationBadge);
+  const opportunityBadge = section === 'casting' && can('castings.read');
+  const opportunityCounts = useOpportunityCounts(opportunityBadge);
   const badgeOf = (item: MenuItem): number => {
     if (item.badge === 'newCastingApplications') return applicationBadge ? (applicationCounts.data?.new ?? 0) : 0;
+    if (item.badge === 'newOpportunities') return opportunityBadge ? (opportunityCounts.data?.new ?? 0) : 0;
     if (item.badge === 'cafeNewOrders') return cafeBadge(cafe);
     return 0;
   };
@@ -343,7 +347,7 @@ export function AppShell() {
 
       {/* ── Page ────────────────────────────────────────────────────── */}
       <main className={clsx('lg:ms-64', !showTabs && 'lg:pt-1')}>
-        <div className="mx-auto max-w-6xl px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-5 sm:px-6 sm:pt-6 lg:px-8 lg:pb-12 lg:pt-8">
+        <div data-app-main className="mx-auto max-w-6xl px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-5 sm:px-6 sm:pt-6 lg:px-8 lg:pb-12 lg:pt-8">
           <Suspense fallback={<PageLoader />}>
             <Outlet />
           </Suspense>

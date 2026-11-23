@@ -6,6 +6,7 @@ import { useNavigate, useParams } from 'react-router';
 import { ATTENDANCE_STATUSES, COURSE_COLORS, type AttendanceStatus, type CourseColor } from '@shared/enums';
 import type { StudentDetail } from '@shared/schemas/students';
 import {
+  AddButton,
   Avatar,
   Button,
   ButtonLink,
@@ -27,6 +28,7 @@ import { courseColor } from '@web/lib/colors';
 import { ageOn, fullName, useFormat } from '@web/lib/format';
 import { errorMessageKey } from '@web/lib/forms';
 import { useDeleteStudent, useStudent } from './api';
+import { EnrolModal } from './components/EnrolModal';
 import { BidiText } from '@web/components/ui';
 
 const isCourseColor = (c: string | null): c is CourseColor => !!c && (COURSE_COLORS as readonly string[]).includes(c);
@@ -64,6 +66,9 @@ function StudentView({ student: s, del }: { student: StudentDetail; del: ReturnT
   const toast = useToast();
   const navigate = useNavigate();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  // "+ Add to a workshop": enrolling needs courses.write (POST /api/courses/:id/enrollments).
+  const [enrolling, setEnrolling] = useState(false);
+  const canEnrol = can('courses.write');
 
   const name = fullName(s);
   const age = ageOn(s.dateOfBirth);
@@ -183,7 +188,7 @@ function StudentView({ student: s, del }: { student: StudentDetail; del: ReturnT
           </>
         )}
 
-        <Card title={t('detail.classes')} padded={false}>
+        <Card title={t('detail.classes')} padded={false} actions={canEnrol && <AddButton label={t('common:add.toWorkshop')} onClick={() => setEnrolling(true)} />}>
           {s.enrollments.length ? (
             <ul className="divide-y divide-line">
               {s.enrollments.map((e) => (
@@ -253,6 +258,7 @@ function StudentView({ student: s, del }: { student: StudentDetail; del: ReturnT
         </Card>
       </div>
 
+      <EnrolModal open={enrolling} onClose={() => setEnrolling(false)} student={s} />
       <ConfirmDialog
         open={confirmOpen}
         title={t('detail.deleteTitle', { name })}

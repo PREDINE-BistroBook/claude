@@ -1,10 +1,11 @@
 import clsx from 'clsx';
-import { Plus, SearchX, SlidersHorizontal, Star, X } from 'lucide-react';
+import { SearchX, SlidersHorizontal, Star, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 import { GENDERS, TALENT_STATUSES, type Gender, type TalentStatus } from '@shared/enums';
-import { Button, ButtonLink, EmptyState, ErrorState, PageHeader, PageLoader, SearchInput, Segmented } from '@web/components/ui';
+import { Button, EmptyState, ErrorState, PageHeader, PageLoader, SearchInput, Segmented } from '@web/components/ui';
+import { ScreenAddAction, ScreenEmptyAdd } from '@web/layout/ScreenAdd';
 import { useAuth } from '@web/lib/auth';
 import { useDebounced } from '@web/lib/hooks';
 import { useTalentList, type TalentFilters } from './api';
@@ -108,11 +109,6 @@ export default function TalentPage() {
   if (extra.language) chips.push({ key: 'language', label: t('list.chipLanguage', { value: extra.language }) });
   const searching = !!q || chips.length > 0;
 
-  const addButton = canWrite ? (
-    <ButtonLink to="/talent/new" variant="primary" icon={Plus}>
-      {t('addTalent')}
-    </ButtonLink>
-  ) : null;
 
   let body;
   if (list.isPending) body = <PageLoader />;
@@ -125,7 +121,7 @@ export default function TalentPage() {
         description={canWrite ? t('list.emptyHint') : t('list.emptyHintReadOnly')}
         action={
           <div className="flex flex-wrap justify-center gap-2">
-            {addButton}
+            <ScreenEmptyAdd screen="talent" />
             <Button onClick={() => setStatus('all')}>{t('list.showAllStatuses')}</Button>
           </div>
         }
@@ -168,7 +164,7 @@ export default function TalentPage() {
 
   return (
     <div>
-      <PageHeader title={t('title')} actions={addButton} />
+      <PageHeader title={t('title')} actions={<ScreenAddAction screen="talent" />} />
 
       <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex gap-2 md:w-full md:max-w-md">

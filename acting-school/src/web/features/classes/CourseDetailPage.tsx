@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import clsx from 'clsx';
-import { Check, ChevronRight, CircleAlert, Ellipsis, Pencil, Plus, Trash2, UserPlus, Users } from 'lucide-react';
+import { Check, ChevronRight, CircleAlert, Ellipsis, Pencil, Trash2, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
@@ -8,6 +8,7 @@ import { todayISO } from '@shared/dates';
 import type { EnrollmentStatus } from '@shared/enums';
 import type { ClassSession, CourseDetail, CourseEnrollment } from '@shared/schemas/courses';
 import {
+  AddButton,
   Avatar,
   Badge,
   Button,
@@ -15,6 +16,7 @@ import {
   Card,
   ConfirmDialog,
   DataLine,
+  EmptyAddAction,
   EmptyState,
   ErrorState,
   IconButton,
@@ -207,10 +209,8 @@ function StudentsTab({ course, canWrite }: { course: CourseDetail; canWrite: boo
   return (
     <div className="grid gap-4">
       {canWrite && course.enrollments.length > 0 && (
-        <div className="flex justify-end">
-          <Button icon={UserPlus} onClick={() => setAdding(true)}>
-            {t('students.add')}
-          </Button>
+        <div className="flex">
+          <AddButton label={t('common:add.student')} onClick={() => setAdding(true)} className="max-sm:w-full" />
         </div>
       )}
       {course.enrollments.length === 0 ? (
@@ -219,13 +219,7 @@ function StudentsTab({ course, canWrite }: { course: CourseDetail; canWrite: boo
             icon={Users}
             title={t('students.empty')}
             description={t('students.emptyHint')}
-            action={
-              canWrite && (
-                <Button variant="primary" icon={UserPlus} onClick={() => setAdding(true)}>
-                  {t('students.add')}
-                </Button>
-              )
-            }
+            action={canWrite && <EmptyAddAction onClick={() => setAdding(true)} />}
           />
         </div>
       ) : (
@@ -406,11 +400,7 @@ function SessionsTab({ course, canWrite }: { course: CourseDetail; canWrite: boo
             { value: 'past', label: `${t('sessions.past')} · ${past.length}` },
           ]}
         />
-        {canWrite && (
-          <Button icon={Plus} onClick={() => setAdding(true)}>
-            {t('sessions.add')}
-          </Button>
-        )}
+        {canWrite && <AddButton label={t('common:add.session')} onClick={() => setAdding(true)} className="max-sm:w-full" />}
       </div>
       {when === 'past' && missing > 0 && (
         <p className="flex items-center gap-2 text-sm text-warning">

@@ -1,15 +1,17 @@
-import { CalendarClock, Clapperboard, Mail, Pencil, Phone, Plus, Trash2 } from 'lucide-react';
+import { CalendarClock, Clapperboard, Mail, Pencil, Phone, Trash2 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router';
 import type { CastingDetail, CastingRole, Submission } from '@shared/schemas/castings';
 import {
+  AddButton,
   Badge,
   Button,
   ButtonLink,
   Card,
   ConfirmDialog,
   DescriptionList,
+  EmptyAddAction,
   EmptyState,
   ErrorState,
   PageHeader,
@@ -207,11 +209,7 @@ function CastingView({ casting: c, del }: { casting: CastingDetail; del: ReturnT
                 </span>
               )}
             </h2>
-            {canWrite && c.roles.length > 0 && (
-              <Button icon={Plus} onClick={() => setRoleForm({ roleId: null })}>
-                {t('roles.add')}
-              </Button>
-            )}
+            {canWrite && c.roles.length > 0 && <AddButton label={t('common:add.role')} onClick={() => setRoleForm({ roleId: null })} />}
           </div>
 
           {c.roles.length === 0 ? (
@@ -219,13 +217,7 @@ function CastingView({ casting: c, del }: { casting: CastingDetail; del: ReturnT
               icon={Clapperboard}
               title={t('roles.emptyTitle')}
               description={canWrite ? t('roles.emptyHint') : undefined}
-              action={
-                canWrite && (
-                  <Button variant="primary" icon={Plus} onClick={() => setRoleForm({ roleId: null })}>
-                    {t('roles.add')}
-                  </Button>
-                )
-              }
+              action={canWrite && <EmptyAddAction onClick={() => setRoleForm({ roleId: null })} />}
               className="rounded-2xl border border-dashed border-line-strong"
             />
           ) : (

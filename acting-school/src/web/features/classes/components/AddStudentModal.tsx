@@ -5,7 +5,8 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CourseDetail } from '@shared/schemas/courses';
 import type { StudentListItem } from '@shared/schemas/students';
-import { Avatar, Button, EmptyState, ErrorState, FormError, Modal, SearchInput, Spinner, StatusBadge, useToast } from '@web/components/ui';
+import { AddButton, Avatar, Button, EmptyState, ErrorState, FormError, Modal, SearchInput, Spinner, StatusBadge, useToast } from '@web/components/ui';
+import { useAuth } from '@web/lib/auth';
 import { api } from '@web/lib/api';
 import { fullName } from '@web/lib/format';
 import { useDebounced } from '@web/lib/hooks';
@@ -35,6 +36,9 @@ function AddStudentDialog({ onClose, course }: Props) {
   const [pendingId, setPendingId] = useState<number | null>(null);
   // Students added in this dialog, shown as enrolled before the class refetches.
   const [added, setAdded] = useState<Set<number>>(() => new Set());
+  // Someone not in the list yet: a new student, enrolled here once saved (students.write to create, courses.write to enrol).
+  const { can } = useAuth();
+  const canCreate = can('students.write');
 
   const byStudent = new Map(course.enrollments.map((e) => [e.studentId, e]));
   const enrolledIds = new Set(course.enrollments.filter((e) => e.status === 'enrolled').map((e) => e.studentId));
@@ -87,6 +91,7 @@ function AddStudentDialog({ onClose, course }: Props) {
     >
       <div className="grid gap-3">
         <SearchInput value={q} onChange={setQ} placeholder={t('students.searchPlaceholder')} autoFocus />
+        {canCreate && !full && <AddButton label={t('common:add.newStudent')} to={`/students/new?courseId=${course.id}`} className="w-full sm:w-auto sm:justify-self-start" testId="add-new-student" />}
         {full && (
           <div role="status" className="flex items-start gap-2 rounded-xl bg-warning-soft px-3.5 py-3 text-sm text-warning">
             <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
