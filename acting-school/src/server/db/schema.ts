@@ -552,9 +552,6 @@ export const siteWorkshops = sqliteTable('site_workshops', {
   titleAr: text('title_ar').notNull().default(''),
   descriptionEn: text('description_en').notNull().default(''),
   descriptionAr: text('description_ar').notNull().default(''),
-  /** Free text: "3,500 EGP" / "٣٥٠٠ جنيه". */
-  priceEn: text('price_en').notNull().default(''),
-  priceAr: text('price_ar').notNull().default(''),
   /** Public (served by /site/media) while the workshop appears on the site. */
   coverFileId: text('cover_file_id').references(() => files.id, { onDelete: 'set null' }),
   acceptingApplications: integer('accepting_applications', { mode: 'boolean' }).notNull().default(true),

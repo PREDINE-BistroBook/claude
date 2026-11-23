@@ -281,11 +281,16 @@ describe('/api/site/workshops', () => {
       schedule: [{ weekday: 2, startTime: '18:00', endTime: '20:00' }],
     });
 
-    const put = await director.put<SiteWorkshop>(`/api/site/workshops/${upcoming.id}`, { visible: true, priceEn: '3,500 EGP', priceAr: '٣٥٠٠ جنيه', titleAr: 'الصوت' });
+    const put = await director.put<SiteWorkshop>(`/api/site/workshops/${upcoming.id}`, { visible: true, descriptionEn: 'Breath and voice', titleAr: 'الصوت' });
     expect(put.status).toBe(200);
-    expect(put.body).toMatchObject({ saved: true, visible: true, onSite: true, priceEn: '3,500 EGP', titleAr: 'الصوت', acceptingApplications: true });
+    expect(put.body).toMatchObject({ saved: true, visible: true, onSite: true, descriptionEn: 'Breath and voice', titleAr: 'الصوت', acceptingApplications: true });
     const second = await director.put<SiteWorkshop>(`/api/site/workshops/${upcoming.id}`, { acceptingApplications: false });
-    expect(second.body).toMatchObject({ visible: true, priceEn: '3,500 EGP', acceptingApplications: false });
+    expect(second.body).toMatchObject({ visible: true, descriptionEn: 'Breath and voice', acceptingApplications: false });
+    // No prices anywhere (the school's decision): a price sent anyway is neither stored nor answered.
+    const priced = await director.put<SiteWorkshop>(`/api/site/workshops/${upcoming.id}`, { priceEn: '3,500 EGP', priceAr: '٣٥٠٠ جنيه' });
+    expect(priced.status).toBe(200);
+    expect(Object.keys(priced.body).filter((k) => /price/i.test(k))).toEqual([]);
+    expect(Object.keys(t.db.select().from(siteWorkshops).where(eq(siteWorkshops.courseId, upcoming.id)).get()!).filter((k) => /price/i.test(k))).toEqual([]);
     expect((await director.get<SiteWorkshop>(`/api/site/workshops/${upcoming.id}`)).body.acceptingApplications).toBe(false);
     // Saved rows come first in the list.
     expect((await director.get<{ items: SiteWorkshop[] }>('/api/site/workshops')).body.items[0]!.courseId).toBe(upcoming.id);
@@ -512,7 +517,10 @@ describe('POST /api/admin/seed-demo-website', () => {
     expect(site.links).toHaveLength(3);
     expect(siteContent.safeParse(site).success).toBe(true);
     expect(t.db.select().from(siteCoaches).where(eq(siteCoaches.userId, layla.id)).all()).toHaveLength(1);
-    expect(findPublicWorkshop(t.db, screen.id, todayISO())).toMatchObject({ price: { en: '3,500 EGP', ar: '٣٥٠٠ جنيه' }, coach: { en: 'Layla Haddad', ar: 'ليلى حداد' } });
+    const screenOnSite = findPublicWorkshop(t.db, screen.id, todayISO())!;
+    expect(screenOnSite).toMatchObject({ title: { en: 'Screen Acting I', ar: 'التمثيل أمام الكاميرا ١' }, coach: { en: 'Layla Haddad', ar: 'ليلى حداد' }, acceptingApplications: true });
+    // No prices in the demo either.
+    expect(Object.keys(screenOnSite).filter((k) => /price/i.test(k))).toEqual([]);
 
     const director = await t.as('executive_director');
     const apps = (await director.get('/api/casting-applications')).body.items;

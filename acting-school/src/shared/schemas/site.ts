@@ -13,10 +13,13 @@ import { dateStr, id, optEmail, optFileId, optId, optPhoneText, optText, reqPhon
  *   one JSON object, `SiteContent`, stored in the settings table under the key
  *   'site' (src/server/lib/siteContent.ts). A missing key means DEFAULT_SITE_CONTENT.
  * - Coaches shown on the site: site_coaches (API /api/site/coaches).
- * - Which workshops (courses) the site shows, with public title/description/price:
- *   site_workshops, one row per course (API /api/site/workshops). A workshop
+ * - Which workshops (courses) the site shows, with a public title, description
+ *   and cover: site_workshops, one row per course (API /api/site/workshops). A workshop
  *   appears on the site only when visible, its course is active and its end
  *   date is on or after the school's today.
+ * - No prices anywhere (the school's decision, 2026-11-23): not in the data,
+ *   the staff screens or the public pages, which offer "Ask about fees on
+ *   WhatsApp" (the workshops WhatsApp, a message naming the workshop) instead.
  *
  * Every bilingual text is `{ en, ar }`; either may be empty (the site then
  * shows the other language, or leaves the block out).
@@ -256,9 +259,6 @@ export const siteWorkshopInput = z
     titleAr: biText(120),
     descriptionEn: biText(4000),
     descriptionAr: biText(4000),
-    /** Free text such as "3,500 EGP" / "٣٥٠٠ جنيه". */
-    priceEn: biText(80),
-    priceAr: biText(80),
     /** An uploaded image; public on the site while the workshop appears there. */
     coverFileId: optFileId,
     /** Show the apply form on the workshop's page. */
@@ -291,8 +291,6 @@ export interface SiteWorkshop {
   titleAr: string;
   descriptionEn: string;
   descriptionAr: string;
-  priceEn: string;
-  priceAr: string;
   coverFileId: string | null;
   acceptingApplications: boolean;
   sortOrder: number;

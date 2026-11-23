@@ -232,8 +232,6 @@ function toSiteWorkshop(course: CourseListItem, row: WorkshopRow | undefined, to
     titleAr: row?.titleAr ?? '',
     descriptionEn: row?.descriptionEn ?? '',
     descriptionAr: row?.descriptionAr ?? '',
-    priceEn: row?.priceEn ?? '',
-    priceAr: row?.priceAr ?? '',
     coverFileId: row?.coverFileId ?? null,
     acceptingApplications: row?.acceptingApplications ?? true,
     sortOrder: row?.sortOrder ?? 0,

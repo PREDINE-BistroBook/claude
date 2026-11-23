@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "a0e89c94-fdea-452e-96ee-cc76ddd81ac4",
+  "id": "12fb6802-652c-4589-883b-5309383a3d90",
   "prevId": "ae62e15b-72e4-42d3-8b58-23cf5001c597",
   "tables": {
     "attendance": {
@@ -2274,22 +2274,6 @@
         },
         "description_ar": {
           "name": "description_ar",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "''"
-        },
-        "price_en": {
-          "name": "price_en",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "''"
-        },
-        "price_ar": {
-          "name": "price_ar",
           "type": "text",
           "primaryKey": false,
           "notNull": true,

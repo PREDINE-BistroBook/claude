@@ -1093,14 +1093,12 @@ export interface SeedDemoWebsiteOptions {
 /** The demo workshops' public texts, by course name (the demo school's courses). */
 const DEMO_WORKSHOP_TEXTS: Record<
   string,
-  { titleAr: string; descriptionEn: string; descriptionAr: string; priceEn: string; priceAr: string; visible: boolean; accepting: boolean }
+  { titleAr: string; descriptionEn: string; descriptionAr: string; visible: boolean; accepting: boolean }
 > = {
   'Screen Acting I': {
     titleAr: 'التمثيل أمام الكاميرا ١',
     descriptionEn: 'Acting for the camera from the first day: eyelines, continuity and playing small.\n\nEvery student leaves with two filmed scenes for their showreel.',
     descriptionAr: 'التمثيل أمام الكاميرا من أول يوم: اتجاه النظر، والراكور، والأداء الهادئ.\n\nكل طالب يخرج بمشهدين مصوَّرين لملف أعماله.',
-    priceEn: '3,500 EGP',
-    priceAr: '٣٥٠٠ جنيه',
     visible: true,
     accepting: true,
   },
@@ -1108,8 +1106,6 @@ const DEMO_WORKSHOP_TEXTS: Record<
     titleAr: 'دراما الأطفال (٨–١٢)',
     descriptionEn: 'Games, storytelling and a short play at the end of the term. Parents are welcome at the last session.',
     descriptionAr: 'ألعاب وحكايات ومسرحية قصيرة في نهاية الدورة. أولياء الأمور مدعوون لحضور الحصة الأخيرة.',
-    priceEn: '2,400 EGP',
-    priceAr: '٢٤٠٠ جنيه',
     visible: true,
     accepting: true,
   },
@@ -1117,8 +1113,6 @@ const DEMO_WORKSHOP_TEXTS: Record<
     titleAr: 'الصوت والإلقاء',
     descriptionEn: 'Breath, resonance, clear speech and projection, with texts in Arabic and English.',
     descriptionAr: 'التنفس والرنين ووضوح النطق وقوة الصوت، بنصوص عربية وإنجليزية.',
-    priceEn: '2,800 EGP',
-    priceAr: '٢٨٠٠ جنيه',
     visible: true,
     // Nearly full: shown, without the apply form.
     accepting: false,
@@ -1127,8 +1121,6 @@ const DEMO_WORKSHOP_TEXTS: Record<
     titleAr: 'معمل الارتجال',
     descriptionEn: 'Short and long improvisation: saying "yes, and", playing status, and building scenes from nothing.',
     descriptionAr: 'ارتجال قصير وطويل: قول «نعم، و»، ولعب المكانة، وبناء المشاهد من لا شيء.',
-    priceEn: '2,600 EGP',
-    priceAr: '٢٦٠٠ جنيه',
     visible: true,
     accepting: true,
   },
@@ -1136,8 +1128,6 @@ const DEMO_WORKSHOP_TEXTS: Record<
     titleAr: 'تقنيات تجارب الأداء',
     descriptionEn: 'Self-tapes, cold reads and choosing monologues, for students getting ready for castings.',
     descriptionAr: 'التسجيل الذاتي والقراءة الأولى واختيار المونولوج، للطلاب المستعدين لتجارب الأداء.',
-    priceEn: '3,000 EGP',
-    priceAr: '٣٠٠٠ جنيه',
     // Prepared, not shown yet.
     visible: false,
     accepting: true,
@@ -1148,7 +1138,7 @@ const DEMO_WORKSHOP_TEXTS: Record<
  * The website part of the demo: studio texts and contact lines (the studio's
  * real public WhatsApp lines from its Instagram; the rest invented and meant to
  * be edited), coach profiles for the demo coach accounts, the demo workshops
- * shown with prices, an open casting call, three custom links, four casting
+ * shown (no prices: the school's decision), an open casting call, three custom links, four casting
  * applications with generated portraits (one a minor with guardian consent) and
  * two website enquiries. Written straight to the database with the same
  * library functions the API and the public forms use. Only adds rows: the
@@ -1301,8 +1291,6 @@ export async function seedDemoWebsite(opts: SeedDemoWebsiteOptions): Promise<See
         titleAr: t?.titleAr ?? '',
         descriptionEn: t?.descriptionEn ?? '',
         descriptionAr: t?.descriptionAr ?? '',
-        priceEn: t?.priceEn ?? '',
-        priceAr: t?.priceAr ?? '',
         acceptingApplications: t?.accepting ?? true,
         sortOrder: i,
       })

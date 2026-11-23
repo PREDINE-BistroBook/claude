@@ -74,8 +74,6 @@ CREATE TABLE `site_workshops` (
 	`title_ar` text DEFAULT '' NOT NULL,
 	`description_en` text DEFAULT '' NOT NULL,
 	`description_ar` text DEFAULT '' NOT NULL,
-	`price_en` text DEFAULT '' NOT NULL,
-	`price_ar` text DEFAULT '' NOT NULL,
 	`cover_file_id` text,
 	`accepting_applications` integer DEFAULT true NOT NULL,
 	`sort_order` integer DEFAULT 0 NOT NULL,

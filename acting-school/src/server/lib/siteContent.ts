@@ -131,7 +131,6 @@ export interface PublicWorkshop {
   courseId: number;
   title: Bilingual;
   description: Bilingual;
-  price: Bilingual;
   coverFileId: string | null;
   acceptingApplications: boolean;
   level: CourseLevel | null;
@@ -189,7 +188,6 @@ export function loadPublicWorkshops(db: DB, today: string, courseId?: number): P
       // An empty title means the course name (in that language too).
       title: { en: r.titleEn.trim() || c.name, ar: r.titleAr.trim() || c.name },
       description: fillBilingual({ en: r.descriptionEn, ar: r.descriptionAr }),
-      price: fillBilingual({ en: r.priceEn, ar: r.priceAr }),
       coverFileId: r.coverFileId,
       acceptingApplications: r.acceptingApplications,
       level: c.level,
