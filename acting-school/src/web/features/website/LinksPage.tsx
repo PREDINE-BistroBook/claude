@@ -146,7 +146,7 @@ function CustomLinks({ links }: { links: SiteLink[] }) {
     saveLinks((current) => {
       const i = current.findIndex((l) => l.id === link.id);
       return i < 0 ? current : moveItem(current, i, delta);
-    });
+    }, t('move.saved'));
 
   const full = links.length >= MAX_SITE_LINKS;
   const add = (
@@ -191,9 +191,9 @@ function CustomLinks({ links }: { links: SiteLink[] }) {
                       }
                     />
                   </div>
-                  <div className="grid gap-2 sm:flex sm:flex-wrap sm:items-center">
+                  <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center [&>*]:min-w-0">
                     <MoveButtons name={label} index={i} count={links.length} onMove={(d) => move(l, d)} disabled={update.isPending} />
-                    <div className="grid grid-cols-2 gap-2 sm:ms-auto sm:flex">
+                    <div className="grid grid-cols-2 gap-2 sm:ms-auto sm:flex [&>*]:min-w-0">
                       <Button size="lg" icon={Pencil} onClick={() => setEditing(l)}>
                         {t('common:actions.edit')}
                         <span className="sr-only">: {label}</span>

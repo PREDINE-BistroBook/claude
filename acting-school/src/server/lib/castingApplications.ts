@@ -16,11 +16,12 @@ import {
   type CastingApplicationListItem,
 } from '../../shared/schemas/castingApplications';
 import type { SessionUser } from '../../shared/schemas/auth';
+import type { ApiIssue } from '../../shared/schemas/common';
 import { CASTING_PHOTO_MAX_BYTES, CASTING_PHOTOS_MAX, isMinor, normalizeInstagramHandle } from '../../shared/schemas/site';
 import type { DB } from '../db/database';
 import { castingApplicationPhotos, castingApplications, files, talent, talentPhotos, users } from '../db/schema';
 import { hasPermission, redactContact, type Conn } from './access';
-import { ApiError, fieldError, notFound } from './errors';
+import { ApiError, notFound } from './errors';
 import { deleteStoredFiles, takeUnusedFiles } from './fileRefs';
 import type { FileStore } from './fileStore';
 import { sniffImage } from './images';
@@ -32,10 +33,55 @@ export type CastingApplicationRow = typeof castingApplications.$inferSelect;
 
 // ── Creating (the public form) ──────────────────────────────────────────────
 
-/** One photo as received from the form: its bytes (and the file name the browser gave, if any). */
-export interface CastingPhotoUpload {
-  data: Uint8Array;
-  name?: string | null;
+/**
+ * One photo as received from the form: its bytes — or the form's own File /
+ * Blob, read only when it is stored, so a request never holds every photo
+ * twice — and the file name the browser gave, if any.
+ */
+export type CastingPhotoUpload = { name?: string | null } & ({ data: Uint8Array; blob?: undefined } | { blob: Blob; data?: undefined });
+
+const photoSize = (p: CastingPhotoUpload) => (p.data ? p.data.byteLength : p.blob.size);
+/** The first bytes (enough for sniffImage). */
+const photoHead = async (p: CastingPhotoUpload) => (p.data ? p.data.subarray(0, 16) : new Uint8Array(await p.blob.slice(0, 16).arrayBuffer()));
+const photoBytes = async (p: CastingPhotoUpload) => p.data ?? new Uint8Array(await p.blob.arrayBuffer());
+
+interface CheckedPhoto {
+  id: string;
+  storageKey: string;
+  mime: string;
+  size: number;
+  name: string | null;
+  source: CastingPhotoUpload;
+}
+
+/**
+ * Every problem with the photos of one application, as field issues on
+ * `photos` (none, too many) or `photos.<i>` (over 6 MB, not a real
+ * JPEG/PNG/WebP by its first bytes) — and what would be stored when there is
+ * none. The public form calls it before answering, so one round trip reports
+ * the photos' problems together with the other fields'.
+ */
+export async function checkCastingPhotos(photos: readonly CastingPhotoUpload[]): Promise<{ issues: ApiIssue[]; checked: CheckedPhoto[] }> {
+  const issue = (path: (string | number)[], message: string): ApiIssue => ({ path, code: 'custom', message });
+  if (!photos.length) return { issues: [issue(['photos'], 'site:errors.photoRequired')], checked: [] };
+  if (photos.length > CASTING_PHOTOS_MAX) return { issues: [issue(['photos'], 'site:errors.tooManyPhotos')], checked: [] };
+  const issues: ApiIssue[] = [];
+  const checked: CheckedPhoto[] = [];
+  for (const [i, p] of photos.entries()) {
+    const size = photoSize(p);
+    if (size > CASTING_PHOTO_MAX_BYTES) {
+      issues.push(issue(['photos', i], 'site:errors.photoTooLarge'));
+      continue;
+    }
+    const kind = size ? sniffImage(await photoHead(p)) : null;
+    if (!kind) {
+      issues.push(issue(['photos', i], 'site:errors.photoType'));
+      continue;
+    }
+    const id = randomUUID();
+    checked.push({ id, storageKey: `${id}.${kind.ext}`, mime: kind.mime, size, name: p.name?.slice(0, 200) || null, source: p });
+  }
+  return { issues, checked };
 }
 
 /**
@@ -48,32 +94,30 @@ export interface CastingPhotoUpload {
  * call is closed (the route should answer its 410 page before parsing at all);
  * a 400 field error on `photos` ('site:errors.photoRequired' / 'site:errors.tooManyPhotos')
  * or on `photos.<i>` ('site:errors.photoTooLarge' / 'site:errors.photoType').
- * The photos are written to the FileStore first (async), then every row in one
- * transaction; if that fails, the stored photos are deleted again.
+ * `opts.beforeStore(bytes)` runs once everything is checked and immediately
+ * before the first photo is written, with the total size of the photos about
+ * to be kept: the public form counts its limits there (and throws to refuse).
+ * The photos are written to the FileStore first (async, one at a time), then
+ * every row in one transaction; if that fails, the stored photos are deleted again.
  */
 export async function createCastingApplication(
   db: DB,
   fileStore: FileStore,
   input: CastingApplicationInput,
   photos: readonly CastingPhotoUpload[],
+  opts: { beforeStore?: (photoBytes: number) => void } = {},
 ): Promise<{ id: number }> {
   if (!getSiteContent(db).castingCall.open) {
     throw new ApiError(409, CASTING_APPLICATION_ERROR_CODES.castingCallClosed, 'There is no open casting call');
   }
-  if (!photos.length) throw fieldError(['photos'], 'site:errors.photoRequired');
-  if (photos.length > CASTING_PHOTOS_MAX) throw fieldError(['photos'], 'site:errors.tooManyPhotos');
-  const checked = photos.map((p, i) => {
-    if (p.data.byteLength > CASTING_PHOTO_MAX_BYTES) throw fieldError(['photos', i], 'site:errors.photoTooLarge');
-    const kind = p.data.byteLength ? sniffImage(p.data) : null;
-    if (!kind) throw fieldError(['photos', i], 'site:errors.photoType');
-    const id = randomUUID();
-    return { id, storageKey: `${id}.${kind.ext}`, mime: kind.mime, size: p.data.byteLength, data: p.data, name: p.name?.slice(0, 200) || null };
-  });
+  const { issues, checked } = await checkCastingPhotos(photos);
+  if (issues.length) throw new ApiError(400, 'validation', 'Some fields are missing or invalid', issues);
+  opts.beforeStore?.(checked.reduce((n, p) => n + p.size, 0));
 
   const stored: string[] = [];
   try {
     for (const p of checked) {
-      await fileStore.put(p.storageKey, p.data, p.mime);
+      await fileStore.put(p.storageKey, await photoBytes(p.source), p.mime);
       stored.push(p.storageKey);
     }
     const id = db.transaction((tx) => {
@@ -233,14 +277,27 @@ export function applicationCounts(db: Pick<DB, 'select'>): Record<CastingApplica
 
 const isInstagramLink = (url: string) => /^https:\/\/(www\.)?instagram\.com\//i.test(url);
 
-/** The talent's notes: what the application had that talent has no field for. */
+/**
+ * Accepted, with its talent profile still there: nothing about it can change
+ * any more. An accepted application whose profile was deleted (talent_id set
+ * null by the foreign key) is open again — it can be added once more, marked
+ * reviewing or declined — instead of being stuck with Delete as its only way out.
+ */
+export const isOnRoster = (r: Pick<CastingApplicationRow, 'status' | 'talentId'>) => r.status === 'accepted' && r.talentId !== null;
+
+/**
+ * The talent's notes: what the application had that talent has no field for.
+ * Never the guardian's phone or the raw links: on the application those are
+ * contact fields (talent.contact), while a talent's notes are read by everyone
+ * with talent.read. They stay on the application, linked through talent_id.
+ */
 function talentNotes(r: CastingApplicationRow, today: string): string {
   const lines = [`From a website casting application (${today}).`];
   if (r.experience) lines.push('', `Experience: ${r.experience}`);
   if (r.message) lines.push('', `Message: ${r.message}`);
-  if (r.links?.length) lines.push('', 'Links:', ...r.links);
   if (r.guardianName || r.guardianPhone) {
-    lines.push('', `Guardian: ${[r.guardianName, r.guardianPhone].filter(Boolean).join(', ')}${r.guardianConsent ? ' (consent given)' : ''}`);
+    const consent = r.guardianConsent ? ' (consent given)' : '';
+    lines.push('', r.guardianName ? `Guardian: ${r.guardianName}${consent}. Their phone number is on the casting application.` : `Guardian${consent}: their phone number is on the casting application.`);
   }
   return lines.join('\n').slice(0, 5000);
 }
@@ -249,13 +306,16 @@ function talentNotes(r: CastingApplicationRow, today: string): string {
  * "Add to roster", in the caller's transaction: create the talent profile from
  * the application (names, gender, date of birth, phone, email, city, height,
  * languages, skills; an Instagram link → instagram, the first other link →
- * showreel; the rest in the notes), attach the same photo files (the first is
- * the headshot), then mark the application accepted by `reviewerId`. 409
- * application_accepted when it already was. Returns the talent id.
+ * showreel; experience, message and the guardian's name in the notes — not the
+ * guardian's phone or the other links, which stay on the application), attach
+ * the same photo files (the first is the headshot), then mark the application
+ * accepted by `reviewerId`. 409 application_accepted when it already has a
+ * talent profile (isOnRoster); one whose profile was deleted since can be
+ * added again. Returns the talent id.
  */
 export function acceptApplication(tx: Conn, id: number, reviewerId: number, today: string): number {
   const r = findApplication(tx, id);
-  if (r.status === 'accepted') throw new ApiError(409, CASTING_APPLICATION_ERROR_CODES.alreadyAccepted, 'This application is already on the roster');
+  if (isOnRoster(r)) throw new ApiError(409, CASTING_APPLICATION_ERROR_CODES.alreadyAccepted, 'This application is already on the roster');
   const photos = tx
     .select({ fileId: castingApplicationPhotos.fileId })
     .from(castingApplicationPhotos)
@@ -307,10 +367,12 @@ export function acceptApplication(tx: Conn, id: number, reviewerId: number, toda
 /**
  * Delete an application and the files of its photos that nothing else uses
  * (files already linked to a talent profile — an accepted application's — are
- * kept). "Used" is lib/fileRefs.ts's one list of places (FILE_REFERENCES and
- * the site's main photo), the same check every other delete goes through.
- * Rows in one transaction, then the bytes from the FileStore (a failed delete
- * there only leaves an orphan, never a dangling row). 404 when missing.
+ * kept; they go when that profile or photo is deleted, so whichever of the two
+ * is deleted last takes the photos with it). "Used" is lib/fileRefs.ts's one
+ * list of places (FILE_REFERENCES and the site's main photo), the same check
+ * every other delete goes through. Rows in one transaction, then the bytes
+ * from the FileStore (a failed delete there only leaves an orphan, never a
+ * dangling row). 404 when missing.
  */
 export async function deleteApplication(db: DB, fileStore: FileStore, id: number): Promise<{ deletedFiles: number }> {
   const keys = db.transaction((tx) => {

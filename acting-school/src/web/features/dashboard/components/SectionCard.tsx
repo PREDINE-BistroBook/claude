@@ -29,7 +29,7 @@ export function SectionCard({
         viewAll && (
           <Link
             to={viewAll}
-            className="-my-2 -me-2 inline-flex min-h-10 items-center gap-1 rounded-lg px-2 text-sm font-medium text-accent hover:bg-accent-soft"
+            className="-my-3 -me-2 inline-flex min-h-12 items-center gap-1 rounded-lg px-2 text-sm font-medium text-accent hover:bg-accent-soft"
           >
             {t('common:actions.viewAll')}
             <ChevronRight className="size-4 rtl:-scale-x-100" aria-hidden />

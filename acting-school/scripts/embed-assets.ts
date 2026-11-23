@@ -9,6 +9,9 @@
  * answer alike. Also checks that wrangler.embedded.jsonc matches
  * wrangler.jsonc in everything but `main` and `assets`, so the two can't
  * drift apart (both deploy the same Worker and the same Durable Object).
+ * Refuses, with the reason, anything it can't serve like the real asset
+ * server: a _redirects file, or _headers rules beyond exact paths and a
+ * trailing * (parseHeadersText, unsupportedAssetConfig).
  */
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
@@ -83,28 +86,56 @@ interface Rule {
   headers: [string, string][];
 }
 
-/** The subset of the _headers format this app uses: a path line, then indented "Name: value" lines. */
-function parseHeaders(file: string): Rule[] {
-  if (!fs.existsSync(file)) return [];
+/**
+ * The subset of the _headers format this app uses: a path line, then indented
+ * "Name: value" lines. Everything else the real asset server understands —
+ * placeholders (/blog/:slug), a * that isn't at the end, absolute URLs,
+ * "! Name" lines that remove a header — is refused with an error rather than
+ * quietly served differently from the real deploy.
+ */
+export function parseHeadersText(text: string): Rule[] {
   const rules: Rule[] = [];
-  for (const raw of fs.readFileSync(file, 'utf8').split('\n')) {
+  for (const raw of text.split('\n')) {
     if (!raw.trim() || raw.trim().startsWith('#')) continue;
     if (!/^\s/.test(raw)) {
       rules.push({ pattern: raw.trim(), headers: [] });
       continue;
     }
     const rule = rules.at(-1);
-    const colon = raw.indexOf(':');
-    if (!rule || colon < 0) fail(`can't read this line of _headers: ${raw}`);
-    rule.headers.push([raw.slice(0, colon).trim(), raw.slice(colon + 1).trim()]);
+    const line = raw.trim();
+    const colon = line.indexOf(':');
+    if (!rule || colon < 1) throw new Error(`can't read this line of _headers: ${raw}`);
+    if (line.startsWith('!')) throw new Error(`_headers line "${line}" removes a header, which this script doesn't emulate`);
+    rule.headers.push([line.slice(0, colon).trim(), line.slice(colon + 1).trim()]);
   }
   for (const rule of rules) {
     const star = rule.pattern.indexOf('*');
-    if (!rule.pattern.startsWith('/') || (star >= 0 && star !== rule.pattern.length - 1)) {
-      fail(`_headers rule "${rule.pattern}" uses a pattern this script doesn't handle (only exact paths and a trailing *)`);
+    if (!rule.pattern.startsWith('/') || rule.pattern.startsWith('//') || (star >= 0 && star !== rule.pattern.length - 1) || /\/:|\s/.test(rule.pattern)) {
+      throw new Error(`_headers rule "${rule.pattern}" uses a pattern this script doesn't handle (only exact paths and a trailing *)`);
     }
   }
   return rules;
+}
+
+/**
+ * What in the built folder the embedded Worker can't reproduce: a _redirects
+ * file (the real asset server would apply it; this one has no redirect rules).
+ * Returns the reason, or null when the folder is fine.
+ */
+export function unsupportedAssetConfig(webDir: string): string | null {
+  if (fs.existsSync(path.join(webDir, '_redirects'))) {
+    return 'dist/web/_redirects exists: the embedded Worker does not emulate redirect rules. Remove it (or teach src/worker/embeddedAssets.ts to apply it) before deploying this way.';
+  }
+  return null;
+}
+
+function parseHeaders(file: string): Rule[] {
+  if (!fs.existsSync(file)) return [];
+  try {
+    return parseHeadersText(fs.readFileSync(file, 'utf8'));
+  } catch (err) {
+    fail((err as Error).message);
+  }
 }
 
 function matches(pattern: string, urlPath: string): boolean {
@@ -118,8 +149,11 @@ function walk(dir: string): string[] {
   });
 }
 
+function main(): void {
 if (!fs.existsSync(path.join(WEB, 'index.html'))) fail('dist/web/index.html is missing — run `npm run build` first.');
 checkConfigsMatch();
+const unsupported = unsupportedAssetConfig(WEB);
+if (unsupported) fail(unsupported);
 
 const rules = parseHeaders(path.join(WEB, '_headers'));
 const files: Record<string, { b64: string; etag: string; headers: Record<string, string> }> = {};
@@ -155,3 +189,7 @@ export default createEmbeddedWorker(FILES);
 `;
 fs.writeFileSync(path.join(OUT_DIR, 'entry.ts'), entry);
 console.log(`embed-assets: ${Object.keys(files).length} files (${(total / 1024).toFixed(0)} KiB) → dist/cf-embedded/entry.ts`);
+}
+
+// Run as a script (not when a test imports the helpers above).
+if (process.argv[1] && import.meta.url.endsWith(path.basename(process.argv[1]))) main();

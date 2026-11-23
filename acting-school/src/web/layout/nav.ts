@@ -16,7 +16,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { Permission } from '@shared/permissions';
-import { sectionByKey, type SectionKey } from './sections';
+import { sectionByKey, sectionForPath, visibleSections, type SectionKey } from './sections';
 
 export type NavSection = SectionKey | 'admin';
 
@@ -112,6 +112,28 @@ export function teamMenuHint(can: (p: Permission) => boolean): 'teamHint' | 'tea
 export function navItemActive(item: Pick<NavItem, 'to' | 'end'>, pathname: string): boolean {
   if (item.end || item.to === '/') return pathname === item.to;
   return pathname === item.to || pathname.startsWith(`${item.to}/`);
+}
+
+/**
+ * Where someone lands after signing in, given the page the previous screen
+ * was on (`next`, from /login?next=…). On a shared phone or computer that page
+ * was often someone else's: when it is in a section this person doesn't see,
+ * or is a menu page (or a team member's account page) their positions don't
+ * open, they go to "/" (their own start) instead of a "No access" screen as
+ * the first thing after a correct sign-in. Anything else — a deep link they
+ * can open, the profile, the Team page, messages — is kept.
+ */
+export function landingAfterSignIn(next: string, can: (p: Permission) => boolean): string {
+  const pathname = (next.split(/[?#]/)[0] ?? '').replace(/\/+$/, '') || '/';
+  const section = sectionForPath(pathname);
+  if (section && !visibleSections(can).some((s) => s.key === section)) return '/';
+  // The page's own menu entry (the longest match: /casting/applications before /casting).
+  const item = NAV_ITEMS.filter((i) => pathname === i.to || pathname.startsWith(`${i.to}/`)).sort((a, b) => b.to.length - a.to.length)[0];
+  if (item && !navItemOpen(item, can)) return '/';
+  // A team member's account page (/staff/new, /staff/:id) is the Team page's management side: staff.manage.
+  // The Team page itself (/team, and /staff, which forwards to it) is everyone's.
+  if (pathname.startsWith('/staff/') && !can('staff.manage')) return '/';
+  return next;
 }
 
 /** Bottom-bar priorities per section, before filtering by permission. */

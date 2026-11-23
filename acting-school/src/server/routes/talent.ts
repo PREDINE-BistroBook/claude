@@ -21,6 +21,7 @@ import type { SessionUser } from '../../shared/schemas/auth';
 import { schoolToday } from '../lib/clock';
 import { hasPermission, maySeeStudent, redactContact, withoutContact } from '../lib/access';
 import { ApiError, conflict, notFound } from '../lib/errors';
+import { deleteStoredFiles, takeUnusedFiles } from '../lib/fileRefs';
 import { IMAGE_MIME_TYPES } from '../lib/images';
 import { contains } from '../lib/sqlLimits';
 import { body, paramId, query } from '../lib/validate';
@@ -390,11 +391,22 @@ router.patch('/:id', canWrite, async (c) => {
 
 // ── Delete ──────────────────────────────────────────────────────────────────
 
-router.delete('/:id', canWrite, (c) => {
+router.delete('/:id', canWrite, async (c) => {
   const id = paramId(c);
-  // Photos and submissions cascade. Image files stay: a student may share them.
-  const deleted = c.get('db').delete(talent).where(eq(talent.id, id)).returning({ id: talent.id }).get();
-  if (!deleted) throw notFound('Talent not found');
+  // Photos and submissions cascade. Their image files go too, unless something else still uses
+  // them (a student's photo, a casting application, the website, a chat…): the one check in
+  // lib/fileRefs.ts (FILE_REFERENCES), asked after this profile's own rows are gone.
+  const keys = c.get('db').transaction((tx) => {
+    const row = tx.select({ headshotFileId: talent.headshotFileId }).from(talent).where(eq(talent.id, id)).get();
+    if (!row) throw notFound('Talent not found');
+    const fileIds = tx.select({ fileId: talentPhotos.fileId }).from(talentPhotos).where(eq(talentPhotos.talentId, id)).all().map((p) => p.fileId);
+    if (row.headshotFileId) fileIds.push(row.headshotFileId);
+    // The profile's own photo rows go first (as the cascade would), so what still points at a file after that is somebody else.
+    tx.delete(talentPhotos).where(eq(talentPhotos.talentId, id)).run();
+    tx.delete(talent).where(eq(talent.id, id)).run();
+    return takeUnusedFiles(tx, fileIds);
+  });
+  await deleteStoredFiles(c.get('files'), keys);
   return c.body(null, 204);
 });
 
@@ -458,12 +470,12 @@ router.patch('/:id/photos/:photoId', canWrite, async (c) => {
   return c.json(toPhoto(updated!));
 });
 
-router.delete('/:id/photos/:photoId', canWrite, (c) => {
+router.delete('/:id/photos/:photoId', canWrite, async (c) => {
   const id = paramId(c);
   const photoId = paramId(c, 'photoId');
   const db = c.get('db');
 
-  db.transaction((tx) => {
+  const keys = db.transaction((tx) => {
     const t = tx.select({ headshotFileId: talent.headshotFileId }).from(talent).where(eq(talent.id, id)).get();
     if (!t) throw notFound('Talent not found');
     const photo = findPhoto(tx, id, photoId);
@@ -478,7 +490,10 @@ router.delete('/:id/photos/:photoId', canWrite, (c) => {
         .get();
       tx.update(talent).set({ headshotFileId: next?.fileId ?? null }).where(eq(talent.id, id)).run();
     }
+    // The image file goes with its last user (lib/fileRefs.ts).
+    return takeUnusedFiles(tx, [photo.fileId]);
   });
+  await deleteStoredFiles(c.get('files'), keys);
   return c.body(null, 204);
 });
 

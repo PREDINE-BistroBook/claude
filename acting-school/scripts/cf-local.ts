@@ -57,34 +57,36 @@ export function ensureWebBuild(force = false) {
   if (r.status !== 0) throw new Error('vite build failed');
 }
 
-/**
- * The arguments of every local `wrangler dev` here.
- *
- * --infer-origin-from-routes=false: both wrangler configs have "routes" (the
- * studio's custom domains), and by default `wrangler dev` then tells the
- * Worker that every request came to the FIRST route's host over https
- * (request.url and the Host header say team.turquoisestudio.app). The Worker
- * routes by host, so that would hide the public website's hosts and the old
- * staff address from local runs, and the public forms' Origin check (Origin
- * must be the host the Worker sees) would refuse every form sent to
- * http://127.0.0.1. With the inference off the Worker sees the address the
- * request really came to — localhost, or whatever Host header a test sends.
- */
-export function wranglerDevArgs(port: number, extra: readonly string[] = []): string[] {
-  return ['wrangler', 'dev', '--local', '--port', String(port), '--infer-origin-from-routes=false', ...extra];
-}
-
 export interface WranglerDev {
   child: ChildProcess;
   url: string;
   stop(): Promise<void>;
 }
 
-/** Start `wrangler dev --local` on `port` and wait until /api/health answers. */
-export async function startWranglerDev(opts: { port: number; persistTo?: string; quiet?: boolean; timeoutMs?: number; config?: string }): Promise<WranglerDev> {
-  const args = wranglerDevArgs(opts.port, ['--ip', '127.0.0.1', '--show-interactive-dev-session=false']);
+/**
+ * The `npx` arguments of every local `wrangler dev` here (cf:dev and cf:smoke).
+ *
+ * --infer-origin-from-routes=false: both wrangler configs have "routes" (the
+ * studio's custom domains), and by default `wrangler dev` then tells the
+ * Worker that every request came to the FIRST route's host over https
+ * (request.url and the Host header say team.turquoisestudio.app). The Worker
+ * routes by host, so that would hide the public website's hosts and the old
+ * staff address from local runs, the app would write links to the live host,
+ * and the public forms' Origin check (Origin must be the host the Worker
+ * sees) would refuse every form sent to http://127.0.0.1. With the inference
+ * off the Worker sees the address the request really came to — localhost, or
+ * whatever Host header a test sends.
+ */
+export function wranglerDevArgs(opts: { port: number; config?: string; persistTo?: string; extra?: readonly string[] }): string[] {
+  const args = ['wrangler', 'dev', '--local', '--port', String(opts.port), '--infer-origin-from-routes=false'];
   if (opts.config) args.push('-c', opts.config);
   if (opts.persistTo) args.push('--persist-to', opts.persistTo);
+  return [...args, ...(opts.extra ?? [])];
+}
+
+/** Start `wrangler dev --local` on `port` and wait until /api/health answers. */
+export async function startWranglerDev(opts: { port: number; persistTo?: string; quiet?: boolean; timeoutMs?: number; config?: string }): Promise<WranglerDev> {
+  const args = wranglerDevArgs({ port: opts.port, config: opts.config, persistTo: opts.persistTo, extra: ['--ip', '127.0.0.1', '--show-interactive-dev-session=false'] });
   const child = spawn('npx', args, { cwd: ROOT, env: wranglerEnv(), stdio: ['ignore', 'pipe', 'pipe'], detached: true });
   let output = '';
   const onData = (chunk: Buffer) => {

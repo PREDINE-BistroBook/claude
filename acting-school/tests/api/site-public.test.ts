@@ -3,11 +3,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { castingApplicationPhotos, castingApplications, courseSlots, courses, files, leadActivities, leads, rateLimits, siteCoaches, siteWorkshops } from '../../src/server/db/schema';
 import { saveSiteContent } from '../../src/server/lib/siteContent';
 import { FORM_TOKEN_MAX_AGE_MS, issueFormToken, SITE_RATE_LIMITS } from '../../src/server/lib/siteForms';
+import { CASTING_IN_FLIGHT_MAX_BYTES, SITE_READ_DEADLINE_MS, castingBytesReserved } from '../../src/server/site/submit';
 import { HONEYPOT_FIELD, TOKEN_FIELD } from '../../src/server/site/forms';
 import { SITE_CSP } from '../../src/server/site/headers';
 import { SITE_STRINGS } from '../../src/server/site/i18n';
 import { addDays } from '../../src/shared/dates';
-import { SITE_APPLY_MAX_BYTES, type SiteContent } from '../../src/shared/schemas/site';
+import * as phone from '../../src/shared/phone';
+import { castingApplicationInput } from '../../src/shared/schemas/castingApplications';
+import { SITE_APPLY_MAX_BYTES, SITE_CASTING_MAX_BYTES, type SiteContent } from '../../src/shared/schemas/site';
 import { makeTestContext, PNG_1PX, todayISO, uploadPng } from '../helpers';
 
 /**
@@ -147,6 +150,54 @@ const postCasting = (t: Ctx, lang: string, fd: FormData, headers: Record<string,
 const websiteLeads = (t: Ctx) => t.db.select().from(leads).where(eq(leads.source, 'website')).all();
 const applicationCount = (t: Ctx) => t.db.select({ n: count() }).from(castingApplications).get()!.n;
 
+/** A rate-limit counter as it stands (0 without a row), and setting one. */
+const used = (t: Ctx, key: string) => t.db.select().from(rateLimits).where(eq(rateLimits.key, key)).get()?.count ?? 0;
+function seed(t: Ctx, key: string, n: number) {
+  t.db.insert(rateLimits).values({ key, count: n, windowStart: Date.now() - 60_000 }).onConflictDoUpdate({ target: rateLimits.key, set: { count: n } }).run();
+}
+
+/** A form as the bytes a browser would send, with its content type (the multipart boundary). */
+async function encoded(fd: FormData) {
+  const r = new Response(fd);
+  return { bytes: new Uint8Array(await r.arrayBuffer()), contentType: r.headers.get('content-type')! };
+}
+
+const CHUNK = 64 * 1024;
+/** A form as a body without a Content-Length, handed over in 64 KB pieces — and how many bytes the server asked for. */
+async function countingBody(fd: FormData) {
+  const { bytes, contentType } = await encoded(fd);
+  let at = 0;
+  const stream = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (at >= bytes.byteLength) return controller.close();
+      controller.enqueue(bytes.slice(at, at + CHUNK));
+      at += CHUNK;
+    },
+  });
+  return { stream, contentType, pulled: () => Math.min(at, bytes.byteLength) };
+}
+
+/** A casting POST whose body has started and neither ends nor fails until told to. */
+function heldCasting(t: Ctx, headers: Record<string, string> = {}) {
+  let controller!: ReadableStreamDefaultController<Uint8Array>;
+  const stream = new ReadableStream<Uint8Array>({
+    start(c) {
+      controller = c;
+    },
+  });
+  const response = t.app.request('/site/en/casting-call', {
+    method: 'POST',
+    body: stream,
+    headers: { 'content-type': 'multipart/form-data; boundary=held', ...headers },
+    duplex: 'half',
+  } as RequestInit);
+  return { response: Promise.resolve(response), end: () => controller.close(), fail: () => controller.error(new Error('connection lost')) };
+}
+
+const tick = (ms = 15) => new Promise((resolve) => setTimeout(resolve, ms));
+/** The "Back to the form" link of an error page. */
+const backHref = (html: string) => new RegExp(`<a class="btn btn-primary" href="([^"]+)">[^]*?${SITE_STRINGS.en.pages.backToForm}`).exec(html)?.[1];
+
 afterEach(() => {
   vi.useRealTimers();
 });
@@ -166,6 +217,27 @@ describe('/site pages', () => {
     const slash = await get(t, '/site/en/workshops/');
     expect(slash.status).toBe(301);
     expect(slash.headers.get('location')).toBe('/site/en/workshops');
+    // "/site/" too (it used to be the 404 page).
+    const rootSlash = await get(t, '/site/');
+    expect(rootSlash.status).toBe(301);
+    expect(rootSlash.headers.get('location')).toBe('/site');
+  });
+
+  it('the trailing-slash redirect keeps the path encoded: no backslash, tab or line break in Location, never a 500', async () => {
+    const t = await ctx();
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {});
+    for (const sneaky of ['/site/%5Cevil.example/', '/site/%09/evil.example/', '/site/%0D%0ASet-Cookie:x=1/', '/site/en/%0A/', '/site//evil.example/']) {
+      const res = await get(t, sneaky);
+      expect([301, 404], sneaky).toContain(res.status);
+      expect(res.headers.get('set-cookie')).toBeNull();
+      const location = res.headers.get('location');
+      if (location === null) continue;
+      expect(location, sneaky).toMatch(/^\/site\/[\x21-\x7e]*$/);
+      expect(location, sneaky).not.toContain('\\');
+      expect(new URL(location, 'http://localhost/').host).toBe('localhost');
+    }
+    expect(quiet).not.toHaveBeenCalled();
+    quiet.mockRestore();
   });
 
   it('every page renders in both languages with lang/dir, the security headers and a one-minute cache', async () => {
@@ -193,7 +265,10 @@ describe('/site pages', () => {
     const thanks = await get(t, '/site/ar/thanks?k=casting');
     expect(thanks.status).toBe(200);
     expect(thanks.headers.get('cache-control')).toBe('no-store');
-    expect(await thanks.text()).toContain(SITE_STRINGS.ar.thanks.castingTitle);
+    const thanksBody = await thanks.text();
+    expect(thanksBody).toContain(SITE_STRINGS.ar.thanks.castingTitle);
+    // The forms redirect to …#thanks: the page has that anchor.
+    expect(thanksBody).toContain('id="thanks"');
   });
 
   it('home: hero, about paragraphs, workshops with dates/days/coach, casting banner, coaches, contact — and no prices', async () => {
@@ -325,7 +400,7 @@ describe('the enquiry form', () => {
     const w = workshop(t, { name: 'Voice and Speech' });
     const res = await postForm(t, `/site/ar/workshops/${w.id}/apply`, applyFields(t), { origin: 'http://localhost' });
     expect(res.status).toBe(303);
-    expect(res.headers.get('location')).toBe('/site/ar/thanks?k=apply');
+    expect(res.headers.get('location')).toBe('/site/ar/thanks?k=apply#thanks');
     expect(res.headers.get('cache-control')).toBe('no-store');
     expect(res.headers.get('content-security-policy')).toBe(SITE_CSP);
     const [lead] = websiteLeads(t);
@@ -345,6 +420,18 @@ describe('the enquiry form', () => {
     expect(websiteLeads(t)).toHaveLength(1);
     const notes = t.db.select().from(leadActivities).where(eq(leadActivities.leadId, lead!.id)).all().map((a) => a.body ?? '');
     expect(notes.some((b) => b.startsWith('Applied again on the website: general') && b.includes('Me again'))).toBe(true);
+  });
+
+  it('two children enquiring from one parent’s phone become two leads', async () => {
+    const t = await ctx();
+    saveSiteContent(t.db, content());
+    const w = workshop(t, { name: 'Kids Drama' });
+    const guardian = { phone: '0128 888 0042', guardianName: 'Mona Saber', guardianPhone: '0128 888 0042', guardianConsent: 'on' };
+    const child = (firstName: string, age: number) => applyFields(t, { ...guardian, firstName, lastName: 'Saber', dateOfBirth: addDays(todayISO(), -age * 366) });
+    expect((await postForm(t, `/site/en/workshops/${w.id}/apply`, child('Hana', 10))).status).toBe(303);
+    expect((await postForm(t, `/site/ar/workshops/${w.id}/apply`, child('Karim', 8))).status).toBe(303);
+    expect(websiteLeads(t).map((l) => l.firstName).sort()).toEqual(['Hana', 'Karim']);
+    expect(websiteLeads(t).every((l) => l.status === 'new')).toBe(true);
   });
 
   it('a validation error re-renders the form: summary with links, messages next to fields, values kept, nothing stored', async () => {
@@ -393,7 +480,7 @@ describe('the enquiry form', () => {
     saveSiteContent(t.db, content());
     const res = await postForm(t, '/site/en/apply', applyFields(t, { [HONEYPOT_FIELD]: 'https://spam.example' }));
     expect(res.status).toBe(303);
-    expect(res.headers.get('location')).toBe('/site/en/thanks?k=apply');
+    expect(res.headers.get('location')).toBe('/site/en/thanks?k=apply#thanks');
     expect(websiteLeads(t)).toHaveLength(0);
   });
 
@@ -486,8 +573,8 @@ describe('the enquiry form', () => {
     } as RequestInit);
     expect(streamed.status).toBe(413);
     expect(websiteLeads(t)).toHaveLength(0);
-    // Not counted against the rate limit either (refused before).
-    expect(t.db.select().from(rateLimits).all()).toHaveLength(0);
+    // Nothing stored was counted: only the streamed body's attempt (its size is unknown until it is read; the declared one was refused before).
+    expect(t.db.select().from(rateLimits).all().map((r) => r.key.replace(/:[^:]+$/, ''))).toEqual(['site:apply:attempts']);
   });
 
   it('GET on …/apply after a failed POST shows the workshop again', async () => {
@@ -524,12 +611,12 @@ describe('the casting-call form', () => {
     expect(page).toContain('We are casting a new series.');
     expect(page).toContain('enctype="multipart/form-data"');
     expect(page).toContain('name="photo1" type="file" accept="image/jpeg,image/png,image/webp" required');
-    expect(page).toContain('autocomplete="bday"');
+    for (const part of ['bday-day', 'bday-month', 'bday-year']) expect(page).toContain(`autocomplete="${part}"`);
     expect(page).toContain(SITE_STRINGS.en.form.privacyCasting);
 
     const res = await postCasting(t, 'en', castingForm(t, {}, [{ data: JPEG }, { data: PNG_1PX, name: 'second.png' }]), { origin: 'http://localhost' });
     expect(res.status).toBe(303);
-    expect(res.headers.get('location')).toBe('/site/en/thanks?k=casting');
+    expect(res.headers.get('location')).toBe('/site/en/thanks?k=casting#thanks');
     const [app] = t.db.select().from(castingApplications).all();
     expect(app).toMatchObject({ firstName: 'Karim', lastName: 'Nabil', gender: 'male', heightCm: 180, languages: ['Arabic', 'English'], links: ['https://www.instagram.com/karim/'], locale: 'en', status: 'new' });
     const photos = t.db.select().from(castingApplicationPhotos).where(eq(castingApplicationPhotos.applicationId, app!.id)).all();
@@ -599,17 +686,29 @@ describe('the casting-call form', () => {
     const limited = await postCasting(t, 'en', castingForm(t), ip);
     expect(limited.status).toBe(429);
     expect(applicationCount(t)).toBe(3);
-    // The bytes received count against the daily photo allowance.
-    const bytes = t.db.select().from(rateLimits).where(eq(rateLimits.key, 'site:casting:photo-bytes')).get();
-    expect(bytes!.count).toBeGreaterThan(3 * JPEG.byteLength);
+    // Only the photos kept count against the daily photo allowance — not the bodies, the honeypot's or the refused ones.
+    expect(used(t, 'site:casting:photo-bytes')).toBe(3 * JPEG.byteLength);
+    expect(used(t, 'site:casting:school')).toBe(3);
   });
 
-  it('the daily photo allowance (300 MB school-wide) refuses before reading the photos', async () => {
+  it('the daily photo allowance (300 MB kept, school-wide): photos that no longer fit are refused and nothing is stored; a spent allowance refuses before the body is read', async () => {
     const t = await ctx();
     saveSiteContent(t.db, content());
-    t.db.insert(rateLimits).values({ key: 'site:casting:photo-bytes', count: SITE_RATE_LIMITS.casting.photoBytes.limit - 10, windowStart: Date.now() - 60_000 }).run();
-    expect((await postCasting(t, 'en', castingForm(t))).status).toBe(429);
+    const limit = SITE_RATE_LIMITS.casting.photoBytes.limit;
+    seed(t, 'site:casting:photo-bytes', limit - 10);
+    const res = await postCasting(t, 'en', castingForm(t));
+    expect(res.status).toBe(429);
+    expect(await res.text()).toContain(SITE_STRINGS.en.pages.tooManyTitle);
     expect(applicationCount(t)).toBe(0);
+    expect(t.db.select().from(files).all()).toHaveLength(0);
+    expect(used(t, 'site:casting:photo-bytes')).toBe(limit - 10);
+    expect(used(t, 'site:casting:school')).toBe(0);
+
+    seed(t, 'site:casting:photo-bytes', limit);
+    const body = await countingBody(castingForm(t));
+    const spent = await t.app.request('/site/en/casting-call', { method: 'POST', body: body.stream, headers: { 'content-type': body.contentType }, duplex: 'half' } as RequestInit);
+    expect(spent.status).toBe(429);
+    expect(body.pulled()).toBeLessThanOrEqual(CHUNK);
   });
 
   it('accept → talent through the staff API, after a public application', async () => {
@@ -622,6 +721,371 @@ describe('the casting-call form', () => {
     const accepted = await head.post(`/api/casting-applications/${list.body.items[0].id}/accept`);
     expect(accepted.status).toBe(201);
     expect((await head.get(`/api/talent/${accepted.body.talentId}`)).body).toMatchObject({ firstName: 'Karim', lastName: 'Nabil' });
+  });
+});
+
+describe('abuse limits: what junk can and cannot do', () => {
+  it('junk POSTs (no token, a filled honeypot, invalid fields) never use up the school-wide allowance: the next real visitor gets through', async () => {
+    const t = await ctx();
+    saveSiteContent(t.db, content());
+    const n = SITE_RATE_LIMITS.apply.school.limit;
+    for (let i = 0; i < n; i++) {
+      const junk =
+        i % 3 === 0
+          ? postForm(t, '/site/en/apply', { x: '1' })
+          : i % 3 === 1
+            ? postForm(t, '/site/en/apply', applyFields(t, { [HONEYPOT_FIELD]: 'spam' }))
+            : postForm(t, '/site/en/apply', applyFields(t, { phone: '12' }));
+      const res = await junk;
+      expect([400, 303]).toContain(res.status);
+    }
+    expect(websiteLeads(t)).toHaveLength(0);
+    expect(used(t, 'site:apply:school')).toBe(0);
+    for (const path of ['/site/en/apply', '/site/ar/apply']) expect((await postForm(t, path, applyFields(t, { phone: `0100 77${path.length} 0000` }))).status, path).toBe(303);
+    expect(used(t, 'site:apply:school')).toBe(2);
+  });
+
+  it('the casting form: a token-less POST, a refused form and a declared length without a body use up nothing of the day’s allowances', async () => {
+    const t = await ctx();
+    saveSiteContent(t.db, content());
+    // 15 requests that only announce 20 MB, from five addresses (3 each).
+    for (let i = 0; i < 15; i++) {
+      const res = await t.app.request('/site/en/casting-call', {
+        method: 'POST',
+        body: '',
+        headers: { 'content-type': 'multipart/form-data; boundary=x', 'content-length': String(SITE_CASTING_MAX_BYTES), [IP_HEADER]: `203.0.113.${100 + (i % 5)}` },
+      });
+      expect(res.status, `announce ${i}`).toBe(400);
+    }
+    // A sent body with no token, a too-fast token, a missing privacy tick — each with a real photo attached.
+    const noToken = await encoded(castingForm(t, { [TOKEN_FIELD]: null }));
+    expect((await t.app.request('/site/en/casting-call', { method: 'POST', body: noToken.bytes, headers: { 'content-type': noToken.contentType, 'content-length': String(noToken.bytes.byteLength) } })).status).toBe(400);
+    expect((await postCasting(t, 'en', castingForm(t, { [TOKEN_FIELD]: issueFormToken(t.db, 'casting', Date.now()) }))).status).toBe(400);
+    expect((await postCasting(t, 'en', castingForm(t, { privacyConsent: null }))).status).toBe(400);
+    expect(used(t, 'site:casting:photo-bytes')).toBe(0);
+    expect(used(t, 'site:casting:school')).toBe(0);
+    expect(applicationCount(t)).toBe(0);
+    // …so a real applicant still gets through, and is charged for exactly the photo kept.
+    expect((await postCasting(t, 'en', castingForm(t))).status).toBe(303);
+    expect(used(t, 'site:casting:photo-bytes')).toBe(JPEG.byteLength);
+    expect(used(t, 'site:casting:school')).toBe(1);
+  });
+
+  it('the addresses of one IPv6 /64 share the per-address limit; another /64 and an IPv4 address do not', async () => {
+    const t = await ctx();
+    saveSiteContent(t.db, content());
+    for (let i = 1; i <= SITE_RATE_LIMITS.apply.perAddress.limit; i++) {
+      expect((await postForm(t, '/site/en/apply', applyFields(t, { phone: `0100 000 01${10 + i}` }), { [IP_HEADER]: `2001:db8:1:2::${i}` })).status, `address ${i}`).toBe(303);
+    }
+    expect((await postForm(t, '/site/en/apply', applyFields(t, { phone: '0100 000 0199' }), { [IP_HEADER]: '2001:db8:1:2:ffff::9' })).status).toBe(429);
+    expect((await postForm(t, '/site/en/apply', applyFields(t, { phone: '0100 000 0198' }), { [IP_HEADER]: '2001:db8:1:3::1' })).status).toBe(303);
+    expect((await postForm(t, '/site/en/apply', applyFields(t, { phone: '0100 000 0197' }), { [IP_HEADER]: '192.0.2.1' })).status).toBe(303);
+  });
+
+  it('mistakes in the form do not lock an honest applicant out: three forms that come back, then a correct one is stored', async () => {
+    const t = await ctx();
+    saveSiteContent(t.db, content());
+    const ip = { [IP_HEADER]: '203.0.113.61' };
+    const child = { dateOfBirth: addDays(todayISO(), -10 * 366) };
+    expect((await postCasting(t, 'ar', castingForm(t, child), ip)).status).toBe(400);
+    expect((await postCasting(t, 'ar', castingForm(t, { ...child, guardianName: 'وائل', guardianPhone: '0100 555 7099' }), ip)).status).toBe(400);
+    expect((await postCasting(t, 'ar', castingForm(t, { ...child, guardianName: 'وائل', guardianPhone: '12', guardianConsent: 'on' }), ip)).status).toBe(400);
+    const ok = await postCasting(t, 'ar', castingForm(t, { ...child, guardianName: 'وائل', guardianPhone: '0100 555 7099', guardianConsent: 'on' }), ip);
+    expect(ok.status).toBe(303);
+    expect(applicationCount(t)).toBe(1);
+    expect(used(t, 'site:casting:photo-bytes')).toBe(JPEG.byteLength);
+
+    const ip2 = { [IP_HEADER]: '203.0.113.62' };
+    for (let i = 0; i < 5; i++) expect((await postForm(t, '/site/en/apply', applyFields(t, { phone: '12' }), ip2)).status).toBe(400);
+    expect((await postForm(t, '/site/en/apply', applyFields(t), ip2)).status).toBe(303);
+    expect(websiteLeads(t)).toHaveLength(1);
+  });
+
+  it('…but attempts are limited too: after 12 casting tries (20 enquiries) an hour from one address, the 429 page — and nothing of the school’s day is used', async () => {
+    const t = await ctx();
+    saveSiteContent(t.db, content());
+    const ip = { [IP_HEADER]: '203.0.113.63' };
+    for (let i = 0; i < SITE_RATE_LIMITS.casting.attempts.limit; i++) expect((await postCasting(t, 'en', castingForm(t, { privacyConsent: null }), ip)).status, `try ${i + 1}`).toBe(400);
+    const limited = await postCasting(t, 'en', castingForm(t), ip);
+    expect(limited.status).toBe(429);
+    expect(used(t, 'site:casting:photo-bytes')).toBe(0);
+    expect(used(t, 'site:casting:school')).toBe(0);
+    for (let i = 0; i < SITE_RATE_LIMITS.apply.attempts.limit; i++) expect((await postForm(t, '/site/en/apply', applyFields(t, { phone: '12' }), ip)).status).toBe(400);
+    expect((await postForm(t, '/site/en/apply', applyFields(t), ip)).status).toBe(429);
+    expect(websiteLeads(t)).toHaveLength(0);
+  });
+
+  it('a limit that is already reached refuses a body without a Content-Length before reading it', async () => {
+    const t = await ctx();
+    saveSiteContent(t.db, content());
+    const ip = '203.0.113.64';
+    const refusedUnread = async (why: string) => {
+      const body = await countingBody(castingForm(t, {}, [{ data: new Uint8Array(3 * 1024 * 1024).fill(1) }]));
+      const res = await t.app.request('/site/en/casting-call', { method: 'POST', body: body.stream, headers: { 'content-type': body.contentType, [IP_HEADER]: ip }, duplex: 'half' } as RequestInit);
+      expect(res.status, why).toBe(429);
+      // At most the one piece a stream prepares by itself — not the 3 MB.
+      expect(body.pulled(), why).toBeLessThanOrEqual(CHUNK);
+    };
+    seed(t, `site:casting:address:${ip}`, SITE_RATE_LIMITS.casting.perAddress.limit);
+    await refusedUnread('the address has stored its three');
+    t.db.delete(rateLimits).run();
+    seed(t, `site:casting:attempts:${ip}`, SITE_RATE_LIMITS.casting.attempts.limit);
+    await refusedUnread('the address has used its attempts');
+    t.db.delete(rateLimits).run();
+    seed(t, 'site:casting:school', SITE_RATE_LIMITS.casting.school.limit);
+    await refusedUnread('the school’s day is full');
+    expect(applicationCount(t)).toBe(0);
+    // The same for the enquiry form.
+    seed(t, 'site:apply:school', SITE_RATE_LIMITS.apply.school.limit);
+    const big = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.enqueue(new Uint8Array(1024));
+      },
+    });
+    const res = await t.app.request('/site/en/apply', { method: 'POST', body: big, headers: { 'content-type': 'application/x-www-form-urlencoded' }, duplex: 'half' } as RequestInit);
+    expect(res.status).toBe(429);
+  });
+
+  it('casting uploads in flight are capped: beyond two full-size bodies the next visitor is asked to wait, unread and uncounted; places free up when a body ends or fails', async () => {
+    const t = await ctx();
+    saveSiteContent(t.db, content());
+    expect(castingBytesReserved()).toBe(0);
+    const first = heldCasting(t);
+    const second = heldCasting(t);
+    await tick();
+    expect(castingBytesReserved()).toBe(CASTING_IN_FLIGHT_MAX_BYTES);
+    const before = t.db.select().from(rateLimits).all().length;
+
+    const body = await countingBody(castingForm(t));
+    const busy = await t.app.request('/site/ar/casting-call', { method: 'POST', body: body.stream, headers: { 'content-type': body.contentType }, duplex: 'half' } as RequestInit);
+    expect(busy.status).toBe(429);
+    expect(busy.headers.get('retry-after')).toBe('30');
+    const page = await busy.text();
+    expect(page).toContain(SITE_STRINGS.ar.pages.busyTitle);
+    expect(page).toContain('https://wa.me/');
+    expect(body.pulled()).toBeLessThanOrEqual(CHUNK);
+    // With a Content-Length too.
+    expect((await postCasting(t, 'en', castingForm(t), { 'content-length': '1000' })).status).toBe(429);
+    expect(t.db.select().from(rateLimits).all()).toHaveLength(before);
+    expect(applicationCount(t)).toBe(0);
+    // The enquiry form is not held up by them.
+    expect((await postForm(t, '/site/en/apply', applyFields(t))).status).toBe(303);
+
+    // One body fails (the connection dropped), the other ends: both places are free again.
+    first.fail();
+    second.end();
+    expect((await first.response).status).toBe(400);
+    expect((await second.response).status).toBe(400);
+    expect(castingBytesReserved()).toBe(0);
+    expect((await postCasting(t, 'en', castingForm(t))).status).toBe(303);
+    expect(castingBytesReserved()).toBe(0);
+  });
+
+  it('a body that stalls is given up after the deadline and its place freed', async () => {
+    const t = await ctx();
+    saveSiteContent(t.db, content());
+    vi.useFakeTimers();
+    const stalled = heldCasting(t);
+    await vi.advanceTimersByTimeAsync(50);
+    expect(castingBytesReserved()).toBe(SITE_CASTING_MAX_BYTES);
+    await vi.advanceTimersByTimeAsync(SITE_READ_DEADLINE_MS.casting);
+    const res = await stalled.response;
+    expect(res.status).toBe(400);
+    expect(await res.text()).toContain(SITE_STRINGS.en.errors.tryAgain);
+    expect(castingBytesReserved()).toBe(0);
+  });
+
+  it('a form with far more parts than ours is refused without being parsed', async () => {
+    const t = await ctx();
+    saveSiteContent(t.db, content());
+    const fd = castingForm(t);
+    for (let i = 0; i < 1000; i++) fd.append(`x${i}`, new Blob([new Uint8Array(1)]), 'a');
+    const res = await postCasting(t, 'en', fd);
+    expect(res.status).toBe(400);
+    expect(await res.text()).toContain(SITE_STRINGS.en.errors.tryAgain);
+    expect(applicationCount(t)).toBe(0);
+  });
+
+  it('megabytes in a text field are refused small and cheap: never validated, never echoed', async () => {
+    const t = await ctx();
+    saveSiteContent(t.db, content());
+    const normalize = vi.spyOn(phone, 'normalizePhone');
+    for (const [field, value] of [
+      ['phone', '0 '.repeat(500_000)],
+      ['guardianPhone', '0 '.repeat(500_000)],
+      ['links', 'a '.repeat(500_000)],
+      ['languages', 'a,'.repeat(500_000)],
+      ['message', 'm'.repeat(1_000_000)],
+    ] as const) {
+      const res = await postCasting(t, 'en', castingForm(t, { [field]: value }));
+      expect(res.status, field).toBe(413);
+      const body = await res.text();
+      expect(body.length, field).toBeLessThan(100_000);
+      expect(body, field).not.toContain(value.slice(0, 200));
+    }
+    // A refused token echoes the answers — but never a huge one.
+    const badToken = await postCasting(t, 'en', castingForm(t, { [TOKEN_FIELD]: 'x', message: 'm'.repeat(1_000_000) }));
+    expect((await badToken.text()).length).toBeLessThan(100_000);
+    // Many fields that are each short enough, far too much together.
+    const many = castingForm(t);
+    for (let i = 0; i < 40; i++) many.append(`extra${i}`, 'y'.repeat(3000));
+    expect((await postCasting(t, 'en', many)).status).toBe(413);
+    expect(normalize.mock.calls.every(([v]) => v.length <= 200)).toBe(true);
+    expect(applicationCount(t)).toBe(0);
+
+    // The schema itself leaves over-long input alone (other callers are protected too).
+    normalize.mockClear();
+    const valid = { firstName: 'A', lastName: 'B', gender: 'male', dateOfBirth: addDays(todayISO(), -30 * 366), phone: '0100 123 4567', privacyConsent: 'on', locale: 'en' };
+    const long = castingApplicationInput(todayISO()).safeParse({ ...valid, phone: '0 '.repeat(1_000_000), guardianPhone: '0 '.repeat(1_000_000), links: 'a '.repeat(1_000_000), skills: 'a,'.repeat(1_000_000) });
+    expect(long.success).toBe(false);
+    expect([...new Set(long.error!.issues.map((i) => String(i.path[0])))].sort()).toEqual(['guardianPhone', 'links', 'phone', 'skills']);
+    expect(long.error!.issues.length).toBeLessThan(10);
+    expect(normalize).not.toHaveBeenCalled();
+    // (The spy does see the schema's calls: an ordinary phone is cleaned up.)
+    expect(castingApplicationInput(todayISO()).safeParse(valid).success).toBe(true);
+    expect(normalize).toHaveBeenCalledWith('0100 123 4567');
+    normalize.mockRestore();
+  });
+});
+
+describe('forms made for people, not for machines', () => {
+  it('one answer names every problem: a wrong height, the missing guardian block and a photo that is too big, together', async () => {
+    const t = await ctx();
+    saveSiteContent(t.db, content());
+    const huge = new Uint8Array(7 * 1024 * 1024);
+    huge.set(JPEG.slice(0, 4));
+    const res = await postCasting(t, 'en', castingForm(t, { dateOfBirth: addDays(todayISO(), -10 * 366), heightCm: 'tall', links: 'not a link' }, [{ data: huge }, { data: NOT_AN_IMAGE }]));
+    expect(res.status).toBe(400);
+    const body = await res.text();
+    const s = SITE_STRINGS.en;
+    for (const id of ['e-heightCm', 'e-links', 'e-guardianName', 'e-guardianPhone', 'e-guardianConsent', 'e-photo1', 'e-photo2']) expect(body, id).toContain(`id="${id}"`);
+    expect(body).toContain(s.formErrors.photoTooLarge);
+    expect(body).toContain(s.formErrors.photoType);
+    expect(body).toContain(s.formErrors.guardianConsent);
+    // The enquiry form too: a bad phone and the guardian block in one go.
+    const apply = await (await postForm(t, '/site/en/apply', applyFields(t, { phone: '12', dateOfBirth: addDays(todayISO(), -10 * 366) }))).text();
+    for (const id of ['e-phone', 'e-guardianName', 'e-guardianPhone', 'e-guardianConsent']) expect(apply, id).toContain(`id="${id}"`);
+  });
+
+  it('a height typed with an Arabic keyboard (١٧٠) is 170', async () => {
+    const t = await ctx();
+    saveSiteContent(t.db, content());
+    expect((await postCasting(t, 'ar', castingForm(t, { heightCm: '١٧٠', phone: '٠١٠١٢٣٤٥٦٧٩' }))).status).toBe(303);
+    expect(t.db.select().from(castingApplications).get()).toMatchObject({ heightCm: 170, phone: '01012345679' });
+    const parse = (heightCm: string) => castingApplicationInput(todayISO()).safeParse({ firstName: 'A', lastName: 'B', gender: 'male', dateOfBirth: addDays(todayISO(), -30 * 366), phone: '0100 123 4567', privacyConsent: 'on', locale: 'ar', heightCm });
+    expect(parse('۱۷۰').data?.heightCm).toBe(170);
+    expect(parse(' ‏170 ').data?.heightCm).toBe(170);
+    expect(parse('   ').data?.heightCm).toBeNull();
+    expect(parse('٢٠').error?.issues).toHaveLength(1);
+    expect(parse('abc').success).toBe(false);
+  });
+
+  it('links as people write them: an Instagram name with @, or a link without https://', async () => {
+    const t = await ctx();
+    saveSiteContent(t.db, content());
+    expect((await postCasting(t, 'en', castingForm(t, { links: '@karim' }))).status).toBe(303);
+    expect(t.db.select().from(castingApplications).get()!.links).toEqual(['https://www.instagram.com/karim/']);
+    const links = (v: string) => {
+      const r = castingApplicationInput(todayISO()).safeParse({ firstName: 'A', lastName: 'B', gender: 'male', dateOfBirth: addDays(todayISO(), -30 * 366), phone: '0100 123 4567', privacyConsent: 'on', locale: 'en', links: v });
+      return r.success ? r.data.links : r.error.issues.map((i) => i.message);
+    };
+    expect(links('@nour.acts\ninstagram.com/nour.acts,\nwww.youtube.com/watch?v=abc')).toEqual(['https://www.instagram.com/nour.acts/', 'https://instagram.com/nour.acts', 'https://www.youtube.com/watch?v=abc']);
+    // Still refused: anything that isn't plainly an https link.
+    for (const bad of ['http://insecure.com/x', 'javascript:alert(1)', 'data:text/html,x', '//evil.example/x', 'nour.acts', '@bad handle!']) expect(links(bad), bad).toContain('errors.invalidUrl');
+    // The hint and the message say so, in plain words.
+    const page = await (await get(t, '/site/ar/casting-call')).text();
+    expect(page).toContain(SITE_STRINGS.ar.form.linksHint);
+    expect(SITE_STRINGS.en.form.linksHint).toContain('@yourname');
+  });
+
+  it('date of birth is three plain lists (day, month by name, year) joined on the server', async () => {
+    const t = await ctx();
+    saveSiteContent(t.db, content());
+    const w = workshop(t);
+    for (const lang of ['en', 'ar'] as const) {
+      for (const path of [`/site/${lang}/apply`, `/site/${lang}/casting-call`, `/site/${lang}/workshops/${w.id}`]) {
+        const page = await (await get(t, path)).text();
+        expect(page, path).not.toContain('type="date"');
+        const field = /<fieldset class="field"[^>]*>\s*<legend class="legend">([^<]+)<span class="req">[^]*?<\/fieldset>/.exec(page.slice(page.indexOf('name="dobDay"') - 400))?.[0] ?? '';
+        expect(field, path).toContain(SITE_STRINGS[lang].form.dateOfBirth);
+        expect(field).toMatch(/<select id="f-dateOfBirth" name="dobDay" aria-label="[^"]+" autocomplete="bday-day" required>/);
+        expect(field).toMatch(/name="dobMonth" aria-label="[^"]+" autocomplete="bday-month" required>/);
+        expect(field).toMatch(/name="dobYear" aria-label="[^"]+" autocomplete="bday-year" required>/);
+        expect(field).toContain(lang === 'ar' ? '<option value="3">مارس</option>' : '<option value="3">March</option>');
+        expect(field).toContain(`<option value="${todayISO().slice(0, 4)}">`);
+      }
+    }
+    const parts = (day: string, month: string, year: string) => ({ dateOfBirth: null, dobDay: day, dobMonth: month, dobYear: year });
+    expect((await postCasting(t, 'en', castingForm(t, parts('15', '3', '1994')))).status).toBe(303);
+    expect(t.db.select().from(castingApplications).get()!.dateOfBirth).toBe('1994-03-15');
+    expect((await postForm(t, '/site/en/apply', applyFields(t, parts('5', '11', '1988')))).status).toBe(303);
+    expect(websiteLeads(t)[0]!.dateOfBirth).toBe('1988-11-05');
+
+    // 30 February: the date message, the three choices kept, and the summary's link lands on a control.
+    const feb = await postForm(t, '/site/en/apply', applyFields(t, parts('30', '2', '1994')));
+    expect(feb.status).toBe(400);
+    const body = await feb.text();
+    expect(body).toContain(`<a href="#f-dateOfBirth">${SITE_STRINGS.en.form.dateOfBirth}: ${SITE_STRINGS.en.errors.invalidDate}</a>`);
+    expect(body).toContain('<option value="30" selected>30</option>');
+    expect(body).toContain('<option value="2" selected>February</option>');
+    expect(body).toContain('<option value="1994" selected>1994</option>');
+    // Nothing chosen, or only part of it.
+    expect(await (await postForm(t, '/site/en/apply', applyFields(t, parts('', '', '')))).text()).toContain(`${SITE_STRINGS.en.form.dateOfBirth}: ${SITE_STRINGS.en.errors.required}`);
+    expect(await (await postForm(t, '/site/en/apply', applyFields(t, parts('12', '', '1990')))).text()).toContain(SITE_STRINGS.en.errors.invalidDate);
+    // A child's year still asks for the guardian; a plain dateOfBirth field fills the lists when the form comes back.
+    const year = String(Number(todayISO().slice(0, 4)) - 10);
+    const child = await (await postForm(t, '/site/en/apply', applyFields(t, parts('1', '1', year)))).text();
+    expect(child).toContain('id="e-guardianName"');
+    const plain = await (await postForm(t, '/site/en/apply', applyFields(t, { dateOfBirth: '1990-07-09', phone: '12' }))).text();
+    expect(plain).toContain('<option value="9" selected>9</option>');
+    expect(plain).toContain('<option value="7" selected>July</option>');
+    expect(plain).toContain('<option value="1990" selected>1990</option>');
+  });
+
+  it('"Back to the form" on an error page is a real link: never the address the form was posted to plus a fragment', async () => {
+    const t = await ctx();
+    saveSiteContent(t.db, content());
+    const w = workshop(t);
+    const strip = (href: string) => href.split('#')[0];
+    // 413 (too large) and 429 (limit reached) of the two forms that post to their own address…
+    const castingBig = await t.app.request('/site/en/casting-call', { method: 'POST', headers: { 'content-length': String(SITE_CASTING_MAX_BYTES + 1), 'content-type': 'multipart/form-data; boundary=x' }, body: '' });
+    expect(castingBig.status).toBe(413);
+    seed(t, 'site:casting:school', SITE_RATE_LIMITS.casting.school.limit);
+    seed(t, 'site:apply:school', SITE_RATE_LIMITS.apply.school.limit);
+    const castingLimited = await postCasting(t, 'en', castingForm(t));
+    const applyLimited = await postForm(t, '/site/en/apply', applyFields(t));
+    const applyBig = await postForm(t, '/site/en/apply', applyFields(t, { message: 'x'.repeat(SITE_APPLY_MAX_BYTES) }));
+    for (const [res, posted] of [
+      [castingBig, '/site/en/casting-call'],
+      [castingLimited, '/site/en/casting-call'],
+      [applyLimited, '/site/en/apply'],
+      [applyBig, '/site/en/apply'],
+    ] as const) {
+      const href = backHref(await res.text());
+      expect(href, posted).toBe(`${posted}?again=1#apply`);
+      expect(strip(href!)).not.toBe(posted);
+      // …and that address is the form.
+      const form = await get(t, href!);
+      expect(form.status).toBe(200);
+      expect(await form.text()).toContain('<form method="post"');
+    }
+    // A workshop's form posts to …/apply: its page is another address already.
+    const workshopLimited = await postForm(t, `/site/en/workshops/${w.id}/apply`, applyFields(t));
+    expect(workshopLimited.status).toBe(429);
+    expect(backHref(await workshopLimited.text())).toBe(`/site/en/workshops/${w.id}#apply`);
+  });
+
+  it('error pages keep a language switch (to the other language’s home); a question label gets no colon in the summary; no heading level is skipped on "Ask us"', async () => {
+    const t = await ctx();
+    saveSiteContent(t.db, content());
+    const notFound = await (await get(t, '/site/en/nope')).text();
+    expect(notFound).toContain('<a class="lang" href="/site/ar" hreflang="ar"');
+    expect(notFound).not.toContain('rel="canonical"');
+    const summary = await (await postForm(t, '/site/en/apply', applyFields(t, { heardFrom: null }))).text();
+    expect(summary).toContain(`<a href="#f-heardFrom">${SITE_STRINGS.en.form.heardFrom} ${SITE_STRINGS.en.errors.choose}</a>`);
+    const page = await (await get(t, '/site/en/apply')).text();
+    expect(page).toContain(`<h2>${SITE_STRINGS.en.form.guardianTitle}</h2>`);
+    expect(page).not.toContain('<h3>');
   });
 });
 

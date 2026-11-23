@@ -46,20 +46,27 @@ site.use('*', async (c, next) => {
 });
 
 /**
- * The visible form of an app path (/site/…): bare on a public host. Runs of slashes are merged, so the
- * result is always a same-site path ("//evil.example" would be another host).
+ * The visible form of an app path (/site/…): bare on a public host. Runs of slashes are merged and
+ * whatever a browser would read as "another host" at the start (a second slash, a backslash, a
+ * space or control character) is dropped, so the result is always a same-site path.
  */
 function visible(c: Context<AppEnv>, appPath: string): string {
   const paths = pathsFor(c);
   const clean = appPath.replace(/\/{2,}/g, '/');
-  return paths.base === SITE_BASE ? clean : clean.slice(SITE_BASE.length).replace(/^\/*/, '/');
+  const shown = paths.base === SITE_BASE ? clean : clean.slice(SITE_BASE.length);
+  return shown.replace(/^[/\\\s\x00-\x1f]*/, '/');
 }
 
-/** "/site/en/" → "/site/en" (one canonical spelling per page). */
+/**
+ * "/site/en/" → "/site/en" (one canonical spelling per page). Built from the URL's own, still
+ * percent-encoded path — never c.req.path, which is decoded: "%5C" or "%09" there would put a
+ * backslash or a tab into the Location header (browsers read "/\evil.example" as another host),
+ * and "%0D%0A" an invalid header value.
+ */
 site.use('*', async (c, next) => {
-  const path = c.req.path;
-  if (path.length > SITE_BASE.length + 1 && path.endsWith('/')) {
-    const url = new URL(c.req.url);
+  const url = new URL(c.req.url);
+  const path = url.pathname;
+  if (path.length > SITE_BASE.length && path.endsWith('/')) {
     c.header('Cache-Control', 'no-store');
     return c.redirect(visible(c, path.replace(/\/+$/, '')) + url.search, 301);
   }

@@ -17,10 +17,18 @@ import { CASTING_LINKS_MAX, formBool, guardianRules, httpsUrl, isMinor, optSiteP
 
 // ── The public form ─────────────────────────────────────────────────────────
 
+/**
+ * The longest text the list and link fields look into. The public form accepts
+ * megabytes before validation: anything longer is left whole, so it fails as
+ * "not a list" without being split into millions of pieces.
+ */
+const FORM_LIST_TEXT_MAX = 4000;
+
 /** "Arabic, English" or one per line (Arabic comma too) → a list without blanks or repeats. */
 const formList = (maxItems: number, maxLength = 60) =>
   z.preprocess(
     (v) => {
+      if (typeof v === 'string' && v.length > FORM_LIST_TEXT_MAX) return v;
       const raw = typeof v === 'string' ? v.split(/[,،;\n]/) : v == null ? [] : v;
       if (!Array.isArray(raw)) return raw;
       const seen = new Set<string>();
@@ -40,11 +48,27 @@ const formList = (maxItems: number, maxLength = 60) =>
     z.array(z.string().max(maxLength)).max(maxItems),
   );
 
-/** Up to 3 https links (Instagram, showreel…): blanks dropped; a text with several links is split on spaces/new lines. */
+/**
+ * One link as people write it → a full https link where the meaning is plain:
+ * "@nour.acts" is an Instagram name; "instagram.com/nour.acts" and
+ * "www.youtube.com/watch?v=…" only lack the "https://". Anything else is left
+ * for the https check (http:, javascript:, data: and "//host" stay refused).
+ */
+export function normalizeFormLink(raw: string): string {
+  const t = raw.trim().replace(/[,،;]+$/, '');
+  const handle = /^@([A-Za-z0-9._]{1,30})$/.exec(t);
+  if (handle) return `https://www.instagram.com/${handle[1]}/`;
+  if (/^(www\.)?[a-z0-9-]+(\.[a-z0-9-]+)+\/\S*$/i.test(t)) return `https://${t}`;
+  return t;
+}
+
+/** Up to 3 links (Instagram, showreel…), stored as https: blanks dropped; a text with several links is split on spaces/new lines. */
 const formLinks = z.preprocess(
   (v) => {
+    if (typeof v === 'string' && v.length > FORM_LIST_TEXT_MAX) return v;
     const raw = typeof v === 'string' ? v.split(/\s+/) : v == null ? [] : v;
-    return Array.isArray(raw) ? raw.filter((x) => !(typeof x === 'string' && x.trim() === '')) : raw;
+    if (!Array.isArray(raw)) return raw;
+    return raw.filter((x) => !(typeof x === 'string' && x.trim() === '')).map((x) => (typeof x === 'string' ? normalizeFormLink(x) : x));
   },
   z.array(httpsUrl).max(CASTING_LINKS_MAX, { message: 'site:errors.tooManyLinks' }),
 );

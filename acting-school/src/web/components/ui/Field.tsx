@@ -53,7 +53,7 @@ export function Field({
 }
 
 export function Input({ className, ...rest }: InputHTMLAttributes<HTMLInputElement>) {
-  return <input className={clsx(control, 'h-11 text-base sm:h-10 sm:text-sm', className)} {...rest} />;
+  return <input className={clsx(control, 'h-12 text-base sm:h-10 sm:text-sm', className)} {...rest} />;
 }
 
 export function Textarea({ className, rows = 4, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
@@ -62,7 +62,7 @@ export function Textarea({ className, rows = 4, ...rest }: TextareaHTMLAttribute
 
 export function Select({ className, children, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
-    <select className={clsx(control, 'h-11 text-base sm:h-10 sm:text-sm pe-8', className)} {...rest}>
+    <select className={clsx(control, 'h-12 text-base sm:h-10 sm:text-sm pe-8', className)} {...rest}>
       {children}
     </select>
   );

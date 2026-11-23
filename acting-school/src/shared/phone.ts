@@ -29,6 +29,14 @@ export function normalizePhone(raw: string): string {
   return westernDigits(raw).replace(INVISIBLE_MARKS_RE, '').replace(ODD_SPACES_RE, ' ').replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * A typed number as plain text: Western digits (people type ١٧٠ with an Arabic
+ * keyboard), no invisible marks, trimmed — ready for Number().
+ */
+export function plainNumberText(raw: string): string {
+  return westernDigits(raw).replace(INVISIBLE_MARKS_RE, '').replace(ODD_SPACES_RE, ' ').trim();
+}
+
 /** Only the digits of a phone number (Arabic digits converted); '' for nothing. */
 export function phoneDigits(raw: string | null | undefined): string {
   return raw ? westernDigits(raw).replace(/\D/g, '') : '';

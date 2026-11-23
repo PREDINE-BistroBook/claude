@@ -28,6 +28,6 @@ const passThrough = argv.filter((a, i) => a !== '--build' && (portArg < 0 || (i 
 
 ensureDevVars();
 ensureWebBuild(argv.includes('--build'));
-const child = spawn('npx', wranglerDevArgs(port, passThrough), { cwd: ROOT, env: wranglerEnv(), stdio: 'inherit' });
+const child = spawn('npx', wranglerDevArgs({ port, extra: passThrough }), { cwd: ROOT, env: wranglerEnv(), stdio: 'inherit' });
 for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => child.kill(signal));
 child.on('exit', (code) => process.exit(code ?? 0));

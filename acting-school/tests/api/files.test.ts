@@ -16,7 +16,7 @@ import {
   users,
 } from '../../src/server/db/schema';
 import { createCastingApplication } from '../../src/server/lib/castingApplications';
-import { FILE_REFERENCES, fileInUse, releaseFile } from '../../src/server/lib/fileRefs';
+import { FILE_REFERENCES, fileInUse, fileUsedOffSite, releaseFile } from '../../src/server/lib/fileRefs';
 import { getSiteContent, saveSiteContent } from '../../src/server/lib/siteContent';
 import { addDays } from '../../src/shared/dates';
 import { castingApplicationInput } from '../../src/shared/schemas/castingApplications';
@@ -319,6 +319,81 @@ describe('releaseFile: a file goes only when nothing uses it', () => {
     }
   });
 
+  it('deleting a talent profile, or one of its photos, keeps a file that anything else still uses — the same list of places', async () => {
+    const t = await makeTestContext();
+    const owner = await t.as('owner');
+    const cases = await referenceCases(t, owner);
+
+    for (const how of ['profile', 'photo'] as const) {
+      for (const [name, place] of Object.entries(cases)) {
+        const label = `${how}: ${name}`;
+        const talentId = (await owner.post('/api/talent', { firstName: 'Leaving', lastName: 'Actor' })).body.id as number;
+        const fileId = await uploadPng(owner);
+        const photo = await owner.post(`/api/talent/${talentId}/photos`, { fileId });
+        expect(photo.status, label).toBe(201);
+        const storageKey = fileRow(t, fileId)!.storageKey;
+        place.point(fileId);
+
+        const path = how === 'profile' ? `/api/talent/${talentId}` : `/api/talent/${talentId}/photos/${photo.body.id}`;
+        expect((await owner.delete(path)).status, label).toBe(204);
+        // The other place still has its file: row, bytes, and its own pointer to it.
+        expect(fileRow(t, fileId), label).toBeTruthy();
+        expect(await t.files.get(storageKey), label).not.toBeNull();
+        expect(fileInUse(t.db, fileId), label).toBe(true);
+
+        place.clear(fileId);
+        expect(await releaseFile(t.db, t.files, fileId), label).toBe(true);
+        expect(await t.files.get(storageKey), label).toBeNull();
+      }
+    }
+  });
+
+  it('a talent photo nothing else uses goes with the photo, or with the profile: row and bytes', async () => {
+    const t = await makeTestContext();
+    const owner = await t.as('owner');
+    const talentId = (await owner.post('/api/talent', { firstName: 'Leaving', lastName: 'Actor' })).body.id as number;
+    const [first, second] = [await uploadPng(owner), await uploadPng(owner)];
+    const keys = [first, second].map((f) => fileRow(t, f)!.storageKey);
+    const added = await owner.post(`/api/talent/${talentId}/photos`, { fileId: first });
+    expect((await owner.post(`/api/talent/${talentId}/photos`, { fileId: second })).status).toBe(201);
+
+    expect((await owner.delete(`/api/talent/${talentId}/photos/${added.body.id}`)).status).toBe(204);
+    expect(fileRow(t, first)).toBeUndefined();
+    expect(await t.files.get(keys[0]!)).toBeNull();
+    expect(fileRow(t, second)).toBeTruthy();
+
+    expect((await owner.delete(`/api/talent/${talentId}`)).status).toBe(204);
+    expect(fileRow(t, second)).toBeUndefined();
+    expect(await t.files.get(keys[1]!)).toBeNull();
+    expect((await owner.delete(`/api/talent/${talentId}`)).status).toBe(404);
+  });
+
+  it('an accepted applicant’s photo that a team-pack record also uses outlives the application and the talent profile, in either order, and goes with that last record', async () => {
+    for (const order of [['application', 'talent'], ['talent', 'application']] as const) {
+      const t = await makeTestContext();
+      const owner = await t.as('owner');
+      const application = await newApplication(t, '0100 777 1000');
+      const storageKey = fileRow(t, application.fileId)!.storageKey;
+      const accepted = await owner.post(`/api/casting-applications/${application.id}/accept`);
+      expect(accepted.status).toBe(201);
+      // The same file as a workshop photo (a team-pack reference).
+      const courseId = await newCourse(owner, null);
+      t.db.insert(courseFiles).values({ courseId, fileId: application.fileId, kind: 'photo', uploadedById: owner.user.id }).run();
+      const record = t.db.select().from(courseFiles).where(eq(courseFiles.fileId, application.fileId)).get()!;
+
+      for (const what of order) {
+        const path = what === 'application' ? `/api/casting-applications/${application.id}` : `/api/talent/${accepted.body.talentId}`;
+        expect((await owner.delete(path)).status, order.join(' → ')).toBe(204);
+        expect(fileRow(t, application.fileId), order.join(' → ')).toBeTruthy();
+      }
+      expect(await t.files.get(storageKey)).not.toBeNull();
+      // Its last user goes: so does the file.
+      expect((await owner.delete(`/api/courses/${courseId}/files/${record.id}`)).status).toBe(204);
+      expect(fileRow(t, application.fileId)).toBeUndefined();
+      expect(await t.files.get(storageKey)).toBeNull();
+    }
+  });
+
   it('the site’s hero photo counts as used', async () => {
     const t = await makeTestContext();
     const owner = await t.as('owner');
@@ -326,6 +401,67 @@ describe('releaseFile: a file goes only when nothing uses it', () => {
     const content = (await owner.get('/api/site/content')).body;
     expect((await owner.put('/api/site/content', { ...content, heroFileId: fileId })).status).toBe(200);
     expect(await releaseFile(t.db, t.files, fileId)).toBe(false);
+  });
+});
+
+describe('what a website manager may put on the public site', () => {
+  it('fileUsedOffSite is the same list of places as fileInUse, minus the website’s own', () => {
+    const own = FILE_REFERENCES.filter((r) => r.site).map((r) => `${getTableConfig(r.table).name}.${r.column.name}`);
+    expect(own.sort()).toEqual(['site_coaches.photo_file_id', 'site_workshops.cover_file_id']);
+  });
+
+  it('never a file something outside the website uses — every FILE_REFERENCES place, the team pack’s included; the site’s own images can be reused', async () => {
+    const t = await makeTestContext();
+    const owner = await t.as('owner');
+    const cases = await referenceCases(t, owner);
+    const web = await t.as({ permissions: ['website.manage'] });
+    const course = await newCourse(owner, null, 'Cover course');
+    const siteOwn = new Set(['site_coaches.photo_file_id', 'site_workshops.cover_file_id', HERO_CASE]);
+    expect(Object.keys(cases).filter((name) => !siteOwn.has(name))).toHaveLength(FILE_REFERENCES.filter((r) => !r.site).length);
+
+    for (const [name, place] of Object.entries(cases)) {
+      const fileId = await uploadPng(web);
+      expect(fileUsedOffSite(t.db, fileId), name).toBe(false);
+      place.point(fileId);
+      const offSite = !siteOwn.has(name);
+      expect(fileUsedOffSite(t.db, fileId), name).toBe(offSite);
+      const expected = offSite ? 400 : 200;
+
+      const content = (await web.get('/api/site/content')).body;
+      const before = content.heroFileId as string | null;
+      const hero = await web.put('/api/site/content', { ...content, heroFileId: fileId });
+      expect(hero.status, `hero: ${name}`).toBe(expected);
+      if (offSite) expect(hero.body.error.issues[0], name).toMatchObject({ path: ['heroFileId'], message: 'talent:errors.fileNotFound' });
+      const coach = await web.post('/api/site/coaches', { nameEn: 'Coach', photoFileId: fileId });
+      expect(coach.status, `coach: ${name}`).toBe(offSite ? 400 : 201);
+      expect((await web.put(`/api/site/workshops/${course}`, { visible: true, coverFileId: fileId })).status, `cover: ${name}`).toBe(expected);
+      // Owners get the same answer: it is about the file, not the person.
+      if (offSite) expect((await owner.put('/api/site/content', { ...content, heroFileId: fileId })).status, name).toBe(400);
+      // And the public never gets a file that only something off the site uses.
+      if (offSite) expect((await t.app.request(`/site/media/${fileId}`)).status, name).toBe(404);
+
+      // Tidy up for the next place: nothing of this file stays on the site.
+      if (!offSite) {
+        const now = (await web.get('/api/site/content')).body;
+        expect((await web.put('/api/site/content', { ...now, heroFileId: name === HERO_CASE ? fileId : before })).status).toBe(200);
+        expect((await web.delete(`/api/site/coaches/${coach.body.id}`)).status).toBe(204);
+        expect((await web.put(`/api/site/workshops/${course}`, { visible: true, coverFileId: null })).status).toBe(200);
+      }
+      place.clear(fileId);
+    }
+  });
+
+  it('saving the site content again keeps a main photo that is already there, whatever uses it since', async () => {
+    const t = await makeTestContext();
+    const owner = await t.as('owner');
+    const hero = await uploadPng(owner);
+    const content = (await owner.get('/api/site/content')).body;
+    expect((await owner.put('/api/site/content', { ...content, heroFileId: hero })).status).toBe(200);
+    // Later the same (already public) file is made a student's photo.
+    expect((await owner.post('/api/students', { firstName: 'Sara', lastName: 'Nabil', photoFileId: hero })).status).toBe(201);
+    const again = await owner.put('/api/site/content', { ...content, heroFileId: hero, tagline: { en: 'New line', ar: '' } });
+    expect(again.status).toBe(200);
+    expect(again.body).toMatchObject({ heroFileId: hero, tagline: { en: 'New line' } });
   });
 });
 

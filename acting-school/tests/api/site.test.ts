@@ -1,9 +1,9 @@
 import { count, eq } from 'drizzle-orm';
 import { describe, expect, it, vi } from 'vitest';
 import { createDb, type DB } from '../../src/server/db/client';
-import { courseSlots, courses, files, leadActivities, leads, positions, settings, siteCoaches, siteWorkshops, students } from '../../src/server/db/schema';
+import { courseSlots, courses, files, leadActivities, leads, positions, settings, siteCoaches, siteWorkshops, students, users } from '../../src/server/db/schema';
 import { builtInGrantsVersion, upgradeBuiltInPositions } from '../../src/server/lib/access';
-import { createWebsiteLead, WEBSITE_GENERAL_ENQUIRY } from '../../src/server/lib/admissions';
+import { createWebsiteLead, sameLeadPerson, WEBSITE_GENERAL_ENQUIRY } from '../../src/server/lib/admissions';
 import { createCastingApplication } from '../../src/server/lib/castingApplications';
 import {
   findPublicFile,
@@ -15,6 +15,7 @@ import {
   loadPublicWorkshops,
   saveSiteContent,
   SITE_FORM_SECRET_SETTING,
+  siteUrls,
 } from '../../src/server/lib/siteContent';
 import { checkFormToken, FORM_TOKEN_MAX_AGE_MS, issueFormToken } from '../../src/server/lib/siteForms';
 import { publicHostSitePaths, sitePaths } from '../../src/server/site/paths';
@@ -242,6 +243,20 @@ describe('/api/site/coaches', () => {
     expect((await director.get<SiteCoach>(`/api/site/coaches/${ownerLinked.body.id}`)).body).toMatchObject({ userId: null, userName: null });
     await director.patch(`/api/site/coaches/${ownerLinked.body.id}`, { userId: null, titleEn: 'Guest director' });
     expect(t.db.select().from(siteCoaches).where(eq(siteCoaches.id, ownerLinked.body.id)).get()!.userId).toBe(cfo.id);
+    // Naming the owner behind that hidden link answers exactly like a missing id (no "yes, that's the one"), and changes nothing.
+    const guess = await director.patch(`/api/site/coaches/${ownerLinked.body.id}`, { userId: cfo.id });
+    const missing = await director.patch(`/api/site/coaches/${ownerLinked.body.id}`, { userId: 99999 });
+    expect(guess.status).toBe(400);
+    expect(guess.body.error.issues[0].path).toEqual(['userId']);
+    expect(guess.body).toEqual(missing.body);
+    expect(t.db.select().from(siteCoaches).where(eq(siteCoaches.id, ownerLinked.body.id)).get()!.userId).toBe(cfo.id);
+    // The owner may send it back unchanged.
+    expect((await owner.patch(`/api/site/coaches/${ownerLinked.body.id}`, { userId: cfo.id })).status).toBe(200);
+    // An unchanged visible link keeps saving even after that account was deactivated (the form always sends it back).
+    t.db.update(users).set({ active: false }).where(eq(users.id, coach.id)).run();
+    const resave = await director.patch<SiteCoach>(`/api/site/coaches/${linked.body.id}`, { userId: coach.id, titleEn: 'Still here' });
+    expect(resave.status).toBe(200);
+    expect(t.db.select().from(siteCoaches).where(eq(siteCoaches.id, linked.body.id)).get()).toMatchObject({ userId: coach.id, titleEn: 'Still here' });
     // Unlinking a visible account works.
     await director.patch(`/api/site/coaches/${linked.body.id}`, { userId: null });
     expect((await director.get<SiteCoach>(`/api/site/coaches/${linked.body.id}`)).body.userId).toBeNull();
@@ -254,6 +269,48 @@ describe('/api/site/coaches', () => {
     expect((await director.post<SiteCoach>('/api/site/coaches', { nameEn: 'A', photoFileId: fileId })).body.photoFileId).toBe(fileId);
     expect((await director.post('/api/site/coaches', { nameEn: 'A', photoFileId: '00000000-0000-4000-8000-000000000000' })).status).toBe(400);
     expect((await director.post('/api/site/coaches', { nameEn: 'A', photoFileId: 'not-a-uuid' })).status).toBe(400);
+  });
+});
+
+describe('site images are the website’s own uploads', () => {
+  it('a student’s photo or a talent’s photo can’t be made the hero, a coach photo or a workshop cover — by anyone holding only website.manage or more', async () => {
+    const t = await makeTestContext();
+    const owner = await t.as('ceo');
+    const studentPhoto = await uploadPng(owner);
+    const talentPhoto = await uploadPng(owner);
+    const student = await owner.post('/api/students', { firstName: 'Sara', lastName: 'Nabil', photoFileId: studentPhoto });
+    expect(student.status).toBe(201);
+    const person = await owner.post('/api/talent', { firstName: 'Omar', lastName: 'Zaki' });
+    expect((await owner.post(`/api/talent/${person.body.id}/photos`, { fileId: talentPhoto })).status).toBe(201);
+    const c = course(t);
+
+    const web = await t.as({ permissions: ['website.manage'] });
+    expect((await web.get('/api/students')).status).toBe(403);
+    for (const fileId of [studentPhoto, talentPhoto]) {
+      const hero = await web.put('/api/site/content', content({ heroFileId: fileId }));
+      expect(hero.status).toBe(400);
+      expect(hero.body.error.issues[0]).toMatchObject({ path: ['heroFileId'], message: 'talent:errors.fileNotFound' });
+      expect((await web.post('/api/site/coaches', { nameEn: 'X', photoFileId: fileId })).status).toBe(400);
+      expect((await web.put(`/api/site/workshops/${c.id}`, { visible: true, coverFileId: fileId })).status).toBe(400);
+      expect((await owner.put('/api/site/content', content({ heroFileId: fileId }))).status).toBe(400);
+      expect((await t.app.request(`/site/media/${fileId}`)).status).toBe(404);
+    }
+    // Its own upload is fine.
+    const own = await uploadPng(web);
+    expect((await web.put('/api/site/content', content({ heroFileId: own }))).status).toBe(200);
+    expect((await t.app.request(`/site/media/${own}`)).status).toBe(200);
+  });
+
+  it('a casting photo stays off the site after its application was accepted and deleted (it is a talent photo then)', async () => {
+    const t = await makeTestContext();
+    const director = await t.as('executive_director');
+    const app = await application(t);
+    const photo = t.db.select().from(files).all().find((f) => f.uploadedBy === null)!;
+    expect((await director.post(`/api/casting-applications/${app.id}/accept`)).status).toBe(201);
+    expect((await director.delete(`/api/casting-applications/${app.id}`)).status).toBe(204);
+    expect(t.db.select().from(files).where(eq(files.id, photo.id)).get()).toBeTruthy();
+    expect((await director.put('/api/site/content', content({ heroFileId: photo.id }))).status).toBe(400);
+    expect((await t.app.request(`/site/media/${photo.id}`)).status).toBe(404);
   });
 });
 
@@ -338,10 +395,26 @@ describe('/api/site/summary', () => {
     });
     const viaHost = await t.app.request('https://studio.example/api/site/summary', { headers: { cookie: director.cookie!, 'x-requested-with': 'fetch' } });
     expect(((await viaHost.json()) as SiteSummary).urls.ar.links).toBe('https://studio.example/site/ar/links');
+    expect(siteUrls('http://localhost:3000/').en.home).toBe('http://localhost:3000/site/en');
 
     // Website-only staff don't get the admissions / casting numbers.
     const webOnly = await t.as({ permissions: ['website.manage'] });
     expect((await webOnly.get<SiteSummary>('/api/site/summary')).body).toMatchObject({ newWebsiteLeads: null, newCastingApplications: null, visibleCoaches: 1 });
+  });
+});
+
+describe('/api/site/summary with the studio’s own domain (PUBLIC_SITE_HOSTS)', () => {
+  it('the links to open and copy are on the first public host, without /site — whatever host the staff app is used on', async () => {
+    const t = await makeTestContext({ config: { publicSiteHosts: ['turquoisestudio.app', 'www.turquoisestudio.app'] } });
+    const director = await t.as('executive_director');
+    const res = await t.app.request('https://team.turquoisestudio.app/api/site/summary', { headers: { cookie: director.cookie!, 'x-requested-with': 'fetch' } });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as SiteSummary).urls).toEqual({
+      en: { home: 'https://turquoisestudio.app/en', workshops: 'https://turquoisestudio.app/en/workshops', castingCall: 'https://turquoisestudio.app/en/casting-call', links: 'https://turquoisestudio.app/en/links' },
+      ar: { home: 'https://turquoisestudio.app/ar', workshops: 'https://turquoisestudio.app/ar/workshops', castingCall: 'https://turquoisestudio.app/ar/casting-call', links: 'https://turquoisestudio.app/ar/links' },
+    });
+    // The staff API itself still doesn't answer on the public host.
+    expect(siteUrls('http://127.0.0.1:8790', ['turquoisestudio.app']).ar.links).toBe('https://turquoisestudio.app/ar/links');
   });
 });
 
@@ -547,6 +620,79 @@ describe('createWebsiteLead (the enquiry form’s write)', () => {
     expect(t.db.select().from(leadActivities).where(eq(leadActivities.leadId, fresh.leadId)).all()).toHaveLength(1);
   });
 
+  it('the same person applying again: the note carries the date of birth and email, and the lead’s follow-up becomes due today', async () => {
+    const t = await makeTestContext();
+    const director = await t.as('executive_director');
+    const today = todayISO();
+    // A walk-in lead already being worked on: contacted, no follow-up set, no date of birth on file.
+    const existing = (await director.post<LeadDetail>('/api/leads', { firstName: 'Laila', lastName: 'Mostafa', phone: '0106 555 7010', source: 'walk_in' })).body;
+    await director.patch(`/api/leads/${existing.id}`, { status: 'contacted' });
+    const before = (await director.get('/api/leads/counts')).body;
+
+    const dob = addDays(today, -24 * 366);
+    const again = createWebsiteLead(t.db, applyForm({ firstName: ' laila ', lastName: 'MOSTAFA', dateOfBirth: dob, message: 'Evening group?' }), { courseId: null, today });
+    expect(again).toEqual({ leadId: existing.id, created: false });
+    const lead = (await director.get<LeadDetail>(`/api/leads/${existing.id}`)).body;
+    expect(lead).toMatchObject({ status: 'contacted', source: 'walk_in', nextFollowUpOn: today });
+    const note = lead.activities.find((a) => a.body?.startsWith('Applied again'))!;
+    expect(note.body).toContain(`Date of birth: ${dob}`);
+    expect(note.body).toContain('Email: laila@example.com');
+    expect(note.body).toContain('Evening group?');
+    // Staff see it: it is now under "Follow-up due".
+    const due = await director.get<{ items: LeadListItem[] }>('/api/leads?group=follow_up_due');
+    expect(due.body.items.map((l) => l.id)).toEqual([existing.id]);
+    expect((await director.get('/api/leads/counts')).body.followUpDue).toBe(before.followUpDue + 1);
+
+    // A follow-up that was already due earlier keeps its date; a later one is pulled forward to today.
+    await director.patch(`/api/leads/${existing.id}`, { nextFollowUpOn: addDays(today, -2) });
+    createWebsiteLead(t.db, applyForm({ dateOfBirth: dob }), { courseId: null, today });
+    expect(t.db.select().from(leads).get()!.nextFollowUpOn).toBe(addDays(today, -2));
+    await director.patch(`/api/leads/${existing.id}`, { nextFollowUpOn: addDays(today, 9) });
+    createWebsiteLead(t.db, applyForm({ dateOfBirth: dob }), { courseId: null, today });
+    expect(t.db.select().from(leads).get()!.nextFollowUpOn).toBe(today);
+    expect(t.db.select().from(leads).all()).toHaveLength(1);
+  });
+
+  it('someone else on the same phone (a parent’s second child) is a lead of their own, counted as new, naming the other enquiry', async () => {
+    const t = await makeTestContext();
+    const director = await t.as('executive_director');
+    const today = todayISO();
+    const guardian = { guardianName: 'Mona Saber', guardianPhone: '0128 888 0042', guardianConsent: 'on' };
+    const hana = createWebsiteLead(t.db, applyForm({ firstName: 'Hana', lastName: 'Saber', phone: '0128 888 0042', dateOfBirth: addDays(today, -10 * 366), ...guardian }), { courseId: null, today });
+    const newBefore = (await director.get('/api/dashboard')).body.counts.newWebsiteLeads;
+    const karim = createWebsiteLead(t.db, applyForm({ firstName: 'Karim', lastName: 'Saber', phone: '+20 128 888 0042', dateOfBirth: addDays(today, -8 * 366), ...guardian }), { courseId: null, today });
+    expect(karim.created).toBe(true);
+    expect(karim.leadId).not.toBe(hana.leadId);
+    expect(t.db.select().from(leads).all()).toHaveLength(2);
+    expect(newBefore).toBe(1);
+    expect((await director.get('/api/dashboard')).body.counts.newWebsiteLeads).toBe(2);
+    const lead = (await director.get<LeadDetail>(`/api/leads/${karim.leadId}`)).body;
+    expect(lead).toMatchObject({ firstName: 'Karim', status: 'new', source: 'website', dateOfBirth: addDays(today, -8 * 366) });
+    expect(lead.notes).toContain(`Same phone as enquiry #${hana.leadId} (Hana Saber)`);
+    expect(lead.activities[0]!.body).toContain(`Same phone as enquiry #${hana.leadId} (Hana Saber)`);
+    // Hana's lead is untouched.
+    expect(t.db.select().from(leadActivities).where(eq(leadActivities.leadId, hana.leadId)).all()).toHaveLength(1);
+
+    // The same first name with another date of birth is someone else too; the same child again is not.
+    const twin = createWebsiteLead(t.db, applyForm({ firstName: 'Hana', lastName: 'Saber', phone: '0128 888 0042', dateOfBirth: addDays(today, -12 * 366), ...guardian }), { courseId: null, today });
+    expect(twin.created).toBe(true);
+    const again = createWebsiteLead(t.db, applyForm({ firstName: 'هَنا', lastName: 'x', phone: '0128 888 0042', dateOfBirth: addDays(today, -10 * 366), ...guardian }), { courseId: null, today });
+    expect(again.created).toBe(true);
+    const sameChild = createWebsiteLead(t.db, applyForm({ firstName: 'Karim', lastName: 'S.', phone: '0128 888 0042', dateOfBirth: addDays(today, -8 * 366), ...guardian }), { courseId: null, today });
+    expect(sameChild).toEqual({ leadId: karim.leadId, created: false });
+  });
+
+  it('sameLeadPerson: first names must agree; then the date of birth when both have one, else the family names', () => {
+    const lead = { firstName: 'أحمد', lastName: 'علي', dateOfBirth: null as string | null };
+    expect(sameLeadPerson(lead, { firstName: 'احمد ', lastName: 'علي', dateOfBirth: '2000-01-01' })).toBe(true);
+    expect(sameLeadPerson(lead, { firstName: 'أحمد', lastName: 'حسن', dateOfBirth: '2000-01-01' })).toBe(false);
+    expect(sameLeadPerson(lead, { firstName: 'محمد', lastName: 'علي', dateOfBirth: '2000-01-01' })).toBe(false);
+    expect(sameLeadPerson({ ...lead, dateOfBirth: '2000-01-01' }, { firstName: 'أحمد', lastName: 'حسن', dateOfBirth: '2000-01-01' })).toBe(true);
+    expect(sameLeadPerson({ ...lead, dateOfBirth: '2000-01-01' }, { firstName: 'أحمد', lastName: 'علي', dateOfBirth: '2001-01-01' })).toBe(false);
+    expect(sameLeadPerson({ firstName: 'Laila', lastName: 'M', dateOfBirth: null }, { firstName: 'LAILA', lastName: 'Mostafa', dateOfBirth: null })).toBe(true);
+    expect(sameLeadPerson({ firstName: 'Laila', lastName: '', dateOfBirth: null }, { firstName: 'laila', lastName: 'Mostafa', dateOfBirth: null })).toBe(true);
+  });
+
   it('under 18: guardian name, phone and consent are required, and travel with the lead', async () => {
     const t = await makeTestContext();
     const minorDob = addDays(todayISO(), -16 * 366);
@@ -659,7 +805,7 @@ describe('POST /api/admin/seed-demo-website', () => {
     expect(siteContent.safeParse(site).success).toBe(true);
     expect(t.db.select().from(siteCoaches).where(eq(siteCoaches.userId, layla.id)).all()).toHaveLength(1);
     const screenOnSite = findPublicWorkshop(t.db, screen.id, todayISO())!;
-    expect(screenOnSite).toMatchObject({ title: { en: 'Screen Acting I', ar: 'التمثيل أمام الكاميرا ١' }, coach: { en: 'Layla Haddad', ar: 'ليلى حداد' }, acceptingApplications: true });
+    expect(screenOnSite).toMatchObject({ title: { en: 'Screen Acting I', ar: 'التمثيل أمام الكاميرا 1' }, coach: { en: 'Layla Haddad', ar: 'ليلى حداد' }, acceptingApplications: true });
     // No prices in the demo either.
     expect(Object.keys(screenOnSite).filter((k) => /price/i.test(k))).toEqual([]);
 

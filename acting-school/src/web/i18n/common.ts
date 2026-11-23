@@ -385,7 +385,7 @@ const ar: TranslationOf<typeof en> = {
     required: 'حقل مطلوب',
     invalid: 'قيمة غير صالحة',
     invalidEmail: 'أدخل بريدًا إلكترونيًا صالحًا',
-    invalidUrl: 'أدخل رابطًا كاملًا يبدأ بـ https://',
+    invalidUrl: 'أدخل رابطًا كاملًا يبدأ بـ \u2066https://\u2069',
     invalidDate: 'أدخل تاريخًا صالحًا',
     invalidTime: 'أدخل وقتًا صالحًا',
     invalidDateTime: 'أدخل تاريخًا ووقتًا صالحين',

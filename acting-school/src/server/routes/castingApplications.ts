@@ -17,6 +17,7 @@ import {
   applicationSearch,
   deleteApplication,
   findApplication,
+  isOnRoster,
   loadApplicationDetail,
   loadApplicationListItems,
 } from '../lib/castingApplications';
@@ -33,7 +34,8 @@ import { currentUser, requireAuth, requirePermission } from '../middleware/auth'
  * phone and links need talent.contact (null otherwise, contactHidden: true,
  * and the search then leaves phone and email out);
  * talent.write marks them new / reviewing / declined, accepts them ("Add to
- * roster": a talent profile with the same photos, once — 409 after) and
+ * roster": a talent profile with the same photos, once — 409 while that profile
+ * exists; if it is deleted the application is open again) and
  * deletes them (with their photo files, unless a talent profile uses them).
  * Created only by the public form (lib/castingApplications.ts createCastingApplication).
  */
@@ -64,7 +66,7 @@ router.patch('/:id', canWrite, async (c) => {
   const db = c.get('db');
   db.transaction((tx) => {
     const app = findApplication(tx, id);
-    if (app.status === 'accepted') throw new ApiError(409, CASTING_APPLICATION_ERROR_CODES.alreadyAccepted, 'This application is already on the roster');
+    if (isOnRoster(app)) throw new ApiError(409, CASTING_APPLICATION_ERROR_CODES.alreadyAccepted, 'This application is already on the roster');
     if (app.status === input.status) return;
     // Back to new = not looked at yet; reviewing / declined record who decided and when.
     const reviewed = input.status === 'new' ? { reviewedById: null, reviewedAt: null } : { reviewedById: me.id, reviewedAt: Date.now() };

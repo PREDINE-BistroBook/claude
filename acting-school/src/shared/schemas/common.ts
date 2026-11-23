@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { DATETIME_RE, TIME_RE, isValidDate } from '../dates';
-import { normalizePhone } from '../phone';
+import { normalizePhone, plainNumberText } from '../phone';
 
 /**
  * Building blocks for request validation. Forms send '' for an empty field;
@@ -23,10 +23,18 @@ const blankToNull = (v: unknown) => {
   return v;
 };
 
+/**
+ * A number field as a form sends it: '' or only spaces → null; digits in any
+ * script the school types in (١٧٠ and ۱۷۰ are 170) → the number. Anything else
+ * stays as it is and fails the number check.
+ */
 const blankToNullNumber = (v: unknown) => {
-  if (v === '' || v === null) return null;
+  if (v === null) return null;
   if (typeof v === 'string') {
-    const n = Number(v);
+    if (v.length > 40) return v;
+    const t = plainNumberText(v);
+    if (t === '') return null;
+    const n = Number(t);
     return Number.isNaN(n) ? v : n;
   }
   return v;
@@ -40,7 +48,9 @@ export const optText = (max = 1000) => z.preprocess(blankToNull, z.string().max(
  * pasted from WhatsApp, single spaces — see normalizePhone in shared/phone.ts),
  * so they can be matched and searched. Otherwise as typed.
  */
-const normalizePhoneInput = (v: unknown) => (typeof v === 'string' ? normalizePhone(v) : v);
+// A text far longer than any phone number is left alone (the length check then refuses it) rather
+// than run through the clean-up: public forms accept megabytes before validation.
+const normalizePhoneInput = (v: unknown) => (typeof v === 'string' && v.length <= 200 ? normalizePhone(v) : v);
 export const reqPhoneText = (max = 50) => z.preprocess(normalizePhoneInput, reqText(max));
 export const optPhoneText = (max = 50) => z.preprocess(normalizePhoneInput, optText(max));
 

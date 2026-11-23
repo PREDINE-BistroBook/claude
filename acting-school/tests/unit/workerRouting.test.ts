@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createApp } from '../../src/server/app';
 import { parsePublicSiteHosts, testConfig } from '../../src/server/config';
 import { sqliteFileStore } from '../../src/server/lib/fileStore';
@@ -147,7 +147,8 @@ describe('the Worker on the staff host (and workers.dev, localhost)', () => {
 
     const casting = await routeRequest(post('/site/en/casting-call', SITE_CASTING_MAX_BYTES + 1), f.deps);
     expect(casting.status).toBe(413);
-    expect(await casting.text()).toContain('href="/site/en/casting-call#apply"');
+    // "Back to the form" must be a real navigation, not a jump within the error page (the form posts to its own address).
+    expect(await casting.text()).toContain('href="/site/en/casting-call?again=1#apply"');
     expect(f.school).toHaveLength(0);
 
     // Within the cap: through (a 10 MB casting form, an 8 MB upload).
@@ -190,7 +191,7 @@ describe('the Worker on the public hosts (turquoisestudio.app)', () => {
     expect(big.status).toBe(413);
     const page = await big.text();
     // Links on a public host are bare.
-    expect(page).toContain('href="/ar/casting-call#apply"');
+    expect(page).toContain('href="/ar/casting-call?again=1#apply"');
     expect(page).toContain('href="/ar"');
     expect(page).not.toContain('/site/');
     expect(f.school).toHaveLength(1);
@@ -235,18 +236,39 @@ describe('the real app behind the Worker', () => {
 
     // The trailing-slash redirect and the form's thank-you redirect stay bare too — and never leave the site.
     expect((await routeRequest(req('https://turquoisestudio.app/en/links/'), deps)).headers.get('location')).toBe('/en/links');
-    for (const sneaky of ['//evil.example/', '///evil.example//', '/%2F%2Fevil.example/']) {
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {});
+    for (const sneaky of [
+      '//evil.example/',
+      '///evil.example//',
+      '/%2F%2Fevil.example/',
+      // Hono's c.req.path is percent-decoded: an encoded backslash, tab or line break must not reach the Location header.
+      '/%5Cevil.example/',
+      '/%5C%5Cevil.example/',
+      '/%5cevil.example/?a=1',
+      '/%09/evil.example/',
+      '/%20/evil.example/',
+      '/%0D%0ASet-Cookie:x=1/',
+      '/%0A/evil.example/',
+    ]) {
       const res = await routeRequest(req(`https://turquoisestudio.app${sneaky}`), deps);
+      expect(res.status, sneaky).not.toBe(500);
+      expect(res.headers.get('set-cookie'), sneaky).toBeNull();
       const location = res.headers.get('location');
-      if (location !== null) expect(location, sneaky).toMatch(/^\/[^/\\]/);
+      if (location === null) continue;
+      expect(location, sneaky).toMatch(/^\/[^/\\\s]/);
+      // What a browser makes of it: the same host, always.
+      expect(new URL(location, 'https://turquoisestudio.app/').host, sneaky).toBe('turquoisestudio.app');
     }
+    expect(quiet).not.toHaveBeenCalled();
+    quiet.mockRestore();
+    expect((await routeRequest(req('https://turquoisestudio.app/%5Cevil.example/?a=1'), deps)).headers.get('location')).toBe('/%5Cevil.example?a=1');
     expect((await routeRequest(req('https://team.turquoisestudio.app/site//evil.example/'), deps)).headers.get('location')).toBe('/site/evil.example');
     const bot = await routeRequest(
       req('https://turquoisestudio.app/en/apply', { method: 'POST', body: 'website=spam', headers: { 'content-type': 'application/x-www-form-urlencoded' } }),
       deps,
     );
     expect(bot.status).toBe(303);
-    expect(bot.headers.get('location')).toBe('/en/thanks?k=apply');
+    expect(bot.headers.get('location')).toBe('/en/thanks?k=apply#thanks');
   });
 
   it('on the staff host: the staff app as before, and /site previews with /site links', async () => {
@@ -255,6 +277,12 @@ describe('the real app behind the Worker', () => {
     expect((await routeRequest(req('https://team.turquoisestudio.app/api/health'), deps)).status).toBe(200);
     const preview = await (await routeRequest(req('https://team.turquoisestudio.app/site/en'), deps)).text();
     expect(preview).toContain('href="/site/en/workshops"');
-    expect(preview).toContain('<link rel="canonical" href="https://team.turquoisestudio.app/site/en">');
+    // The preview names the studio's own domain as the page's address (not a second copy of the site).
+    expect(preview).toContain('<link rel="canonical" href="https://turquoisestudio.app/en">');
+    expect(preview).toContain('<link rel="alternate" hreflang="ar" href="https://turquoisestudio.app/ar">');
+    expect(preview).toContain('<link rel="alternate" hreflang="x-default" href="https://turquoisestudio.app/">');
+    expect(preview).toContain('<meta property="og:url" content="https://turquoisestudio.app/en">');
+    const links = await (await routeRequest(req('https://team.turquoisestudio.app/site/ar/links'), deps)).text();
+    expect(links).toContain('<link rel="canonical" href="https://turquoisestudio.app/ar/links">');
   });
 });

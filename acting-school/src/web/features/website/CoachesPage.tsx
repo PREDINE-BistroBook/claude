@@ -17,7 +17,7 @@ export default function CoachesPage() {
 
   const move = (index: number, delta: -1 | 1) => {
     const ids = moveItem(items, index, delta).map((c) => c.id);
-    order.mutate(ids, { onError: (err) => toast.error(t(errorMessageKey(err))) });
+    order.mutate(ids, { onSuccess: () => toast.success(t('move.saved')), onError: (err) => toast.error(t(errorMessageKey(err))) });
   };
 
   const add = (

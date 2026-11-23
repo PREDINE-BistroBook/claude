@@ -5,9 +5,12 @@
  * worker's photo, talent photos, the website, workshop and casting files, chat
  * attachments — and sometimes from two at once (an accepted casting
  * application's photos become the talent profile's). So deleting a record
- * never deletes its file directly: it calls releaseFile / releaseFiles, which
+ * never deletes its file directly: it calls releaseFile / releaseFiles (or
+ * takeUnusedFiles inside its own transaction, then deleteStoredFiles), which
  * delete the file (row, then bytes) only when nothing in FILE_REFERENCES (nor
- * the site's hero photo) still points at it.
+ * the site's hero photo) still points at it. So a file goes with its last
+ * user, whichever record that is: an accepted applicant's photos are deleted
+ * for good whether the application or the talent profile is deleted first.
  *
  * FILE_REFERENCES must name every column with a foreign key to files:
  * tests/api/files.test.ts compares it with the schema.
@@ -36,14 +39,20 @@ import type { FileStore } from './fileStore';
 import { getSiteContent } from './siteContent';
 import { chunk, IN_LIST_CHUNK, inChunks } from './sqlLimits';
 
-/** Every column holding a file id (a foreign key to files.id). */
-export const FILE_REFERENCES: readonly { table: SQLiteTable; column: SQLiteColumn }[] = [
+/**
+ * Every column holding a file id (a foreign key to files.id). `site: true`
+ * marks the public website's own columns (a coach's photo, a workshop's
+ * cover): what they point at can be served to anyone (/site/media/:id), so a
+ * file used from any *other* column here must never be put there
+ * (fileUsedOffSite).
+ */
+export const FILE_REFERENCES: readonly { table: SQLiteTable; column: SQLiteColumn; site?: true }[] = [
   { table: users, column: users.photoFileId },
   { table: students, column: students.photoFileId },
   { table: talent, column: talent.headshotFileId },
   { table: talentPhotos, column: talentPhotos.fileId },
-  { table: siteCoaches, column: siteCoaches.photoFileId },
-  { table: siteWorkshops, column: siteWorkshops.coverFileId },
+  { table: siteCoaches, column: siteCoaches.photoFileId, site: true },
+  { table: siteWorkshops, column: siteWorkshops.coverFileId, site: true },
   { table: castingApplicationPhotos, column: castingApplicationPhotos.fileId },
   { table: courseFiles, column: courseFiles.fileId },
   { table: castingFiles, column: castingFiles.fileId },
@@ -58,6 +67,19 @@ export function fileInUse(db: Reader, fileId: string): boolean {
   const row = db.get<{ used: number }>(sql`select (${sql.join(checks, sql` or `)}) as used`);
   if (row?.used) return true;
   return getSiteContent(db).heroFileId === fileId;
+}
+
+/**
+ * Is this file used by something other than the public website: someone's
+ * photo (a team member's, a student's, a talent's headshot or gallery photo),
+ * a casting application's photo, a workshop's or a casting's file, a chat
+ * attachment? Such a file is private to the people who may see that record,
+ * so it can't be made a site image (assertSiteImage in lib/siteContent.ts) —
+ * the same list of places as fileInUse, minus the site's own. One statement.
+ */
+export function fileUsedOffSite(db: Reader, fileId: string): boolean {
+  const checks: SQL[] = FILE_REFERENCES.filter((r) => !r.site).map(({ table, column }) => sql`exists (select 1 from ${table} where ${column} = ${fileId})`);
+  return !!db.get<{ used: number }>(sql`select (${sql.join(checks, sql` or `)}) as used`)?.used;
 }
 
 /**

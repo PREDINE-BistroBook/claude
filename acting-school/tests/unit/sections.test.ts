@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BUILT_IN_POSITIONS, PERMISSIONS, type Permission } from '../../src/shared/permissions';
 import type { ScheduleEvent } from '../../src/shared/schemas/schedule';
-import { NAV_ITEMS, TEAM_PATH, adminNavItems, mobileTabs, navItemActive, navItemOpen, sectionNavItems, teamMenuActive, teamMenuHint } from '../../src/web/layout/nav';
+import { NAV_ITEMS, TEAM_PATH, adminNavItems, landingAfterSignIn, mobileTabs, navItemActive, navItemOpen, sectionNavItems, teamMenuActive, teamMenuHint } from '../../src/web/layout/nav';
 import {
   SECTIONS,
   currentSection,
+  defaultSection,
   lastRoute,
   rememberRoute,
   rememberSection,
@@ -12,6 +13,7 @@ import {
   resetSectionMemoryForTests,
   sectionForPath,
   sectionTabTarget,
+  startSection,
   visibleSections,
 } from '../../src/web/layout/sections';
 import { CASTING_SCHEDULE_KINDS, SCHOOL_SCHEDULE_KINDS, eventsOfKinds, visibleKinds } from '../../src/web/features/schedule/utils';
@@ -207,6 +209,81 @@ describe('currentSection', () => {
     expect(currentSection('/castings', schoolOnly, 'casting')).toBe('school');
     expect(currentSection('/profile', [], 'school')).toBeNull();
   });
+  it('with nothing remembered, profile and admin pages show the person’s default section (as "/" would)', () => {
+    const team = canWith(builtIn('casting_team'));
+    expect(currentSection('/profile', visibleSections(team), null, team)).toBe('casting');
+    expect(currentSection('/profile', visibleSections(team), 'school', team)).toBe('school');
+    expect(currentSection('/profile', all, null, canWith(PERMISSIONS))).toBe('school');
+  });
+});
+
+describe('where "/" starts (defaultSection, startSection)', () => {
+  const start = (perms: readonly Permission[], remembered: Parameters<typeof startSection>[2] = null) => startSection(visibleSections(canWith(perms)), canWith(perms), remembered);
+
+  it('School → Casting → Website for everyone — except someone whose School is only the student list, who starts in Casting', () => {
+    // The casting team: students.read without workshops or admissions. School would be one card.
+    expect(start(builtIn('casting_team'))).toBe('casting');
+    expect(start(['students.read', 'talent.read'])).toBe('casting');
+    expect(start(['students.read', 'castings.read', 'website.manage'])).toBe('casting');
+    // Everyone else keeps the tab order.
+    for (const key of ['ceo', 'cfo', 'executive_director', 'head_of_casting', 'video_editor', 'acting_coach', 'finance']) expect(start(builtIn(key)), key).toBe('school');
+    expect(start(['students.read', 'courses.read', 'talent.read'])).toBe('school');
+    expect(start(['students.read', 'admissions.read', 'castings.read'])).toBe('school');
+    // Only the student list and no Casting: School it is.
+    expect(start(['students.read'])).toBe('school');
+    expect(start(['students.read', 'website.manage'])).toBe('school');
+    expect(start(['talent.read', 'website.manage'])).toBe('casting');
+    expect(start(['website.manage'])).toBe('website');
+    expect(start([])).toBeNull();
+    expect(defaultSection([], canWith([]))).toBeNull();
+  });
+
+  it('a remembered section the person still sees always wins; one they no longer see doesn’t', () => {
+    expect(start(builtIn('casting_team'), 'school')).toBe('school');
+    expect(start(PERMISSIONS, 'website')).toBe('website');
+    expect(start(builtIn('acting_coach'), 'casting')).toBe('school');
+    expect(start(builtIn('casting_team'), 'website')).toBe('casting');
+  });
+});
+
+describe('landingAfterSignIn (the page the last person left the screen on)', () => {
+  const coach = canWith(builtIn('acting_coach'));
+  const director = canWith(builtIn('executive_director'));
+
+  it('a section the person doesn’t see is replaced by their own start, never a "No access" screen', () => {
+    expect(landingAfterSignIn('/casting', coach)).toBe('/');
+    expect(landingAfterSignIn('/website/pages', coach)).toBe('/');
+    expect(landingAfterSignIn('/talent/12?tab=photos', coach)).toBe('/');
+    expect(landingAfterSignIn('/school', canWith(['talent.read']))).toBe('/');
+    expect(landingAfterSignIn('/website', canWith(builtIn('casting_team')))).toBe('/');
+  });
+
+  it('a menu page their positions don’t open goes to their start too', () => {
+    // A team member's account page is the Team page's management side (staff.manage).
+    expect(landingAfterSignIn('/staff/4', coach)).toBe('/');
+    expect(landingAfterSignIn('/staff/new', coach)).toBe('/');
+    expect(landingAfterSignIn('/settings', coach)).toBe('/');
+    expect(landingAfterSignIn('/admissions/7', coach)).toBe('/');
+    expect(landingAfterSignIn('/casting/applications/3', canWith(['castings.read']))).toBe('/');
+    expect(landingAfterSignIn('/schedule', canWith(builtIn('casting_team')))).toBe('/');
+  });
+
+  it('a page they can open is kept, query and all', () => {
+    expect(landingAfterSignIn('/school', coach)).toBe('/school');
+    expect(landingAfterSignIn('/students/3?x=1', coach)).toBe('/students/3?x=1');
+    expect(landingAfterSignIn('/sessions/40', coach)).toBe('/sessions/40');
+    expect(landingAfterSignIn('/profile', coach)).toBe('/profile');
+    expect(landingAfterSignIn('/', coach)).toBe('/');
+    expect(landingAfterSignIn('/casting', director)).toBe('/casting');
+    expect(landingAfterSignIn('/website/pages', director)).toBe('/website/pages');
+    expect(landingAfterSignIn('/staff/4', director)).toBe('/staff/4');
+    expect(landingAfterSignIn('/staff/new', director)).toBe('/staff/new');
+    // The Team page is everyone's (/staff, the old list, only forwards to it); so are messages.
+    expect(landingAfterSignIn('/team', coach)).toBe('/team');
+    expect(landingAfterSignIn('/staff', coach)).toBe('/staff');
+    expect(landingAfterSignIn('/messages/3', coach)).toBe('/messages/3');
+    expect(landingAfterSignIn('/casting/applications/3', canWith(builtIn('casting_team')))).toBe('/casting/applications/3');
+  });
 });
 
 describe('remembering sections and pages', () => {
@@ -235,6 +312,20 @@ describe('remembering sections and pages', () => {
   it('ignores a stored value that is not a section', () => {
     store.set('section', 'admin');
     expect(rememberedSection()).toBeNull();
+  });
+
+  it('is kept per person: the next one to sign in on a shared phone doesn’t inherit it', () => {
+    rememberSection('school', 7);
+    expect(store.get('section')).toBe('school');
+    expect(rememberedSection(7)).toBe('school');
+    expect(rememberedSection(8)).toBeNull();
+    // Remembered for nobody in particular (an older version, or no account known): anyone's.
+    rememberSection('casting');
+    expect(rememberedSection(8)).toBe('casting');
+    store.clear();
+    resetSectionMemoryForTests();
+    store.set('section', 'website');
+    expect(rememberedSection(3)).toBe('website');
   });
 
   it('a tab goes back to the last page visited in that section, or its home; the current section’s tab goes home', () => {
@@ -275,6 +366,9 @@ describe('remembering sections and pages', () => {
     });
     expect(() => rememberSection('website')).not.toThrow();
     expect(rememberedSection()).toBe('website');
+    rememberSection('casting', 5);
+    expect(rememberedSection(5)).toBe('casting');
+    expect(rememberedSection(6)).toBeNull();
     expect(() => rememberRoute('website', '/website/links', 2)).not.toThrow();
     expect(lastRoute('website', 2)).toBe('/website/links');
   });

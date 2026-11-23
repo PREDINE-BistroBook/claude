@@ -2,6 +2,7 @@ import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { MAX_INTERVIEW_CRITERIA } from '@shared/schemas/settings';
 import { Button, IconButton, TextField } from '@web/components/ui';
+import { criterionName } from './utils';
 
 /** A criterion being edited. `key` is '' for one added in this session (generated from the label on save). */
 export interface CriterionDraft {
@@ -27,7 +28,7 @@ export function CriteriaEditor({
   /** Field errors keyed like the API's: 'interviewCriteria.2.label'. */
   error: (path: string) => string | undefined;
 }) {
-  const { t } = useTranslation(['settings', 'common']);
+  const { t, i18n } = useTranslation(['settings', 'common']);
   const set = (i: number, patch: Partial<CriterionDraft>) => onChange(value.map((c, j) => (j === i ? { ...c, ...patch } : c)));
   const move = (i: number, dir: -1 | 1) => {
     const next = [...value];
@@ -42,7 +43,8 @@ export function CriteriaEditor({
       {value.length ? (
         <ol className="grid gap-3">
           {value.map((c, i) => {
-            const name = c.label.trim() || t('criteria.untitled', { n: i + 1 });
+            // The name the move / remove buttons are read out with: in the screen's language.
+            const name = criterionName(c, i18n.language) || t('criteria.untitled', { n: i + 1 });
             return (
               <li key={c.rowId} className="rounded-xl border border-line bg-surface-2/50 px-3 pt-1.5 pb-3">
                 <div className="mb-1 flex items-center justify-between gap-2">

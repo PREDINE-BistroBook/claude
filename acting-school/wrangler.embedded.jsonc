@@ -27,8 +27,9 @@
     "ALLOW_DEMO_RESET": "false",
     // The studio's own domain: these hosts serve the public website at their
     // root (www redirects to the apex) and nothing of the staff app. The staff
-    // app is on team.turquoisestudio.app. The deployer attaches the domains
-    // (routes with custom_domain) when switching them on.
+    // app is on team.turquoisestudio.app. The domains themselves are attached
+    // by "routes" below. The first host listed here is the one the staff app's
+    // "Open the website" / "Copy link" buttons point at.
     "PUBLIC_SITE_HOSTS": "turquoisestudio.app,www.turquoisestudio.app",
     // The staff app's old address forwards to the new one (src/worker/hostRedirect.ts).
     "HOST_REDIRECTS": "staff.turquoisestudio.app=team.turquoisestudio.app",

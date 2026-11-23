@@ -19,6 +19,12 @@ export interface SiteCtx {
   paths: SitePaths;
   /** "https://host" of this request. */
   origin: string;
+  /**
+   * Set on a /site preview (the staff host, workers.dev) when the studio has its own domain:
+   * "https://turquoisestudio.app". The page's canonical, hreflang and og:url then name that domain
+   * (without /site), so the preview isn't a second copy of the site for search engines and link previews.
+   */
+  canonicalOrigin?: string;
   studioName: string;
   content: SiteContent;
   /** For wa.me links (settings.defaultCountryCode). */
@@ -63,11 +69,14 @@ export function siteCtx(c: Context<AppEnv>, lang: Locale): SiteCtx {
   const settings = getSettings(db);
   const t = SITE_STRINGS[lang];
   const name = (lang === 'ar' ? settings.schoolNameAr || settings.schoolName : settings.schoolName)?.trim() || t.meta.studioName;
+  const paths = pathsFor(c);
+  const publicHost = c.get('config').publicSiteHosts[0];
   return {
     lang,
     t,
-    paths: pathsFor(c),
+    paths,
     origin: new URL(c.req.url).origin,
+    canonicalOrigin: publicHost && paths.base === SITE_BASE ? `https://${publicHost}` : undefined,
     studioName: name,
     content: getSiteContent(db),
     countryCode: settings.defaultCountryCode,

@@ -10,7 +10,7 @@ import { html, raw } from 'hono/html';
 import type { Locale } from '../../shared/enums';
 import type { SiteContent } from '../../shared/schemas/site';
 import { fmt, type SiteStrings } from './i18n';
-import type { SitePaths } from './paths';
+import { SITE_BASE, type SitePaths } from './paths';
 import { FAVICON_HREF, brandMark, icon, instagramUrl, type Html } from './render';
 
 /**
@@ -18,7 +18,8 @@ import { FAVICON_HREF, brandMark, icon, instagramUrl, type Html } from './render
  * --brand-turquoise #50e0d0, --brand-mint #a8f0e8, --accent #0c766c family).
  * Text contrast: body #0d1716 / muted #485a57 on white and #f3f8f7 ≥ 7:1;
  * white on --accent 6.4:1; black on turquoise 13:1; the WhatsApp green with its
- * dark text 7.7:1. Focus: a thick amber ring, visible on black and on white.
+ * dark text 7.7:1. Focus: a thick amber ring with a dark edge inside it, so it shows on black (amber
+ * 12:1) and on white (the dark edge; amber alone is only 1.75:1 there).
  */
 const CSS = `
 :root{--ink:#0d1716;--muted:#485a57;--line:#cfdfdc;--canvas:#f3f8f7;--surface:#fff;--tile:#000;--tq:#50e0d0;--mint:#a8f0e8;--accent:#0a6b62;--accent-h:#075750;--soft:#e0f5f1;--wa:#25d366;--wa-ink:#062a12;--danger:#b42318;--danger-soft:#fdeceb;--focus:#ffb703;--r:16px}
@@ -32,7 +33,7 @@ h1{font-size:2rem}h2{font-size:1.55rem}h3{font-size:1.2rem}
 p{margin:0 0 1em}
 a{color:var(--accent);text-underline-offset:3px}
 img{max-width:100%;height:auto;display:block}
-:focus-visible{outline:3px solid var(--focus);outline-offset:3px;border-radius:6px}
+:focus-visible{outline:3px solid var(--focus);outline-offset:3px;border-radius:6px;box-shadow:0 0 0 3px var(--ink)}
 .wrap{max-width:1040px;margin-inline:auto;padding-inline:16px}
 .narrow{max-width:720px}
 .i{width:1.25em;height:1.25em;flex:none}
@@ -66,7 +67,7 @@ img{max-width:100%;height:auto;display:block}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.05)}
 .block.alt .card{background:var(--canvas)}
 .card-body{padding:20px}
-.card :is(h2,h3) a{display:block;padding-block:10px;margin-block:-10px;color:var(--ink);text-decoration:none}
+.card :is(h2,h3) a{display:block;padding-block:12px;margin-block:-12px;color:var(--ink);text-decoration:none}
 .card :is(h2,h3) a:hover{text-decoration:underline}
 .cover{aspect-ratio:16/9;object-fit:cover;width:100%;background:var(--soft)}
 .facts{list-style:none;margin:0 0 16px;padding:0;display:grid;gap:10px}
@@ -111,7 +112,11 @@ legend{padding:0;margin-bottom:8px}
 .check{align-items:flex-start}
 .check input{margin-top:.2em}
 .group{border:2px dashed var(--line);border-radius:var(--r);padding:16px;display:grid;gap:16px}
-.group h3{margin:0}
+.group :is(h2,h3){margin:0;font-size:1.2rem}
+.dob{display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.6fr) minmax(0,1fr);gap:8px}
+html[lang=ar] .dob{grid-template-columns:minmax(0,1fr) minmax(0,1.5fr) minmax(0,1.06fr)}
+.dob select{padding-inline:6px;font-size:16px}
+.has-error select{border-color:var(--danger)}
 .has-error input:not([type=checkbox]):not([type=radio]),.has-error textarea,.has-error .choice{border-color:var(--danger)}
 .err{display:flex;gap:8px;align-items:flex-start;color:var(--danger);font-weight:700;margin:0}
 .err .i{margin-top:.2em}
@@ -134,6 +139,7 @@ legend{padding:0;margin-bottom:8px}
 .bio .btn-line{background:#101817;color:#fff;border-color:#2e3d3b}
 .bio small{display:block;font-weight:600;opacity:.8}
 .bio .lang{margin-top:24px}
+@media (max-width:350px){.dob,html[lang=ar] .dob{grid-template-columns:1fr}}
 @media (min-width:600px){.nav{display:flex;flex-wrap:wrap}}
 @media (min-width:760px){
 h1{font-size:2.5rem}.hero h1{font-size:3rem}
@@ -151,12 +157,16 @@ export interface LayoutOptions {
   paths: SitePaths;
   /** "https://host" of this request (absolute URLs for canonical, hreflang, og). */
   origin: string;
+  /** The studio's own domain, for canonical / hreflang / og:url of a /site preview on another host (context.ts). */
+  canonicalOrigin?: string;
   /** The studio's name in this language. */
   studioName: string;
   title: string;
   description: string;
   /** This page in each language (paths), for the switch and hreflang; null on pages that have none (errors). */
   alternates: Record<Locale, string> | null;
+  /** Where the language switch goes on a page without alternates (error pages: the other language's home). */
+  switchTo?: Record<Locale, string>;
   /** Which menu entry is this page. */
   current?: 'home' | 'workshops' | 'castingCall' | 'links';
   /** A public image path for og:image (/site/media/…). */
@@ -173,6 +183,8 @@ export function layout(o: LayoutOptions): Html {
   const { lang, t, paths } = o;
   const other: Locale = lang === 'ar' ? 'en' : 'ar';
   const abs = (p: string) => o.origin + p;
+  // The page's public address: on the studio's domain the same path without /site.
+  const canon = (p: string) => (o.canonicalOrigin ? o.canonicalOrigin + (p.slice(SITE_BASE.length) || '/') : abs(p));
   const ig = instagramUrl(o.content?.instagram);
   const address = o.content?.address[lang]?.trim() || o.content?.address[other]?.trim() || '';
   const nav = (
@@ -183,8 +195,9 @@ export function layout(o: LayoutOptions): Html {
       ['links', paths.links(lang), t.nav.links],
     ] as const
   ).map(([key, href, label]) => html`<a href="${href}"${o.current === key ? raw(' aria-current="page"') : ''}>${label}</a>`);
-  const langSwitch = o.alternates
-    ? html`<a class="lang" href="${o.alternates[other]}" hreflang="${other}" lang="${other}" title="${t.meta.otherLanguageLabel}">${icon('globe')}${t.meta.otherLanguage}</a>`
+  const otherPage = (o.alternates ?? o.switchTo)?.[other];
+  const langSwitch = otherPage
+    ? html`<a class="lang" href="${otherPage}" hreflang="${other}" lang="${other}" title="${t.meta.otherLanguageLabel}">${icon('globe')}${t.meta.otherLanguage}</a>`
     : '';
 
   const head = html`<meta charset="utf-8">
@@ -193,10 +206,10 @@ export function layout(o: LayoutOptions): Html {
 <meta name="description" content="${o.description}">
 ${o.noindex ? raw('<meta name="robots" content="noindex">') : ''}
 ${o.alternates
-  ? html`<link rel="canonical" href="${abs(o.alternates[lang])}">
-<link rel="alternate" hreflang="en" href="${abs(o.alternates.en)}">
-<link rel="alternate" hreflang="ar" href="${abs(o.alternates.ar)}">
-<link rel="alternate" hreflang="x-default" href="${abs(paths.root())}">`
+  ? html`<link rel="canonical" href="${canon(o.alternates[lang])}">
+<link rel="alternate" hreflang="en" href="${canon(o.alternates.en)}">
+<link rel="alternate" hreflang="ar" href="${canon(o.alternates.ar)}">
+<link rel="alternate" hreflang="x-default" href="${canon(paths.root())}">`
   : ''}
 <meta name="theme-color" content="#000000">
 <meta property="og:type" content="website">
@@ -204,7 +217,7 @@ ${o.alternates
 <meta property="og:title" content="${o.title}">
 <meta property="og:description" content="${o.description}">
 <meta property="og:locale" content="${lang === 'ar' ? 'ar_EG' : 'en_GB'}">
-${o.alternates ? html`<meta property="og:url" content="${abs(o.alternates[lang])}">` : ''}
+${o.alternates ? html`<meta property="og:url" content="${canon(o.alternates[lang])}">` : ''}
 ${o.ogImage ? html`<meta property="og:image" content="${abs(o.ogImage)}"><meta name="twitter:card" content="summary_large_image">` : ''}
 <link rel="icon" href="${FAVICON_HREF}">
 <style>${raw(CSS)}</style>`;

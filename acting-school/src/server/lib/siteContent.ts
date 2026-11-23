@@ -5,7 +5,7 @@
  * - what the public sees: loadPublicWorkshops / findPublicWorkshop / loadPublicCoaches;
  * - which uploaded files are public (served by /site/media/:id): isPublicFile / findPublicFile;
  * - the form-token secret (settings key 'siteFormSecret'), created at startup;
- * - the public URLs (GET /api/site/summary).
+ * - the public URLs (GET /api/site/summary): on the studio's domain when one is configured.
  */
 import { and, asc, eq, gte, sql, type SQL } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
@@ -14,9 +14,10 @@ import type { ScheduleSlot } from '../../shared/schemas/courses';
 import { DEFAULT_SITE_CONTENT, siteContent as siteContentSchema, type Bilingual, type SiteContent, type SiteContentParsed, type SiteLink, type SiteUrls } from '../../shared/schemas/site';
 import type { DB } from '../db/database';
 import { castingApplicationPhotos, courses, files, settings, siteCoaches, siteWorkshops } from '../db/schema';
-import { sitePaths } from '../site/paths';
+import { publicHostSitePaths, sitePaths } from '../site/paths';
 import { loadCourseListItems } from './classSessions';
 import { fieldError } from './errors';
+import { fileUsedOffSite } from './fileRefs';
 import { IMAGE_MIME_TYPES } from './images';
 
 /** Settings key of the site content object. */
@@ -108,12 +109,18 @@ export function isApplicationPhoto(db: Reader, fileId: string): boolean {
 
 /**
  * A file staff want to show on the site (hero, coach photo, workshop cover):
- * it must exist, be an image and not be a casting application's photo —
- * otherwise a field error on `path` (same answer for each, no oracle).
+ * it must exist, be an image, and not be used anywhere outside the website —
+ * not a casting application's photo, a student's, a talent's or a team
+ * member's photo, a workshop's or a casting's file, a chat attachment
+ * (fileUsedOffSite: the one list of places in lib/fileRefs.ts). The Website
+ * screens upload their own images; website.manage alone must not publish, by
+ * its id, a file that is private to the people who may see that record —
+ * which also keeps a child's casting photo off the site once it became a
+ * talent photo. Otherwise a field error on `path` (same answer for each, no oracle).
  */
-export function assertSiteImage(db: Reader, fileId: string, path: (string | number)[]) {
+export function assertSiteImage(db: Reader & Pick<DB, 'get'>, fileId: string, path: (string | number)[]) {
   const row = db.select({ mime: files.mime }).from(files).where(eq(files.id, fileId)).get();
-  if (!row || !IMAGE_MIME_TYPES.includes(row.mime) || isApplicationPhoto(db, fileId)) throw fieldError(path, 'talent:errors.fileNotFound');
+  if (!row || !IMAGE_MIME_TYPES.includes(row.mime) || fileUsedOffSite(db, fileId)) throw fieldError(path, 'talent:errors.fileNotFound');
 }
 
 // ── Workshops on the site ───────────────────────────────────────────────────
@@ -274,17 +281,25 @@ export function findPublicFile(db: Reader, fileId: string, today: string): { id:
 
 // ── Public URLs ─────────────────────────────────────────────────────────────
 
-/** The site's page URLs in both languages, absolute on `origin` ("https://host"). */
-export function siteUrls(origin: string): Record<Locale, SiteUrls> {
-  const base = origin.replace(/\/+$/, '');
+/**
+ * The site's page URLs in both languages, to show and copy in the staff app
+ * (the Website home, "Put this link in your Instagram bio"). With the studio's
+ * own domain configured (`publicHosts`, config.publicSiteHosts): on its first
+ * entry, without /site — https://turquoisestudio.app/ar/links. Without one
+ * (local runs, tests, a preview): the /site pages on `origin`, the request's own.
+ */
+export function siteUrls(origin: string, publicHosts: readonly string[] = []): Record<Locale, SiteUrls> {
+  const host = publicHosts[0];
+  const base = host ? `https://${host}` : origin.replace(/\/+$/, '');
+  const paths = host ? publicHostSitePaths : sitePaths;
   return Object.fromEntries(
     LOCALES.map((lang) => [
       lang,
       {
-        home: base + sitePaths.home(lang),
-        workshops: base + sitePaths.workshops(lang),
-        castingCall: base + sitePaths.castingCall(lang),
-        links: base + sitePaths.links(lang),
+        home: base + paths.home(lang),
+        workshops: base + paths.workshops(lang),
+        castingCall: base + paths.castingCall(lang),
+        links: base + paths.links(lang),
       },
     ]),
   ) as Record<Locale, SiteUrls>;

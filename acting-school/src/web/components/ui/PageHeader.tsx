@@ -31,7 +31,7 @@ export function PageHeader({
   return (
     <header className="mb-5 sm:mb-6">
       {back && (
-        <Link to={back} className="mb-2 inline-flex items-center gap-1.5 text-sm text-muted hover:text-ink">
+        <Link to={back} className="-ms-2 -mt-2 mb-0.5 inline-flex min-h-12 items-center gap-1.5 rounded-xl px-2 text-sm text-muted hover:bg-surface-2 hover:text-ink">
           <ArrowLeft className="size-4 rtl:-scale-x-100" aria-hidden />
           {t('common:actions.back')}
         </Link>

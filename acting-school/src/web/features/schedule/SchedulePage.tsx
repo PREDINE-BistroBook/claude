@@ -23,7 +23,7 @@ function StepButton({ icon: Icon, label, onClick }: { icon: LucideIcon; label: s
       onClick={onClick}
       aria-label={label}
       title={label}
-      className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl border border-line-strong bg-surface text-ink transition-colors hover:bg-surface-2"
+      className="inline-flex size-12 shrink-0 items-center justify-center rounded-xl border border-line-strong bg-surface text-ink transition-colors hover:bg-surface-2 lg:size-10"
     >
       <Icon className="size-5 rtl:-scale-x-100" aria-hidden />
     </button>
@@ -125,7 +125,7 @@ export default function SchedulePage({ kinds: sectionKinds }: { kinds: readonly 
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div role="group" aria-label={t('weekNavigation')} className="flex min-w-0 items-center gap-2">
             <StepButton icon={ChevronLeft} label={t('previousWeek')} onClick={() => stepWeek(-1)} />
-            <Button onClick={() => selectDate(today)} title={t('goToToday')}>
+            <Button onClick={() => selectDate(today)} title={t('goToToday')} className="h-12! lg:h-10!">
               {t('common:actions.today')}
             </Button>
             <StepButton icon={ChevronRight} label={t('nextWeek')} onClick={() => stepWeek(1)} />
@@ -140,7 +140,7 @@ export default function SchedulePage({ kinds: sectionKinds }: { kinds: readonly 
               options={filterOptions}
               value={filter}
               onChange={setFilter}
-              className="w-full *:flex-1 sm:w-auto sm:*:flex-none"
+              className="w-full *:flex-1 sm:w-auto sm:*:flex-none [&_button]:min-h-12 lg:[&_button]:min-h-0"
             />
           )}
         </div>
