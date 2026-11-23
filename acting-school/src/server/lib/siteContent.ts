@@ -126,7 +126,7 @@ export function workshopOnSite(today: string): SQL {
   return and(eq(siteWorkshops.visible, true), eq(courses.status, 'active'), gte(courses.endDate, today))!;
 }
 
-/** What the public site shows of a workshop. Bilingual texts: an empty half is the other language's (titles fall back to the course name). */
+/** What the public site shows of a workshop. Bilingual texts: an empty half is the other language's — except titles, where an empty half is the course name. */
 export interface PublicWorkshop {
   courseId: number;
   title: Bilingual;
@@ -186,7 +186,8 @@ export function loadPublicWorkshops(db: DB, today: string, courseId?: number): P
     if (!r) continue;
     out.push({
       courseId: c.id,
-      title: fillBilingual({ en: r.titleEn, ar: r.titleAr }, c.name),
+      // An empty title means the course name (in that language too).
+      title: { en: r.titleEn.trim() || c.name, ar: r.titleAr.trim() || c.name },
       description: fillBilingual({ en: r.descriptionEn, ar: r.descriptionAr }),
       price: fillBilingual({ en: r.priceEn, ar: r.priceAr }),
       coverFileId: r.coverFileId,

@@ -19,6 +19,8 @@ Design rule for everything here: **made for older, non-technical people.**
 - Up/down buttons rather than drag-and-drop.
 - Confirm before anything destructive.
 
+**No prices — decided by the school (2026-11-23).** The studio doesn't put fees on the website, so people get in touch instead of being put off. There are no price fields anywhere: not in the data, the staff screens, the demo, or the public pages. Where a visitor would look for the fee, workshop cards and pages show an **"Ask about fees on WhatsApp"** button instead. It opens the workshops WhatsApp with a prefilled message naming the workshop, in the page's language.
+
 ---
 
 ## Part A — Three sections in the staff app (web UI)
@@ -140,7 +142,6 @@ Design rule for everything here: **made for older, non-technical people.**
   - `visible` (bool, default false);
   - `title_en`, `title_ar` (empty = use the course name);
   - `description_en`, `description_ar`;
-  - `price_en`, `price_ar` (free text such as "3,500 EGP" / "٣٥٠٠ جنيه");
   - `cover_file_id` (nullable FK files, set null);
   - `accepting_applications` (bool, default true);
   - `sort_order`;
@@ -210,7 +211,7 @@ Design rule for everything here: **made for older, non-technical people.**
 - **`seedDemo` (`src/server/db/demoSeed.ts`)** also creates the website demo for new installs:
   - **Studio info:** EN + AR about text for Turquoise Studio (invented but plausible, clearly editable); tagline; the studio's real public contact lines from its Instagram (workshops WhatsApp 01094635959, casting WhatsApp 01119003100); Instagram `turquoisecastingstudio`; address "Mohandessin, Giza" / "المهندسين، الجيزة".
   - **Coaches:** coach profiles for the demo coach accounts.
-  - **Workshops:** three or four workshops visible with prices.
+  - **Workshops:** three or four workshops visible (no prices — see "No prices" above).
   - **Casting call:** open, with intro text.
   - **Links:** three custom links.
   - **Applications:** three or four casting applications with generated portrait photos (as the talent demo makes them), one of them a minor with guardian consent.
@@ -233,7 +234,7 @@ Design rule for everything here: **made for older, non-technical people.**
   - `/website/coaches/new` and `/website/coaches/:id`: an edit form with an optional "linked staff account" picker, and delete with confirm.
 - **`/website/workshops` — "Workshops on the website":**
   - Every active or upcoming workshop with a big `Switch` "Show on website".
-  - Tapping a workshop opens `/website/workshops/:courseId`: public title EN/AR (placeholder = the course name), description EN/AR, price EN/AR, cover photo, "Accepting applications" switch.
+  - Tapping a workshop opens `/website/workshops/:courseId`: public title EN/AR (placeholder = the course name), description EN/AR, cover photo, "Accepting applications" switch.
   - Show a small preview line: dates, days and times, coach — what the public will see.
 - **`/website/casting-call`:**
   - A big Open/Closed switch, with an explanation of what each state shows the public.
@@ -269,14 +270,26 @@ Design rule for everything here: **made for older, non-technical people.**
   - The Worker's `tooLarge` uses the per-route caps below.
 - **Node:** `src/server/index.ts` must not serve the SPA for `/site*`.
 - **The staff app's service worker must never answer `/site`:** in `vite.config.ts`, `navigateFallbackDenylist: [/^\/api\//, /^\/site(\/|$)/]`.
-- **Later**, a custom domain can serve this site at its root. Out of scope now, but keep the paths in one place, `src/server/site/paths.ts`, so that change is small.
+- **The studio's own domain (decided 2026-11-23).** The school bought `turquoisestudio.app`.
+  - **Staff app:** `staff.turquoisestudio.app` (already attached to the Worker).
+  - **Public website:** at the root of `turquoisestudio.app`. `www.turquoisestudio.app` redirects (301) to it.
+  - **How the Worker routes it:** a var `PUBLIC_SITE_HOSTS` (comma-separated; `"turquoisestudio.app,www.turquoisestudio.app"`, the same in both wrangler configs) names the public hosts.
+    - On a public host, the site is served **at the root**: `/` → home, `/ar`, `/en/workshops/12`, `/ar/casting-call`, `/en/links`, `/media/:id`, and so on.
+    - The Worker maps a public-host path `/x` to the app's `/site/x`, with no `/site` in the visible URLs.
+    - Nothing of the staff app answers on a public host. `/api/*`, `/login`, the staff static files and the service worker all get the site's 404 page.
+    - `www` → 301 to the apex, with the same path and query.
+  - **Links inside the pages** come from `src/server/site/paths.ts`, given the request: `/site/...` on any other host (staff host, workers.dev, localhost), bare paths on a public host.
+  - **On a non-public host,** `/site/*` keeps working as today, for previews.
+  - **`run_worker_first`:** with static assets, a path on a public host must reach the Worker before assets. So `wrangler.jsonc` uses `"run_worker_first": true`, and the Worker passes staff-host asset requests to `env.ASSETS` exactly as before; the embedded variant already runs the Worker first.
+  - **Tests:** cover the public-host routing (Worker-level unit tests in `tests/unit/`, using a fake ASSETS and DO stub) and the link building in `paths.ts`.
+  - **Custom domains in the configs:** the deployer adds `routes` with `custom_domain: true` when switching the domain on. Builders don't add `routes`.
 
 ### Pages (`:lang` is `en` or `ar`)
 - **`GET /site`:** redirects (302) to `/site/ar` if `Accept-Language` prefers Arabic, otherwise `/site/en`.
 - **`GET /site/:lang` — Home:**
   - Hero: brand mark, studio name, tagline, hero photo.
   - About text.
-  - "Open workshops" cards (title, dates, days and times, coach, price, "Apply" button).
+  - "Open workshops" cards (title, dates, days and times, coach, "Apply" button, and "Ask about fees on WhatsApp").
   - Casting-call banner when open.
   - Coaches (photo, name, title, short bio).
   - Contact block: WhatsApp buttons (`https://wa.me/<international digits>?text=<prefilled in page language>`), phone (`tel:`), Instagram, address, map link.
