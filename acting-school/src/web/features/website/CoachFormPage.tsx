@@ -146,7 +146,6 @@ function CoachForm({ coach, onDeleted }: { coach?: SiteCoach; onDeleted: () => v
       <FormSection>
         <BigSwitch checked={v.visible} onChange={(on) => form.set('visible', on)} label={t('coaches.show')} description={t('coaches.showHint')} />
         <TeacherSelect
-          id="f-userId"
           label={t('coaches.staff')}
           hint={t('coaches.staffHint')}
           emptyLabel={t('coaches.staffNone')}

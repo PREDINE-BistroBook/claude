@@ -1,4 +1,4 @@
-import { GraduationCap, Inbox, LayoutDashboard, MessageSquarePlus, Sparkles, UserPlus, Users } from 'lucide-react';
+import { Globe, GraduationCap, Inbox, LayoutDashboard, MessageSquarePlus, Sparkles, UserPlus, Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { todayISO } from '@shared/dates';
 import { EmptyState, ErrorState, PageLoader } from '@web/components/ui';
@@ -11,6 +11,8 @@ import { AttendanceCard, FollowUpsCard, InterviewsCard, TodayClassesCard } from 
 const STATS: HomeStat[] = [
   { key: 'openLeads', to: '/admissions?tab=open', icon: Inbox },
   { key: 'newLeadsThisWeek', to: '/admissions?tab=open', icon: Sparkles },
+  // Enquiries sent from the public website and not yet answered: Admissions' "New" tab, website only.
+  { key: 'newWebsiteLeads', to: '/admissions?tab=new&source=website', icon: Globe },
   { key: 'activeStudents', to: '/students', icon: Users },
   { key: 'activeCourses', to: '/classes', icon: GraduationCap },
 ];

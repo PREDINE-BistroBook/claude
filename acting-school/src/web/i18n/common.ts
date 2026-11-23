@@ -30,6 +30,9 @@ const en = {
     signOut: 'Sign out',
     mainMenu: 'Main menu',
     moreSection: 'More in {{section}}',
+    /** Read out after a menu entry's count badge ("Applications, 3 new"). */
+    newCount_one: '{{count}} new',
+    newCount_other: '{{count}} new',
   },
   /** The three parts of the app, switched with the tabs at the top (layout/sections.ts). */
   sections: {
@@ -299,6 +302,12 @@ const ar: TranslationOf<typeof en> = {
     signOut: 'تسجيل الخروج',
     mainMenu: 'القائمة الرئيسية',
     moreSection: 'المزيد في {{section}}',
+    newCount_zero: 'لا جديد',
+    newCount_one: 'واحد جديد',
+    newCount_two: 'اثنان جديدان',
+    newCount_few: '{{count}} جديدة',
+    newCount_many: '{{count}} جديدًا',
+    newCount_other: '{{count}} جديد',
   },
   sections: {
     label: 'الأقسام',

@@ -19,6 +19,7 @@ import positionRoutes from './routes/positions';
 import scheduleRoutes from './routes/schedule';
 import sessionRoutes from './routes/sessions';
 import siteRoutes from './routes/site';
+import publicSite from './site';
 import settingsRoutes from './routes/settings';
 import staffRoutes from './routes/staff';
 import studentRoutes from './routes/students';
@@ -89,6 +90,11 @@ export function createApp(deps: AppDeps) {
   app.route('/api/casting-applications', castingApplicationRoutes);
 
   app.all('/api/*', (c) => c.json({ error: { code: 'not_found', message: 'No such API route' } }, 404));
+
+  // The public website (server-rendered HTML, no session): src/server/site/. Its own headers,
+  // body caps, rate limits and friendly error pages; on a public host the Worker / Node server
+  // map the root to /site first (site/publicHost.ts).
+  app.route('/site', publicSite);
 
   app.onError((err, c) => {
     if (err instanceof ApiError) {

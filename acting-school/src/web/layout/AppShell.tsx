@@ -10,7 +10,9 @@ import { currentLanguage, setLanguage } from '../i18n';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useOnline, useSchoolName } from '../lib/hooks';
+import { useApplicationCounts } from '../features/applications/api';
 import { usePositionNames } from '../lib/positions';
+import { useFormat } from '../lib/format';
 import { adminNavItems, mobileTabs, navItemActive, sectionNavItems, type NavItem } from './nav';
 import { SectionTabs } from './SectionTabs';
 import { currentSection, rememberRoute, rememberSection, rememberedSection, sectionByKey, sectionForPath, visibleSections } from './sections';
@@ -27,7 +29,7 @@ function useLanguageToggle() {
   };
 }
 
-type MenuItem = Pick<NavItem, 'to' | 'label' | 'icon' | 'end'>;
+type MenuItem = Pick<NavItem, 'to' | 'label' | 'icon' | 'end' | 'badge'>;
 
 /** The plain home ("/") for someone who sees no section yet. */
 const START_ITEM: MenuItem = { to: '/', label: 'home', icon: House, end: true };
@@ -83,6 +85,11 @@ export function AppShell() {
     return () => window.removeEventListener('keydown', onKey);
   }, [moreOpen]);
 
+  // Count badges (new casting applications): fetched only while the person is in the section that lists them.
+  const applicationBadge = section === 'casting' && can('talent.read');
+  const applicationCounts = useApplicationCounts(applicationBadge);
+  const badgeOf = (item: MenuItem): number => (item.badge === 'newCastingApplications' && applicationBadge ? (applicationCounts.data?.new ?? 0) : 0);
+
   const sectionItems = section ? sectionNavItems(section, can) : [];
   const adminItems = adminNavItems(can);
   const tabPaths = user ? mobileTabs(section, can) : [];
@@ -131,6 +138,7 @@ export function AppShell() {
                       >
                         <item.icon className="size-5 shrink-0" aria-hidden />
                         {t(`nav.${item.label}`)}
+                        <CountBadge count={badgeOf(item)} className="ms-auto" />
                       </NavLink>
                     </li>
                   ))}
@@ -241,8 +249,9 @@ export function AppShell() {
                     active ? 'font-semibold text-section' : 'text-muted',
                   )}
                 >
-                  <span className={clsx('flex h-7 w-12 items-center justify-center rounded-full', active && 'bg-section-soft')}>
+                  <span className={clsx('relative flex h-7 w-12 items-center justify-center rounded-full', active && 'bg-section-soft')}>
                     <item.icon className="size-[22px]" aria-hidden strokeWidth={active ? 2.2 : 1.8} />
+                    <CountBadge count={badgeOf(item)} className="absolute -top-1.5 -end-1" />
                   </span>
                   <span className="line-clamp-2 max-w-full">{t(`nav.${item.label}`)}</span>
                 </Link>
@@ -292,7 +301,7 @@ export function AppShell() {
               </button>
             </div>
             {moreSection.length > 0 && sectionLabel && (
-              <MoreGroup label={t('nav.moreSection', { section: sectionLabel })} items={moreSection} pathname={pathname} />
+              <MoreGroup label={t('nav.moreSection', { section: sectionLabel })} items={moreSection} pathname={pathname} badgeOf={badgeOf} />
             )}
             {adminItems.length > 0 && <MoreGroup label={t('nav.admin')} items={adminItems} pathname={pathname} />}
             <div className="mt-2 grid grid-cols-2 gap-2 border-t border-line px-4 py-3">
@@ -323,7 +332,7 @@ export function AppShell() {
   );
 }
 
-function MoreGroup({ label, items, pathname }: { label: string; items: MenuItem[]; pathname: string }) {
+function MoreGroup({ label, items, pathname, badgeOf }: { label: string; items: MenuItem[]; pathname: string; badgeOf?: (item: MenuItem) => number }) {
   const { t } = useTranslation();
   return (
     <section className="px-4 pb-2 pt-3">
@@ -341,7 +350,10 @@ function MoreGroup({ label, items, pathname }: { label: string; items: MenuItem[
                   active ? 'bg-section-soft text-section' : 'bg-surface-2 text-ink',
                 )}
               >
-                <item.icon className="size-6 shrink-0" aria-hidden />
+                <span className="relative">
+                  <item.icon className="size-6 shrink-0" aria-hidden />
+                  <CountBadge count={badgeOf?.(item) ?? 0} className="absolute -top-2 -end-3" />
+                </span>
                 {t(`nav.${item.label}`)}
               </Link>
             </li>
@@ -349,5 +361,18 @@ function MoreGroup({ label, items, pathname }: { label: string; items: MenuItem[
         })}
       </ul>
     </section>
+  );
+}
+
+/** A small count in the section's colour next to a menu entry ("3"), read out as "3 new"; nothing at zero. */
+function CountBadge({ count, className }: { count: number; className?: string }) {
+  const { t } = useTranslation();
+  const f = useFormat();
+  if (count <= 0) return null;
+  return (
+    <span className={clsx('inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-section px-1.5 text-xs font-bold leading-none text-section-ink tabular-nums', className)}>
+      <span aria-hidden>{count > 99 ? '99+' : f.number(count)}</span>
+      <span className="sr-only">, {t('nav.newCount', { count })}</span>
+    </span>
   );
 }

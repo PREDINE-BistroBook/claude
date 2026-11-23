@@ -24,6 +24,8 @@ const en = {
     openCastings: 'Open castings',
     openLeads: 'Open enquiries',
     newLeadsThisWeek: 'New this week',
+    newWebsiteLeads: 'New website enquiries',
+    newCastingApplications: 'New casting applications',
   },
   quick: {
     label: 'Quick actions',
@@ -100,6 +102,8 @@ const ar: TranslationOf<typeof en> = {
     openCastings: 'تجارب الأداء المفتوحة',
     openLeads: 'الاستفسارات المفتوحة',
     newLeadsThisWeek: 'جديدة هذا الأسبوع',
+    newWebsiteLeads: 'استفسارات جديدة من الموقع',
+    newCastingApplications: 'طلبات انضمام جديدة',
   },
   quick: {
     label: 'إجراءات سريعة',

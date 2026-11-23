@@ -21,6 +21,9 @@ import { sectionByKey, type SectionKey } from './sections';
 
 export type NavSection = SectionKey | 'admin';
 
+/** A count shown next to a menu entry: things waiting for someone (AppShell fetches it only in that entry's section). */
+export type NavBadge = 'newCastingApplications';
+
 export interface NavItem {
   to: string;
   /** Key in common:nav. */
@@ -33,6 +36,7 @@ export interface NavItem {
   section: NavSection;
   /** Active only on this exact path (a section's home: /casting is not active on /casting/schedule). */
   end?: boolean;
+  badge?: NavBadge;
 }
 
 const home = (section: SectionKey): NavItem => ({
@@ -56,7 +60,7 @@ export const NAV_ITEMS: NavItem[] = [
   home('casting'),
   { to: '/talent', label: 'talent', icon: Star, permission: 'talent.read', section: 'casting' },
   { to: '/castings', label: 'castings', icon: Clapperboard, permission: 'castings.read', section: 'casting' },
-  { to: '/casting/applications', label: 'applications', icon: UserRoundPlus, permission: 'talent.read', section: 'casting' },
+  { to: '/casting/applications', label: 'applications', icon: UserRoundPlus, permission: 'talent.read', section: 'casting', badge: 'newCastingApplications' },
   { to: '/casting/schedule', label: 'schedule', icon: CalendarDays, permission: 'castings.read', section: 'casting' },
   // ── Website ──
   home('website'),

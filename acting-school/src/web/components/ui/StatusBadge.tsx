@@ -36,6 +36,8 @@ export const STATUS_TONES = {
   },
   interviewStatus: { scheduled: 'info', done: 'success', no_show: 'danger', cancelled: 'neutral' },
   interviewRecommendation: { accept: 'success', maybe: 'warning', decline: 'danger' },
+  // Casting applications from the website: new ones need someone, so they stand out.
+  castingApplicationStatus: { new: 'accent', reviewing: 'warning', accepted: 'success', declined: 'neutral' },
 } as const satisfies Record<string, Record<string, Tone>>;
 
 export type StatusGroup = keyof typeof STATUS_TONES;

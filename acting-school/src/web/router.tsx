@@ -1,6 +1,7 @@
 import { lazy } from 'react';
 import { createBrowserRouter } from 'react-router';
 import { admissionsRoutes } from './features/admissions/routes';
+import { applicationsRoutes } from './features/applications/routes';
 import { castingsRoutes } from './features/castings/routes';
 import { classesRoutes } from './features/classes/routes';
 import { dashboardRoutes } from './features/dashboard/routes';
@@ -10,16 +11,14 @@ import { settingsRoutes } from './features/settings/routes';
 import { staffRoutes } from './features/staff/routes';
 import { studentsRoutes } from './features/students/routes';
 import { talentRoutes } from './features/talent/routes';
+import { websiteRoutes } from './features/website/routes';
 import { AppShell } from './layout/AppShell';
-import { RequireSection } from './layout/RequireSection';
 import { RequireAuth } from './lib/auth';
 import LoginPage from './pages/LoginPage';
 import NotFoundPage from './pages/NotFoundPage';
 import SetupPage from './pages/SetupPage';
 
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
-// Until features/website/routes.tsx exists: the Website tab and its menu open a "being built" page.
-const WebsitePlaceholder = lazy(() => import('./layout/WebsitePlaceholder'));
 
 /**
  * Every screen. Each feature owns its paths in features/<name>/routes.tsx;
@@ -44,17 +43,11 @@ export const router = createBrowserRouter([
       ...classesRoutes,
       ...talentRoutes,
       ...castingsRoutes,
+      ...applicationsRoutes,
+      ...websiteRoutes,
       ...staffRoutes,
       ...positionsRoutes,
       ...settingsRoutes,
-      {
-        path: 'website/*',
-        element: (
-          <RequireSection section="website">
-            <WebsitePlaceholder />
-          </RequireSection>
-        ),
-      },
       { path: 'profile', element: <ProfilePage /> },
       { path: '*', element: <NotFoundPage /> },
     ],

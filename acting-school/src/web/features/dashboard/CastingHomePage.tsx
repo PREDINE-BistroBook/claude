@@ -1,4 +1,4 @@
-import { Clapperboard, LayoutDashboard, Plus, Star, UserPlus } from 'lucide-react';
+import { Clapperboard, LayoutDashboard, Plus, Star, UserPlus, UserRoundPlus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { todayISO } from '@shared/dates';
 import { EmptyState, ErrorState, PageLoader } from '@web/components/ui';
@@ -10,6 +10,8 @@ import { AuditionsCard, ClosingCastingsCard } from './components/Sections';
 const STATS: HomeStat[] = [
   { key: 'activeTalent', to: '/talent', icon: Star },
   { key: 'openCastings', to: '/castings', icon: Clapperboard },
+  // Casting-call applications from the website still waiting for someone.
+  { key: 'newCastingApplications', to: '/casting/applications', icon: UserRoundPlus },
 ];
 
 const ACTIONS: QuickAction[] = [
@@ -19,7 +21,8 @@ const ACTIONS: QuickAction[] = [
 
 /**
  * /casting — the Casting section's home: upcoming auditions, castings closing
- * soon, the roster size and open castings. Nothing from the school.
+ * soon, the roster size, open castings and new casting-call applications.
+ * Nothing from the school.
  */
 export default function CastingHomePage() {
   const { t } = useTranslation(['dashboard', 'common']);
