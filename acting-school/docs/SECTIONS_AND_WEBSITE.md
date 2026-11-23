@@ -732,3 +732,11 @@ Decided by the school on 2026-11-23.
 - **Privacy:** `personal_email` never leaves in other people's payloads.
 - **Rules:** auto-fill naming rules and duplicates; deactivation switches the rule off.
 - **No-config mode.**
+
+### Amendment to Part G2 — one "Team" page, and the word "Team" instead of "Staff" (asked 2026-11-23)
+The school asked to call it **Team**, not Staff. So there is **one** page, "Team" / "الفريق", at `/team`, instead of a separate Staff page and Team directory.
+- **Everyone** sees the team list: photo, name, positions (owners' positions stay hidden from non-owners) and the **Message** button.
+- **With `staff.manage`**, the same page also shows the management controls: **Add team member**, a link on each row to the member's page (the existing staff detail/edit screens, kept at `/staff/:id` and `/staff/new`), the active/inactive filter, and inactive members. `/staff` redirects to `/team`.
+- **With `staff.summon`**, each row also has **Call to the office**.
+- **Menu:** one entry, "Team", in the account / "More" menu of every section. The "Administration" group keeps Positions and Settings.
+- **Wording everywhere on screen:** "staff" → "team" / "team member(s)" (Arabic: "الفريق" / "عضو الفريق" / "أعضاء الفريق"), including the sign-in page ("Team accounts only"), permission labels and descriptions, empty states and the Secretary's app guide. Code names (`staff.manage`, `/api/staff`, file names) do not change.
