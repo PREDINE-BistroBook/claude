@@ -233,8 +233,14 @@ describe('the real app behind the Worker', () => {
       expect(await res.text()).toContain(SITE_STRINGS.en.pages.notFoundTitle);
     }
 
-    // The trailing-slash redirect and the form's thank-you redirect stay bare too.
+    // The trailing-slash redirect and the form's thank-you redirect stay bare too — and never leave the site.
     expect((await routeRequest(req('https://turquoisestudio.app/en/links/'), deps)).headers.get('location')).toBe('/en/links');
+    for (const sneaky of ['//evil.example/', '///evil.example//', '/%2F%2Fevil.example/']) {
+      const res = await routeRequest(req(`https://turquoisestudio.app${sneaky}`), deps);
+      const location = res.headers.get('location');
+      if (location !== null) expect(location, sneaky).toMatch(/^\/[^/\\]/);
+    }
+    expect((await routeRequest(req('https://staff.turquoisestudio.app/site//evil.example/'), deps)).headers.get('location')).toBe('/site/evil.example');
     const bot = await routeRequest(
       req('https://turquoisestudio.app/en/apply', { method: 'POST', body: 'website=spam', headers: { 'content-type': 'application/x-www-form-urlencoded' } }),
       deps,

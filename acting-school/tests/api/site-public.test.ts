@@ -1,7 +1,7 @@
 import { and, count, eq } from 'drizzle-orm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { castingApplicationPhotos, castingApplications, courseSlots, courses, files, leadActivities, leads, rateLimits, siteCoaches, siteWorkshops } from '../../src/server/db/schema';
-import { getSiteContent, saveSiteContent } from '../../src/server/lib/siteContent';
+import { saveSiteContent } from '../../src/server/lib/siteContent';
 import { FORM_TOKEN_MAX_AGE_MS, issueFormToken, SITE_RATE_LIMITS } from '../../src/server/lib/siteForms';
 import { HONEYPOT_FIELD, TOKEN_FIELD } from '../../src/server/site/forms';
 import { SITE_CSP } from '../../src/server/site/headers';
@@ -649,6 +649,23 @@ describe('/site/media/:id', () => {
     }
     // Staff files stay staff-only.
     expect((await t.anon.get(`/api/files/${hero}`)).status).toBe(401);
+  });
+});
+
+describe('when something breaks', () => {
+  it('an unexpected error is a friendly 500 page in the right language, with the site headers', async () => {
+    const t = await ctx();
+    (t.db as unknown as { $client: { close(): void } }).$client.close();
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const res = await get(t, '/site/ar/workshops');
+    quiet.mockRestore();
+    expect(res.status).toBe(500);
+    expect(res.headers.get('content-type')).toContain('text/html');
+    expect(res.headers.get('content-security-policy')).toBe(SITE_CSP);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    const body = await res.text();
+    expect(body).toContain('<html lang="ar" dir="rtl">');
+    expect(body).toContain(SITE_STRINGS.ar.pages.errorTitle);
   });
 });
 

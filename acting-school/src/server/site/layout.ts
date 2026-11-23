@@ -66,7 +66,7 @@ img{max-width:100%;height:auto;display:block}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.05)}
 .block.alt .card{background:var(--canvas)}
 .card-body{padding:20px}
-.card :is(h2,h3) a{display:block;padding-block:8px;margin-block:-8px;color:var(--ink);text-decoration:none}
+.card :is(h2,h3) a{display:block;padding-block:10px;margin-block:-10px;color:var(--ink);text-decoration:none}
 .card :is(h2,h3) a:hover{text-decoration:underline}
 .cover{aspect-ratio:16/9;object-fit:cover;width:100%;background:var(--soft)}
 .facts{list-style:none;margin:0 0 16px;padding:0;display:grid;gap:10px}
@@ -130,7 +130,7 @@ legend{padding:0;margin-bottom:8px}
 .bio .mark{width:96px;height:96px;margin:0 auto 16px}
 .bio .tagline{margin-bottom:24px}
 .bio .stack{display:grid;gap:14px;text-align:start}
-.bio .btn{justify-content:flex-start;font-size:1.05rem}
+.bio .btn{justify-content:flex-start;text-align:start;font-size:1.05rem}
 .bio .btn-line{background:#101817;color:#fff;border-color:#2e3d3b}
 .bio small{display:block;font-weight:600;opacity:.8}
 .bio .lang{margin-top:24px}
@@ -231,7 +231,7 @@ ${o.ogImage ? html`<meta property="og:image" content="${abs(o.ogImage)}"><meta n
 <main id="main">${o.body}</main>
 <footer class="foot">
 <div class="wrap">
-${ig ? html`<p><a href="${ig}" rel="noopener">${icon('instagram')}${t.contact.instagram}: @${o.content!.instagram}</a></p>` : ''}
+${ig ? html`<p><a href="${ig}" rel="noopener">${icon('instagram')}<span>${t.contact.instagram}: <bdi dir="ltr">@${o.content!.instagram}</bdi></span></a></p>` : ''}
 ${address ? html`<p class="addr">${icon('pin')}<span>${address}</span></p>` : ''}
 <p>${fmt(t.footer.rights, { year: new Date().getUTCFullYear(), name: o.studioName })}</p>
 </div>

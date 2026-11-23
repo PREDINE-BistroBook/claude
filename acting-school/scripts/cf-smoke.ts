@@ -15,12 +15,16 @@
  * Worker on the same state (sessions, the sign-in brake and files survive),
  * checks the static assets and headers, finishes with the demo reset and
  * checks first-run setup then needs the setup code. Bodies over 1 MB are
- * refused (413) and the session cookie is __Host- prefixed.
+ * refused (413) and the session cookie is __Host- prefixed. The public
+ * website (/site): every page in both languages with its headers, one
+ * enquiry and one casting application with a photo through the real forms,
+ * accept → talent, and /site/media serving only public images.
  * Exit code 1 on the first failure. Local only (scripts/cf-local.ts).
  */
 import { spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import fs from 'node:fs';
+import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { crc32, deflateSync } from 'node:zlib';
@@ -433,6 +437,174 @@ async function staticChecks(base: string) {
   check(apiHeaders.get('cache-control') === 'no-store', 'API responses are not cached');
 }
 
+/** The public website (/site) through the Worker → Durable Object: pages in both languages, one enquiry, one casting application with a photo, /site/media, accept → talent, and the headers. */
+async function siteChecks(base: string, opts: { password: string }) {
+  step('public site: /site redirect, every page in both languages, headers');
+  const SITE_CSP = "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
+  const page = async (path: string, init: RequestInit = {}) => {
+    const res = await fetch(base + path, { redirect: 'manual', ...init });
+    const text = await res.text();
+    return { status: res.status, headers: res.headers, text };
+  };
+  const siteHeaders = (h: Headers, what: string, cache: string) => {
+    check(h.get('content-security-policy') === SITE_CSP, `CSP on ${what}`);
+    check(h.get('x-content-type-options') === 'nosniff', `nosniff on ${what}`);
+    check(h.get('referrer-policy') === 'strict-origin-when-cross-origin', `Referrer-Policy on ${what}`);
+    check(h.get('cache-control') === cache, `Cache-Control ${cache} on ${what} (${h.get('cache-control')})`);
+  };
+  const root = await page('/site', { headers: { 'accept-language': 'ar-EG,ar;q=0.9' } });
+  checks++;
+  if (root.status !== 302 || root.headers.get('location') !== '/site/ar') throw new Error(`/site with Arabic: ${root.status} ${root.headers.get('location')}`);
+  siteHeaders(root.headers, '/site redirect', 'no-store');
+  const workshopsEn = await page('/site/en/workshops');
+  const workshopHref = /href="(\/site\/en\/workshops\/\d+)#apply"/.exec(workshopsEn.text)?.[1];
+  check(workshopHref, 'the demo has a workshop taking applications on the site');
+  const workshopPath = workshopHref!.replace('/site/en', '');
+  for (const lang of ['en', 'ar']) {
+    for (const p of ['', '/workshops', workshopPath, '/apply', '/casting-call', '/links']) {
+      const res = await page(`/site/${lang}${p}`);
+      checks++;
+      if (res.status !== 200) throw new Error(`/site/${lang}${p}: expected 200, got ${res.status} ${res.text.slice(0, 200)}`);
+      check(res.text.includes(`<html lang="${lang}" dir="${lang === 'ar' ? 'rtl' : 'ltr'}">`), `lang/dir on /site/${lang}${p}`);
+      check(!/<script/i.test(res.text), `no script on /site/${lang}${p}`);
+      siteHeaders(res.headers, `/site/${lang}${p}`, 'public, max-age=60');
+    }
+  }
+  const home = await page('/site/en');
+  // No amounts anywhere (a coach may well be called Price, so look for money, not the word).
+  check(!/\bEGP\b|\bL\.?E\.?\s*\d|\d\s*(EGP|LE)\b|جنيه|ج\.م/i.test(home.text) && home.text.includes('Ask about fees on WhatsApp'), 'no prices; fees are asked on WhatsApp');
+  const missing = await page('/site/ar/no-such-page');
+  check(missing.status === 404 && missing.text.includes('<html lang="ar" dir="rtl">'), `friendly Arabic 404 (${missing.status})`);
+  siteHeaders(missing.headers, 'the 404 page', 'no-store');
+  // The staff app's service worker and shell never answer /site.
+  check(!missing.text.includes('<div id="root">'), 'the 404 is the site’s, not the staff app shell');
+
+  step('public site: one enquiry (token, Origin, 303 → thanks) lands in Admissions');
+  const token = (html: string) => /name="formToken" value="([^"]+)"/.exec(html)?.[1] ?? '';
+  const workshopPage = await page(`/site/en${workshopPath}`);
+  const applyToken = token(workshopPage.text);
+  check(applyToken, 'the workshop page carries a form token');
+  await new Promise((r) => setTimeout(r, 3200));
+  const stamp = String(Date.now()).slice(-6);
+  const applyBody = new URLSearchParams({
+    formToken: applyToken,
+    website: '',
+    firstName: 'Smoke',
+    lastName: `Visitor${stamp}`,
+    phone: `0100 77${stamp.slice(0, 1)} ${stamp.slice(1)}`,
+    dateOfBirth: addDays(todayIn('Africa/Cairo'), -25 * 366),
+    experience: 'none',
+    heardFrom: 'instagram',
+    message: 'Smoke test enquiry',
+    privacyConsent: 'on',
+  }).toString();
+  const applied = await page(`${workshopHref}/apply`, { method: 'POST', body: applyBody, headers: { 'content-type': 'application/x-www-form-urlencoded', origin: base } });
+  checks++;
+  if (applied.status !== 303 || applied.headers.get('location') !== '/site/en/thanks?k=apply') throw new Error(`enquiry: ${applied.status} ${applied.headers.get('location')} ${applied.text.slice(0, 300)}`);
+  siteHeaders(applied.headers, 'the form redirect', 'no-store');
+  const forged = await page('/site/en/apply', { method: 'POST', body: applyBody.replace(/formToken=[^&]+/, 'formToken=1.abc'), headers: { 'content-type': 'application/x-www-form-urlencoded' } });
+  check(forged.status === 400 && forged.text.includes('id="errors"'), `a forged token re-renders the form (${forged.status})`);
+  const foreign = await page('/site/en/apply', { method: 'POST', body: applyBody, headers: { 'content-type': 'application/x-www-form-urlencoded', origin: 'https://evil.example' } });
+  check(foreign.status === 403, `another site's Origin is refused (${foreign.status})`);
+  const bigForm = await page('/site/en/apply', { method: 'POST', body: `message=${'x'.repeat(70 * 1024)}`, headers: { 'content-type': 'application/x-www-form-urlencoded' } });
+  check(bigForm.status === 413 && bigForm.text.includes('<html lang="en"'), `a 70 KB enquiry is refused by the Worker with the site's page (${bigForm.status})`);
+  const director = new Client(base);
+  expectStatus(await director.post('/api/auth/login', { email: 'director@demo.school', password: opts.password }), 200, 'director signs in');
+  const webLeads = expectStatus(await director.get('/api/leads?source=website'), 200, 'website leads').body.items;
+  check(webLeads.some((l: any) => l.lastName === `Visitor${stamp}`), 'the enquiry is a website lead in Admissions');
+
+  step('public site: one casting application with a photo, then accept → talent through the staff API');
+  const castingPage = await page('/site/ar/casting-call');
+  const castingToken = token(castingPage.text);
+  check(castingToken && castingPage.text.includes('enctype="multipart/form-data"'), 'the casting call is open with its form (demo)');
+  await new Promise((r) => setTimeout(r, 3200));
+  const form = new FormData();
+  const fields: Record<string, string> = {
+    formToken: castingToken,
+    website: '',
+    firstName: 'Smoke',
+    lastName: `Actor${stamp}`,
+    gender: 'female',
+    dateOfBirth: addDays(todayIn('Africa/Cairo'), -23 * 366),
+    phone: `0112 66${stamp.slice(0, 1)} ${stamp.slice(1)}`,
+    city: 'Giza',
+    heightCm: '170',
+    languages: 'Arabic, English',
+    skills: 'Dance',
+    links: 'https://www.instagram.com/smoke.actor/',
+    privacyConsent: 'on',
+  };
+  for (const [k, v] of Object.entries(fields)) form.append(k, v);
+  const headshot = noisePng(48);
+  form.append('photo1', new Blob([headshot], { type: 'image/png' }), 'headshot.png');
+  const cast = await page('/site/ar/casting-call', { method: 'POST', body: form, headers: { origin: base } });
+  checks++;
+  if (cast.status !== 303 || cast.headers.get('location') !== '/site/ar/thanks?k=casting') throw new Error(`casting application: ${cast.status} ${cast.headers.get('location')} ${cast.text.slice(0, 300)}`);
+  const head = new Client(base);
+  expectStatus(await head.post('/api/auth/login', { email: 'head@demo.school', password: opts.password }), 200, 'head of casting signs in');
+  const apps = expectStatus(await head.get(`/api/casting-applications?q=${encodeURIComponent(`Actor${stamp}`)}`), 200, 'applications search').body.items;
+  check(apps.length === 1, 'the application reached the staff list');
+  const detail = expectStatus(await head.get(`/api/casting-applications/${apps[0].id}`), 200, 'application detail').body;
+  check(detail.photos.length === 1 && detail.locale === 'ar', 'one photo, sent from the Arabic page');
+  const photo = expectStatus(await head.get(`/api/files/${detail.photos[0].fileId}`), 200, 'staff download the photo');
+  check(sha(photo.bytes) === sha(headshot), 'the photo round-trips byte for byte');
+  const appMedia = await page(`/site/media/${detail.photos[0].fileId}`);
+  check(appMedia.status === 404, `an application photo is never public (${appMedia.status})`);
+  const accepted = expectStatus(await head.post(`/api/casting-applications/${apps[0].id}/accept`), 201, 'accept → talent').body;
+  const talent = expectStatus(await head.get(`/api/talent/${accepted.talentId}`), 200, 'the new talent profile').body;
+  check(talent.lastName === `Actor${stamp}`, 'talent made from the application');
+  expectStatus(await head.post(`/api/casting-applications/${apps[0].id}/accept`), 409, 'accept again');
+
+  step('public site: /site/media serves public images only');
+  const owner = new Client(base);
+  expectStatus(await owner.post('/api/auth/login', { email: 'owner@demo.school', password: opts.password }), 200, 'owner signs in');
+  const coaches = expectStatus(await owner.get('/api/site/coaches'), 200, 'site coaches').body.items;
+  const shown = coaches.find((c: any) => c.visible && c.photoFileId);
+  const hidden = coaches.find((c: any) => !c.visible && c.photoFileId);
+  check(shown, 'a shown coach with a photo (demo)');
+  const media = await fetch(`${base}/site/media/${shown.photoFileId}`);
+  const mediaBytes = new Uint8Array(await media.arrayBuffer());
+  check(media.status === 200 && media.headers.get('content-type') === 'image/png' && mediaBytes.byteLength > 100, `a shown coach's photo is public (${media.status})`);
+  check(media.headers.get('cache-control') === 'public, max-age=3600', 'media cached for an hour');
+  check(media.headers.get('x-content-type-options') === 'nosniff' && media.headers.get('content-disposition') === 'inline', 'media nosniff + inline');
+  if (hidden) check((await page(`/site/media/${hidden.photoFileId}`)).status === 404, "a hidden coach's photo is not public");
+  check((await page('/site/media/00000000-0000-4000-8000-000000000000')).status === 404, 'an unknown id is a 404');
+}
+
+/**
+ * The studio's own domain (PUBLIC_SITE_HOSTS in wrangler.jsonc): wrangler dev passes the Host header
+ * through, so the Worker's host routing (src/worker/routing.ts) runs for real here. On a public host
+ * the site answers at the root with bare links and nothing of the staff app does; www → the apex.
+ */
+async function publicHostChecks(base: string) {
+  step('studio domain: turquoisestudio.app serves the site at the root, www → apex, no staff app there');
+  const { hostname, port } = new URL(base);
+  const get = (p: string, host: string) =>
+    new Promise<{ status: number; headers: http.IncomingHttpHeaders; body: string }>((resolve, reject) => {
+      const req = http.request({ host: hostname, port, path: p, headers: { host, 'accept-language': 'ar' } }, (res) => {
+        let body = '';
+        res.setEncoding('utf8');
+        res.on('data', (c: string) => (body += c));
+        res.on('end', () => resolve({ status: res.statusCode ?? 0, headers: res.headers, body }));
+      });
+      req.on('error', reject);
+      req.end();
+    });
+  const root = await get('/', 'turquoisestudio.app');
+  check(root.status === 302 && root.headers.location === '/ar', `apex / → /ar (${root.status} ${root.headers.location})`);
+  const home = await get('/en/workshops', 'turquoisestudio.app');
+  check(home.status === 200 && home.body.includes('href="/en/casting-call"') && !home.body.includes('href="/site/'), `bare links on the public host (${home.status})`);
+  check(home.headers['content-security-policy']?.includes("default-src 'none'"), 'site CSP on the public host');
+  for (const p of ['/api/health', '/login', '/sw.js', '/students/1']) {
+    const res = await get(p, 'turquoisestudio.app');
+    check(res.status === 404 && !res.body.includes('<div id="root">') && String(res.headers['content-type']).startsWith('text/html'), `${p} on the public host is the site's 404 (${res.status})`);
+  }
+  const www = await get('/ar/links?from=ig', 'www.turquoisestudio.app');
+  check(www.status === 301 && /^https?:\/\/turquoisestudio\.app\/ar\/links\?from=ig$/.test(String(www.headers.location)), `www → apex (${www.status} ${www.headers.location})`);
+  const staff = await get('/students/1', `${hostname}:${port}`);
+  check(staff.status === 200 && staff.body.includes('<div id="root">'), 'the staff host still serves the staff app');
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   const portArg = argv.indexOf('--port');
@@ -458,6 +630,8 @@ async function main() {
     console.log(`• seeded through POST /api/admin/seed-demo in ${((Date.now() - started) / 1000).toFixed(1)}s (${JSON.stringify(seeded.counts)})`);
     const state = await runApiSmoke(dev.url, { adminToken: vars.ADMIN_TOKEN, password });
     await staticChecks(dev.url);
+    await siteChecks(dev.url, { password });
+    await publicHostChecks(dev.url);
 
     await dev.stop();
     dev = await startWranglerDev({ port, persistTo, quiet: !argv.includes('--verbose'), config });

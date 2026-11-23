@@ -45,10 +45,14 @@ site.use('*', async (c, next) => {
   if (!c.res.headers.has('Cache-Control')) c.header('Cache-Control', 'no-store');
 });
 
-/** The visible form of an app path (/site/…): bare on a public host. */
+/**
+ * The visible form of an app path (/site/…): bare on a public host. Runs of slashes are merged, so the
+ * result is always a same-site path ("//evil.example" would be another host).
+ */
 function visible(c: Context<AppEnv>, appPath: string): string {
   const paths = pathsFor(c);
-  return paths.base === SITE_BASE ? appPath : appPath.slice(SITE_BASE.length) || '/';
+  const clean = appPath.replace(/\/{2,}/g, '/');
+  return paths.base === SITE_BASE ? clean : clean.slice(SITE_BASE.length).replace(/^\/*/, '/');
 }
 
 /** "/site/en/" → "/site/en" (one canonical spelling per page). */

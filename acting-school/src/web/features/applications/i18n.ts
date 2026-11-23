@@ -43,6 +43,8 @@ const en = {
     message: 'Their message',
     appliedOn: 'Applied on',
     appliedIn: 'Page language',
+    /** Each language named in itself. */
+    locale: { en: 'English', ar: 'العربية' },
     reviewed: 'Last changed by {{name}}, {{date}}',
     nothing: 'Not given',
     onRoster: 'This person is on the talent roster.',
@@ -109,6 +111,7 @@ const ar: TranslationOf<typeof en> = {
     message: 'رسالتهم',
     appliedOn: 'تاريخ التقديم',
     appliedIn: 'لغة الصفحة',
+    locale: { en: 'English', ar: 'العربية' },
     reviewed: 'آخر تغيير بواسطة {{name}}، {{date}}',
     nothing: 'غير مذكور',
     onRoster: 'هذا الشخص في قائمة الممثلين.',

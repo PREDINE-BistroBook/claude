@@ -31,7 +31,7 @@ export function coachTitle(c: Pick<SiteCoach, 'titleEn' | 'titleAr'>, lang: stri
   return pickBilingual({ en: c.titleEn, ar: c.titleAr }, lang);
 }
 
-/** The title visitors see: the public title in that language, then the other language's, then the course name. */
+/** The title visitors see in that language: its public title, else the other language's, else the course name (fillBilingual on the public site). */
 export function workshopTitle(w: Pick<SiteWorkshop, 'titleEn' | 'titleAr' | 'courseName'>, lang: string): string {
   return pickBilingual({ en: w.titleEn, ar: w.titleAr }, lang) || w.courseName;
 }

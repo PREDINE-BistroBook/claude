@@ -176,8 +176,8 @@ export function applyLabels(ctx: SiteCtx): Record<string, string> {
     message: f.message,
     guardianName: f.guardianName,
     guardianPhone: f.guardianPhone,
-    guardianConsent: f.guardianConsent,
-    privacyConsent: f.privacyConsent,
+    guardianConsent: f.guardianConsentShort,
+    privacyConsent: f.privacyConsentShort,
   };
 }
 
@@ -208,8 +208,8 @@ function guardianGroup(ctx: SiteCtx, state: FormState): Html {
   return html`<div class="group">
 <h3>${f.guardianTitle}</h3>
 <p class="hint">${f.guardianIntro}</p>
-${textField(ctx, state, 'guardianName', f.guardianName, { autocomplete: 'off', maxlength: 200 })}
-${textField(ctx, state, 'guardianPhone', f.guardianPhone, { type: 'tel', autocomplete: 'off', inputmode: 'tel', dir: 'ltr', maxlength: 50 })}
+${textField(ctx, state, 'guardianName', f.guardianName, { autocomplete: 'off', maxlength: 200, noMarker: true })}
+${textField(ctx, state, 'guardianPhone', f.guardianPhone, { type: 'tel', autocomplete: 'off', inputmode: 'tel', dir: 'ltr', maxlength: 50, noMarker: true })}
 ${checkbox(ctx, state, 'guardianConsent', f.guardianConsent)}
 </div>`;
 }
@@ -260,8 +260,8 @@ export function castingLabels(ctx: SiteCtx): Record<string, string> {
     photo3: f.photo3,
     guardianName: f.guardianName,
     guardianPhone: f.guardianPhone,
-    guardianConsent: f.guardianConsent,
-    privacyConsent: f.privacyConsent,
+    guardianConsent: f.guardianConsentShort,
+    privacyConsent: f.privacyConsentShort,
   };
 }
 

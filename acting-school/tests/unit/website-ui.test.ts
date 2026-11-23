@@ -57,10 +57,11 @@ describe('bilingual texts on staff screens', () => {
     expect(pickBilingual({ en: '', ar: '' }, 'en')).toBe('');
   });
 
-  it("a workshop's public title falls back to the course name, like the public site", () => {
+  it("a workshop's public title: that language's, else the other language's, else the course name (as the public site fills it)", () => {
     expect(workshopTitle({ titleEn: '', titleAr: '', courseName: 'Acting 101' }, 'ar')).toBe('Acting 101');
     expect(workshopTitle({ titleEn: 'On camera', titleAr: '', courseName: 'Acting 101' }, 'ar')).toBe('On camera');
     expect(workshopTitle({ titleEn: 'On camera', titleAr: 'أمام الكاميرا', courseName: 'Acting 101' }, 'ar')).toBe('أمام الكاميرا');
+    expect(workshopTitle({ titleEn: ' ', titleAr: 'أمام الكاميرا', courseName: 'Acting 101' }, 'en')).toBe('أمام الكاميرا');
   });
 
   it('coach names and link labels follow the same rule', () => {

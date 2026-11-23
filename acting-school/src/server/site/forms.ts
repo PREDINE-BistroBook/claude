@@ -90,7 +90,9 @@ export const zodIssues = (err: z.ZodError) => err.issues.map((i) => ({ path: i.p
 
 const fid = (name: string) => `f-${name}`;
 
-function labelText(ctx: SiteCtx, label: string, required: boolean): Html {
+/** The label with a "required" / "optional" marker; `required: null` → no marker (the guardian block explains when it's needed). */
+function labelText(ctx: SiteCtx, label: string, required: boolean | null): Html {
+  if (required === null) return html`${label}`;
   return html`${label}<span class="${required ? 'req' : 'opt'}">${required ? ctx.t.form.required : ctx.t.form.optional}</span>`;
 }
 
@@ -106,6 +108,8 @@ function errorLine(name: string, message: string | undefined): Html | '' {
 export interface TextFieldOptions {
   type?: 'text' | 'tel' | 'email' | 'date' | 'url';
   required?: boolean;
+  /** No required/optional marker (fields needed only sometimes). */
+  noMarker?: boolean;
   autocomplete?: string;
   inputmode?: 'tel' | 'numeric' | 'email' | 'url' | 'text';
   hint?: string;
@@ -119,7 +123,7 @@ export function textField(ctx: SiteCtx, state: FormState, name: string, label: s
   const err = state.errors[name];
   const required = !!o.required;
   return html`<div class="field${err ? ' has-error' : ''}">
-<label for="${fid(name)}">${labelText(ctx, label, required)}</label>
+<label for="${fid(name)}">${labelText(ctx, label, o.noMarker ? null : required)}</label>
 ${o.hint ? html`<p class="hint" id="h-${name}">${o.hint}</p>` : ''}
 <input id="${fid(name)}" name="${name}" type="${o.type ?? 'text'}" value="${state.values[name] ?? ''}"${required ? raw(' required') : ''}${o.autocomplete ? html` autocomplete="${o.autocomplete}"` : ''}${o.inputmode ? html` inputmode="${o.inputmode}"` : ''}${o.dir ? html` dir="${o.dir}"` : ''}${o.maxlength ? html` maxlength="${o.maxlength}"` : ''}${o.min ? html` min="${o.min}"` : ''}${o.max ? html` max="${o.max}"` : ''}${err ? raw(' aria-invalid="true"') : ''}${describedBy(name, !!o.hint, !!err)}>
 ${errorLine(name, err)}
@@ -149,7 +153,7 @@ ${errorLine(name, err)}
 </fieldset>`;
 }
 
-export function checkbox(ctx: SiteCtx, state: FormState, name: string, label: string, required = false): Html {
+export function checkbox(_ctx: SiteCtx, state: FormState, name: string, label: string, required = false): Html {
   const err = state.errors[name];
   const checked = ['on', 'true', '1', 'yes'].includes(state.values[name] ?? '');
   return html`<div class="field${err ? ' has-error' : ''}">

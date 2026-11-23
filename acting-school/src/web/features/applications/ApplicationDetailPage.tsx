@@ -247,7 +247,7 @@ function ApplicationView({ application: a, del }: { application: CastingApplicat
               columns={1}
               items={[
                 { label: t('detail.appliedOn'), value: f.timestampTime(a.createdAt, 'long') },
-                { label: t('detail.appliedIn'), value: a.locale === 'ar' ? 'العربية' : 'English' },
+                { label: t('detail.appliedIn'), value: <span lang={a.locale}>{t(`detail.locale.${a.locale}`)}</span> },
               ]}
             />
             {a.reviewedAt && a.reviewedByName && (
