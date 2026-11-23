@@ -1,10 +1,25 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { getTableConfig, type SQLiteTable } from 'drizzle-orm/sqlite-core';
 import { describe, expect, it } from 'vitest';
 import * as schema from '../../src/server/db/schema';
-import { courseFiles, files, talentPhotos, users } from '../../src/server/db/schema';
+import {
+  castingApplicationPhotos,
+  castingFiles,
+  courseFiles,
+  files,
+  messageAttachments,
+  siteCoaches,
+  siteWorkshops,
+  students,
+  talent,
+  talentPhotos,
+  users,
+} from '../../src/server/db/schema';
+import { createCastingApplication } from '../../src/server/lib/castingApplications';
 import { FILE_REFERENCES, fileInUse, releaseFile } from '../../src/server/lib/fileRefs';
+import { getSiteContent, saveSiteContent } from '../../src/server/lib/siteContent';
 import { addDays } from '../../src/shared/dates';
+import { castingApplicationInput } from '../../src/shared/schemas/castingApplications';
 import type { CourseDetail } from '../../src/shared/schemas/courses';
 import { DOCX_BYTES, makeTestContext, makeZip, PDF_BYTES, PNG_1PX, todayISO, uploadBytes, uploadPng, type Client } from '../helpers';
 
@@ -22,6 +37,109 @@ async function newCourse(client: Client, teacherId: number | null, name = 'Scree
   expect(res.status).toBe(201);
   return res.body.id;
 }
+
+type Ctx = Awaited<ReturnType<typeof makeTestContext>>;
+/** A signed-in client from t.as(): the client plus its user. */
+type SignedIn = Awaited<ReturnType<Ctx['as']>>;
+
+/** A casting application as the public form stores it (one photo, nobody's upload); its id and its photo's file id. */
+async function newApplication(t: Ctx, phone: string) {
+  const content = getSiteContent(t.db);
+  saveSiteContent(t.db, { ...content, castingCall: { ...content.castingCall, open: true } });
+  const input = castingApplicationInput(todayISO()).parse({
+    firstName: 'Nadia',
+    lastName: 'Fahmy',
+    gender: 'female',
+    dateOfBirth: addDays(todayISO(), -25 * 366),
+    phone,
+    city: 'Giza',
+    privacyConsent: 'on',
+    locale: 'en',
+  });
+  const { id } = await createCastingApplication(t.db, t.files, input, [{ data: PNG_1PX, name: 'me.png' }]);
+  const photo = t.db.select().from(castingApplicationPhotos).where(eq(castingApplicationPhotos.applicationId, id)).get()!;
+  return { id, fileId: photo.fileId };
+}
+
+interface ReferenceCase {
+  /** Make this place use the file. */
+  point(fileId: string): void;
+  /** And stop using it. */
+  clear(fileId: string): void;
+}
+
+/**
+ * Every place a file can be used from: one case per FILE_REFERENCES column
+ * ("table.column"), plus the website's main photo, which lives in settings.
+ * The website's (site_coaches, site_workshops, casting_application_photos, the
+ * hero) and the team pack's (users, course_files, casting_files,
+ * message_attachments) side by side: a place missing from the "is it still
+ * used?" check would let a delete elsewhere take the file away.
+ */
+async function referenceCases(t: Ctx, owner: SignedIn): Promise<Record<string, ReferenceCase>> {
+  const courseId = await newCourse(owner, null, 'Reference course');
+  const studentId = (await owner.post('/api/students', { firstName: 'Ref', lastName: 'Student' })).body.id as number;
+  const talentId = (await owner.post('/api/talent', { firstName: 'Ref', lastName: 'Talent' })).body.id as number;
+  const castingId = (await owner.post('/api/castings', { title: 'Reference casting' })).body.id as number;
+  const colleague = await t.as('acting_coach');
+  const conversationId = (await owner.post('/api/chat/conversations', { userId: colleague.user.id })).body.id as number;
+  const messageId = (await owner.post(`/api/chat/conversations/${conversationId}/messages`, { body: 'hello' })).body.id as number;
+  const coachId = t.db.insert(siteCoaches).values({ nameEn: 'Reference coach' }).returning({ id: siteCoaches.id }).get().id;
+  t.db.insert(siteWorkshops).values({ courseId, visible: true }).run();
+  const otherApplication = await newApplication(t, '0100 000 0001');
+  const me = owner.user.id;
+  for (const id of [courseId, studentId, talentId, castingId, conversationId, messageId]) expect(id).toBeGreaterThan(0);
+  return {
+    'users.photo_file_id': {
+      point: (f) => t.db.update(users).set({ photoFileId: f }).where(eq(users.id, me)).run(),
+      clear: () => t.db.update(users).set({ photoFileId: null }).where(eq(users.id, me)).run(),
+    },
+    'students.photo_file_id': {
+      point: (f) => t.db.update(students).set({ photoFileId: f }).where(eq(students.id, studentId)).run(),
+      clear: () => t.db.update(students).set({ photoFileId: null }).where(eq(students.id, studentId)).run(),
+    },
+    'talent.headshot_file_id': {
+      point: (f) => t.db.update(talent).set({ headshotFileId: f }).where(eq(talent.id, talentId)).run(),
+      clear: () => t.db.update(talent).set({ headshotFileId: null }).where(eq(talent.id, talentId)).run(),
+    },
+    'talent_photos.file_id': {
+      point: (f) => t.db.insert(talentPhotos).values({ talentId, fileId: f }).run(),
+      clear: (f) => t.db.delete(talentPhotos).where(eq(talentPhotos.fileId, f)).run(),
+    },
+    'site_coaches.photo_file_id': {
+      point: (f) => t.db.update(siteCoaches).set({ photoFileId: f }).where(eq(siteCoaches.id, coachId)).run(),
+      clear: () => t.db.update(siteCoaches).set({ photoFileId: null }).where(eq(siteCoaches.id, coachId)).run(),
+    },
+    'site_workshops.cover_file_id': {
+      point: (f) => t.db.update(siteWorkshops).set({ coverFileId: f }).where(eq(siteWorkshops.courseId, courseId)).run(),
+      clear: () => t.db.update(siteWorkshops).set({ coverFileId: null }).where(eq(siteWorkshops.courseId, courseId)).run(),
+    },
+    'casting_application_photos.file_id': {
+      point: (f) => t.db.insert(castingApplicationPhotos).values({ applicationId: otherApplication.id, fileId: f, sortOrder: 1 }).run(),
+      clear: (f) => t.db.delete(castingApplicationPhotos).where(and(eq(castingApplicationPhotos.applicationId, otherApplication.id), eq(castingApplicationPhotos.fileId, f))).run(),
+    },
+    'course_files.file_id': {
+      point: (f) => t.db.insert(courseFiles).values({ courseId, fileId: f, kind: 'photo', uploadedById: me }).run(),
+      clear: (f) => t.db.delete(courseFiles).where(eq(courseFiles.fileId, f)).run(),
+    },
+    'casting_files.file_id': {
+      point: (f) => t.db.insert(castingFiles).values({ castingId, fileId: f, kind: 'photo', uploadedById: me }).run(),
+      clear: (f) => t.db.delete(castingFiles).where(eq(castingFiles.fileId, f)).run(),
+    },
+    'message_attachments.file_id': {
+      point: (f) => t.db.insert(messageAttachments).values({ messageId, fileId: f, kind: 'photo' }).run(),
+      clear: (f) => t.db.delete(messageAttachments).where(eq(messageAttachments.fileId, f)).run(),
+    },
+    'settings: the website’s main photo (heroFileId)': {
+      point: (f) => void saveSiteContent(t.db, { ...getSiteContent(t.db), heroFileId: f }),
+      clear: () => void saveSiteContent(t.db, { ...getSiteContent(t.db), heroFileId: null }),
+    },
+  };
+}
+
+const HERO_CASE = 'settings: the website’s main photo (heroFileId)';
+const referenceNames = () => [...FILE_REFERENCES.map((r) => `${getTableConfig(r.table).name}.${r.column.name}`), HERO_CASE].sort();
+const fileRow = (t: Ctx, fileId: string) => t.db.select().from(files).where(eq(files.id, fileId)).get();
 
 describe('POST /api/files: images and documents, checked by their bytes', () => {
   it('takes JPEG/PNG/WebP, PDF, Word, Excel and PowerPoint; answers kind and name', async () => {
@@ -149,6 +267,56 @@ describe('releaseFile: a file goes only when nothing uses it', () => {
     expect(await releaseFile(t.db, t.files, fileId)).toBe(true);
     expect(t.db.select().from(files).where(eq(files.id, fileId)).get()).toBeUndefined();
     expect(await t.files.get(storageKey)).toBeNull();
+  });
+
+  it('a file stays while any one place uses it — every FILE_REFERENCES column and the website’s main photo, each on its own', async () => {
+    const t = await makeTestContext();
+    const owner = await t.as('owner');
+    const cases = await referenceCases(t, owner);
+    expect(Object.keys(cases).sort()).toEqual(referenceNames());
+
+    for (const [name, place] of Object.entries(cases)) {
+      const fileId = await uploadPng(owner);
+      const storageKey = fileRow(t, fileId)!.storageKey;
+      place.point(fileId);
+      expect(fileInUse(t.db, fileId), name).toBe(true);
+      expect(await releaseFile(t.db, t.files, fileId), name).toBe(false);
+      // Its uploader can't take it back either (DELETE /api/files/:id), and it is still served.
+      expect((await owner.delete(`/api/files/${fileId}`)).status, name).toBe(409);
+      expect(fileRow(t, fileId), name).toBeTruthy();
+      expect(await t.files.get(storageKey), name).not.toBeNull();
+      expect((await owner.raw(`/api/files/${fileId}`, { headers: { cookie: owner.cookie! } })).status, name).toBe(200);
+
+      place.clear(fileId);
+      expect(fileInUse(t.db, fileId), name).toBe(false);
+      expect(await releaseFile(t.db, t.files, fileId), name).toBe(true);
+      expect(fileRow(t, fileId), name).toBeUndefined();
+      expect(await t.files.get(storageKey), name).toBeNull();
+    }
+  });
+
+  it('deleting a casting application keeps a photo that anything else still uses — the same list of places', async () => {
+    const t = await makeTestContext();
+    const owner = await t.as('owner');
+    const cases = await referenceCases(t, owner);
+
+    let n = 0;
+    for (const [name, place] of Object.entries(cases)) {
+      const application = await newApplication(t, `0100 555 ${String(1000 + n++)}`);
+      const storageKey = fileRow(t, application.fileId)!.storageKey;
+      place.point(application.fileId);
+
+      expect((await owner.delete(`/api/casting-applications/${application.id}`)).status, name).toBe(204);
+      expect((await owner.get(`/api/casting-applications/${application.id}`)).status, name).toBe(404);
+      // The other place still has its file: row, bytes, and its own pointer to it.
+      expect(fileRow(t, application.fileId), name).toBeTruthy();
+      expect(await t.files.get(storageKey), name).not.toBeNull();
+      expect(fileInUse(t.db, application.fileId), name).toBe(true);
+
+      place.clear(application.fileId);
+      expect(await releaseFile(t.db, t.files, application.fileId), name).toBe(true);
+      expect(await t.files.get(storageKey), name).toBeNull();
+    }
   });
 
   it('the site’s hero photo counts as used', async () => {

@@ -4,7 +4,7 @@
  * (routes/castingApplications.ts: loaders, accept, delete). Photos go into the
  * FileStore like staff uploads (uploadedBy null) and are never public.
  */
-import { and, asc, desc, eq, inArray, ne, or, sql, type SQL } from 'drizzle-orm';
+import { asc, desc, eq, or, sql, type SQL } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { ageOn } from '../../shared/dates';
 import type { CastingApplicationStatus } from '../../shared/enums';
@@ -18,14 +18,15 @@ import {
 import type { SessionUser } from '../../shared/schemas/auth';
 import { CASTING_PHOTO_MAX_BYTES, CASTING_PHOTOS_MAX, isMinor, normalizeInstagramHandle } from '../../shared/schemas/site';
 import type { DB } from '../db/database';
-import { castingApplicationPhotos, castingApplications, files, siteCoaches, siteWorkshops, students, talent, talentPhotos, users } from '../db/schema';
+import { castingApplicationPhotos, castingApplications, files, talent, talentPhotos, users } from '../db/schema';
 import { hasPermission, redactContact, type Conn } from './access';
 import { ApiError, fieldError, notFound } from './errors';
+import { deleteStoredFiles, takeUnusedFiles } from './fileRefs';
 import type { FileStore } from './fileStore';
 import { sniffImage } from './images';
 import { phoneSearchDigits, withPhoneDigits } from './phone';
 import { getSiteContent } from './siteContent';
-import { chunk, contains, IN_LIST_CHUNK, inChunks } from './sqlLimits';
+import { contains } from './sqlLimits';
 
 export type CastingApplicationRow = typeof castingApplications.$inferSelect;
 
@@ -303,30 +304,13 @@ export function acceptApplication(tx: Conn, id: number, reviewerId: number, toda
 
 // ── Deleting ────────────────────────────────────────────────────────────────
 
-/** Is the file used anywhere besides casting application `exceptApplicationId`'s photos (talent, students, the site, another application)? */
-function fileStillUsed(tx: Conn, fileId: string, exceptApplicationId: number): boolean {
-  const used = (q: { get(): unknown }) => !!q.get();
-  return (
-    used(tx.select({ id: talentPhotos.id }).from(talentPhotos).where(eq(talentPhotos.fileId, fileId))) ||
-    used(tx.select({ id: talent.id }).from(talent).where(eq(talent.headshotFileId, fileId))) ||
-    used(tx.select({ id: students.id }).from(students).where(eq(students.photoFileId, fileId))) ||
-    used(tx.select({ id: siteCoaches.id }).from(siteCoaches).where(eq(siteCoaches.photoFileId, fileId))) ||
-    used(tx.select({ id: siteWorkshops.courseId }).from(siteWorkshops).where(eq(siteWorkshops.coverFileId, fileId))) ||
-    used(
-      tx
-        .select({ id: castingApplicationPhotos.id })
-        .from(castingApplicationPhotos)
-        .where(and(eq(castingApplicationPhotos.fileId, fileId), ne(castingApplicationPhotos.applicationId, exceptApplicationId))),
-    ) ||
-    getSiteContent(tx).heroFileId === fileId
-  );
-}
-
 /**
  * Delete an application and the files of its photos that nothing else uses
  * (files already linked to a talent profile — an accepted application's — are
- * kept). Rows in one transaction, then the bytes from the FileStore (a failed
- * delete there only leaves an orphan, never a dangling row). 404 when missing.
+ * kept). "Used" is lib/fileRefs.ts's one list of places (FILE_REFERENCES and
+ * the site's main photo), the same check every other delete goes through.
+ * Rows in one transaction, then the bytes from the FileStore (a failed delete
+ * there only leaves an orphan, never a dangling row). 404 when missing.
  */
 export async function deleteApplication(db: DB, fileStore: FileStore, id: number): Promise<{ deletedFiles: number }> {
   const keys = db.transaction((tx) => {
@@ -337,12 +321,11 @@ export async function deleteApplication(db: DB, fileStore: FileStore, id: number
       .where(eq(castingApplicationPhotos.applicationId, id))
       .all()
       .map((p) => p.fileId);
-    const unused = fileIds.filter((f) => !fileStillUsed(tx, f, id));
-    const rows = inChunks(unused, (part) => tx.select({ id: files.id, storageKey: files.storageKey }).from(files).where(inArray(files.id, part)).all());
+    // The application's own photo rows go first, so what still points at a file after that is somebody else.
+    tx.delete(castingApplicationPhotos).where(eq(castingApplicationPhotos.applicationId, id)).run();
     tx.delete(castingApplications).where(eq(castingApplications.id, id)).run();
-    for (const part of chunk(rows.map((r) => r.id), IN_LIST_CHUNK)) tx.delete(files).where(inArray(files.id, part)).run();
-    return rows.map((r) => r.storageKey);
+    return takeUnusedFiles(tx, fileIds);
   });
-  for (const key of keys) await fileStore.delete(key).catch(() => {});
+  await deleteStoredFiles(fileStore, keys);
   return { deletedFiles: keys.length };
 }

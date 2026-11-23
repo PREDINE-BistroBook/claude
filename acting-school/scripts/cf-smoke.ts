@@ -18,7 +18,8 @@
  * refused (413) and the session cookie is __Host- prefixed. The public
  * website (/site): every page in both languages with its headers, one
  * enquiry and one casting application with a photo through the real forms,
- * accept → talent, and /site/media serving only public images; the studio's
+ * accept → talent, deleting applications (a photo goes only when nothing
+ * else uses it), and /site/media serving only public images; the studio's
  * domain (the site at the root of turquoisestudio.app, the staff app on
  * team.turquoisestudio.app, its old address staff. forwarding). The team pack:
  * the Team page, a chat round trip with a photo, a workshop document, a call
@@ -617,6 +618,14 @@ async function siteChecks(base: string, opts: { password: string }) {
   const talent = expectStatus(await head.get(`/api/talent/${accepted.talentId}`), 200, 'the new talent profile').body;
   check(talent.lastName === `Actor${stamp}`, 'talent made from the application');
   expectStatus(await head.post(`/api/casting-applications/${apps[0].id}/accept`), 409, 'accept again');
+  // Deleting applications: a photo goes only when nothing else uses it (lib/fileRefs.ts, the one list of places).
+  expectStatus(await head.delete(`/api/casting-applications/${apps[0].id}`), 204, 'delete the accepted application');
+  expectStatus(await head.get(`/api/files/${detail.photos[0].fileId}`), 200, 'its photo stays: the talent profile uses it');
+  const demoApp = expectStatus(await head.get('/api/casting-applications?status=new'), 200, 'the demo applications').body.items[0];
+  const demoPhotos = expectStatus(await head.get(`/api/casting-applications/${demoApp.id}`), 200, 'a demo application').body.photos as { fileId: string }[];
+  check(demoPhotos.length >= 1, 'a demo application has photos');
+  expectStatus(await head.delete(`/api/casting-applications/${demoApp.id}`), 204, 'delete an application that was never accepted');
+  for (const p of demoPhotos) expectStatus(await head.get(`/api/files/${p.fileId}`), 404, 'its photos go with it');
 
   step('public site: /site/media serves public images only');
   const owner = new Client(base);
