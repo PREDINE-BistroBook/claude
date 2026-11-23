@@ -1034,3 +1034,91 @@ One consistent pattern, so nobody has to hunt for it:
 - **A unit test over the route table** that fails when a list route has no registered "add" action or an explicit "nothing to add here" mark.
 - **`cf:smoke`:** an opportunity from add to casting.
 - **Phone walkthrough** at 375 px in English and Arabic, checking that the fixed Add button never covers content or other fixed bars.
+
+---
+
+## Part L — The video pipeline: coach → editor → reviewer (asked 2026-11-23)
+
+The school described the flow:
+- coaches record in class and put the link for the video editor, who works on it the next day;
+- when the editor is done, he marks it;
+- **Moaty checks every edit** for mistakes, so he must be notified when an edit is finished.
+
+This is the roadmap's "Editors' queue" (step 11), built now in its first form. **Videos are links** (Google Drive, WeTransfer, YouTube unlisted, …): the app stores no video, so it stays at $0 and needs no R2.
+
+### Positions and permissions
+- **`videos.add`** — "Add class videos for the editor". Built in for `acting_coach` and `executive_director` (BUILT_IN_GRANTS, next version). A coach adds videos only to sessions they can see (class scope, `lib/access.ts`).
+- **`videos.edit`** — "Edit videos (the editor's queue)". Built in for `video_editor`.
+- **`videos.review`** — "Check finished edits". Held through a new built-in position, **Video reviewer** / «مراجع الفيديو», which holds `videos.review` and `videos.read`. Moaty is given it on top of his two positions.
+- **`videos.read`** — see the pipeline (read-only). The Executive Director gets it built in. Owners hold everything.
+- **Who is alerted** (like the cafeteria's rule, never the owners unless they act):
+  - a finished edit → every active holder of `videos.review` **who is not an owner**;
+  - "needs changes" → the editor who did it (or every holder of `videos.edit` if unassigned);
+  - "approved" → the coach who added the video;
+  - a new video → every active holder of `videos.edit` who is not an owner.
+- **Existing database:** the new position appears once (`ensureBuiltInPositions`). The grants are applied once.
+
+### Data (one add-only migration)
+- **`videos`:**
+  - id, `course_id` (FK, cascade), `session_id` (nullable FK `class_sessions`, set null), `title` (≤ 120);
+  - `kind`: `scene` | `monologue` | `exercise` | `showreel` | `performance` | `other`;
+  - `raw_link` (http/https, ≤ 1000), `notes_for_editor` (≤ 1000), `due_on` (YYYY-MM-DD; default the day after it is added, school clock);
+  - `status`: `new` | `editing` | `in_review` | `changes_requested` | `approved`;
+  - `added_by_id`, `editor_id` (who took it), `reviewer_id` (who decided);
+  - `edited_link` (http/https, ≤ 1000), `editor_notes` (≤ 1000);
+  - `taken_at`, `submitted_at`, `decided_at`, timestamps.
+- **`video_students`:** `video_id`, `student_id`, unique pair (who appears in it).
+- **`video_events`:** id, `video_id`, `user_id`, `type` (`added` | `taken` | `submitted` | `changes_requested` | `approved` | `reopened` | `comment`), `note` (≤ 1000), `link` (nullable), `created_at` — the history shown on the video page, like an enquiry's timeline.
+- Add every new table to `CLEAR_DEMO_TABLES` and `WIPE_ORDER`; their coverage tests enforce it.
+
+### The flow (status machine; every move is an `UPDATE … WHERE status = <read>`)
+- **`new`** → **`editing`**: the editor taps "Start editing"; `editor_id` is set.
+- **`editing`** → **`in_review`**: "Done", with the edited link (required) and optional notes. This alerts the reviewer(s).
+- **`in_review`** → **`approved`**: the reviewer taps "Approved". This alerts the coach who added it.
+- **`in_review`** → **`changes_requested`**: the reviewer taps "Needs changes", with a note (required). This alerts the editor.
+- **`changes_requested`** → **`editing`**: the editor taps "Start fixing", then submits again, which goes back to `in_review`.
+- **Other moves:**
+  - The coach who added a video (or `videos.review`, or an owner) may edit its title, links, notes, students or due date while it is `new`, and may delete it while `new`.
+  - `approved` can be reopened by the reviewer, with a note, back to `changes_requested`.
+  - Any participant can add a **comment** to the history.
+
+### Screens
+- **On a session's page** (and a workshop's): a **"Videos"** block with **"+ Add video"**. The form asks for:
+  - the title, prefilled with "<workshop> — <date>";
+  - the kind;
+  - the raw footage link;
+  - the students in it, picked from the session's students as big checkboxes;
+  - notes for the editor;
+  - the due date (tomorrow).
+
+  The block lists the session's videos with their status in words.
+- **Video queue** (`/videos`, School section; menu entry "Videos" / «الفيديوهات» with a count badge):
+  - **The editor sees:** tabs "To edit" (new + changes requested, due first, overdue in red, changes requested on top with the reviewer's note shown), "Editing" (his), "Waiting for check", and "Approved".
+  - **The reviewer sees:** "To check" first (each card shows the edited link as a big **"Watch the edit"** button, the editor's notes, and two big buttons, **Approved ✓** and **Needs changes**), then the rest.
+  - **Coaches** see the videos they added and their status.
+- **Video page** (`/videos/:id`): everything above, the students (links to their pages), both links as "Open raw footage" / "Watch the edit", the history timeline, the next-step button for the viewer's role, and comments.
+- **Section homes:** a School home card for each role:
+  - editor: "N videos to edit (M due today)";
+  - reviewer: "N edits to check";
+  - coach: "N of your videos approved this week".
+- **The editor's start page:** someone with `videos.edit` and no other section permission lands on the queue. The Video editor position today has talent read-only, so Casting is visible; keep his School section with the queue first in his bottom bar.
+- **Every string in EN + AR**, 375 px, 48 px targets, plain words. The links open in a new tab, `rel="noopener noreferrer"`, and their host is shown.
+
+### API (`/api/videos`)
+- `GET /` with `?status=&mine=&courseId=&sessionId=`; `GET /:id`; `POST /` (`videos.add`, class scope); `PATCH /:id` (while `new`); `DELETE /:id` (while `new`).
+- `POST /:id/take`, `POST /:id/submit { editedLink, notes? }` (`videos.edit`).
+- `POST /:id/approve`, `POST /:id/request-changes { note }`, `POST /:id/reopen { note }` (`videos.review`).
+- `POST /:id/comments { note }` (participants: the adder, the editor, reviewers, owners).
+- **Counts** for the badges go in the existing unread poll.
+- **Visibility:**
+  - `videos.read`, `videos.edit` and `videos.review` see every video;
+  - a coach sees the videos of workshops they can see;
+  - students' names follow the existing student scope rules.
+
+### Tests
+- **API:** permissions; class scope for coaches; the status machine (every allowed and refused move, double taps); link validation (http/https only); who is alerted at each step (never owners); the history; counts in the poll.
+- **Positions:** the Video reviewer position and the grants on an upgraded database.
+- **Tools:** clear-demo and wipe coverage.
+- **Unit:** the queue's ordering (changes requested first, then due date) and which buttons each role sees.
+- **`cf:smoke`:** add → take → submit → changes requested → submit → approved.
+- **Demo seed:** a few videos in each state.
