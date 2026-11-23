@@ -20,7 +20,8 @@ export function BigSwitch({
 }) {
   return (
     <div className={clsx('flex min-h-14 items-center rounded-xl border px-3 py-2 sm:px-4', checked ? 'border-accent/40 bg-accent-soft' : 'border-line-strong bg-surface', className)}>
-      <div className="min-w-0 flex-1 [&_label]:text-base [&_label]:font-semibold">
+      {/* Bigger label, and the switch itself 48 px tall (the kit's is 40). */}
+      <div className="min-w-0 flex-1 [&_label]:text-base [&_label]:font-semibold [&_[role=switch]]:h-12">
         <Switch checked={checked} onChange={onChange} label={label} description={description} disabled={disabled} />
       </div>
     </div>

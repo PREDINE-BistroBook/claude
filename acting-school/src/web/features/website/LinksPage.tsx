@@ -43,7 +43,8 @@ export default function LinksPage() {
       ) : content.isError ? (
         <ErrorState error={content.error} onRetry={() => void content.refetch()} />
       ) : (
-        <div className="grid gap-4 sm:gap-5">
+        // Block layout, not grid: a grid item would grow to fit a long link that is meant to be cut with "…".
+        <div className="space-y-4 sm:space-y-5">
           <Card title={t('linkPage.bioTitle')} description={t('linkPage.bioHint')} padded={false}>
             {summary.data ? (
               <ul className="divide-y divide-line">
@@ -177,7 +178,7 @@ function CustomLinks({ links }: { links: SiteLink[] }) {
                       <div className="mt-1">{l.visible ? <Badge tone="success">{t('linkPage.shown')}</Badge> : <Badge>{t('linkPage.hidden')}</Badge>}</div>
                     </div>
                   </div>
-                  <div className="rounded-xl bg-surface-2 px-3">
+                  <div className="rounded-xl bg-surface-2 px-3 [&_[role=switch]]:h-12">
                     <Switch
                       checked={l.visible}
                       disabled={update.isPending}

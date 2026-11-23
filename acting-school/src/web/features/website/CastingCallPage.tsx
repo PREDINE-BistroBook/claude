@@ -28,7 +28,7 @@ export default function CastingCallPage() {
       ) : content.isError ? (
         <ErrorState error={content.error} onRetry={() => void content.refetch()} />
       ) : (
-        <div className="mx-auto grid max-w-3xl gap-4 sm:gap-5">
+        <div className="mx-auto max-w-3xl space-y-4 sm:space-y-5">
           <OpenSwitch open={content.data.castingCall.open} />
           <ApplicationsLink />
           <CastingTexts content={content.data} />

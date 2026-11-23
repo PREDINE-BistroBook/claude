@@ -15,7 +15,6 @@ import {
   FormSection,
   PageHeader,
   PageLoader,
-  PhotoInput,
   useToast,
 } from '@web/components/ui';
 import { ApiError } from '@web/lib/api';
@@ -23,7 +22,9 @@ import { errorMessageKey, useForm } from '@web/lib/forms';
 import { TeacherSelect } from '../classes/components/TeacherSelect';
 import { useDeleteSiteCoach, useSaveSiteCoach, useSiteCoach } from './api';
 import { BigSwitch } from './components/BigSwitch';
+import { BackLink } from './components/BackLink';
 import { BilingualField } from './components/BilingualField';
+import { CoverPhotoInput } from './components/CoverPhotoInput';
 import { coachName } from './utils';
 
 /** /website/coaches/new and /website/coaches/:id — one coach on the website. */
@@ -39,9 +40,9 @@ export default function CoachFormPage() {
   return (
     <div>
       <div className="mx-auto max-w-3xl">
+        <BackLink to="/website/coaches">{t('coaches.title')}</BackLink>
         <PageHeader
           title={isNew ? t('coaches.newTitle') : t('coaches.editTitle')}
-          back="/website/coaches"
           subtitle={query.data ? <bdi>{coachName(query.data, i18n.language)}</bdi> : undefined}
         />
       </div>
@@ -138,8 +139,8 @@ function CoachForm({ coach, onDeleted }: { coach?: SiteCoach; onDeleted: () => v
         <BilingualField label={t('coaches.name')} required maxLength={100} {...pair('name')} />
         <BilingualField label={t('coaches.jobTitle')} hint={t('coaches.jobTitleHint')} maxLength={100} {...pair('title')} />
         <BilingualField label={t('coaches.bio')} hint={t('coaches.bioHint')} multiline rows={5} maxLength={2000} {...pair('bio')} />
-        <Field label={t('coaches.photo')} error={form.error('photoFileId')}>
-          <PhotoInput value={v.photoFileId} onChange={(fileId) => form.set('photoFileId', fileId)} name={name} shape="rounded" />
+        <Field label={t('coaches.photo')} error={form.error('photoFileId')} htmlFor="f-photoFileId">
+          <CoverPhotoInput id="f-photoFileId" shape="portrait" value={v.photoFileId} onChange={(fileId) => form.set('photoFileId', fileId)} alt={name} />
         </Field>
       </FormSection>
 

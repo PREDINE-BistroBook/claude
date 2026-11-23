@@ -86,6 +86,11 @@ img{max-width:100%;height:auto;display:block}
 .ok{display:flex;justify-content:center;color:var(--accent);margin-bottom:8px}
 .ok .i{width:64px;height:64px}
 .center{text-align:center}
+.mt{margin-top:20px}
+.pad{padding-block:40px}
+.rounded{border-radius:var(--r);margin-bottom:20px}
+.centered{justify-content:center}
+.ok.bad{color:var(--danger)}
 .form-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:20px;margin-top:24px}
 form{display:grid;gap:22px}
 .field{display:grid;gap:6px}

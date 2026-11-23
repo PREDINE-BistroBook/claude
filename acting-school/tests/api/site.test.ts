@@ -17,7 +17,7 @@ import {
   SITE_FORM_SECRET_SETTING,
 } from '../../src/server/lib/siteContent';
 import { checkFormToken, FORM_TOKEN_MAX_AGE_MS, issueFormToken } from '../../src/server/lib/siteForms';
-import { sitePaths } from '../../src/server/site/paths';
+import { publicHostSitePaths, sitePaths } from '../../src/server/site/paths';
 import { addDays } from '../../src/shared/dates';
 import { BUILT_IN_GRANTS, BUILT_IN_GRANTS_SETTING, BUILT_IN_POSITIONS, LATEST_BUILT_IN_GRANTS_VERSION } from '../../src/shared/permissions';
 import { castingApplicationInput } from '../../src/shared/schemas/castingApplications';
@@ -441,6 +441,9 @@ describe('the public side (library functions for /site)', () => {
     expect(sitePaths.workshopApply('en', 4)).toBe('/site/en/workshops/4/apply');
     expect(sitePaths.thanks('ar', 'casting')).toBe('/site/ar/thanks?k=casting');
     expect(sitePaths.media('abc')).toBe('/site/media/abc');
+    // On a public host (PUBLIC_SITE_HOSTS) the same pages are bare; the per-host rules are in tests/unit/workerRouting.test.ts.
+    expect(publicHostSitePaths.home('ar')).toBe('/ar');
+    expect(publicHostSitePaths.media('abc')).toBe('/media/abc');
   });
 });
 

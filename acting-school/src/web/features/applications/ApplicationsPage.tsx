@@ -1,9 +1,11 @@
+import clsx from 'clsx';
 import { Megaphone, UserRoundPlus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
-import type { CastingApplicationListItem } from '@shared/schemas/castingApplications';
-import { Avatar, Badge, ButtonLink, EmptyState, ErrorState, List, ListRow, PageHeader, PageLoader, SearchInput, Tabs } from '@web/components/ui';
+import type { CastingApplicationStatus } from '@shared/enums';
+import type { CastingApplicationCounts, CastingApplicationListItem } from '@shared/schemas/castingApplications';
+import { Avatar, Badge, ButtonLink, EmptyState, ErrorState, List, ListRow, PageHeader, PageLoader, SearchInput } from '@web/components/ui';
 import { useAuth } from '@web/lib/auth';
 import { fullName, useFormat } from '@web/lib/format';
 import { useDebounced } from '@web/lib/hooks';
@@ -81,14 +83,45 @@ export default function ApplicationsPage() {
           ) : undefined
         }
       />
-      <Tabs
-        tabs={APPLICATION_TABS.map((id) => ({ id, label: t(`common:enums.castingApplicationStatus.${id}`), count: counts.data?.[id] }))}
-        value={status}
-        onChange={setStatus}
-        className="mb-4 [&_button]:min-h-12 [&_button]:text-base"
-      />
+      <StatusTabs value={status} onChange={setStatus} counts={counts.data} />
       <SearchInput value={q} onChange={setQ} placeholder={can('talent.contact') ? t('searchContact') : t('search')} className="mb-4" />
       {body}
+    </div>
+  );
+}
+
+/**
+ * The four statuses as big buttons, two by two on a phone (all visible at once:
+ * no strip that scrolls sideways), each with its count. The chosen one is
+ * filled with the Casting colour.
+ */
+function StatusTabs({ value, onChange, counts }: { value: CastingApplicationStatus; onChange: (s: CastingApplicationStatus) => void; counts?: CastingApplicationCounts }) {
+  const { t } = useTranslation(['applications', 'common']);
+  const f = useFormat();
+  return (
+    <div role="tablist" aria-label={t('common:fields.status')} className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {APPLICATION_TABS.map((id) => {
+        const active = id === value;
+        const n = counts?.[id];
+        return (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(id)}
+            className={clsx(
+              'flex min-h-12 items-center justify-between gap-2 rounded-xl border px-3 py-2 text-start text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-section',
+              active ? 'border-section bg-section text-section-ink' : 'border-line-strong bg-surface text-ink hover:bg-surface-2',
+            )}
+          >
+            <span className="min-w-0">{t(`common:enums.castingApplicationStatus.${id}`)}</span>
+            {n !== undefined && (
+              <span className={clsx('shrink-0 rounded-full px-2 py-0.5 text-xs tabular-nums', active ? 'bg-black/15' : 'bg-surface-2 text-muted')}>{f.number(n)}</span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }

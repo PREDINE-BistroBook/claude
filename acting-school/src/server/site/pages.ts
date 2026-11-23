@@ -48,7 +48,7 @@ ${content.heroFileId ? html`<img class="hero-photo" src="${paths.media(content.h
 </div>
 </section>
 ${content.castingCall.open
-  ? html`<div class="wrap" style="margin-top:24px"><div class="banner">
+  ? html`<div class="wrap mt"><div class="banner">
 <h2>${icon('clapper')}${t.home.castingTitle}</h2>
 <p>${t.home.castingText}</p>
 <div class="actions"><a class="btn btn-bright" href="${paths.castingCall(lang)}">${t.home.castingCta}${icon('arrow')}</a></div>
@@ -61,7 +61,7 @@ ${about ? html`<section class="block"><div class="wrap narrow"><h2>${t.home.abou
 ${data.workshops.length
   ? html`<div class="grid two">${data.workshops.map((w) => workshopCard(ctx, w, { heading: 'h3', description: false }))}</div>`
   : html`<p class="lead">${t.home.noWorkshops}</p>`}
-<div class="card" style="margin-top:16px"><div class="card-body">
+<div class="card mt"><div class="card-body">
 <h3>${t.home.notSureTitle}</h3>
 <p>${t.home.notSureText}</p>
 <div class="actions"><a class="btn btn-primary" href="${paths.apply(lang)}">${t.home.askUs}${icon('arrow')}</a>${data.workshops.length > 1 ? html`<a class="btn btn-line" href="${paths.workshops(lang)}">${t.home.allWorkshops}</a>` : ''}</div>
@@ -106,7 +106,7 @@ ${pageHead(t.nav.workshops, t.workshop.listIntro)}
 ${workshops.length
   ? html`<div class="grid two">${workshops.map((w) => workshopCard(ctx, w, { heading: 'h2', description: true }))}</div>`
   : html`<p class="lead">${t.home.noWorkshops}</p>${waButton(waHref(ctx, 'workshops', fmt(t.whatsapp.general, { name: ctx.studioName })), t.home.whatsapp)}`}
-<div class="card" style="margin-top:24px"><div class="card-body">
+<div class="card mt"><div class="card-body">
 <h2>${t.home.notSureTitle}</h2><p>${t.home.notSureText}</p>
 <div class="actions"><a class="btn btn-primary" href="${paths.apply(ctx.lang)}">${t.home.askUs}${icon('arrow')}</a></div>
 </div></div>
@@ -121,7 +121,7 @@ export function workshopPage(ctx: SiteCtx, w: PublicWorkshop, form: { state: For
   const body = html`<div class="wrap narrow">
 <a class="back" href="${paths.workshops(lang)}">${icon('back')}${t.workshop.allWorkshops}</a>
 <h1>${wTitle}</h1>
-${w.coverFileId ? html`<img class="cover" style="border-radius:16px;margin-bottom:20px" src="${paths.media(w.coverFileId)}" alt="${fmt(t.workshop.coverAlt, { title: wTitle })}" decoding="async">` : ''}
+${w.coverFileId ? html`<img class="cover rounded" src="${paths.media(w.coverFileId)}" alt="${fmt(t.workshop.coverAlt, { title: wTitle })}" decoding="async">` : ''}
 ${workshopFacts(ctx, w)}
 ${desc ? paragraphs(desc) : ''}
 <div class="actions">${feesButton(ctx, w)}</div>
@@ -131,7 +131,7 @@ ${w.acceptingApplications
 <p>${t.workshop.applyIntro}</p>
 ${applyForm(ctx, paths.workshopApply(lang, w.courseId), form.state, form.token)}
 </section>`
-  : html`<p class="note" style="margin-top:24px">${t.workshop.notAccepting}</p>`}
+  : html`<p class="note mt">${t.workshop.notAccepting}</p>`}
 </div>`;
   return layout({
     ...base(ctx),
@@ -276,7 +276,7 @@ export function castingPage(ctx: SiteCtx, form: { state: FormState; token: strin
   const body = html`<div class="wrap narrow">
 ${pageHead(t.casting.title)}
 ${intro ? paragraphs(intro, 'lead') : ''}
-${lookingFor ? html`<section class="card" style="margin-top:8px"><div class="card-body"><h2>${t.casting.lookingForTitle}</h2>${paragraphs(lookingFor)}</div></section>` : ''}
+${lookingFor ? html`<section class="card mt"><div class="card-body"><h2>${t.casting.lookingForTitle}</h2>${paragraphs(lookingFor)}</div></section>` : ''}
 <section class="form-card" id="apply">
 <h2>${t.casting.formTitle}</h2>
 <p>${t.casting.formIntro}</p>
@@ -327,11 +327,11 @@ ${checkbox(ctx, state, 'privacyConsent', f.privacyConsent, true)}
 export function castingClosedPage(ctx: SiteCtx): Html {
   const { t, paths } = ctx;
   const ig = instagramUrl(ctx.content.instagram);
-  const body = html`<div class="wrap narrow center" style="padding-block:32px">
+  const body = html`<div class="wrap narrow center pad">
 <div class="ok">${icon('clapper')}</div>
 <h1>${t.casting.closedTitle}</h1>
 <p class="lead">${t.casting.closedText}</p>
-<div class="actions" style="justify-content:center">
+<div class="actions centered">
 ${ig ? html`<a class="btn btn-primary" href="${ig}" rel="noopener">${icon('instagram')}<span>${t.casting.followInstagram}</span></a>` : ''}
 <a class="btn btn-line" href="${paths.home(ctx.lang)}">${t.pages.home}</a>
 </div>
@@ -383,11 +383,11 @@ export function thanksPage(ctx: SiteCtx, kind: SiteThanksKind): Html {
   const { t, paths, lang } = ctx;
   const casting = kind === 'casting';
   const wa = waHref(ctx, casting ? 'casting' : 'workshops', fmt(casting ? t.whatsapp.afterCasting : t.whatsapp.afterApply, { name: ctx.studioName }));
-  const body = html`<div class="wrap narrow center" style="padding-block:40px">
+  const body = html`<div class="wrap narrow center pad">
 <div class="ok">${icon('check')}</div>
 <h1>${casting ? t.thanks.castingTitle : t.thanks.applyTitle}</h1>
 <p class="lead">${casting ? t.thanks.castingText : t.thanks.applyText}</p>
-<div class="actions" style="justify-content:center">
+<div class="actions centered">
 ${waButton(wa, t.thanks.whatsapp)}
 <a class="btn btn-line" href="${paths.home(lang)}">${t.thanks.home}</a>
 </div>
@@ -416,11 +416,11 @@ export function errorPage(ctx: SiteCtx, kind: ErrorPageKind, back?: string): Htm
   }[kind];
   const number = whatsappNumber(ctx.content, 'workshops');
   const wa = number ? waLink(number, ctx.countryCode, fmt(t.whatsapp.general, { name: ctx.studioName })) : null;
-  const body = html`<div class="wrap narrow center" style="padding-block:40px">
-<div class="ok" style="color:#b42318">${icon('alert')}</div>
+  const body = html`<div class="wrap narrow center pad">
+<div class="ok bad">${icon('alert')}</div>
 <h1>${text[0]}</h1>
 <p class="lead">${text[1]}</p>
-<div class="actions" style="justify-content:center">
+<div class="actions centered">
 ${back ? html`<a class="btn btn-primary" href="${back}">${icon('back')}${t.pages.backToForm}</a>` : ''}
 ${waButton(wa, t.home.whatsapp)}
 <a class="btn btn-line" href="${paths.home(lang)}">${t.pages.home}</a>

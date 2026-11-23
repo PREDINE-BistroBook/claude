@@ -1,3 +1,4 @@
+import clsx from 'clsx';
 import { Camera, ImageIcon, Trash2 } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -7,11 +8,25 @@ import { errorMessageKey } from '@web/lib/forms';
 import { uploadImage } from '@web/lib/image';
 
 /**
- * A wide photo (the home page's main photo, a workshop's cover): a 16:9
- * preview, then "Add / Change photo" and "Remove photo". The photo is resized
- * on the phone before upload (uploadImage), like every staff upload.
+ * A photo for the website (the home page's main photo, a workshop's cover, a
+ * coach's portrait): a large preview, then big "Add / Change photo" and
+ * "Remove photo" buttons. The photo is resized on the phone before upload
+ * (uploadImage), like every staff upload.
  */
-export function CoverPhotoInput({ value, onChange, alt, id }: { value: string | null; onChange: (fileId: string | null) => void; alt: string; id?: string }) {
+export function CoverPhotoInput({
+  value,
+  onChange,
+  alt,
+  id,
+  shape = 'wide',
+}: {
+  value: string | null;
+  onChange: (fileId: string | null) => void;
+  alt: string;
+  id?: string;
+  /** 'wide' (16:9) for covers and the main photo, 'portrait' (3:4) for a person. */
+  shape?: 'wide' | 'portrait';
+}) {
   const { t } = useTranslation(['website', 'common']);
   const toast = useToast();
   const input = useRef<HTMLInputElement>(null);
@@ -33,7 +48,7 @@ export function CoverPhotoInput({ value, onChange, alt, id }: { value: string | 
 
   return (
     <div className="grid gap-3">
-      <div className="aspect-video w-full max-w-md overflow-hidden rounded-2xl border border-line bg-surface-2">
+      <div className={clsx('w-full overflow-hidden rounded-2xl border border-line bg-surface-2', shape === 'wide' ? 'aspect-video max-w-md' : 'aspect-[3/4] max-w-40')}>
         {value && broken !== value ? (
           <img src={fileUrl(value)} alt={alt} className="size-full object-cover" onError={() => setBroken(value)} />
         ) : (

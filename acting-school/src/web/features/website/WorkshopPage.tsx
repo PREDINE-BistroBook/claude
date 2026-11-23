@@ -8,6 +8,7 @@ import { ApiError } from '@web/lib/api';
 import { useForm } from '@web/lib/forms';
 import { useSaveSiteWorkshop, useSiteWorkshop } from './api';
 import { BigSwitch } from './components/BigSwitch';
+import { BackLink } from './components/BackLink';
 import { BilingualField } from './components/BilingualField';
 import { CoverPhotoInput } from './components/CoverPhotoInput';
 import { WorkshopFacts } from './components/WorkshopFacts';
@@ -22,7 +23,8 @@ export default function WorkshopPage() {
   return (
     <div>
       <div className="mx-auto max-w-3xl">
-        <PageHeader title={t('workshops.editTitle')} back="/website/workshops" subtitle={query.data ? <bdi>{query.data.courseName}</bdi> : undefined} />
+        <BackLink to="/website/workshops">{t('workshops.title')}</BackLink>
+        <PageHeader title={t('workshops.editTitle')} subtitle={query.data ? <bdi>{query.data.courseName}</bdi> : undefined} />
       </div>
       {!valid || query.isError ? (
         <ErrorState error={valid ? query.error : new ApiError(404, 'not_found', 'Not found')} onRetry={valid ? () => void query.refetch() : undefined} />
