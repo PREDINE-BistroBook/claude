@@ -33,21 +33,47 @@ Rules that hold for every position: owner accounts are visible and editable only
 
 ## Phase 2 — in build order
 
+Updated 2026-11-23 with the school's picks from the Idea Board. The numbers in brackets (#n) are ideas from `docs/IDEAS.md`. Each one is built with the step it extends.
+
 1. ✅ **Positions & permissions.** Replace the four fixed roles with the positions above, editable as checkboxes per permission by owners (and by the Executive Director within her own limits). A person can hold several positions.
-2. **Admissions.** Leads (people asking about classes, from WhatsApp / email / Sheets / forms) → interview with Salma (notes + assessment) → Salma picks the coach and class → enrolled student. Follow-up reminders so no lead is forgotten.
-3. **Import from Google Sheets.** Upload a CSV/Excel export, match columns to fields (students, actors, leads). Optional automatic sync of new rows through a free Google Apps Script.
-4. **Coach rankings.** Coaches score their students on criteria (editable list), with notes and history; progress over time; top students surface for castings.
-5. **Actor database + "Find actors for a role".** Everyone who passes through is kept (represented, freelancers, auditioned once). Search by filters or by describing the role in plain Arabic/English (Claude Haiku turns the description into filters + ranked matches). Includes top-ranked students.
-6. **Actor profile cards.** One tap makes a shareable profile (headshots, measurements, skills, showreel link) to send to casting directors.
-7. **AI secretary.** One inbox for requests from the app, email and Google Sheets (free Apps Script connector) and WhatsApp (forwarded/pasted — reading WhatsApp automatically costs money). The AI summarizes in both languages, labels type and urgency, suggests who handles it; routing follows the positions above (flow to be confirmed with the school; Salma is the first stop for many requests). Replies via pre-written wa.me links.
-8. **Casting tracker.** The school lists casting sources (websites, public channels); a scheduled job checks them, Claude Haiku extracts each casting call, and each one gets an automatic shortlist of matching actors. Facebook/Instagram posts can't be read automatically for free: staff paste them and the AI extracts the details.
-9. **Tuition & payments.** Fees per class, who paid / who owes, overdue list, WhatsApp reminder links to parents. Tracking only — no card payments.
-10. **Video editors' work queue.** Tasks (showreels, self-tapes, class footage) with deadlines, status, Google Drive links.
-11. **Student section.**
+2. **Admissions** *(building now)*. Leads (people asking about classes, from WhatsApp / email / Sheets / forms) → interview with Salma (notes + assessment) → Salma picks the coach and class → enrolled student. Follow-up reminders so no lead is forgotten.
+   - Picked ideas, right after the core: referral codes and bring-a-friend days (#22); cold lead revival and win-back (#54) — the daily follow-up list first, AI-written messages once the AI key is in; free trial class booking page (#2) — a public page, so it needs hosting.
+3. **Go-live essentials** *(new — before the school puts real data in)*. Nightly backup with restore test (#88); change history with one-tap undo (#99); unusual activity alarms (#89) as an **in-app notification bar** as the school asked, not Telegram; one-button staff leaving checklist (#94); staff vetting folder with expiry alerts (#92). The hosting choice is needed here.
+4. **Import from Google Sheets.** Upload a CSV/Excel export, match columns to fields (students, actors, leads). Optional automatic sync of new rows through a free Google Apps Script.
+5. **Coach rankings.** Coaches score their students on criteria (editable list), with notes and history; progress over time; top students surface for castings.
+   - Picked ideas: Kombars-to-Batal level ladder (#13); voice notes become coach evaluations (#11); exam day jury mode (#18); session log and lesson library (#19); pre-class coach briefing card (#97).
+6. **Actor database + "Find actors for a role".** Everyone who passes through is kept (represented, freelancers, auditioned once). Search by filters or by describing the role in plain Arabic/English (Claude Haiku turns the description into filters + ranked matches). Includes top-ranked students.
+   - First AI feature, so it ships with the AI spending meter and monthly cap (#84): the owners set a limit (e.g. $5) and the AI stops at it.
+   - Picked ideas: dialect passport and verified skills (#32); travel-ready board for Gulf jobs (#42); Actors' Syndicate permit tracker (#93); family and look-alike group finder (#33); voice-over and dubbing talent line (#34); book-out and holds calendar (#41).
+7. **Actor profile cards.** One tap makes a shareable profile (headshots, measurements, skills, showreel link) to send to casting directors.
+   - Picked ideas: casting director pick-list link (#30); monthly New Faces lookbook (#45).
+8. **AI secretary.** One inbox for requests from the app, email and Google Sheets (free Apps Script connector) and WhatsApp (forwarded/pasted — reading WhatsApp automatically costs money). The AI summarizes in both languages, labels type and urgency, suggests who handles it; routing follows the positions above (flow to be confirmed with the school; Salma is the first stop for many requests). Replies via pre-written wa.me links.
+   - Picked ideas: reply drafts from the fact sheet (#79); council approval inbox for the owners (#96); interview co-pilot for Salma (#6).
+9. **Casting tracker & bookings.** The school lists casting sources (websites, public channels); a scheduled job checks them, Claude Haiku extracts each casting call, and each one gets an automatic shortlist of matching actors. Facebook/Instagram posts can't be read automatically for free: staff paste them and the AI extracts the details.
+   - Picked ideas: casting rush board with Ramadan mode (#38); script-to-roles breakdown in one click (#28); one-tap "Are you free?" check (#81); extras booking desk (#40); host casting days at the school (#35); one-tap guardian consent per job (#23); chaperone gate for child jobs (#86); ad usage-rights and exclusivity watchdog (#66); contracts filled from the record (#43).
+10. **Tuition & payments.** Fees per class, who paid / who owes, overdue list, WhatsApp reminder links to parents. Tracking only — no card payments.
+    - Picked ideas: one price list, approved discounts only (#67); numbered receipts that can't vanish (#68); attending-but-unpaid student alerts (#64); payment screenshot reader with copy guard (#63); end-of-day cash closing (#69); expenses, custody and accountant pack (#70); one-click next-term renewals (#1).
+11. **Video editors' work queue.** Tasks (showreels, self-tapes, class footage) with deadlines, status, Google Drive links.
+    - Picked ideas: children's photo and clip protection (#87) — nothing is marked "OK to post" without the right consent; footage library searchable by student (#49); guided self-tape recorder (#48); monthly content shoot-day planner (#53); Day 1 vs today progress reels (#47); monthly class highlight for parents (#25).
+12. **Student section.**
     - **Sign-in at $0:** a personal link sent by WhatsApp from the app (wa.me, pre-written) plus a short PIN. No email or SMS codes (they cost money; many students only have a phone).
     - **What students see:** coach notes the coach marks "visible to student"; their scores and progress over time; highlights the coach picks (best moments, clips, photos); attendance, schedule, homework (monologues, scenes). Seeing their rank against classmates is off unless the owners turn it on.
     - **End-of-course pack:** one private page per student with their showreel, the photos the agency took, certificate and final coach feedback — everything downloadable. Unguessable link, can be revoked. Media of a student only goes in their pack if their photo/filming consent is recorded (minors: guardian consent).
     - **Video storage at $0:** photos are stored in the app; videos are linked from Google Drive (download button on the student's page) until hosting is chosen. With a free server with large disk, editors can upload videos directly instead.
+    - Picked ideas: homework self-tapes (#14), sent through the student page or a Google Form; shareable bilingual certificates (#26) in the end-of-course pack.
+
+## Phase 3 — the school's other picks
+
+13. **Money & owner insights.** Coach and editor payroll in one tap (#65); 90-day cash forecast (#74); profit map by class, coach and talent (#72); booking scoreboard and rising stars (#73); staff performance scorecards, owners only (#77). These come after steps 10–11 because they read attendance, payments, bookings and the editors' queue.
+14. **Marketing.** Egyptian-season content calendar (#59); our students on screen (#55); self-updating link-in-bio page (#60) — a public page, so it needs hosting.
+15. **Calendar & weak signal.** Ramadan, Eid and exam-aware timetable (#10); basement mode for weak signal (#95) — the day's classes and lists saved on the phone, attendance and notes kept offline and sent when the signal returns.
+
+## Idea Board decisions (2026-11-23)
+
+- **Want (58):** all placed in the steps above.
+- **Telegram:** not used for staff. The school skipped the staff Telegram bot (#98) and asked for an in-app notification bar instead of Telegram alarms (#89). Where someone outside the app must answer (an actor for "Are you free?" #81 or an extras call #40, a student sending homework #14), they get a pre-written WhatsApp message with a link to a one-tap answer page. A free Telegram bot or channel stays an option if the school wants one later.
+- **Maybe (34) — kept for later, not scheduled:** best class and coach suggestion (#4); success stories screen for interviews (#5); open day and intake audition mode (#7); makeup class finder (#8); one-tap substitute coach (#9); monthly parent progress letter (#20); dropout early warning with check-in draft (#21); end-of-term showcase planner (#24); alumni mentor matching (#27); ready-for-roster gate and handoff (#29); showcase night that books actors (#31); headshot auto-tagger and quality check (#36); casting director relationship book (#37); booking message to call sheet (#39); actor's private status page (#44); Booked! story drafted automatically (#50); digitals day and look-change tracker (#51); showreel brief writer for editors (#52); Google review booster (#56); weekly post ideas with safe captions (#57); testimonial bank and quote cards (#58); follower counts on actor profiles (#61); booking money ledger and fee guide (#62); weekly council brief you can question (#71); roster gap and season report (#75); which posts bring paying students (#76); end-of-term survey summaries (#78); screenshot a DM, get a lead (#80); pitch note for every submission (#82); plain-Arabic contract explainer (#83); casting scam and child-safety screen (#85); safe pickup for kids' classes (#91); nightly data tidy-up list (#100). (#89 moved up to step 3 as a notification bar.)
+- **Skip (8) — not doing:** smart waitlist with automatic offers (#3); every audition teaches something (#12); AI scene partner on the phone (#15); monologue matchmaker and shared library (#16); dialect and Fusha practice gym (#17); showreel gap finder and paid shoots (#46); shoot-day check-ins with overtime proof (#90); Telegram helper bot for staff (#98).
 
 ## Waiting on the school
 
@@ -59,4 +85,4 @@ Rules that hold for every position: owner accounts are visible and editable only
 
 ## Ideas backlog
 
-100 more enhancement ideas are in `docs/IDEAS.md`, and on the interactive Idea Board (https://claude.ai/artifact/SV4PHBRaWH7aG4wBYD4Q1Y) where the school marks Want / Maybe / Skip. Picks from that board get added here.
+The 100 ideas are described in `docs/IDEAS.md` and on the interactive Idea Board (https://claude.ai/artifact/SV4PHBRaWH7aG4wBYD4Q1Y). The school's picks are placed above ("Idea Board decisions"); if picks change on the board, update this file.

@@ -4,6 +4,8 @@ Brainstormed from six angles (agency, school, AI automation, marketing, owner/fi
 
 ★ = top pick (best payoff for a zero budget). Cost: Free, or AI pennies (Claude Haiku).
 
+**The school's picks (2026-11-23):** 58 Want, 34 Maybe, 8 Skip. Where each Want is built is in `ROADMAP.md` ("Phase 2", "Phase 3" and "Idea Board decisions").
+
 ## Admissions & school operations
 
 **1. ★ One-click next-term renewals** — At term end, the app suggests each student's next step (move up, repeat, or join the agency track) based on their coach scores and attendance. It writes a personal renewal message with an early-bird deadline, ready to send through a wa.me WhatsApp link. A live list shows who has renewed, who hasn't, and who needs a call from Salma. *Payoff:* Renewals are the cheapest money the school earns, and they no longer depend on Salma remembering to chase every family. _(Medium effort · Free)_
