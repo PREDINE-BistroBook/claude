@@ -470,3 +470,92 @@ Asked by the school on 2026-11-23: "put websites or Instagram pages where AI che
 - **AI calls:** test with a **mocked** Anthropic client. Never call the real API in tests; there is no key in the container.
 - **API tests:** permissions, social-URL refusal, run-now rate limit, to-casting, no-key mode, dashboard count.
 - **`cf:smoke`:** the radar endpoints with a source pointing at a local fixture server or the Worker's own `/site` page. No external network in tests.
+
+---
+
+## Part F — The AI pack: shared foundation, staff Secretary, website "Chat with us"
+
+Asked by the school on 2026-11-23:
+- "a secretary button for all the workers to help them understand whatever they need";
+- "a chat with us button on the website that would understand the question and redirect them to the right place".
+
+Built together with the radar (Part E) on one shared AI foundation. **Claude Haiku 5.5 only** (the school's budget rule). Same SDK rules as Part E: read the claude-api skill files first, use the official `@anthropic-ai/sdk`, no temperature, no prefill, no budget_tokens, structured output through tools validated with zod, and **mocked clients in tests**.
+
+### F1. Shared foundation (`src/server/lib/ai/`)
+- **`client.ts`:**
+  - `getAi(c)` returns a thin wrapper, or `null` when no `ANTHROPIC_API_KEY` is configured (a Worker secret; env on Node).
+  - Model constant `claude-haiku-5-5`; pricing constants for the cost math.
+  - Timeouts: 30 s for chat, 60 s for radar.
+- **`usage.ts`:**
+  - `recordUsage(db, feature, usage)` writes to `ai_usage` (Part E table; `feature` is one of `radar`, `radar_manual`, `secretary`, `site_chat`).
+  - `canSpend(db, feature, estimate)` checks the monthly overall cap `aiMonthlyCapUsd` **and** a separate public cap `siteChatMonthlyCapUsd` (default 2) for `site_chat`, so strangers on the website can never use up the staff's budget.
+- **Prompt caching** for the long, stable system prompts (app guide, site facts) where the skill docs say Haiku supports it.
+- **Untrusted text everywhere:** user questions, page text and database contents are data. Tools are **read-only**. Nothing the model says is executed. Links come from a fixed list of targets the server maps to real URLs (website chat) or are internal app paths validated on the client (Secretary).
+- **Settings › AI card** (from Part E) shows:
+  - this month's spend per feature, with the overall cap and the website-chat cap;
+  - switches for "Secretary", "Website chat" and "Nightly opportunity check";
+  - whether the key is configured, with plain steps to add it in the Cloudflare dashboard (Workers & Pages → claude → Settings → Variables and Secrets → Add → Secret, name `ANTHROPIC_API_KEY`). Never ask for the key in the app.
+
+### F2. Staff "Secretary" (every signed-in worker)
+- **Button:** a floating, labelled button "Secretary" / "السكرتيرة" on every staff screen.
+  - On phones: bottom-end, above the tab bar, at least 48 px.
+  - It opens a chat sheet (the `Modal`, a bottom sheet on phones) with a greeting and three starter suggestions that fit the person's sections, e.g. "Who has a session today?", "Which enquiries need a follow-up?", "How do I add a new student?".
+  - It answers in the language the person writes in (Egyptian Arabic welcome).
+- **What it does (v1):**
+  - **Explains how to do anything in the app.** A concise app guide is maintained in `src/server/lib/ai/appGuide.ts`: every section and screen, what each position can do, the common tasks step by step, and where things live. A test fails if a nav item exists that the guide doesn't mention.
+  - **Answers questions about the school's data, read-only, with exactly the person's permissions.** Each tool is executed by calling the app's own GET API **in-process** with the person's session (e.g. `app.request('/api/students?q=…', { headers: cookie + X-Requested-With })` inside the same Durable Object). Permission checks, class scope and contact redaction are therefore identical to the screens, by construction. A coach asking about a student outside their workshops gets the same 404 the screen would.
+    - Tools: `search_students`, `get_student`, `schedule` (from/to), `list_workshops`, `get_workshop`, `list_enquiries` (status / follow-ups due), `get_enquiry`, `search_talent` (filters), `get_talent`, `list_castings`, `get_casting`, `list_opportunities`, `dashboard_summary`, `app_guide(topic)`.
+    - Trim the JSON to the useful fields before giving it back to the model.
+    - At most 6 tool rounds per question.
+  - **Drafts text** (a WhatsApp reply to an enquiry, a message to a coach) for the person to copy. It **never** sends, saves or changes anything.
+  - **Links into the app:** the model may write `[label](/students/12)`-style links. The client renders only same-app relative paths that match the router's patterns as buttons; everything else stays plain text. The client renders a small safe subset of markdown (bold, lists, line breaks, those links), never HTML.
+- **API:** `POST /api/secretary/chat`, `{ messages: [{ role, content }] }` (last 12 turns, each ≤ 2000 characters), any signed-in staff.
+  - Answers `{ reply, links? }`.
+  - Rate limit 30 questions an hour per person, plus the overall cap.
+  - No key or switched off: 409 `ai_not_configured`, and the sheet explains it. Over the cap: 429 with a plain message.
+  - Conversations are **not stored** on the server (only usage numbers); the sheet keeps them in memory until it's closed.
+- **i18n** for everything; RTL; phone first; the sheet must not cover the input on small phones (use `dvh`).
+
+### F3. Website "Chat with us" (public site)
+- **A "Chat with us" button** on every public page: fixed, bottom-end, big, with a speech icon and the label. It links to **`/:lang/chat`** (`/site/:lang/chat` on non-public hosts).
+- **The chat page works without JavaScript** (the site's rule): a question box (≤ 500 characters) and a "Send" button. The answer appears above with **buttons to the right place**. Up to the last 4 turns are carried in hidden fields (each capped, escaped) so follow-up questions work. Quick-choice buttons are always shown: Workshops · Casting call · WhatsApp (workshops) · WhatsApp (casting).
+- **What it knows** comes from a system prompt built per request from the **published site content only**:
+  - about, address, contact lines, Instagram;
+  - visible workshops with dates, days, times and coach (**no prices** — the school's rule);
+  - casting call open/closed with its intro;
+  - the links page.
+  Nothing from the staff database beyond what the public site already shows.
+- **How it answers:** through a tool `{ answer: string (≤ 600 characters), targets: [ 'workshops' | 'workshop:<id>' | 'apply' | 'casting_call' | 'whatsapp_workshops' | 'whatsapp_casting' | 'links' | 'home' | 'instagram' ] }`.
+  - The server maps targets to real URLs and **ignores unknown targets and any URLs in the text**.
+  - Rules in the prompt:
+    - answer briefly in the visitor's language;
+    - fees/prices → "the team will tell you on WhatsApp" + `whatsapp_workshops`;
+    - never promise acceptance, roles or results;
+    - never ask for or repeat personal data (to apply → the apply form or casting call);
+    - off-topic or abusive → a polite line + WhatsApp;
+    - questions about children → mention guardian consent and the casting call rules;
+    - when unsure → WhatsApp.
+- **Abuse and cost:**
+  - Origin check, honeypot and signed form token (the Part D helpers).
+  - Rate limits: 15 messages an hour per address, 500 a day school-wide.
+  - The `site_chat` monthly cap.
+  - A question over 500 characters is refused politely.
+- **No key, switched off, or over the cap:** the page shows the quick-choice buttons with "Our team answers on WhatsApp", which is still useful.
+- **"What people ask" (Website section):** store each question and answer **without** the address or any identifier in `site_chat_log` (id, created_at, lang, question ≤ 500 characters, answer, targets json). Delete rows older than 90 days in the nightly run. Show it at `/website/questions` (`website.manage`) as a simple list with the newest first, so the owners learn what visitors want. Mention this in the website's privacy note.
+
+### Tests (Part F)
+- **Usage and caps:** usage recording and both caps (the website chat can't spend the staff budget).
+- **Secretary:**
+  - tools run with the person's permissions: a coach's tool call for another coach's student gets the not-found answer; contact fields stay hidden without `students.contact`;
+  - link rendering allows only internal router paths;
+  - the rate limit;
+  - no-key 409;
+  - the app guide covers every nav item.
+- **Website chat:**
+  - target mapping ignores unknown targets and model-written URLs;
+  - fees questions route to WhatsApp (prompt-level, with a mocked model returning targets; assert the mapping and that no price text exists in the site facts);
+  - rate limits and caps;
+  - no-JS form round trip with history fields;
+  - no-key fallback;
+  - log purge.
+- **Never call the real API in tests.**
