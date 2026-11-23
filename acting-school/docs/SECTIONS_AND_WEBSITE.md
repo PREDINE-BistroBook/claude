@@ -768,3 +768,69 @@ The school asked to call it **Team**, not Staff. So there is **one** page, "Team
 - The link on a row is the member's name block, ending in the word "Edit" (or "View" for an account out of the caller's reach). The filter is two tabs, Active / Inactive, shown only with `staff.manage`.
 - `tests/unit/team-web.test.ts` fails if "staff" (or «موظف») appears in any i18n namespace. The Secretary's app guide (Part F) is not built yet: write it with "Team" from the start.
 - The staff app's address followed the wording: `team.turquoisestudio.app`, with `staff.turquoisestudio.app` forwarding (see "The studio's own domain" in Part D).
+
+---
+
+## Part I — Usernames, first-sign-in passwords, and clearing the demo (asked 2026-11-23)
+
+The school asked for three things at once:
+- "take out all the demo things";
+- "delete all accounts but recreate all of them with a simple password like their name then 123";
+- "a username they choose instead of the email".
+
+They also said to keep "the website information we pulled from Instagram".
+
+### I1. Sign in with a username
+- **`users.username`:** unique, stored lower-case; 3–20 characters from `a–z 0–9 . _ -`, starting with a letter. A new migration adds the column (nullable) and a unique index; `initDb` fills it for existing rows from the email's local part, made unique.
+- **Sign-in:** the field is "Username" / "اسم المستخدم". It accepts a username **or** an email address, trimmed and case-insensitive. The sign-in brakes stay per account: they are keyed on the account the identifier resolves to, or on the typed identifier when it resolves to nobody. The error stays the same generic one.
+- **Adding a team member:** asks for Name, **Username**, position(s) and a first password. The username is suggested from the first name (Latin, lower-case; a taken name gets `.lastname`). The email is no longer asked for: `users.email` stays NOT NULL and is filled as `<username>@<emailDomain>` (settings `emailDomain`, default `turquoisestudio.app`; Part H reuses it). An "Email (optional)" field lets a manager set another address.
+- **Changing your own username:** anyone can, in My profile, under the same rules and uniqueness check. If their email was the automatic one, it follows the username. Managers can change a member's username on the member page.
+- **Where the username shows:** on the Team list for people with `staff.manage`, on the member page, and on My profile.
+
+### I2. A first password is temporary
+- **`users.must_change_password`** (boolean, default false).
+- **When it is set:** whenever someone else sets a person's password. That is: a manager adding a team member, a manager resetting a password, and the operator's clear-and-recreate tool.
+- **What the person sees:** on their next sign-in, one screen and nothing else: "Choose your own password" (new password twice, plain rules, show/hide). Until they do:
+  - the app shows only that screen;
+  - every API call except the auth ones answers 403 `password_change_required`.
+- **Rules for the new password:** it must meet the normal password policy and differ from the temporary one.
+- **After choosing:** the flag clears and their other sessions end.
+- **Why:** this makes simple first passwords ("salma123") safe to hand out. They stop working as soon as the person signs in once.
+
+### I3. Clear the demo and create the real team (operator tool)
+- **`POST /api/admin/clear-demo`**, bearer `ADMIN_TOKEN`, with a **dry run first** (the default): it changes nothing and returns the exact plan and a `confirm` code. The real run must send that code, and is refused if the data changed in between.
+- **What a real run does, in one transaction:**
+  - deletes **every** domain record: students, workshops, sessions, attendance, files, talent, castings, enquiries, interviews, casting applications, chats, summons, alerts, rate limits, sign-in failures;
+  - deletes **every** account not listed under `keep` (normally all of them), with their sessions and push subscriptions;
+  - creates the accounts listed under `create` (`{ name, username, password, positions: [position keys], locale? }`), each with `must_change_password = true`;
+  - guarantees `owner` (a username from `create` or `keep`) is an active owner.
+- **Website content, `keepSiteContent`:**
+  - `'contact'` (the school's choice): keep the tagline, about text, address, map link, WhatsApp lines, phone, email and Instagram; remove the demo coaches, the workshops shown, the custom links and the main photo; the casting call is closed and the site unpublished;
+  - `'all'` keeps everything that doesn't point at a deleted record;
+  - `'none'` resets to empty.
+- **Kept as they are:** settings, positions (built-in and custom), the form secret and the migration bookkeeping.
+- **Stored files** nothing references any more are deleted after the transaction.
+- **Restore point:** a real run first records the Durable Object's point-in-time-recovery bookmark and returns it. `GET /api/admin/restore-point` and `POST /api/admin/restore` let the operator roll the whole database back within 30 days. On Node the database file is copied aside instead.
+
+### The real team (from the school's confirmed positions)
+
+| Name | Username | Position | First password |
+|---|---|---|---|
+| Ahmed Tamam | `ceo` | CEO (owner) | `ahmed123` |
+| Abdelrahman Tamam | `cfo` | CFO (owner) | `abdelrahman123` |
+| Salma | `salma` | Executive Director | `salma123` |
+| Ahmed Abdellah | `ahmed` | Head of Casting | `ahmed123` |
+| Ayman Farouk | `ayman` | Head of Casting | `ayman123` |
+| Mohamed Hamzawy | `hamzawy` | Casting team | `mohamed123` |
+| Taha | `taha` | Casting team | `taha123` |
+| Ali El Gohary | `ali` | Video editor | `ali123` |
+| Moaty | `moaty` | Acting coach + Finance | `moaty123` |
+
+Each person is asked to choose their own password the first time they sign in.
+
+### Tests
+- **Usernames:** rules, uniqueness, backfill, sign-in by username and by email, brakes per account.
+- **First password:** the forced-change gate on every API route, and its lifting.
+- **Team form and profile:** adding a member, changing a username.
+- **The tool:** dry-run accuracy, confirm code, plan drift, atomicity, no orphan rows in any table (the test walks the schema), files, owner guarantee, website content modes, token rules, the app working afterwards.
+- **`cf:smoke`** covers the whole flow.
