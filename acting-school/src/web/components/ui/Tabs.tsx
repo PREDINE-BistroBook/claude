@@ -1,7 +1,7 @@
 import clsx from 'clsx';
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 
-/** Underlined tabs; scrolls sideways on narrow screens. */
+/** Underlined tabs; scrolls sideways on narrow screens, keeping the active tab in view. */
 export function Tabs<T extends string>({
   tabs,
   value,
@@ -13,8 +13,21 @@ export function Tabs<T extends string>({
   onChange: (id: T) => void;
   className?: string;
 }) {
+  const listRef = useRef<HTMLDivElement>(null);
+  // Counts often arrive after the first render and widen the tabs, so re-check when they change.
+  const layoutKey = tabs.map((tab) => `${tab.id}:${tab.count ?? ''}`).join('|');
+  // On a phone the strip scrolls sideways: bring the active tab into view (e.g. opened from a link to a later tab).
+  useEffect(() => {
+    const list = listRef.current;
+    const tab = list?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!list || !tab || list.scrollWidth <= list.clientWidth) return;
+    const l = list.getBoundingClientRect();
+    const r = tab.getBoundingClientRect();
+    if (r.left < l.left) list.scrollBy({ left: r.left - l.left - 16 });
+    else if (r.right > l.right) list.scrollBy({ left: r.right - l.right + 16 });
+  }, [value, layoutKey]);
   return (
-    <div role="tablist" className={clsx('-mx-4 flex gap-1 overflow-x-auto border-b border-line px-4 sm:mx-0 sm:px-0', className)}>
+    <div ref={listRef} role="tablist" className={clsx('-mx-4 flex gap-1 overflow-x-auto border-b border-line px-4 sm:mx-0 sm:px-0', className)}>
       {tabs.map((tab) => {
         const active = tab.id === value;
         return (

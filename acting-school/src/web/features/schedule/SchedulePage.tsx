@@ -11,7 +11,9 @@ import { DayAgenda } from './components/DayAgenda';
 import { WeekGrid } from './components/WeekGrid';
 import { WeekStrip } from './components/WeekStrip';
 import { useCalendarFormat } from './format';
-import { filterEvents, groupByDate, parseDateParam, parseFilterParam, weekOf } from './utils';
+import { filterEvents, groupByDate, parseDateParam, parseFilterParam, weekOf, type VisibleKinds } from './utils';
+
+const KINDS = ['classes', 'auditions', 'interviews'] as const;
 
 /** Square previous/next button; the chevron mirrors in RTL so "previous" always points back. */
 function StepButton({ icon: Icon, label, onClick }: { icon: LucideIcon; label: string; onClick: () => void }) {
@@ -33,16 +35,17 @@ export default function SchedulePage() {
   const { can } = useAuth();
   const f = useCalendarFormat();
   const [params, setParams] = useSearchParams();
-  // The API adds class sessions only with courses.read and auditions only with castings.read.
-  const canSeeClasses = can('courses.read');
-  const canSeeAuditions = can('castings.read');
-  const canSeeAnything = canSeeClasses || canSeeAuditions;
-  // The All / Classes / Auditions switch only makes sense to someone who sees both.
-  const canFilter = canSeeClasses && canSeeAuditions;
+  // The API adds class sessions only with courses.read, auditions only with castings.read and
+  // admissions interviews only with admissions.read.
+  const sees: VisibleKinds = { classes: can('courses.read'), auditions: can('castings.read'), interviews: can('admissions.read') };
+  const kinds = KINDS.filter((k) => sees[k]);
+  const canSeeAnything = kinds.length > 0;
+  // The All / Classes / Auditions / Interviews switch only makes sense to someone who sees several kinds.
+  const canFilter = kinds.length > 1;
 
   const today = todayISO();
   const selected = parseDateParam(params.get('date')) ?? today;
-  const filter = parseFilterParam(params.get('show'), { classes: canSeeClasses, auditions: canSeeAuditions });
+  const filter = parseFilterParam(params.get('show'), sees);
 
   const { weekStartsOn, ready } = useWeekStart();
   const week = useMemo(() => weekOf(selected, weekStartsOn), [selected, weekStartsOn]);
@@ -75,11 +78,10 @@ export default function SchedulePage() {
 
   const filterOptions: { value: ScheduleFilter; label: string }[] = [
     { value: 'all', label: t('filter.all') },
-    { value: 'classes', label: t('filter.classes') },
-    { value: 'auditions', label: t('filter.auditions') },
+    ...kinds.map((k) => ({ value: k, label: t(`filter.${k}`) })),
   ];
 
-  const subtitle = canFilter ? t('subtitle') : canSeeAuditions ? t('subtitleAuditions') : canSeeClasses ? t('subtitleClasses') : undefined;
+  const subtitle = canSeeAnything ? t(`subtitles.${kinds.join('_')}`) : undefined;
 
   let body;
   if (!canSeeAnything)

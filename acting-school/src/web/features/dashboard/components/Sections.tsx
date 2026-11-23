@@ -1,8 +1,12 @@
-import { CalendarClock, CalendarDays, CheckCheck, ClipboardCheck, Clapperboard, Hourglass } from 'lucide-react';
+import { CalendarCheck, CalendarClock, CalendarDays, CheckCheck, ClipboardCheck, Clapperboard, Hourglass, UserRoundSearch } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ClassSession } from '@shared/schemas/courses';
+import type { LeadListItem } from '@shared/schemas/admissions';
 import type { ClosingCasting, DashboardAudition } from '@shared/schemas/dashboard';
+import type { InterviewEvent } from '@shared/schemas/schedule';
 import { Badge, DataLine, EmptyState, ListRow, StatusBadge, type Tone } from '@web/components/ui';
+import { fullName } from '@web/lib/format';
+import { followUpTone } from '../../admissions/utils';
 import { ColorDot } from '../../schedule/components/ColorDot';
 import { DataText } from '../../schedule/components/DataText';
 import { useCalendarFormat } from '../../schedule/format';
@@ -155,6 +159,103 @@ export function ClosingCastingsCard({ castings, today }: { castings: ClosingCast
         </SectionList>
       ) : (
         <EmptyState icon={Hourglass} title={t('closing.empty')} description={t('closing.emptyHint')} className="py-10" />
+      )}
+    </SectionCard>
+  );
+}
+
+/** Open enquiries whose follow-up is due today or overdue, most overdue first (admissions.read). */
+export function FollowUpsCard({ leads, total, today }: { leads: LeadListItem[]; total: number; today: string }) {
+  const { t } = useTranslation(['dashboard', 'common']);
+  const f = useCalendarFormat();
+  const more = total - leads.length;
+  return (
+    <SectionCard
+      title={
+        <span className="flex items-center gap-2">
+          {t('followUps.title')}
+          {total > 0 && <Badge tone="warning">{f.number(total)}</Badge>}
+        </span>
+      }
+      description={total > 0 ? t('followUps.hint', { count: total }) : undefined}
+      viewAll="/admissions?tab=follow_up"
+      footer={more > 0 ? t('followUps.more', { count: more }) : undefined}
+    >
+      {leads.length ? (
+        <SectionList>
+          {leads.map((l) => {
+            const due = l.nextFollowUpOn ?? today;
+            const tone = followUpTone(due, today);
+            return (
+              <ListRow
+                key={l.id}
+                to={`/admissions/${l.id}`}
+                leading={<DateTile date={due} tone={tone === 'danger' ? 'danger' : 'warning'} />}
+                title={<DataText>{fullName(l)}</DataText>}
+                subtitle={
+                  <span className="flex min-w-0 items-center gap-1">
+                    <span className="shrink-0">{t(`common:enums.leadSource.${l.source}`)}</span>
+                    {l.assignedToName && (
+                      <>
+                        <span aria-hidden className="shrink-0">
+                          ·
+                        </span>
+                        <DataText>{l.assignedToName}</DataText>
+                      </>
+                    )}
+                  </span>
+                }
+                trailing={
+                  <span className="flex flex-col items-end gap-1">
+                    <StatusBadge group="leadStatus" value={l.status} />
+                    <span className={tone === 'danger' ? 'text-xs font-medium text-danger' : 'text-xs font-medium text-warning'}>
+                      <span className="inline-block first-letter:uppercase">{f.relativeDays(due, today)}</span>
+                    </span>
+                  </span>
+                }
+              />
+            );
+          })}
+        </SectionList>
+      ) : (
+        <EmptyState icon={CalendarCheck} title={t('followUps.empty')} description={t('followUps.emptyHint')} className="py-10" />
+      )}
+    </SectionCard>
+  );
+}
+
+/** Admissions interviews in the next 7 days (admissions.read). */
+export function InterviewsCard({ interviews }: { interviews: InterviewEvent[] }) {
+  const { t } = useTranslation(['dashboard', 'common']);
+  const f = useCalendarFormat();
+  return (
+    <SectionCard title={t('interviews.title')} description={t('interviews.subtitle')} viewAll="/schedule?show=interviews">
+      {interviews.length ? (
+        <SectionList>
+          {interviews.map((i) => (
+            <ListRow
+              key={i.id}
+              to={`/admissions/${i.leadId}`}
+              leading={<DateTile date={i.date} tone="info" />}
+              title={<DataText>{i.title}</DataText>}
+              subtitle={
+                <span className="flex min-w-0 gap-1">
+                  <span className="shrink-0 tabular-nums">{f.timeRange(i.startTime, i.endTime)}</span>
+                  {(i.room || i.interviewerName) && (
+                    <>
+                      <span aria-hidden className="shrink-0">
+                        ·
+                      </span>
+                      <DataLine parts={[i.room, i.interviewerName]} />
+                    </>
+                  )}
+                </span>
+              }
+            />
+          ))}
+        </SectionList>
+      ) : (
+        <EmptyState icon={UserRoundSearch} title={t('interviews.empty')} description={t('interviews.emptyHint')} className="py-10" />
       )}
     </SectionCard>
   );

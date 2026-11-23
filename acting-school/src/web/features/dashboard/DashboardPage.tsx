@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { Clapperboard, GraduationCap, LayoutDashboard, Lock, Plus, Star, UserPlus, Users, type LucideIcon } from 'lucide-react';
+import { Clapperboard, GraduationCap, Inbox, LayoutDashboard, Lock, MessageSquarePlus, Plus, Sparkles, Star, UserPlus, Users, type LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ReactNode } from 'react';
 import { todayISO } from '@shared/dates';
@@ -9,10 +9,12 @@ import { ButtonLink, EmptyState, ErrorState, PageHeader, PageLoader, StatCard } 
 import { useAuth } from '@web/lib/auth';
 import { useFormat } from '@web/lib/format';
 import { useDashboard } from './api';
-import { AttendanceCard, AuditionsCard, ClosingCastingsCard, TodayClassesCard } from './components/Sections';
+import { AttendanceCard, AuditionsCard, ClosingCastingsCard, FollowUpsCard, InterviewsCard, TodayClassesCard } from './components/Sections';
 import { firstName, greetingFor } from './utils';
 
 const STATS: { key: keyof DashboardData['counts']; to: string; icon: LucideIcon }[] = [
+  { key: 'openLeads', to: '/admissions?tab=open', icon: Inbox },
+  { key: 'newLeadsThisWeek', to: '/admissions?tab=open', icon: Sparkles },
   { key: 'activeStudents', to: '/students', icon: Users },
   { key: 'activeCourses', to: '/classes', icon: GraduationCap },
   { key: 'activeTalent', to: '/talent', icon: Star },
@@ -20,6 +22,7 @@ const STATS: { key: keyof DashboardData['counts']; to: string; icon: LucideIcon 
 ];
 
 const QUICK_ACTIONS: { key: string; to: string; icon: LucideIcon; permission: Permission }[] = [
+  { key: 'newEnquiry', to: '/admissions/new', icon: MessageSquarePlus, permission: 'admissions.write' },
   { key: 'newStudent', to: '/students/new', icon: UserPlus, permission: 'students.write' },
   { key: 'newClass', to: '/classes/new', icon: Plus, permission: 'courses.write' },
   { key: 'addTalent', to: '/talent/new', icon: Plus, permission: 'talent.write' },
@@ -27,7 +30,14 @@ const QUICK_ACTIONS: { key: string; to: string; icon: LucideIcon; permission: Pe
 ];
 
 /** Tailwind needs the full class names written out. */
-const STAT_COLS: Record<number, string> = { 1: 'sm:grid-cols-1', 2: 'sm:grid-cols-2', 3: 'sm:grid-cols-3', 4: 'sm:grid-cols-4' };
+const STAT_COLS: Record<number, string> = {
+  1: 'sm:grid-cols-1',
+  2: 'sm:grid-cols-2',
+  3: 'sm:grid-cols-3',
+  4: 'sm:grid-cols-4',
+  5: 'sm:grid-cols-3 lg:grid-cols-5',
+  6: 'sm:grid-cols-3 xl:grid-cols-6',
+};
 
 export default function DashboardPage() {
   const { t } = useTranslation(['dashboard', 'common']);
@@ -41,8 +51,13 @@ export default function DashboardPage() {
   const stats = data ? STATS.filter((s) => data.counts[s.key] !== undefined) : [];
   const actions = QUICK_ACTIONS.filter((a) => can(a.permission));
 
+  // Admissions sit with the school cards, first: follow-ups due are the day's to-do list.
   const school = data
     ? [
+        data.followUpsDue && (
+          <FollowUpsCard key="followUps" leads={data.followUpsDue} total={data.followUpsDueCount ?? data.followUpsDue.length} today={today} />
+        ),
+        data.upcomingInterviews && <InterviewsCard key="interviews" interviews={data.upcomingInterviews} />,
         data.todaySessions && <TodayClassesCard key="today" sessions={data.todaySessions} today={today} mine={!can('classes.all')} />,
         data.attendanceToDo && data.attendanceToDo.length > 0 && (
           <AttendanceCard key="attendance" sessions={data.attendanceToDo} total={data.attendanceToDoCount ?? data.attendanceToDo.length} today={today} />

@@ -25,7 +25,16 @@ const DATE_OPTS: Record<DateStyle, Intl.DateTimeFormatOptions> = {
 /** Formatting functions bound to the current language. Re-renders on language change. */
 export function useFormat() {
   const { i18n } = useTranslation();
-  const loc = intlLocale(i18n.language);
+  return makeFormat(i18n.language);
+}
+
+/**
+ * The same formatting functions for a given language — for text written in a
+ * language other than the screen's (e.g. a WhatsApp message in Arabic sent
+ * from the English UI). Prefer useFormat() for what's on screen.
+ */
+export function makeFormat(language: string) {
+  const loc = intlLocale(language);
   return {
     locale: loc,
     /** "YYYY-MM-DD" → localised date. */
@@ -45,13 +54,18 @@ export function useFormat() {
     /** "YYYY-MM-DDTHH:MM" → date + time. */
     dateTime(dt: string | null | undefined, style: DateStyle = 'weekday'): string {
       if (!dt) return '';
-      const sep = i18n.language === 'ar' ? '، ' : ', ';
+      const sep = language === 'ar' ? '، ' : ', ';
       return `${this.date(dt.slice(0, 10), style)}${sep}${this.time(dt.slice(11, 16))}`;
     },
     /** Epoch ms → date. */
     timestamp(ms: number | null | undefined, style: DateStyle = 'medium'): string {
       if (!ms) return '';
       return new Intl.DateTimeFormat(loc, DATE_OPTS[style]).format(new Date(ms));
+    },
+    /** Epoch ms → date and time ("24 Nov 2026, 14:05"). */
+    timestampTime(ms: number | null | undefined, style: DateStyle = 'medium'): string {
+      if (!ms) return '';
+      return new Intl.DateTimeFormat(loc, { ...DATE_OPTS[style], hour: 'numeric', minute: '2-digit' }).format(new Date(ms));
     },
     /** 0 = Sunday … 6 = Saturday → "Sun" / "الأحد". */
     weekday(n: number, width: 'long' | 'short' = 'short'): string {

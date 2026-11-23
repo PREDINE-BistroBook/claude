@@ -14,7 +14,7 @@ export const PERMISSIONS = [
   'staff.manage',
   /** Create/edit positions and what they allow. */
   'positions.manage',
-  /** School name, default language, week start. */
+  /** School name, default language, week start, interview criteria, WhatsApp country code. */
   'settings.manage',
 
   /** See students (only students in your own classes or that you added, unless classes.all). */
@@ -45,6 +45,17 @@ export const PERMISSIONS = [
   /** Send actors to clients: move a submission to submitted/audition/callback/booked. */
   'castings.send',
 
+  /** See enquiries (leads) with their contact details, interviews and history. Leads are not class-scoped. */
+  'admissions.read',
+  /** Add/edit leads, log contacts, set follow-ups, schedule/reschedule/cancel interviews, close/reopen leads. */
+  'admissions.write',
+  /**
+   * Record interview assessments, accept/decline, choose the class (and so the
+   * coach), enrol the person — enrolling creates the student and the enrollment
+   * even without students.write / courses.write.
+   */
+  'admissions.decide',
+
   /** Who paid / who owes (Tuition module, later). */
   'payments.status',
   /** Amounts, totals, revenue, commissions (Tuition module, later). */
@@ -61,6 +72,7 @@ export const PERMISSION_GROUPS = [
     permissions: ['students.read', 'students.contact', 'students.write', 'courses.read', 'courses.write', 'classes.all', 'attendance.write'],
   },
   { id: 'agency', permissions: ['talent.read', 'talent.contact', 'talent.write', 'castings.read', 'castings.write', 'castings.send'] },
+  { id: 'admissions', permissions: ['admissions.read', 'admissions.write', 'admissions.decide'] },
   { id: 'money', permissions: ['payments.status', 'payments.manage'] },
 ] as const satisfies readonly { id: string; permissions: readonly Permission[] }[];
 
@@ -142,3 +154,29 @@ export type BuiltInPositionKey = (typeof BUILT_IN_POSITIONS)[number]['key'];
 
 /** The position the first account (school setup) and `npm run owner` give. */
 export const FIRST_OWNER_POSITION: BuiltInPositionKey = 'ceo';
+
+// ── Upgrading built-in positions ────────────────────────────────────────────
+
+/**
+ * Permissions added to built-in positions after they first shipped, in order.
+ * Existing databases already have their built-in positions stored (and
+ * ensureBuiltInPositions only inserts missing ones), so on startup every grant
+ * newer than the version stored in settings ('builtInGrantsVersion') is applied
+ * once — each permission added to that position only if missing — and the
+ * latest version is stored (src/server/lib/access.ts, upgradeBuiltInPositions).
+ * Fresh databases get the full current lists above and just record the latest
+ * version. Because a grant runs once, a permission an owner later removes
+ * stays removed.
+ *
+ * Adding a permission to a built-in position: add it to BUILT_IN_POSITIONS
+ * above AND append a grant here with the next version number. Never edit or
+ * reorder a released entry.
+ */
+export const BUILT_IN_GRANTS: readonly { version: number; grants: Partial<Record<BuiltInPositionKey, readonly Permission[]>> }[] = [
+  { version: 1, grants: { executive_director: ['admissions.read', 'admissions.write', 'admissions.decide'] } },
+];
+
+/** Settings key holding the last BUILT_IN_GRANTS version applied to this database. */
+export const BUILT_IN_GRANTS_SETTING = 'builtInGrantsVersion';
+
+export const LATEST_BUILT_IN_GRANTS_VERSION = BUILT_IN_GRANTS.reduce((max, g) => Math.max(max, g.version), 0);

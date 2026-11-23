@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LOCALES, type Locale } from '@shared/enums';
-import { settingsInput, type AppSettings } from '@shared/schemas/settings';
+import { COUNTRY_CODE_RE, internationalPhone } from '@shared/phone';
+import { settingsInput, type AppSettings, type SettingsInput } from '@shared/schemas/settings';
 import {
   Button,
   ErrorState,
@@ -21,6 +23,8 @@ import { api } from '@web/lib/api';
 import { ME_KEY } from '@web/lib/auth';
 import { useFormat } from '@web/lib/format';
 import { useForm } from '@web/lib/forms';
+import { CriteriaEditor, type CriterionDraft } from './CriteriaEditor';
+import { fromDrafts, toDrafts } from './utils';
 
 const SETTINGS_KEY = ['settings'] as const;
 /** Offered week starts, in calendar order for the region: Saturday, Sunday, Monday. */
@@ -53,12 +57,18 @@ function SettingsForm({ settings }: { settings: AppSettings }) {
     schoolName: settings.schoolName,
     defaultLocale: settings.defaultLocale as Locale,
     weekStartsOn: String(settings.weekStartsOn),
+    defaultCountryCode: settings.defaultCountryCode,
   });
+  // Criteria are a list, edited beside the plain fields; errors come back as 'interviewCriteria.<i>.<field>'.
+  const [criteria, setCriteria] = useState<CriterionDraft[]>(() => toDrafts(settings.interviewCriteria));
 
   const save = useMutation({
-    mutationFn: (data: Partial<AppSettings>) => api.patch<AppSettings>('/settings', data),
+    mutationFn: (data: SettingsInput) => api.patch<AppSettings>('/settings', data),
     onSuccess: async (saved) => {
       qc.setQueryData(SETTINGS_KEY, saved);
+      // New criteria got their keys on the server's copy: start again from it.
+      setCriteria(toDrafts(saved.interviewCriteria));
+      form.set('defaultCountryCode', saved.defaultCountryCode);
       toast.success(t('saved'));
       // The school name in the shell comes from /auth/me; the schedule reads the week start from ['settings'].
       await Promise.all([qc.invalidateQueries({ queryKey: SETTINGS_KEY }), qc.invalidateQueries({ queryKey: ME_KEY })]);
@@ -66,11 +76,16 @@ function SettingsForm({ settings }: { settings: AppSettings }) {
     onError: form.setServerError,
   });
 
-  const candidate = { ...form.values, weekStartsOn: Number(form.values.weekStartsOn) };
+  const interviewCriteria = fromDrafts(criteria);
+  const candidate = { ...form.values, weekStartsOn: Number(form.values.weekStartsOn), interviewCriteria };
   const dirty =
     candidate.schoolName.trim() !== settings.schoolName ||
     candidate.defaultLocale !== settings.defaultLocale ||
-    candidate.weekStartsOn !== settings.weekStartsOn;
+    candidate.weekStartsOn !== settings.weekStartsOn ||
+    candidate.defaultCountryCode.replace(/[\s+]/g, '') !== settings.defaultCountryCode ||
+    JSON.stringify(interviewCriteria) !== JSON.stringify(settings.interviewCriteria);
+  const code = candidate.defaultCountryCode.replace(/[\s+]/g, '');
+  const example = COUNTRY_CODE_RE.test(code) ? internationalPhone('01012345678', code) : null;
 
   return (
     <FormPage
@@ -112,6 +127,32 @@ function SettingsForm({ settings }: { settings: AppSettings }) {
             </Select>
           </Field>
         </FormGrid>
+      </FormSection>
+
+      <FormSection title={t('criteria.title')} description={t('criteria.description')}>
+        <CriteriaEditor
+          value={criteria}
+          onChange={(next) => {
+            setCriteria(next);
+            // Rows may have moved: drop the old per-row errors rather than pin them to the wrong row.
+            form.setErrors((e) => Object.fromEntries(Object.entries(e).filter(([k]) => !k.startsWith('interviewCriteria'))));
+          }}
+          error={form.error}
+        />
+      </FormSection>
+
+      <FormSection title={t('whatsapp.title')} description={t('whatsapp.description')}>
+        <TextField
+          label={t('whatsapp.countryCode')}
+          inputMode="numeric"
+          autoComplete="off"
+          dir="ltr"
+          required
+          className="sm:max-w-56"
+          {...form.bind('defaultCountryCode')}
+          error={form.error('defaultCountryCode')}
+          hint={example ? t('whatsapp.example', { local: '01012345678', link: `wa.me/${example}` }) : t('whatsapp.countryCodeHint')}
+        />
       </FormSection>
 
       <FormActions>

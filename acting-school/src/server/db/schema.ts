@@ -19,6 +19,12 @@ import {
   COURSE_STATUSES,
   ENROLLMENT_STATUSES,
   GENDERS,
+  INTERVIEW_RECOMMENDATIONS,
+  INTERVIEW_STATUSES,
+  LEAD_ACTIVITY_TYPES,
+  LEAD_LOST_REASONS,
+  LEAD_SOURCES,
+  LEAD_STATUSES,
   LOCALES,
   SESSION_STATUSES,
   STUDENT_STATUSES,
@@ -26,6 +32,7 @@ import {
   TALENT_STATUSES,
 } from '../../shared/enums';
 import type { Permission } from '../../shared/permissions';
+import type { LeadActivityMeta } from '../../shared/schemas/admissions';
 
 const now = () => Date.now();
 const timestamps = () => ({
@@ -358,4 +365,94 @@ export const submissions = sqliteTable(
     index('submissions_talent_idx').on(t.talentId),
     index('submissions_audition_idx').on(t.auditionAt),
   ],
+);
+
+// ── Admissions ──────────────────────────────────────────────────────────────
+
+/**
+ * Enquiries: people asking about classes, followed up until they enrol (the
+ * student is created then and linked here) or the lead is closed. Not
+ * class-scoped: anyone with admissions.read sees every lead, contacts included.
+ */
+export const leads = sqliteTable(
+  'leads',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    firstName: text('first_name').notNull(),
+    lastName: text('last_name').notNull(),
+    phone: text('phone').notNull(),
+    email: text('email'),
+    dateOfBirth: text('date_of_birth'),
+    gender: text('gender', { enum: GENDERS }),
+    city: text('city'),
+    /** For minors. */
+    guardianName: text('guardian_name'),
+    guardianPhone: text('guardian_phone'),
+    source: text('source', { enum: LEAD_SOURCES }).notNull().default('other'),
+    /** Who referred them, which ad, which form… */
+    sourceDetail: text('source_detail'),
+    /** What they want (free text). */
+    interest: text('interest'),
+    experience: text('experience'),
+    preferredCourseId: integer('preferred_course_id').references(() => courses.id, { onDelete: 'set null' }),
+    status: text('status', { enum: LEAD_STATUSES }).notNull().default('new'),
+    /** Only when status is 'lost'. */
+    lostReason: text('lost_reason', { enum: LEAD_LOST_REASONS }),
+    assignedToId: integer('assigned_to_id').references(() => users.id, { onDelete: 'set null' }),
+    /** Open leads only; cleared when the lead is closed (enrolled/declined/lost). */
+    nextFollowUpOn: text('next_follow_up_on'),
+    /** Set on enrolment. */
+    studentId: integer('student_id').references(() => students.id, { onDelete: 'set null' }),
+    createdById: integer('created_by_id').references(() => users.id, { onDelete: 'set null' }),
+    notes: text('notes'),
+    ...timestamps(),
+  },
+  (t) => [index('leads_status_idx').on(t.status), index('leads_follow_up_idx').on(t.nextFollowUpOn), index('leads_phone_idx').on(t.phone)],
+);
+
+/** A lead's timeline: contacts logged by staff, plus status changes, interviews and enrolment written by the app. */
+export const leadActivities = sqliteTable(
+  'lead_activities',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    leadId: integer('lead_id')
+      .notNull()
+      .references(() => leads.id, { onDelete: 'cascade' }),
+    type: text('type', { enum: LEAD_ACTIVITY_TYPES }).notNull(),
+    body: text('body'),
+    /** E.g. { from, to } for a status change; see LeadActivityMeta. */
+    meta: text('meta', { mode: 'json' }).$type<LeadActivityMeta>(),
+    createdById: integer('created_by_id').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at').notNull().$defaultFn(now),
+  },
+  (t) => [index('lead_activities_lead_idx').on(t.leadId, t.createdAt)],
+);
+
+/** Admissions interviews. A lead can have several (e.g. a new one after a no-show). */
+export const interviews = sqliteTable(
+  'interviews',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    leadId: integer('lead_id')
+      .notNull()
+      .references(() => leads.id, { onDelete: 'cascade' }),
+    /** "YYYY-MM-DDTHH:MM", school-local. */
+    scheduledAt: text('scheduled_at').notNull(),
+    durationMinutes: integer('duration_minutes').notNull().default(30),
+    room: text('room'),
+    interviewerId: integer('interviewer_id').references(() => users.id, { onDelete: 'set null' }),
+    status: text('status', { enum: INTERVIEW_STATUSES }).notNull().default('scheduled'),
+    /** { criterionKey: 1..5 } — keys from settings.interviewCriteria (kept when a criterion is removed). */
+    scores: text('scores', { mode: 'json' }).$type<Record<string, number>>().notNull().$defaultFn(() => ({})),
+    strengths: text('strengths'),
+    areasToWork: text('areas_to_work'),
+    notes: text('notes'),
+    recommendation: text('recommendation', { enum: INTERVIEW_RECOMMENDATIONS }),
+    recommendedLevel: text('recommended_level', { enum: COURSE_LEVELS }),
+    recommendedCourseId: integer('recommended_course_id').references(() => courses.id, { onDelete: 'set null' }),
+    recordedById: integer('recorded_by_id').references(() => users.id, { onDelete: 'set null' }),
+    recordedAt: integer('recorded_at'),
+    ...timestamps(),
+  },
+  (t) => [index('interviews_lead_idx').on(t.leadId), index('interviews_scheduled_idx').on(t.scheduledAt)],
 );

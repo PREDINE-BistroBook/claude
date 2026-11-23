@@ -69,6 +69,7 @@ const en = {
     staff: 'Staff & settings',
     school: 'School',
     agency: 'Agency',
+    admissions: 'Admissions',
     money: 'Money',
   },
   perm: {
@@ -79,7 +80,7 @@ const en = {
       manage: { label: 'Manage positions', description: 'Create and edit positions and what each one allows.' },
     },
     settings: {
-      manage: { label: 'School settings', description: 'School name, default language and the first day of the week.' },
+      manage: { label: 'School settings', description: 'School name, default language, first day of the week, admissions interview criteria and the country code for WhatsApp links.' },
     },
     students: {
       read: { label: 'See students', description: 'Only students in your own classes and students you added — unless “All classes” is allowed too.' },
@@ -108,6 +109,18 @@ const en = {
         description: 'Create, edit and delete castings and roles; add actors to shortlists, remove them, or mark them not selected or withdrawn.',
       },
       send: { label: 'Send actors to clients', description: 'Put actors forward: submitted, audition, callback, booked.' },
+    },
+    admissions: {
+      read: { label: 'See admissions', description: 'Enquiries from people who want to join, with their contact details, interviews and history.' },
+      write: {
+        label: 'Work on admissions',
+        description: 'Add and edit enquiries, log calls and messages, set follow-ups, schedule interviews, close and reopen enquiries.',
+      },
+      decide: {
+        label: 'Admissions decisions',
+        description:
+          'Record interview assessments, accept or decline, choose the class (and so the coach) and enrol. Enrolling creates the student and their enrollment even without “Edit students” or “Edit classes”.',
+      },
     },
     payments: {
       status: { label: 'Payment status', description: 'Who has paid and who still owes (comes with Tuition).' },
@@ -196,6 +209,7 @@ const ar: TranslationOf<typeof en> = {
     staff: 'الفريق والإعدادات',
     school: 'المدرسة',
     agency: 'الوكالة',
+    admissions: 'القبول',
     money: 'المال',
   },
   perm: {
@@ -206,7 +220,7 @@ const ar: TranslationOf<typeof en> = {
       manage: { label: 'إدارة المناصب', description: 'إنشاء المناصب وتعديلها وتحديد ما يسمح به كلٌّ منها.' },
     },
     settings: {
-      manage: { label: 'إعدادات المدرسة', description: 'اسم المدرسة واللغة الافتراضية وأول أيام الأسبوع.' },
+      manage: { label: 'إعدادات المدرسة', description: 'اسم المدرسة واللغة الافتراضية وأول أيام الأسبوع ومعايير مقابلات القبول ورمز الدولة لروابط واتساب.' },
     },
     students: {
       read: { label: 'عرض الطلاب', description: 'الطلاب في صفوفك والطلاب الذين أضفتهم فقط، ما لم يُسمح أيضًا بـ«كل الصفوف».' },
@@ -235,6 +249,18 @@ const ar: TranslationOf<typeof en> = {
         description: 'إنشاء تجارب الأداء والأدوار وتعديلها وحذفها، وإضافة الممثلين إلى القوائم المختصرة أو إزالتهم منها أو تحديدهم بـ«لم يتم الاختيار» أو «منسحب».',
       },
       send: { label: 'إرسال الممثلين إلى العملاء', description: 'ترشيح الممثلين: تم الترشيح، تجربة أداء، استدعاء ثانٍ، تم الاختيار.' },
+    },
+    admissions: {
+      read: { label: 'عرض القبول', description: 'استفسارات الراغبين في الالتحاق، مع بيانات التواصل معهم والمقابلات وسجلّ المتابعة.' },
+      write: {
+        label: 'العمل على القبول',
+        description: 'إضافة الاستفسارات وتعديلها، وتسجيل المكالمات والرسائل، وتحديد مواعيد المتابعة، وجدولة المقابلات، وإغلاق الاستفسارات وإعادة فتحها.',
+      },
+      decide: {
+        label: 'قرارات القبول',
+        description:
+          'تسجيل تقييم المقابلات، والقبول أو الرفض، واختيار الصف (ومن ثَمّ المدرب)، وتسجيل الطالب. التسجيل يُنشئ الطالب وتسجيله في الصف حتى دون «تعديل الطلاب» أو «تعديل الصفوف».',
+      },
     },
     payments: {
       status: { label: 'حالة الدفع', description: 'من دفع ومن لا يزال عليه مستحقات (مع وحدة الرسوم الدراسية).' },

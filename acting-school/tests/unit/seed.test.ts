@@ -52,6 +52,19 @@ describe('npm run seed', () => {
     expect(count('select count(*) as n from talent')).toBeGreaterThanOrEqual(12);
     expect(count('select count(*) as n from talent_photos')).toBeGreaterThan(5);
     expect(count('select count(distinct status) as n from submissions')).toBe(7);
+    // Admissions: ~16 leads in every status, most sources, interviews in three states, one enrolled lead linked to its new student.
+    expect(count('select count(*) as n from leads')).toBe(16);
+    expect(count('select count(distinct status) as n from leads')).toBe(8);
+    expect(count('select count(distinct source) as n from leads')).toBeGreaterThanOrEqual(8);
+    expect(count(`select count(distinct status) as n from interviews where status in ('scheduled', 'done', 'no_show')`)).toBe(3);
+    expect(count(`select count(*) as n from leads l join students s on s.id = l.student_id where l.status = 'enrolled'`)).toBe(1);
+    expect(count(`select count(*) as n from leads where status = 'lost' and lost_reason is not null`)).toBe(2);
+    expect(count(`select count(*) as n from leads where status in ('enrolled', 'declined', 'lost') and next_follow_up_on is not null`)).toBe(0);
+    expect(count(`select count(*) as n from leads where next_follow_up_on < date('now', 'localtime')`)).toBeGreaterThan(0);
+    expect(count('select count(*) as n from lead_activities')).toBeGreaterThan(30);
+    // The director's stored position has the admissions permissions (built in), and the grants version is recorded.
+    expect(count(`select count(*) as n from positions where key = 'executive_director' and permissions like '%admissions.decide%'`)).toBe(1);
+    expect(count(`select count(*) as n from settings where key = 'builtInGrantsVersion'`)).toBe(1);
     expect(fs.readdirSync(path.join(dataDir, 'uploads')).length).toBeGreaterThan(5);
 
     const again = seed();

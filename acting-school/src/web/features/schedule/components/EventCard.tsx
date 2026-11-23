@@ -1,8 +1,8 @@
 import clsx from 'clsx';
-import { Clapperboard, MapPin, Users } from 'lucide-react';
+import { Clapperboard, MapPin, UserRoundSearch, Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
-import type { AuditionEvent, ClassEvent, ScheduleEvent } from '@shared/schemas/schedule';
+import type { AuditionEvent, ClassEvent, InterviewEvent, ScheduleEvent } from '@shared/schemas/schedule';
 import { DataLine, StatusBadge } from '@web/components/ui';
 import { courseColor } from '@web/lib/colors';
 import { useFormat } from '@web/lib/format';
@@ -18,7 +18,9 @@ export type Density = 'compact' | 'comfortable';
  * `comfortable` is the phone agenda row (time on the start side).
  */
 export function EventCard({ event, density }: { event: ScheduleEvent; density: Density }) {
-  return event.kind === 'class' ? <ClassCard event={event} density={density} /> : <AuditionCard event={event} density={density} />;
+  if (event.kind === 'class') return <ClassCard event={event} density={density} />;
+  if (event.kind === 'interview') return <InterviewCard event={event} density={density} />;
+  return <AuditionCard event={event} density={density} />;
 }
 
 function ClassCard({ event: e, density }: { event: ClassEvent; density: Density }) {
@@ -130,6 +132,55 @@ function AuditionCard({ event: e, density }: { event: AuditionEvent; density: De
             <DataText>{e.location}</DataText>
           </span>
         )}
+      </span>
+    </Link>
+  );
+}
+
+/** An admissions interview: the person's name, time, room and interviewer; opens the enquiry. */
+function InterviewCard({ event: e, density }: { event: InterviewEvent; density: Density }) {
+  const { t } = useTranslation(['schedule', 'common']);
+  const f = useFormat();
+  const base = 'group block border border-line border-s-4 border-s-info bg-info-soft/40 transition-colors hover:bg-info-soft focus-visible:bg-info-soft';
+  const place = e.room || e.interviewerName ? [e.room, e.interviewerName && t('event.interviewWith', { name: e.interviewerName })] : null;
+  const settled = e.status !== 'scheduled';
+  const to = `/admissions/${e.leadId}`;
+
+  if (density === 'compact') {
+    return (
+      <Link to={to} className={clsx(base, 'rounded-lg px-2 py-1.5 text-xs')}>
+        <span className="flex items-center gap-1 text-info">
+          <UserRoundSearch className="size-3 shrink-0" aria-hidden />
+          <span className="tabular-nums">{f.time(e.startTime)}</span>
+          <span className="sr-only">{t('event.interview')}</span>
+        </span>
+        <span className="mt-0.5 block text-[13px] font-medium leading-snug text-ink break-words">
+          <bdi>{e.title}</bdi>
+        </span>
+        {place && <DataLine parts={place} className="mt-0.5 text-muted" />}
+        {settled && <StatusBadge group="interviewStatus" value={e.status} className="mt-1 px-1.5 text-[11px]" />}
+      </Link>
+    );
+  }
+
+  return (
+    <Link to={to} className={clsx(base, 'flex gap-3 rounded-2xl p-3')}>
+      <span className="w-16 shrink-0 tabular-nums">
+        <span className="block text-sm font-semibold text-ink">{f.time(e.startTime)}</span>
+        <span className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-info">
+          <UserRoundSearch className="size-3.5" aria-hidden />
+          {t('event.interview')}
+        </span>
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-start justify-between gap-2">
+          <span className="min-w-0 font-medium leading-snug text-ink break-words">
+            <bdi>{e.title}</bdi>
+          </span>
+          {settled && <StatusBadge group="interviewStatus" value={e.status} className="shrink-0" />}
+        </span>
+        <span className="mt-0.5 block text-xs text-muted tabular-nums">{f.timeRange(e.startTime, e.endTime)}</span>
+        {place && <DataLine parts={place} className="mt-0.5 text-sm text-muted" />}
       </span>
     </Link>
   );

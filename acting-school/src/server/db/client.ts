@@ -5,7 +5,7 @@ import { inArray } from 'drizzle-orm';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { BuiltInPositionKey } from '../../shared/permissions';
-import { ensureBuiltInPositions } from '../lib/access';
+import { upgradeBuiltInPositions } from '../lib/access';
 import * as schema from './schema';
 
 export type DB = BetterSQLite3Database<typeof schema> & { $client: Database.Database };
@@ -55,7 +55,9 @@ export function migrationsDir(): string {
 
 /**
  * Open (or create) the database and bring it up to date: migrations, then the
- * built-in positions (CEO, Acting coach, …) if any are missing. A phase-1
+ * built-in positions (CEO, Acting coach, …) if any are missing, plus any
+ * permissions granted to built-in positions since this database last started
+ * (BUILT_IN_GRANTS in shared/permissions.ts). A phase-1
  * database (fixed roles) also gets each account's role carried over to the
  * matching position. Pass ':memory:' for a throwaway database (tests).
  */
@@ -70,7 +72,7 @@ export function createDb(filename: string): DB {
   // commits its own transaction, so the carry-over runs right after it.)
   const phaseOneRoles = readPhaseOneRoles(sqlite);
   migrate(db, { migrationsFolder: migrationsDir() });
-  ensureBuiltInPositions(db);
+  upgradeBuiltInPositions(db);
   if (phaseOneRoles?.length) carryOverPhaseOneRoles(db, phaseOneRoles);
   return db;
 }

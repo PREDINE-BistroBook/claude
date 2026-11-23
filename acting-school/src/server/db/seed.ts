@@ -3,9 +3,11 @@
  *
  * Everything goes through the real API (createApp + app.request), signed in as
  * the people who would do it, so the data obeys the same rules as the app. The
- * one exception: the API stamps an enrolment with today's date and has no way to
- * backdate it, so after enrolling we set `enrolled_on` to when the student
- * really joined (otherwise the past sessions would have nobody on their roster).
+ * exceptions are timestamps the API always sets to "now" and can't backdate:
+ * after enrolling we set `enrolled_on` to when the student really joined
+ * (otherwise the past sessions would have nobody on their roster), and the
+ * admissions story's leads, timeline entries and interview records get the
+ * date each step happened (otherwise every lead would be "new this week").
  *
  * Dates are relative to today, so the demo always looks current.
  *
@@ -20,18 +22,29 @@
  *   coach2@demo.school    Acting coach + Finance   (Daniel Price — teaches classes)
  *   tom.wilkins@demo.school  former Acting coach, deactivated
  */
-import { count, eq } from 'drizzle-orm';
+import { and, count, eq, gt, max } from 'drizzle-orm';
 import fs from 'node:fs';
 import path from 'node:path';
-import { addDays, todayISO, weekdayOf } from '../../shared/dates';
-import type { AttendanceStatus, Gender, SubmissionStatus } from '../../shared/enums';
+import { addDays, parseDate, todayISO, weekdayOf } from '../../shared/dates';
+import type {
+  AttendanceStatus,
+  CourseLevel,
+  Gender,
+  InterviewRecommendation,
+  LeadContactType,
+  LeadLostReason,
+  LeadSource,
+  LeadStatus,
+  SubmissionStatus,
+} from '../../shared/enums';
+import type { Interview, LeadDetail } from '../../shared/schemas/admissions';
 import type { BuiltInPositionKey } from '../../shared/permissions';
 import type { CourseDetail, CourseEnrollment } from '../../shared/schemas/courses';
 import type { Position } from '../../shared/schemas/positions';
 import { createApp } from '../app';
 import { loadConfig } from '../config';
 import { createDb } from './client';
-import { enrollments, users } from './schema';
+import { enrollments, interviews, leadActivities, leads, users } from './schema';
 import { lookFor, renderPortrait } from './seedPortraits';
 
 const PASSWORD = 'demo1234';
@@ -756,6 +769,274 @@ for (const c of castingSpec) {
   }
 }
 
+// ── 6. Admissions ───────────────────────────────────────────────────────────
+
+// The director runs admissions: she takes the enquiries, interviews and enrols.
+const director = await login('director@demo.school');
+
+type LeadStep =
+  | { do: 'contact'; daysAgo: number; type: LeadContactType; body?: string; followUp?: number | null; status?: LeadStatus; lostReason?: LeadLostReason }
+  | {
+      do: 'interview';
+      daysAgo: number;
+      at: [days: number, time: string];
+      room?: string;
+      outcome?: {
+        daysAgo: number;
+        status: 'done' | 'no_show';
+        scores?: Record<string, number>;
+        strengths?: string;
+        areasToWork?: string;
+        notes?: string;
+        recommendation?: InterviewRecommendation;
+        level?: CourseLevel;
+        course?: string;
+      };
+    }
+  | { do: 'status'; daysAgo: number; status: LeadStatus; lostReason?: LeadLostReason; followUp?: number | null }
+  | { do: 'enrol'; daysAgo: number; course: string };
+
+interface LeadSpec {
+  first: string;
+  last: string;
+  phone: string;
+  email?: string;
+  gender?: Gender;
+  age?: number;
+  md?: string;
+  city?: string;
+  guardian?: [name: string, phone: string];
+  source: LeadSource;
+  sourceDetail?: string;
+  interest?: string;
+  experience?: string;
+  preferred?: string;
+  /** Taken by the owner instead of the director (so assigned to him). */
+  byOwner?: boolean;
+  daysAgo: number;
+  followUp?: number;
+  notes?: string;
+  steps?: LeadStep[];
+}
+
+const leadSpec: LeadSpec[] = [
+  // New
+  { first: 'نور', last: 'خالد', phone: '0100 765 4321', gender: 'female', age: 24, md: '02-02', city: 'Cairo', source: 'whatsapp', interest: 'Evening classes after work — screen acting.', daysAgo: 0, followUp: 0 },
+  { first: 'Omar', last: 'Farouk', phone: '+20 111 222 3344', email: 'omar.farouk@example.com', gender: 'male', age: 20, md: '06-15', source: 'instagram', sourceDetail: 'Reel: Screen Acting showcase', interest: 'Saw the showcase reel. Wants to try acting for the first time.', daysAgo: 1 },
+  // Already a student (Tariq came to the open day): the form and the enrol step warn about the duplicate.
+  { first: 'Tariq', last: 'Saleh', phone: '01223030318', email: 'tariq.saleh@example.com', gender: 'male', age: 23, md: '07-14', source: 'google_form', sourceDetail: 'Open-day sign-up form', interest: 'Screen Acting I next term.', daysAgo: 2, followUp: -1, byOwner: true },
+  // Contacted
+  {
+    first: 'مريم', last: 'سامي', phone: '+20 106 555 1234', gender: 'female', age: 19, md: '09-09', city: 'Giza', source: 'phone_call', interest: 'Theatre and voice.', daysAgo: 6,
+    steps: [{ do: 'contact', daysAgo: 6, type: 'call', body: 'Asked about prices and times. Sent the class schedule on WhatsApp.', followUp: -2 }],
+  },
+  {
+    first: 'حسن', last: 'عبد الله', phone: '+20 109 444 2211', gender: 'male', age: 10, md: '03-03', city: 'Cairo', guardian: ['عبد الله حسن', '+20 109 444 2200'], source: 'facebook', sourceDetail: 'Ad: Kids Drama autumn', preferred: 'kids', daysAgo: 4,
+    steps: [{ do: 'contact', daysAgo: 4, type: 'whatsapp', body: 'Spoke with his father. They want to visit a Saturday class first.', followUp: 0 }],
+  },
+  {
+    first: 'Lucy', last: 'Hart', phone: '+44 7700 900555', email: 'lucy.hart@example.com', gender: 'female', age: 22, md: '05-21', city: 'Cairo', source: 'email', interest: 'Improvisation; has done some school theatre.', experience: 'School plays in London, two years of youth theatre.', daysAgo: 10,
+    steps: [
+      { do: 'contact', daysAgo: 9, type: 'email', body: 'Replied with the improv class details and invited her for an interview.' },
+      { do: 'interview', daysAgo: 8, at: [-5, '18:00'], room: 'Studio B', outcome: { daysAgo: 5, status: 'no_show' } },
+      { do: 'contact', daysAgo: 4, type: 'whatsapp', body: 'Apologised — exam week. Wants a new date after her exams.', followUp: 2 },
+    ],
+  },
+  // Interview scheduled
+  {
+    first: 'يوسف', last: 'مجدي', phone: '01001234567', gender: 'male', age: 27, md: '11-01', city: 'Cairo', source: 'walk_in', interest: 'Wants to move from modelling into acting.', experience: 'Fashion modelling, two commercials.', preferred: 'screen', daysAgo: 5,
+    steps: [
+      { do: 'contact', daysAgo: 5, type: 'meeting', body: 'Walked in on Thursday; showed him the studios.' },
+      { do: 'interview', daysAgo: 5, at: [1, '17:00'], room: 'Studio A' },
+    ],
+  },
+  {
+    first: 'Sara', last: 'Nabil', phone: '+20 112 909 8080', email: 'sara.nabil@example.com', gender: 'female', age: 18, md: '12-12', source: 'tiktok', sourceDetail: 'Comment on the monologue challenge video', daysAgo: 3,
+    steps: [
+      { do: 'contact', daysAgo: 3, type: 'whatsapp', body: 'Sent the interview invitation.' },
+      { do: 'interview', daysAgo: 3, at: [3, '16:30'], room: 'Room 3' },
+    ],
+  },
+  // Interviewed
+  {
+    first: 'كريم', last: 'عادل', phone: '+20 114 321 6543', gender: 'male', age: 21, md: '08-30', city: 'Alexandria', source: 'referral', sourceDetail: 'Referred by Kareem Saeed (student)', daysAgo: 14,
+    steps: [
+      { do: 'contact', daysAgo: 13, type: 'call', body: 'Booked an interview.' },
+      {
+        do: 'interview', daysAgo: 13, at: [-3, '15:00'], room: 'Studio A',
+        outcome: { daysAgo: 3, status: 'done', scores: { presence: 3, voice: 4, body: 2, emotion: 3, imagination: 4, listening: 3, commitment: 4 }, strengths: 'Good voice, thoughtful.', areasToWork: 'Stiff physically; needs movement work.', recommendation: 'maybe', level: 'beginner' },
+      },
+      { do: 'status', daysAgo: 3, status: 'interviewed', followUp: 1 },
+    ],
+  },
+  {
+    first: 'Emma', last: 'Lewis', phone: '+20 127 111 9090', email: 'emma.lewis@example.com', gender: 'female', age: 25, md: '01-30', source: 'website', interest: 'Camera work for commercials.', experience: 'Short films at university.', preferred: 'screen', daysAgo: 12,
+    steps: [
+      {
+        do: 'interview', daysAgo: 10, at: [-2, '18:30'], room: 'Studio A',
+        outcome: { daysAgo: 2, status: 'done', scores: { presence: 5, voice: 4, body: 4, emotion: 4, imagination: 5, listening: 4, commitment: 5 }, strengths: 'Natural on camera, takes notes fast.', areasToWork: 'Projection in a big room.', recommendation: 'accept', level: 'beginner', course: 'screen' },
+      },
+      { do: 'status', daysAgo: 2, status: 'interviewed', followUp: 0 },
+    ],
+  },
+  // Accepted
+  {
+    first: 'أحمد', last: 'طارق', phone: '+20 155 600 7788', gender: 'male', age: 29, md: '04-04', city: 'Cairo', source: 'google_form', sourceDetail: 'Autumn intake form', daysAgo: 20,
+    steps: [
+      {
+        do: 'interview', daysAgo: 15, at: [-8, '19:00'], room: 'Studio B',
+        outcome: { daysAgo: 8, status: 'done', scores: { presence: 4, voice: 3, body: 5, emotion: 4, imagination: 5, listening: 4, commitment: 4 }, strengths: 'Fearless, very physical.', areasToWork: 'Listening to partners.', recommendation: 'accept', level: 'all_levels', course: 'improv' },
+      },
+      { do: 'status', daysAgo: 7, status: 'accepted' },
+      { do: 'contact', daysAgo: 6, type: 'whatsapp', body: 'Sent the acceptance and the fees. Waiting for him to confirm.', followUp: -3 },
+    ],
+  },
+  {
+    first: 'Lina', last: 'Fares', phone: '+20 128 777 1212', gender: 'female', age: 16, md: '10-10', city: 'Giza', guardian: ['Rania Fares', '+20 128 777 1200'], source: 'whatsapp', preferred: 'voice', daysAgo: 15,
+    steps: [
+      {
+        do: 'interview', daysAgo: 12, at: [-6, '17:30'], room: 'Room 3',
+        outcome: { daysAgo: 6, status: 'done', scores: { presence: 4, voice: 5, body: 3, emotion: 4, imagination: 4, listening: 5, commitment: 4 }, strengths: 'Beautiful voice, mature for her age.', areasToWork: 'Confidence.', recommendation: 'accept', level: 'intermediate', course: 'voice' },
+      },
+      { do: 'status', daysAgo: 5, status: 'accepted', followUp: 3 },
+    ],
+  },
+  // Enrolled
+  {
+    first: 'محمد', last: 'إسماعيل', phone: '+20 100 888 4545', email: 'mohamed.ismail@example.com', gender: 'male', age: 26, md: '07-07', city: 'Cairo', source: 'instagram', preferred: 'screen', daysAgo: 25,
+    steps: [
+      { do: 'contact', daysAgo: 24, type: 'whatsapp', body: 'Invited him for an interview.' },
+      {
+        do: 'interview', daysAgo: 24, at: [-18, '16:00'], room: 'Studio A',
+        outcome: { daysAgo: 18, status: 'done', scores: { presence: 4, voice: 4, body: 4, emotion: 5, imagination: 4, listening: 4, commitment: 5 }, strengths: 'Real emotional range.', areasToWork: 'Camera technique.', recommendation: 'accept', level: 'beginner', course: 'screen' },
+      },
+      { do: 'status', daysAgo: 17, status: 'accepted' },
+      { do: 'enrol', daysAgo: 1, course: 'screen' },
+    ],
+  },
+  // Declined
+  {
+    first: 'دينا', last: 'حمدي', phone: '+20 122 456 0001', gender: 'female', age: 31, md: '03-25', source: 'phone_call', daysAgo: 18,
+    steps: [
+      {
+        do: 'interview', daysAgo: 16, at: [-12, '18:00'], room: 'Studio B',
+        outcome: { daysAgo: 12, status: 'done', scores: { presence: 2, voice: 2, body: 3, emotion: 2, imagination: 3, listening: 2, commitment: 2 }, notes: 'Looking for a weekend hobby class; not ready for the term commitment.', recommendation: 'decline' },
+      },
+      { do: 'status', daysAgo: 11, status: 'declined' },
+    ],
+  },
+  // Lost
+  {
+    first: 'Jake', last: 'Morris', phone: '+20 101 300 2020', email: 'jake.morris@example.com', gender: 'male', age: 33, md: '09-19', source: 'email', daysAgo: 30, byOwner: true,
+    steps: [
+      { do: 'contact', daysAgo: 29, type: 'email', body: 'Sent the brochure.' },
+      { do: 'contact', daysAgo: 22, type: 'call', body: 'No answer.' },
+      { do: 'status', daysAgo: 15, status: 'lost', lostReason: 'no_response' },
+    ],
+  },
+  {
+    first: 'رنا', last: 'شريف', phone: '+20 115 222 7070', gender: 'female', age: 20, md: '12-01', source: 'facebook', daysAgo: 21,
+    steps: [
+      { do: 'contact', daysAgo: 20, type: 'whatsapp', body: 'Sent the fees.' },
+      { do: 'status', daysAgo: 14, status: 'lost', lostReason: 'too_expensive' },
+    ],
+  },
+];
+
+/** When a step happened: that day at 10:00 (never in the future), plus a minute per entry so the timeline keeps its order. */
+let tick = 0;
+const stampAt = (daysAgo: number) => Math.min(parseDate(addDays(today, -daysAgo)).getTime() + 10 * 3_600_000 + tick++ * 60_000, Date.now() - 60_000);
+const lastActivityId = (leadId: number) =>
+  db.select({ id: max(leadActivities.id) }).from(leadActivities).where(eq(leadActivities.leadId, leadId)).get()?.id ?? 0;
+/** Run one step of a lead's story, then date the timeline entries it wrote. */
+async function step<T>(leadId: number, daysAgo: number, run: () => Promise<T>): Promise<T> {
+  const before = lastActivityId(leadId);
+  const out = await run();
+  const ts = stampAt(daysAgo);
+  db.update(leadActivities)
+    .set({ createdAt: ts })
+    .where(and(eq(leadActivities.leadId, leadId), gt(leadActivities.id, before)))
+    .run();
+  db.update(leads).set({ updatedAt: ts }).where(eq(leads.id, leadId)).run();
+  return out;
+}
+
+for (const l of leadSpec) {
+  const client = l.byOwner ? owner : director;
+  const lead = await client.post<LeadDetail>('/leads', {
+    firstName: l.first,
+    lastName: l.last,
+    phone: l.phone,
+    email: l.email ?? null,
+    gender: l.gender ?? null,
+    dateOfBirth: l.age ? dob(l.age, l.md!) : null,
+    city: l.city ?? null,
+    guardianName: l.guardian?.[0] ?? null,
+    guardianPhone: l.guardian?.[1] ?? null,
+    source: l.source,
+    sourceDetail: l.sourceDetail ?? null,
+    interest: l.interest ?? null,
+    experience: l.experience ?? null,
+    preferredCourseId: l.preferred ? courseIds[l.preferred] : null,
+    nextFollowUpOn: l.followUp !== undefined ? addDays(today, l.followUp) : null,
+    notes: l.notes ?? null,
+  });
+  db.update(leads).set({ createdAt: stampAt(l.daysAgo) }).where(eq(leads.id, lead.id)).run();
+
+  for (const s of l.steps ?? []) {
+    if (s.do === 'contact') {
+      await step(lead.id, s.daysAgo, () =>
+        director.post(`/leads/${lead.id}/activities`, {
+          type: s.type,
+          body: s.body ?? null,
+          ...(s.followUp !== undefined ? { nextFollowUpOn: s.followUp === null ? null : addDays(today, s.followUp) } : {}),
+          ...(s.status ? { status: s.status, lostReason: s.lostReason ?? null } : {}),
+        }),
+      );
+    } else if (s.do === 'interview') {
+      const iv = await step(lead.id, s.daysAgo, () =>
+        director.post<Interview>(`/leads/${lead.id}/interviews`, {
+          scheduledAt: `${addDays(today, s.at[0])}T${s.at[1]}`,
+          durationMinutes: 30,
+          room: s.room ?? null,
+          interviewerId: staff.director,
+        }),
+      );
+      const o = s.outcome;
+      if (o) {
+        await step(lead.id, o.daysAgo, () =>
+          director.patch(`/leads/${lead.id}/interviews/${iv.id}`, {
+            status: o.status,
+            ...(o.status === 'done'
+              ? {
+                  scores: o.scores ?? {},
+                  strengths: o.strengths ?? null,
+                  areasToWork: o.areasToWork ?? null,
+                  notes: o.notes ?? null,
+                  recommendation: o.recommendation ?? null,
+                  recommendedLevel: o.level ?? null,
+                  recommendedCourseId: o.course ? courseIds[o.course] : null,
+                }
+              : {}),
+          }),
+        );
+        db.update(interviews).set({ recordedAt: stampAt(o.daysAgo) }).where(eq(interviews.id, iv.id)).run();
+      }
+    } else if (s.do === 'status') {
+      await step(lead.id, s.daysAgo, () =>
+        director.patch(`/leads/${lead.id}`, {
+          status: s.status,
+          ...(s.lostReason ? { lostReason: s.lostReason } : {}),
+          ...(s.followUp !== undefined ? { nextFollowUpOn: s.followUp === null ? null : addDays(today, s.followUp) } : {}),
+        }),
+      );
+    } else {
+      // Enrolling creates the student and the enrollment (from today).
+      await step(lead.id, s.daysAgo, () => director.post(`/leads/${lead.id}/enrol`, { courseId: courseIds[s.course] }));
+    }
+  }
+}
+
 // Tom left at the end of last term.
 await owner.patch(`/staff/${staff.tom}`, { active: false });
 
@@ -766,7 +1047,7 @@ const secs = ((Date.now() - started) / 1000).toFixed(1);
 console.log(`
 Stage Left Academy demo data is ready (${secs}s) in ${config.dataDir}
 
-  ${studentSpec.length} students · ${courseSpec.length} classes · ${talentSpec.length} talent · ${castingSpec.length} castings
+  ${studentSpec.length + 1} students · ${courseSpec.length} classes · ${talentSpec.length} talent · ${castingSpec.length} castings · ${leadSpec.length} enquiries
 
 Sign in with any of these (password: ${PASSWORD}):
   owner@demo.school     CEO                     — Karim Mansour

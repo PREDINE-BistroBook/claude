@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { parseDate } from '../dates';
-import type { CourseColor, SessionStatus, SubmissionStatus } from '../enums';
+import type { CourseColor, InterviewStatus, SessionStatus, SubmissionStatus } from '../enums';
 import { dateStr } from './common';
 
 export const scheduleQuery = z
@@ -8,9 +8,11 @@ export const scheduleQuery = z
   .refine((q) => q.to >= q.from, { message: 'errors.endBeforeStart', path: ['to'] });
 
 /**
- * GET /api/schedule?from&to → { items: ScheduleEvent[] }, sorted by date then time.
- * Classes are visible to every role with courses.read; auditions only to roles
- * with castings.read (teachers never see them).
+ * GET /api/schedule?from&to → { items: ScheduleEvent[] }, sorted by date then
+ * time (at the same minute: classes, then interviews, then auditions).
+ * Classes need courses.read (without classes.all only your own); auditions need
+ * castings.read; admissions interviews need admissions.read (cancelled ones
+ * are left out).
  */
 export type ScheduleEvent =
   | {
@@ -42,6 +44,23 @@ export type ScheduleEvent =
       startTime: string;
       location: string | null;
       status: SubmissionStatus;
+    }
+  | {
+      kind: 'interview';
+      /** interview id */
+      id: number;
+      leadId: number;
+      /** The lead's name ("First Last"). */
+      title: string;
+      date: string;
+      startTime: string;
+      /** startTime + durationMinutes (capped at 23:59). */
+      endTime: string;
+      durationMinutes: number;
+      room: string | null;
+      interviewerId: number | null;
+      interviewerName: string | null;
+      status: InterviewStatus;
     };
 
 // ── Additions (schedule module) ─────────────────────────────────────────────
@@ -66,7 +85,12 @@ export type ScheduleQuery = z.infer<typeof scheduleQuery>;
 
 export type ClassEvent = Extract<ScheduleEvent, { kind: 'class' }>;
 export type AuditionEvent = Extract<ScheduleEvent, { kind: 'audition' }>;
+export type InterviewEvent = Extract<ScheduleEvent, { kind: 'interview' }>;
 
-/** Filter on the schedule screen (?show=). 'auditions' and 'all' need castings.read. */
-export const SCHEDULE_FILTERS = ['all', 'classes', 'auditions'] as const;
+/**
+ * Filter on the schedule screen (?show=). 'classes' needs courses.read,
+ * 'auditions' castings.read, 'interviews' admissions.read; offer only the
+ * kinds the person can see.
+ */
+export const SCHEDULE_FILTERS = ['all', 'classes', 'auditions', 'interviews'] as const;
 export type ScheduleFilter = (typeof SCHEDULE_FILTERS)[number];

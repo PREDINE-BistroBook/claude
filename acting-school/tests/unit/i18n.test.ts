@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import admissions from '../../src/web/features/admissions/i18n';
 import castings from '../../src/web/features/castings/i18n';
 import classes from '../../src/web/features/classes/i18n';
 import dashboard from '../../src/web/features/dashboard/i18n';
@@ -10,7 +11,7 @@ import students from '../../src/web/features/students/i18n';
 import talent from '../../src/web/features/talent/i18n';
 import common from '../../src/web/i18n/common';
 
-const namespaces = { common, students, classes, talent, castings, schedule, dashboard, staff, positions, settings };
+const namespaces = { common, students, classes, talent, castings, schedule, dashboard, staff, positions, settings, admissions };
 const PLURAL = /_(zero|one|two|few|many|other)$/;
 const AR_FORMS = ['zero', 'one', 'two', 'few', 'many', 'other'];
 

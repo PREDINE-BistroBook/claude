@@ -1,25 +1,32 @@
 import { and, asc, count, desc, eq, gte, lte, sql, type SQL } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { addDays, nowTime, todayISO } from '../../shared/dates';
+import { addDays, nowTime, parseDate, startOfWeek, todayISO } from '../../shared/dates';
 import type { ClassSession } from '../../shared/schemas/courses';
 import {
   ATTENDANCE_TODO_LOOKBACK_DAYS,
   ATTENDANCE_TODO_MAX,
   CLOSING_CASTINGS_DAYS,
+  FOLLOW_UPS_DUE_MAX,
   UPCOMING_AUDITIONS_DAYS,
   UPCOMING_AUDITIONS_MAX,
+  UPCOMING_INTERVIEWS_DAYS,
+  UPCOMING_INTERVIEWS_MAX,
   type DashboardData,
 } from '../../shared/schemas/dashboard';
 import type { DB } from '../db/client';
-import { attendance, castings, classSessions, courses, enrollments, students, talent, users } from '../db/schema';
+import { attendance, castings, classSessions, courses, enrollments, leads, students, talent, users } from '../db/schema';
 import type { AppEnv } from '../env';
 import { courseScope, seesAllClasses, studentScope, takesAttendance } from '../lib/access';
+import { followUpDue, leadIsOpen, loadInterviewEvents, loadLeadListItems } from '../lib/admissions';
+import { getSettings } from '../lib/settings';
 import { currentUser, requireAuth, userCan } from '../middleware/auth';
 import { loadAuditionEvents } from './schedule';
 
 /**
  * Home screen data, shaped by permissions: a section the caller can't see is
- * left out of the JSON entirely (not sent empty). Without classes.all the
+ * left out of the JSON entirely (not sent empty). Admissions blocks (open and
+ * new-this-week lead counts, follow-ups due, upcoming interviews) need
+ * admissions.read. Without classes.all the
  * counts cover only the classes you teach (and their students), and the
  * session lists only the sessions you teach yourself (your substitute sessions
  * included, ones handed to a substitute excluded).
@@ -59,7 +66,7 @@ function loadClassSessions(db: DB, where: SQL | undefined, order: SQL[]): ClassS
     .all();
 }
 
-const countWhere = (db: DB, table: typeof students | typeof courses | typeof talent | typeof castings, where: SQL) =>
+const countWhere = (db: DB, table: typeof students | typeof courses | typeof talent | typeof castings | typeof leads, where: SQL) =>
   db.select({ n: count() }).from(table).where(where).get()?.n ?? 0;
 
 router.get('/', (c) => {
@@ -125,6 +132,25 @@ router.get('/', (c) => {
       )
       .orderBy(asc(castings.submissionDeadline), sql`${castings.title} collate nocase`, asc(castings.id))
       .all();
+  }
+
+  if (userCan(c, 'admissions.read')) {
+    data.counts.openLeads = countWhere(db, leads, leadIsOpen);
+    // Since local midnight on the first day of this week (the school's week start).
+    const weekStart = parseDate(startOfWeek(today, getSettings(db).weekStartsOn)).getTime();
+    data.counts.newLeadsThisWeek = countWhere(db, leads, gte(leads.createdAt, weekStart));
+    data.followUpsDue = loadLeadListItems(db, followUpDue(today), {
+      // Most overdue first.
+      order: [asc(leads.nextFollowUpOn), asc(leads.createdAt), asc(leads.id)],
+      limit: FOLLOW_UPS_DUE_MAX,
+    });
+    data.followUpsDueCount = countWhere(db, leads, followUpDue(today)!);
+    data.upcomingInterviews = loadInterviewEvents(db, {
+      from: today,
+      to: addDays(today, UPCOMING_INTERVIEWS_DAYS),
+      statuses: ['scheduled'],
+      limit: UPCOMING_INTERVIEWS_MAX,
+    });
   }
 
   return c.json(data);

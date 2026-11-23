@@ -1,13 +1,17 @@
 import type { ApiErrorBody, ApiIssue } from '@shared/schemas/common';
 import type { UploadedFile } from '@shared/schemas/files';
 
-/** Thrown for every non-2xx answer. `code` mirrors the API ('validation', 'not_found', 'forbidden'…); 'network' when offline. */
+/**
+ * Thrown for every non-2xx answer. `code` mirrors the API ('validation', 'not_found', 'forbidden'…); 'network' when offline.
+ * `details` is the extra data some errors carry (e.g. admissions' possible_duplicate → { matches }).
+ */
 export class ApiError extends Error {
   constructor(
     public status: number,
     public code: string,
     message: string,
     public issues?: ApiIssue[],
+    public details?: unknown,
   ) {
     super(message);
   }
@@ -49,7 +53,7 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
     const err = (data as ApiErrorBody | null)?.error;
     if (res.status === 401 && !url.startsWith('/auth/')) onUnauthorized?.();
     if (res.status === 403 && !url.startsWith('/auth/')) onForbidden?.();
-    throw new ApiError(res.status, err?.code ?? 'server_error', err?.message ?? res.statusText, err?.issues);
+    throw new ApiError(res.status, err?.code ?? 'server_error', err?.message ?? res.statusText, err?.issues, err?.details);
   }
   return data as T;
 }

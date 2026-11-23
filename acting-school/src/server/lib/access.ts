@@ -4,10 +4,19 @@
  * themselves are described in src/shared/permissions.ts.
  */
 import { and, asc, count, countDistinct, eq, inArray, ne, sql, type SQL } from 'drizzle-orm';
-import { BUILT_IN_POSITIONS, PERMISSIONS, effectivePermissions, holdsAll, normalizePermissions, type Permission } from '../../shared/permissions';
+import {
+  BUILT_IN_GRANTS,
+  BUILT_IN_GRANTS_SETTING,
+  BUILT_IN_POSITIONS,
+  PERMISSIONS,
+  effectivePermissions,
+  holdsAll,
+  normalizePermissions,
+  type Permission,
+} from '../../shared/permissions';
 import type { PositionSummary, SessionUser } from '../../shared/schemas/auth';
 import type { DB } from '../db/client';
-import { classSessions, courses, enrollments, positions, students, userPositions, users } from '../db/schema';
+import { classSessions, courses, enrollments, positions, settings, students, userPositions, users } from '../db/schema';
 
 /** The database or an open transaction — both have the same query builder. */
 export type Conn = Pick<DB, 'select' | 'insert' | 'update' | 'delete'>;
@@ -20,9 +29,10 @@ export type Actor = Pick<SessionUser, 'id' | 'isOwner' | 'permissions'>;
 /**
  * Create the built-in positions that don't exist yet (matched by key). Safe to
  * run on every start: existing positions — renamed or changed by an owner — are
- * left alone.
+ * left alone. Returns the keys it created (they already have today's full
+ * permission lists).
  */
-export function ensureBuiltInPositions(db: Conn) {
+export function ensureBuiltInPositions(db: Conn): string[] {
   const existing = new Set(
     db
       .select({ key: positions.key })
@@ -31,11 +41,50 @@ export function ensureBuiltInPositions(db: Conn) {
       .map((r) => r.key),
   );
   const missing = BUILT_IN_POSITIONS.map((p, i) => ({ ...p, sortOrder: i * 10 })).filter((p) => !existing.has(p.key));
-  if (!missing.length) return;
+  if (!missing.length) return [];
   db.insert(positions)
     .values(missing.map((p) => ({ key: p.key, name: p.name, nameAr: p.nameAr, isOwner: p.isOwner, permissions: [...p.permissions], sortOrder: p.sortOrder })))
     .onConflictDoNothing()
     .run();
+  return missing.map((p) => p.key);
+}
+
+/** The BUILT_IN_GRANTS version this database has applied (0 = none yet). */
+export function builtInGrantsVersion(db: Pick<DB, 'select'>): number {
+  const row = db.select({ value: settings.value }).from(settings).where(eq(settings.key, BUILT_IN_GRANTS_SETTING)).get();
+  return typeof row?.value === 'number' ? row.value : 0;
+}
+
+/**
+ * Startup, in one transaction: create missing built-in positions, then apply
+ * every BUILT_IN_GRANTS entry newer than the version stored in settings — each
+ * permission is added to that built-in position only if missing — and store
+ * the latest version. Positions created just now already have their full
+ * current lists, so grants skip them (a fresh database only records the
+ * version). A grant runs once: a permission an owner removes afterwards stays
+ * removed. `grants` is a parameter for tests.
+ */
+export function upgradeBuiltInPositions(db: DB, grants: typeof BUILT_IN_GRANTS = BUILT_IN_GRANTS) {
+  db.transaction((tx) => {
+    const created = new Set(ensureBuiltInPositions(tx));
+    const stored = builtInGrantsVersion(tx);
+    const pending = grants.filter((g) => g.version > stored).sort((a, b) => a.version - b.version);
+    if (!pending.length) return;
+    for (const { grants: byKey } of pending) {
+      for (const [key, add] of Object.entries(byKey)) {
+        if (!add?.length || created.has(key)) continue;
+        const row = tx.select({ id: positions.id, permissions: positions.permissions }).from(positions).where(eq(positions.key, key)).get();
+        if (!row) continue;
+        const missing = add.filter((p) => !row.permissions.includes(p));
+        if (missing.length) tx.update(positions).set({ permissions: [...row.permissions, ...missing] }).where(eq(positions.id, row.id)).run();
+      }
+    }
+    const latest = Math.max(stored, ...pending.map((g) => g.version));
+    tx.insert(settings)
+      .values({ key: BUILT_IN_GRANTS_SETTING, value: latest })
+      .onConflictDoUpdate({ target: settings.key, set: { value: latest } })
+      .run();
+  });
 }
 
 /** List order of positions everywhere: sortOrder, then name, then id. */
@@ -148,6 +197,21 @@ export const notAnOwner = sql`not exists (
   select 1 from ${userPositions} nup join ${positions} np on np.id = nup.position_id
   where nup.user_id = "users"."id" and np.is_owner = 1
 )`;
+
+/**
+ * An existing, active staff account the actor may see: owner accounts don't
+ * exist for non-owners, so naming one gets the same answer as a missing id
+ * (otherwise ids would reveal hidden owners). Used to validate teachers,
+ * substitutes, lead assignees and interviewers.
+ */
+export function isVisibleActiveStaff(db: Pick<DB, 'select'>, actor: Actor, userId: number): boolean {
+  const row = db
+    .select({ active: users.active })
+    .from(users)
+    .where(and(eq(users.id, userId), actor.isOwner ? undefined : notAnOwner))
+    .get();
+  return !!row?.active;
+}
 
 /**
  * How many people hold each position — everyone, owners included, whoever

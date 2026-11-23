@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 import { authSessions, userPositions, users } from '../../src/server/db/schema';
 import { verifyPassword } from '../../src/server/lib/password';
+import { DEFAULT_INTERVIEW_CRITERIA, DEFAULT_SETTINGS } from '../../src/shared/schemas/settings';
 import { makeTestContext, type LegacyRole } from '../helpers';
 
 const ROLES: LegacyRole[] = ['owner', 'admin', 'teacher', 'agent'];
@@ -421,7 +422,7 @@ describe('settings', () => {
     const me = await t.as(role);
     const res = await me.get('/api/settings');
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ schoolName: 'Acting School', defaultLocale: 'en', weekStartsOn: 1 });
+    expect(res.body).toEqual({ schoolName: 'Acting School', defaultLocale: 'en', weekStartsOn: 1, interviewCriteria: DEFAULT_INTERVIEW_CRITERIA, defaultCountryCode: '20' });
   });
 
   it('PATCH saves (partially) and the school name shows in /api/auth/me', async () => {
@@ -429,15 +430,15 @@ describe('settings', () => {
     const admin = await t.as('admin');
     const res = await admin.patch('/api/settings', { schoolName: '  Stage Left  ', weekStartsOn: 6 });
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ schoolName: 'Stage Left', defaultLocale: 'en', weekStartsOn: 6 });
+    expect(res.body).toEqual({ ...DEFAULT_SETTINGS, schoolName: 'Stage Left', defaultLocale: 'en', weekStartsOn: 6 });
 
     const res2 = await admin.patch('/api/settings', { defaultLocale: 'ar' });
-    expect(res2.body).toEqual({ schoolName: 'Stage Left', defaultLocale: 'ar', weekStartsOn: 6 });
+    expect(res2.body).toEqual({ ...DEFAULT_SETTINGS, schoolName: 'Stage Left', defaultLocale: 'ar', weekStartsOn: 6 });
     expect((await admin.patch('/api/settings', { weekStartsOn: 0 })).body.weekStartsOn).toBe(0);
 
     const teacher = await t.as('teacher');
     // Everyone signed in reads the settings (classes and the schedule need the week start).
-    expect((await teacher.get('/api/settings')).body).toEqual({ schoolName: 'Stage Left', defaultLocale: 'ar', weekStartsOn: 0 });
+    expect((await teacher.get('/api/settings')).body).toEqual({ ...DEFAULT_SETTINGS, schoolName: 'Stage Left', defaultLocale: 'ar', weekStartsOn: 0 });
     expect((await teacher.get('/api/auth/me')).body.schoolName).toBe('Stage Left');
     expect((await admin.patch('/api/settings', {})).status).toBe(200);
   });
@@ -454,6 +455,54 @@ describe('settings', () => {
     expect(res.status).toBe(400);
     expect(res.body.error.issues.map((i: any) => i.path[0])).toEqual(expect.arrayContaining(['schoolName', 'defaultLocale']));
     expect((await owner.get('/api/settings')).body.weekStartsOn).toBe(1);
+  });
+
+  it('interview criteria: the whole list is replaced in order; keys are slugs, unique; blank Arabic label → null', async () => {
+    const t = await makeTestContext();
+    const owner = await t.as('owner');
+    const criteria = [
+      { key: 'voice', label: 'Voice', labelAr: 'الصوت' },
+      { key: 'improv_skill', label: ' Improvisation ', labelAr: '  ' },
+      { key: 'presence', label: 'Stage presence', labelAr: null },
+    ];
+    const res = await owner.patch('/api/settings', { interviewCriteria: criteria });
+    expect(res.status).toBe(200);
+    expect(res.body.interviewCriteria).toEqual([
+      { key: 'voice', label: 'Voice', labelAr: 'الصوت' },
+      { key: 'improv_skill', label: 'Improvisation', labelAr: null },
+      { key: 'presence', label: 'Stage presence', labelAr: null },
+    ]);
+    // Readable by everyone signed in, like the rest of the settings.
+    expect((await (await t.as('video_editor')).get('/api/settings')).body.interviewCriteria).toHaveLength(3);
+
+    for (const [bad, path] of [
+      [[{ key: 'Voice', label: 'V' }], [0, 'key']],
+      [[{ key: '1st', label: 'V' }], [0, 'key']],
+      [[{ key: 'a b', label: 'V' }], [0, 'key']],
+      [[{ key: 'ok', label: '  ' }], [0, 'label']],
+      [[{ key: 'ok', label: 'A' }, { key: 'ok', label: 'B' }], [1, 'key']],
+    ] as const) {
+      const r = await owner.patch('/api/settings', { interviewCriteria: bad });
+      expect(r.status).toBe(400);
+      expect(r.body.error.issues[0].path).toEqual(['interviewCriteria', ...path]);
+    }
+    const dup = await owner.patch('/api/settings', { interviewCriteria: [{ key: 'ok', label: 'A' }, { key: 'ok', label: 'B' }] });
+    expect(dup.body.error.issues[0].message).toBe('settings:errors.criterionKeyTaken');
+    expect((await owner.patch('/api/settings', { interviewCriteria: [] })).body.interviewCriteria).toEqual([]);
+  });
+
+  it('default country code: digits only (a leading + and spaces are dropped)', async () => {
+    const t = await makeTestContext();
+    const owner = await t.as('owner');
+    expect((await owner.patch('/api/settings', { defaultCountryCode: '+971' })).body.defaultCountryCode).toBe('971');
+    expect((await owner.patch('/api/settings', { defaultCountryCode: ' 1 ' })).body.defaultCountryCode).toBe('1');
+    for (const bad of ['', '0', '020', '12345', 'eg', 20]) {
+      const r = await owner.patch('/api/settings', { defaultCountryCode: bad });
+      expect(r.status).toBe(400);
+      expect(r.body.error.issues[0].path).toEqual(['defaultCountryCode']);
+    }
+    expect((await owner.get('/api/settings')).body.defaultCountryCode).toBe('1');
+    expect((await (await t.as('teacher')).patch('/api/settings', { defaultCountryCode: '44' })).status).toBe(403);
   });
 
   it('PATCH needs settings.manage: 403 for coaches and casting; 401 signed out', async () => {

@@ -1,5 +1,6 @@
+import type { LeadListItem } from './admissions';
 import type { ClassSession } from './courses';
-import type { ScheduleEvent } from './schedule';
+import type { InterviewEvent, ScheduleEvent } from './schedule';
 
 /**
  * GET /api/dashboard — shaped by permissions: sections the caller can't access
@@ -13,6 +14,10 @@ export interface DashboardData {
     activeCourses?: number;
     activeTalent?: number;
     openCastings?: number;
+    /** (admissions.read) Leads not yet enrolled/declined/lost. */
+    openLeads?: number;
+    /** (admissions.read) Leads created since the start of this week (settings.weekStartsOn). */
+    newLeadsThisWeek?: number;
   };
   /** Today's class sessions (without classes.all: only the ones the caller teaches). */
   todaySessions?: ClassSession[];
@@ -24,6 +29,12 @@ export interface DashboardData {
   upcomingAuditions?: Extract<ScheduleEvent, { kind: 'audition' }>[];
   /** Castings whose submission deadline is within 7 days and are still open. */
   closingCastings?: { id: number; title: string; submissionDeadline: string }[];
+  /** (admissions.read) Open leads with a follow-up due today or earlier: most overdue first, at most FOLLOW_UPS_DUE_MAX. */
+  followUpsDue?: LeadListItem[];
+  /** (admissions.read) How many follow-ups are due in all (before the cap); present exactly when followUpsDue is. */
+  followUpsDueCount?: number;
+  /** (admissions.read) Scheduled interviews today … today + 7, soonest first, at most UPCOMING_INTERVIEWS_MAX. */
+  upcomingInterviews?: InterviewEvent[];
 }
 
 // ── Additions (dashboard module) ────────────────────────────────────────────
@@ -45,3 +56,8 @@ export const CLOSING_CASTINGS_DAYS = 7;
 
 export type DashboardAudition = NonNullable<DashboardData['upcomingAuditions']>[number];
 export type ClosingCasting = NonNullable<DashboardData['closingCastings']>[number];
+
+/** Admissions blocks (admissions.read). */
+export const FOLLOW_UPS_DUE_MAX = 10;
+export const UPCOMING_INTERVIEWS_DAYS = 7;
+export const UPCOMING_INTERVIEWS_MAX = 10;

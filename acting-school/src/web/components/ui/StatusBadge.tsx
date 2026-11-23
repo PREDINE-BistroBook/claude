@@ -23,6 +23,19 @@ export const STATUS_TONES = {
     rejected: 'neutral',
     withdrawn: 'neutral',
   },
+  // Admissions: open statuses that need someone to act are coloured; closed ones are quiet.
+  leadStatus: {
+    new: 'accent',
+    contacted: 'info',
+    interview_scheduled: 'warning',
+    interviewed: 'warning',
+    accepted: 'success',
+    enrolled: 'success',
+    declined: 'neutral',
+    lost: 'neutral',
+  },
+  interviewStatus: { scheduled: 'info', done: 'success', no_show: 'danger', cancelled: 'neutral' },
+  interviewRecommendation: { accept: 'success', maybe: 'warning', decline: 'danger' },
 } as const satisfies Record<string, Record<string, Tone>>;
 
 export type StatusGroup = keyof typeof STATUS_TONES;

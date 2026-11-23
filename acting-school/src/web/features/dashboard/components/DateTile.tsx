@@ -2,7 +2,7 @@ import clsx from 'clsx';
 import { useCalendarFormat } from '../../schedule/format';
 
 /** Calendar-page tile: short weekday over the day number. */
-export function DateTile({ date, tone = 'accent' }: { date: string; tone?: 'accent' | 'neutral' | 'warning' }) {
+export function DateTile({ date, tone = 'accent' }: { date: string; tone?: 'accent' | 'neutral' | 'warning' | 'danger' | 'info' }) {
   const f = useCalendarFormat();
   return (
     <span
@@ -12,6 +12,8 @@ export function DateTile({ date, tone = 'accent' }: { date: string; tone?: 'acce
         tone === 'accent' && 'bg-accent-soft text-accent',
         tone === 'warning' && 'bg-warning-soft text-warning',
         tone === 'neutral' && 'bg-surface-2 text-muted',
+        tone === 'danger' && 'bg-danger-soft text-danger',
+        tone === 'info' && 'bg-info-soft text-info',
       )}
     >
       <span className="max-w-full truncate px-1 text-[11px] font-medium">{f.date(date, 'weekdayShort')}</span>

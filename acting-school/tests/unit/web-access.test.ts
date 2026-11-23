@@ -9,33 +9,64 @@ const canWith = (perms: readonly Permission[]) => (p: Permission) => perms.inclu
 const builtIn = (key: string) => BUILT_IN_POSITIONS.find((p) => p.key === key)!.permissions as readonly Permission[];
 
 describe('schedule filter follows what the person can see', () => {
-  const both = { classes: true, auditions: true };
+  const both = { classes: true, auditions: true, interviews: false };
   it('someone who sees classes and auditions can pick', () => {
     expect(parseFilterParam('auditions', both)).toBe('auditions');
     expect(parseFilterParam('classes', both)).toBe('classes');
     expect(parseFilterParam('bogus', both)).toBe('all');
     expect(parseFilterParam(null, both)).toBe('all');
   });
+  it('a kind the person can’t see is never picked', () => {
+    expect(parseFilterParam('interviews', both)).toBe('all');
+    expect(parseFilterParam('auditions', { classes: true, auditions: false, interviews: true })).toBe('all');
+  });
+  it('someone who sees all three (the director) can pick interviews', () => {
+    expect(parseFilterParam('interviews', { classes: true, auditions: true, interviews: true })).toBe('interviews');
+  });
   it('classes only (coaches) always get classes', () => {
-    expect(parseFilterParam('auditions', { classes: true, auditions: false })).toBe('classes');
+    expect(parseFilterParam('auditions', { classes: true, auditions: false, interviews: false })).toBe('classes');
   });
   it('auditions only (casting team: no courses.read) always get auditions', () => {
-    expect(parseFilterParam(null, { classes: false, auditions: true })).toBe('auditions');
-    expect(parseFilterParam('classes', { classes: false, auditions: true })).toBe('auditions');
+    expect(parseFilterParam(null, { classes: false, auditions: true, interviews: false })).toBe('auditions');
+    expect(parseFilterParam('classes', { classes: false, auditions: true, interviews: false })).toBe('auditions');
+  });
+  it('interviews only (an admissions-only position) always get interviews', () => {
+    expect(parseFilterParam(null, { classes: false, auditions: false, interviews: true })).toBe('interviews');
   });
   it('neither', () => {
-    expect(parseFilterParam('classes', { classes: false, auditions: false })).toBe('all');
+    expect(parseFilterParam('classes', { classes: false, auditions: false, interviews: false })).toBe('all');
   });
 });
 
 describe('navigation', () => {
   const schedule = NAV_ITEMS.find((i) => i.to === '/schedule')!;
 
-  it('Schedule is offered only to people who can see classes or auditions', () => {
+  it('Schedule is offered only to people who can see classes, auditions or interviews', () => {
     expect(navItemOpen(schedule, canWith([]))).toBe(false);
     expect(navItemOpen(schedule, canWith(['staff.manage', 'students.read']))).toBe(false);
     expect(navItemOpen(schedule, canWith(['courses.read']))).toBe(true);
     expect(navItemOpen(schedule, canWith(builtIn('casting_team')))).toBe(true);
+    expect(navItemOpen(schedule, canWith(['admissions.read']))).toBe(true);
+  });
+
+  it('Admissions is offered only with admissions.read (the director, not coaches or the agency)', () => {
+    const admissions = NAV_ITEMS.find((i) => i.to === '/admissions')!;
+    expect(admissions.group).toBe('school');
+    expect(navItemOpen(admissions, canWith(builtIn('executive_director')))).toBe(true);
+    for (const key of ['acting_coach', 'casting_team', 'head_of_casting', 'video_editor', 'finance']) {
+      expect(navItemOpen(admissions, canWith(builtIn(key)))).toBe(false);
+    }
+  });
+
+  it('the director’s phone tabs: Home, Admissions, Students, Schedule', () => {
+    expect(mobileTabs(canWith(builtIn('executive_director')))).toEqual(['/', '/admissions', '/students', '/schedule']);
+    // Owners hold everything and teach no classes of their own: same priority.
+    expect(mobileTabs(canWith(PERMISSIONS))).toEqual(['/', '/admissions', '/students', '/schedule']);
+  });
+
+  it('coaches keep their class-first tabs, even with admissions.read added', () => {
+    expect(mobileTabs(canWith(builtIn('acting_coach')))).toEqual(['/', '/schedule', '/classes', '/students']);
+    expect(mobileTabs(canWith([...builtIn('acting_coach'), 'admissions.read']))).toEqual(['/', '/schedule', '/classes', '/students']);
   });
 
   it('an account whose positions allow nothing gets Home only', () => {

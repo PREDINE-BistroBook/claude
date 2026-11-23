@@ -15,7 +15,7 @@ import {
 import type { ListResponse } from '../../shared/schemas/common';
 import type { CourseListItem } from '../../shared/schemas/courses';
 import type { DB } from '../db/client';
-import { attendance, classSessions, courseSlots, courses, enrollments, students, users } from '../db/schema';
+import { attendance, classSessions, courseSlots, courses, enrollments, students } from '../db/schema';
 import type { AppEnv } from '../env';
 import {
   daysBetween,
@@ -28,8 +28,9 @@ import {
   sameSchedule,
 } from '../lib/classSessions';
 import type { SessionUser } from '../../shared/schemas/auth';
-import { canSeeStudent, courseScope, notAnOwner, type Actor } from '../lib/access';
-import { ApiError, notFound } from '../lib/errors';
+import { canSeeStudent, courseScope, isVisibleActiveStaff, type Actor } from '../lib/access';
+import { addEnrollment, setEnrollmentStatus } from '../lib/enrollments';
+import { ApiError, fieldError, notFound } from '../lib/errors';
 import { body, paramId, query } from '../lib/validate';
 import { currentUser, requireAuth, requirePermission } from '../middleware/auth';
 
@@ -47,10 +48,7 @@ router.use(requireAuth);
 const read = requirePermission('courses.read');
 const write = requirePermission('courses.write');
 
-/** 400 with one field issue — same shape as a zod validation error. */
-export function fieldError(path: (string | number)[], message: string): ApiError {
-  return new ApiError(400, 'validation', 'Some fields are missing or invalid', [{ path, code: 'custom', message }]);
-}
+export { fieldError };
 
 /**
  * A teacher (or substitute) must be an existing, active staff account the
@@ -59,12 +57,7 @@ export function fieldError(path: (string | number)[], message: string): ApiError
  * and their names).
  */
 export function assertActiveStaff(db: DB, actor: Actor, userId: number, path: (string | number)[] = ['teacherId']) {
-  const row = db
-    .select({ active: users.active })
-    .from(users)
-    .where(and(eq(users.id, userId), actor.isOwner ? undefined : notAnOwner))
-    .get();
-  if (!row?.active) throw fieldError(path, 'classes:errors.teacherInvalid');
+  if (!isVisibleActiveStaff(db, actor, userId)) throw fieldError(path, 'classes:errors.teacherInvalid');
 }
 
 function assertSpan(startDate: string, endDate: string) {
@@ -81,20 +74,6 @@ function requireCourse(db: DB, id: number, user: SessionUser) {
     .get();
   if (!course) throw notFound('Class not found');
   return course;
-}
-
-function enrolledCount(db: Pick<DB, 'select'>, courseId: number): number {
-  return (
-    db
-      .select({ n: sql<number>`count(*)`.mapWith(Number) })
-      .from(enrollments)
-      .where(and(eq(enrollments.courseId, courseId), eq(enrollments.status, 'enrolled')))
-      .get()?.n ?? 0
-  );
-}
-
-function classFull(): ApiError {
-  return new ApiError(409, COURSE_ERROR_CODES.classFull, 'This class is full');
 }
 
 // ── Courses ─────────────────────────────────────────────────────────────────
@@ -228,21 +207,7 @@ router.post('/:id/enrollments', write, async (c) => {
   if (!student || !canSeeStudent(db, currentUser(c), input.studentId)) throw fieldError(['studentId'], 'classes:errors.studentNotFound');
   const today = todayISO();
 
-  const enrollmentId = db.transaction((tx) => {
-    const existing = tx
-      .select({ status: enrollments.status })
-      .from(enrollments)
-      .where(and(eq(enrollments.courseId, id), eq(enrollments.studentId, input.studentId)))
-      .get();
-    if (existing?.status === 'enrolled') throw new ApiError(409, COURSE_ERROR_CODES.alreadyEnrolled, 'This student is already enrolled');
-    if (existing) throw new ApiError(409, COURSE_ERROR_CODES.previouslyEnrolled, 'This student was in this class before; re-enroll them instead');
-    if (course.capacity !== null && enrolledCount(tx, id) >= course.capacity) throw classFull();
-    return tx
-      .insert(enrollments)
-      .values({ courseId: id, studentId: input.studentId, status: 'enrolled', enrolledOn: today })
-      .returning({ id: enrollments.id })
-      .get().id;
-  });
+  const enrollmentId = db.transaction((tx) => addEnrollment(tx, course, input.studentId, today));
   return c.json(loadEnrollments(db, id, today, enrollmentId)[0], 201);
 });
 
@@ -254,15 +219,7 @@ router.patch('/:id/enrollments/:enrollmentId', write, async (c) => {
   const input = await body(c, enrollmentUpdateInput);
 
   db.transaction((tx) => {
-    const row = tx
-      .select({ status: enrollments.status })
-      .from(enrollments)
-      .where(and(eq(enrollments.id, enrollmentId), eq(enrollments.courseId, id)))
-      .get();
-    if (!row) throw notFound('Enrollment not found');
-    if (row.status === input.status) return;
-    if (input.status === 'enrolled' && course.capacity !== null && enrolledCount(tx, id) >= course.capacity) throw classFull();
-    tx.update(enrollments).set({ status: input.status }).where(eq(enrollments.id, enrollmentId)).run();
+    if (!setEnrollmentStatus(tx, course, enrollmentId, input.status)) throw notFound('Enrollment not found');
   });
   return c.json(loadEnrollments(db, id, todayISO(), enrollmentId)[0]);
 });

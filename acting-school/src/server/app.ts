@@ -10,6 +10,7 @@ import castingRoutes from './routes/castings';
 import courseRoutes from './routes/courses';
 import dashboardRoutes from './routes/dashboard';
 import fileRoutes from './routes/files';
+import leadRoutes from './routes/leads';
 import positionRoutes from './routes/positions';
 import scheduleRoutes from './routes/schedule';
 import sessionRoutes from './routes/sessions';
@@ -54,6 +55,7 @@ export function createApp(deps: { db: DB; config: AppConfig }) {
   app.route('/api/talent', talentRoutes);
   app.route('/api/castings', castingRoutes);
   app.route('/api/submissions', submissionRoutes);
+  app.route('/api/leads', leadRoutes);
   app.route('/api/schedule', scheduleRoutes);
   app.route('/api/dashboard', dashboardRoutes);
 
@@ -61,7 +63,17 @@ export function createApp(deps: { db: DB; config: AppConfig }) {
 
   app.onError((err, c) => {
     if (err instanceof ApiError) {
-      return c.json({ error: { code: err.code, message: err.message, ...(err.issues ? { issues: err.issues } : {}) } }, err.status);
+      return c.json(
+        {
+          error: {
+            code: err.code,
+            message: err.message,
+            ...(err.issues ? { issues: err.issues } : {}),
+            ...(err.details !== undefined ? { details: err.details } : {}),
+          },
+        },
+        err.status,
+      );
     }
     // SQLite constraint errors that slipped past validation.
     const code = (err as { code?: string }).code;

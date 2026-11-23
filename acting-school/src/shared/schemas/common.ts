@@ -72,7 +72,8 @@ export interface ApiIssue {
 }
 
 export interface ApiErrorBody {
-  error: { code: string; message?: string; issues?: ApiIssue[] };
+  /** `details`: extra data some errors carry, e.g. admissions' possible_duplicate → { matches } (see that module's schema). */
+  error: { code: string; message?: string; issues?: ApiIssue[]; details?: unknown };
 }
 
 /** List endpoints answer { items: [...] }. */

@@ -1,5 +1,6 @@
 import { lazy } from 'react';
 import { createBrowserRouter } from 'react-router';
+import { admissionsRoutes } from './features/admissions/routes';
 import { castingsRoutes } from './features/castings/routes';
 import { classesRoutes } from './features/classes/routes';
 import { dashboardRoutes } from './features/dashboard/routes';
@@ -34,6 +35,7 @@ export const router = createBrowserRouter([
     children: [
       ...dashboardRoutes,
       ...scheduleRoutes,
+      ...admissionsRoutes,
       ...studentsRoutes,
       ...classesRoutes,
       ...talentRoutes,

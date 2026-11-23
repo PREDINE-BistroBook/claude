@@ -8,13 +8,15 @@ import type { DB } from '../db/client';
 import { castingRoles, castings, classSessions, courses, enrollments, submissions, talent, users } from '../db/schema';
 import type { AppEnv } from '../env';
 import { courseScope } from '../lib/access';
+import { loadInterviewEvents } from '../lib/admissions';
 import { query } from '../lib/validate';
 import { currentUser, requireAuth, userCan } from '../middleware/auth';
 
 /**
  * The combined calendar: class sessions (courses.read; without classes.all only
- * sessions of the classes you teach) and auditions (castings.read) in one date
- * range. Reads the school and agency tables directly; nothing here writes.
+ * sessions of the classes you teach), auditions (castings.read) and admissions
+ * interviews (admissions.read; cancelled ones left out) in one date range.
+ * Reads the other modules' tables directly; nothing here writes.
  */
 const router = new Hono<AppEnv>();
 router.use(requireAuth);
@@ -113,12 +115,14 @@ export function loadAuditionEvents(
   });
 }
 
-/** Date, then start time; at the same minute classes before auditions, then by title. */
+const KIND_ORDER: Record<ScheduleEvent['kind'], number> = { class: 0, interview: 1, audition: 2 };
+
+/** Date, then start time; at the same minute classes, then interviews, then auditions; then by title. */
 export function compareEvents(a: ScheduleEvent, b: ScheduleEvent): number {
   return (
     a.date.localeCompare(b.date) ||
     a.startTime.localeCompare(b.startTime) ||
-    (a.kind === b.kind ? 0 : a.kind === 'class' ? -1 : 1) ||
+    KIND_ORDER[a.kind] - KIND_ORDER[b.kind] ||
     a.title.localeCompare(b.title) ||
     a.id - b.id
   );
@@ -130,6 +134,7 @@ router.get('/', (c) => {
   const items: ScheduleEvent[] = [];
   if (userCan(c, 'courses.read')) items.push(...loadClassEvents(db, from, to, courseScope(currentUser(c))));
   if (userCan(c, 'castings.read')) items.push(...loadAuditionEvents(db, { from, to, excludeStatuses: ['withdrawn'] }));
+  if (userCan(c, 'admissions.read')) items.push(...loadInterviewEvents(db, { from, to, excludeStatuses: ['cancelled'] }));
   items.sort(compareEvents);
   return c.json<ListResponse<ScheduleEvent>>({ items });
 });

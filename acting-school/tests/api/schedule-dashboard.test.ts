@@ -280,7 +280,7 @@ describe('GET /api/dashboard', () => {
     const res = await owner.get<DashboardData>('/api/dashboard');
     expect(res.status).toBe(200);
     expect(res.body.today).toBe(todayISO());
-    expect(res.body.counts).toEqual({ activeStudents: 2, activeCourses: 1, activeTalent: 1, openCastings: 2 });
+    expect(res.body.counts).toEqual({ activeStudents: 2, activeCourses: 1, activeTalent: 1, openCastings: 2, openLeads: 0, newLeadsThisWeek: 0 });
 
     // A coach without classes.all counts only their own classes and students: none yet.
     const teacher = await t.as('teacher');
@@ -292,14 +292,34 @@ describe('GET /api/dashboard', () => {
 
   it('shapes the answer by role: sections a role cannot see are absent', async () => {
     const t = await makeTestContext();
-    const all = ['today', 'counts', 'todaySessions', 'attendanceToDo', 'attendanceToDoCount', 'upcomingAuditions', 'closingCastings'];
+    const all = [
+      'today',
+      'counts',
+      'todaySessions',
+      'attendanceToDo',
+      'attendanceToDoCount',
+      'upcomingAuditions',
+      'closingCastings',
+      'followUpsDue',
+      'followUpsDueCount',
+      'upcomingInterviews',
+    ];
 
     for (const role of ['owner', 'admin'] as const) {
       const client = await t.as(role);
       const body = (await client.get('/api/dashboard')).body;
       expect(Object.keys(body).sort()).toEqual([...all].sort());
-      expect(Object.keys(body.counts).sort()).toEqual(['activeCourses', 'activeStudents', 'activeTalent', 'openCastings']);
-      expect(body).toMatchObject({ todaySessions: [], attendanceToDo: [], attendanceToDoCount: 0, upcomingAuditions: [], closingCastings: [] });
+      expect(Object.keys(body.counts).sort()).toEqual(['activeCourses', 'activeStudents', 'activeTalent', 'newLeadsThisWeek', 'openCastings', 'openLeads']);
+      expect(body).toMatchObject({
+        todaySessions: [],
+        attendanceToDo: [],
+        attendanceToDoCount: 0,
+        upcomingAuditions: [],
+        closingCastings: [],
+        followUpsDue: [],
+        followUpsDueCount: 0,
+        upcomingInterviews: [],
+      });
     }
 
     const teacher = await t.as('teacher');
