@@ -4,8 +4,8 @@ import { Navigate, useLocation } from 'react-router';
 import type { Permission } from '@shared/permissions';
 import type { MeResponse, SessionUser } from '@shared/schemas/auth';
 import { currentLanguage, setLanguage } from '../i18n';
-import { NoAccess, SplashScreen } from '../components/ui/States';
-import { api, setForbiddenHandler, setUnauthorizedHandler } from './api';
+import { ErrorState, NoAccess, SplashScreen } from '../components/ui/States';
+import { api, ApiError, setForbiddenHandler, setUnauthorizedHandler } from './api';
 
 interface AuthState {
   user: SessionUser | null;
@@ -16,6 +16,11 @@ interface AuthState {
   /** Arabic name, when the school has one. For display use useSchoolName() (picks by language). */
   schoolNameAr: string | null;
   loading: boolean;
+  /**
+   * The server can't be reached and we don't know who is signed in (opened with no signal, or a
+   * weak one): show an offline screen rather than the sign-in page — the session may well be valid.
+   */
+  offline: boolean;
   /** Whether the signed-in person's positions allow this (owners: everything). */
   can: (permission: Permission) => boolean;
   /** Call after sign-in / setup / profile change to refresh. */
@@ -76,9 +81,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     await api.post('/auth/logout').catch(() => undefined);
-    qc.clear();
-    await qc.invalidateQueries({ queryKey: ME_KEY });
+    // Mark the person as gone at once (RequireAuth then sends the screen to /login), drop every
+    // cached answer about them, then re-read /auth/me for the school name and setup state.
+    // (Clearing the whole cache instead would leave nothing to say "signed out" until a reload.)
+    qc.setQueryData<MeResponse>(ME_KEY, (d) => (d ? { ...d, user: null } : d));
+    qc.removeQueries({ predicate: (q) => !isMeQuery(q.queryKey) });
+    void qc.invalidateQueries({ queryKey: ME_KEY });
   }, [qc]);
+
+  const offline =
+    !me.data && (me.fetchStatus === 'paused' || (me.error instanceof ApiError && me.error.code === 'network'));
 
   const value = useMemo<AuthState>(
     () => ({
@@ -87,12 +99,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setupCodeRequired: me.data?.setupCodeRequired ?? false,
       schoolName: me.data?.schoolName ?? '',
       schoolNameAr: me.data?.schoolNameAr ?? null,
-      loading: me.isPending,
+      loading: me.isPending && !offline,
+      offline,
       can: (p) => !!user?.permissions.includes(p),
       refresh,
       signOut,
     }),
-    [user, me.data, me.isPending, refresh, signOut],
+    [user, me.data, me.isPending, offline, refresh, signOut],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
@@ -105,8 +118,14 @@ export function useAuth(): AuthState {
 
 /** Signed-in only: sends everyone else to /login (or /setup on first run). */
 export function RequireAuth({ children }: { children: ReactNode }) {
-  const { user, loading, needsSetup } = useAuth();
+  const { user, loading, needsSetup, offline, refresh } = useAuth();
   const location = useLocation();
+  if (offline && !user)
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-canvas p-4">
+        <ErrorState error={new ApiError(0, 'network', 'Network error')} onRetry={() => void refresh()} />
+      </div>
+    );
   if (loading) return <SplashScreen />;
   if (!user) {
     if (needsSetup) return <Navigate to="/setup" replace />;

@@ -40,6 +40,11 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // A new deploy takes over at once (the page reloads to it when it activates). Without these,
+        // injectRegister:false means the plugin doesn't add them for autoUpdate, and phones that have
+        // the app would keep the old version for good.
+        skipWaiting: true,
+        clientsClaim: true,
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//],
         // Fonts: only the Latin and Arabic files go offline; other scripts load on demand.

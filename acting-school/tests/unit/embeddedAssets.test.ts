@@ -50,6 +50,39 @@ describe('embedded assets', () => {
     expect(res.headers.get('location')).toBe('/?x=1');
   });
 
+  it('never redirects to another host (protocol-relative or backslash tricks)', async () => {
+    for (const path of ['//evil.com/index.html', '/\\evil.com/index.html', '/.//evil.com/index.html', '//evil.com/index.html?x=1', '///evil.com/index']) {
+      const res = await get(path);
+      const location = res.headers.get('location');
+      if (location !== null) {
+        expect(location, path).toMatch(/^\/(?!\/)/);
+        expect(new URL(location, 'https://school.example').host, path).toBe('school.example');
+      }
+    }
+    // A folder without its own index.html gets the app shell, not a redirect.
+    const res = await get('//evil.com/index.html');
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('<title>app</title>');
+  });
+
+  it('redirects non-canonical spellings of real files and of index.html to the canonical path', async () => {
+    const cases: [string, string][] = [
+      ['/index%2Ehtml', '/'],
+      ['/index', '/'],
+      ['//sw.js', '/sw.js'],
+      ['/sw%2Ejs', '/sw.js'],
+    ];
+    for (const [path, to] of cases) {
+      const res = await get(path);
+      expect(res.status, path).toBe(307);
+      expect(res.headers.get('location'), path).toBe(to);
+    }
+    // /foo/index.html (no such folder) is just a client-side route.
+    const spa = await get('/foo/index.html');
+    expect(spa.status).toBe(200);
+    expect(spa.headers.get('content-type')).toContain('text/html');
+  });
+
   it('answers HEAD without a body and refuses other methods', async () => {
     const head = await get('/sw.js', { method: 'HEAD' });
     expect(head.status).toBe(200);

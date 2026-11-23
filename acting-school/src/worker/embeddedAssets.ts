@@ -83,19 +83,30 @@ export function createAssetFetcher(files: EmbeddedFiles): AssetFetcher {
         });
       }
       const url = new URL(request.url);
-      let path: string;
+      let decoded: string;
       try {
-        path = decodeURIComponent(url.pathname);
+        decoded = decodeURIComponent(url.pathname);
       } catch {
-        path = url.pathname;
+        decoded = url.pathname;
       }
-      if (path === INDEX || path.endsWith(INDEX)) {
-        const target = new URL(url);
-        target.pathname = url.pathname.slice(0, -'index.html'.length);
-        return new Response(null, { status: 307, headers: { Location: target.pathname + target.search } });
+      // One canonical path, used both to find the file and to build any redirect: backslashes as
+      // slashes, runs of slashes merged. It always starts with exactly one "/", so a redirect built
+      // from it can never point at another host (no "//evil.com/" protocol-relative Location).
+      const clean = `/${decoded.replace(/\\/g, '/').replace(/\/{2,}/g, '/').replace(/^\/+/, '')}`;
+      const redirect = (to: string) => new Response(null, { status: 307, headers: { Location: encodeURI(to) + url.search } });
+      const has = (p: string) => Object.hasOwn(files, p);
+
+      // ".../index.html" and ".../index" → the folder, when that folder's index.html exists (html_handling auto-trailing-slash).
+      for (const suffix of ['index.html', 'index']) {
+        const folder = clean.slice(0, -suffix.length);
+        if (clean.endsWith(`/${suffix}`) && has(`${folder}index.html`)) return redirect(folder);
       }
-      const candidate = path.endsWith('/') ? `${path}index.html` : path;
-      if (Object.hasOwn(files, candidate)) return serve(request, candidate);
+      const candidate = clean.endsWith('/') ? `${clean}index.html` : clean;
+      if (has(candidate)) {
+        // A real file asked for by a non-canonical spelling (//sw.js, /sw%2Ejs): send the browser to the canonical one.
+        if (encodeURI(clean) !== url.pathname) return redirect(clean);
+        return serve(request, candidate);
+      }
       return serve(request, INDEX);
     },
   };

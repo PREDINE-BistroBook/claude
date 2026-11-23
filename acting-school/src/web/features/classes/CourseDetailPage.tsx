@@ -137,7 +137,7 @@ function InfoCard({ course: c, enrolled }: { course: CourseDetail; enrolled: num
           { label: t('fields.room'), value: c.room },
           {
             label: t('fields.enrolled'),
-            value: c.capacity !== null ? t('detail.enrolledOf', { enrolled, capacity: c.capacity }) : t('detail.enrolledNoLimit', { enrolled }),
+            value: c.capacity !== null ? t('detail.enrolledOf', { enrolled, count: c.capacity }) : t('detail.enrolledNoLimit', { enrolled }),
           },
           {
             label: t('fields.nextSession'),

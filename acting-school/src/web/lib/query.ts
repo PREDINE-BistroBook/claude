@@ -1,4 +1,4 @@
-import { QueryClient } from '@tanstack/react-query';
+import { onlineManager, QueryClient } from '@tanstack/react-query';
 import { ApiError } from './api';
 
 /**
@@ -17,3 +17,8 @@ export const queryClient = new QueryClient({
     mutations: { retry: false },
   },
 });
+
+// TanStack assumes "online" until it sees an 'offline' event, so an app opened with no signal would
+// fail its first reads (and think nobody is signed in). Start from what the browser knows: reads then
+// wait while offline and run by themselves when the connection comes back.
+if (typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean') onlineManager.setOnline(navigator.onLine);
