@@ -420,6 +420,13 @@ describe('the words on screen and the route table', () => {
     for (const kind of ['video_new', 'video_review', 'video_changes', 'video_approved']) expect(notificationLook(kind).icon, kind).not.toBe(Bell);
   });
 
+  it('every step button waits for the answer with mutateAsync: a per-call onSuccess would be dropped when the card leaves its tab, and the "who got an alert" toast with it', () => {
+    const parts = fs.readFileSync(path.resolve(__dirname, '../../src/web/features/videos/components/VideoParts.tsx'), 'utf8');
+    expect(parts).not.toMatch(/\.mutate\(/);
+    for (const step of ['take', 'approve', 'submit']) expect(parts, step).toMatch(new RegExp(`actions\\.${step}\\s*\\.mutateAsync\\(`));
+    expect(parts).toMatch(/mutation\.mutateAsync\(/);
+  });
+
   it('the route table: /videos and /videos/:id, behind the videos guard', async () => {
     const { videosRoutes } = await import('../../src/web/features/videos/routes');
     expect(videosRoutes.map((r) => r.path)).toEqual(['videos', 'videos/:id']);
