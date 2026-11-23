@@ -387,3 +387,86 @@ Design rule for everything here: **made for older, non-technical people.**
 - **Unit tests:** `sectionForPath`, `visibleSections`, `mobileTabs(section, can)`.
 - **`scripts/cf-smoke.ts`:** extend with the public pages (both languages), one apply, one casting application with a photo, `/site/media`, accept → talent, and the headers on `/site`. Run `npm run cf:smoke` and `npm run cf:smoke -- --embedded`.
 - **Docs:** update `README.md`, `CLAUDE.md` (layout, the sections model, the public site rules: no raw HTML, the rate limits, `/site` paths) and `ROADMAP.md`.
+
+---
+
+## Part E — Opportunity radar (Casting): sources checked every night
+
+Asked by the school on 2026-11-23: "put websites or Instagram pages where AI checks them every now and then for new casting opportunities, after midnight, so the team knows the next morning and can grab more opportunities." It lives in the **Casting** section. It is built **after Parts A–D**, in its own migration (the next number after the website's).
+
+### What a source can be (be honest in the UI about Instagram)
+- **Website page** (`web`): any public page that lists casting calls. The nightly check reads its text, finds what's new since last night, and asks AI to pull out the opportunities.
+- **RSS/Atom feed** (`rss`): each new item is checked.
+- **Telegram public channel** (`telegram`): read from its public web preview (`https://t.me/s/<channel>`); each new post is checked. Many Egyptian casting calls are posted on Telegram.
+- **Instagram and Facebook cannot be watched automatically.** They hide posts behind a login, forbid automated reading in their terms, and block servers. The UI says this plainly when someone pastes an instagram.com/facebook.com URL as a source, and offers the alternative below instead of failing silently.
+- **"Add from a screenshot or text"** covers Instagram, Facebook, WhatsApp groups and anything else. A team member pastes a post's text or uploads a screenshot. AI reads it and fills in an opportunity for them to check and save. On a phone: screenshot the post in Instagram → in the app, Casting › Opportunities › "Add from screenshot".
+
+### Data
+- **`opportunity_sources`:**
+  - id, `name`;
+  - `kind` (`web` | `rss` | `telegram`); `url` (http/https only; for telegram store the channel name and build the URL);
+  - `active` (bool);
+  - `last_checked_at`, `last_status` (`ok` | `unchanged` | `error` | `blocked`), `last_error` (short text), `consecutive_failures`;
+  - `last_snapshot` (text, capped at 60 KB, web pages only);
+  - `created_by_id`; timestamps.
+- **`opportunity_seen`:** `source_id`, `item_key` (hash of a post id/link or of a normalised paragraph), `first_seen_at`, used so the same post is never processed twice. Prune entries older than 120 days.
+- **`casting_opportunities`:**
+  - id, `source_id` (nullable: null = added by hand);
+  - `title`, `summary`, `project_type` (`film` | `series` | `ad` | `theatre` | `music_video` | `online` | `other`);
+  - `roles` (json: `[{ description, gender: 'male'|'female'|'any'|null, ageMin, ageMax }]`);
+  - `location`, `deadline` (YYYY-MM-DD or null), `contact` (text);
+  - `apply_url` (http/https only), `original_url`, `original_excerpt` (≤ 2000 characters);
+  - `language` (`ar` | `en` | `mixed`), `involves_minors` (bool);
+  - `status` (`new` | `interested` | `applied` | `dismissed`); `casting_id` (FK castings, set null) once turned into a casting;
+  - `fingerprint` (unique: normalised title + deadline + contact), `found_at`, `reviewed_by_id`; timestamps.
+- **`ai_usage`:** day (YYYY-MM-DD, the school's date), `feature` (`radar` | `radar_manual`), `input_tokens`, `output_tokens`, `cost_micro_usd`.
+- **Settings:** `radarEnabled` (default true) and `aiMonthlyCapUsd` (default 3). Both are editable in Settings by `settings.manage`, with a line showing this month's spend.
+
+### The nightly run
+- **When:** a Cron Trigger on the Worker, `"triggers": { "crons": ["30 22 * * *"] }` in **both** wrangler configs (22:30 UTC, which is about 00:30 or 01:30 Cairo). The Worker's `scheduled()` handler calls the Durable Object, the same instance "main" (an RPC method on `SchoolDO`, e.g. `runRadar()`), so all work and data stay in the one database. Use `ctx.waitUntil`. Node has no cron, so add an `npm run radar` script that runs the same function against the Node database.
+- **For each active source, one at a time:**
+  - fetch with a 15 s timeout and a 2 MB cap, `User-Agent: TurquoiseStudioRadar/1.0 (+https://turquoisestudio.app)`;
+  - respect `robots.txt` (fetch it, cache it for a day, honour Disallow for `*` and for our agent); if disallowed, set `blocked` and explain it in the UI;
+  - extract text with `HTMLRewriter`: drop scripts, styles and navigation, and for Telegram keep each message's text, date and post link;
+  - work out the **new** items (Telegram/RSS: items whose key isn't in `opportunity_seen`; web: paragraphs not in last night's snapshot), then mark them seen.
+  - At most 40 sources a night. A source that fails 7 nights in a row is switched off, with a note.
+- **AI extraction:** only when there is new text. Claude Haiku 5.5 (`claude-haiku-5-5`) through the official `@anthropic-ai/sdk` (it supports Cloudflare Workers). **Before writing any API code, read the claude-api skill files**:
+  - `/tmp/claude-0/bundled-skills/2.1.330/757b3d191a9f94da40a321abff43c216/claude-api/typescript/claude-api/README.md`;
+  - `tool-use.md` next to it;
+  - `shared/models.md`;
+  - the "Migrating to Claude Haiku 5.5" section of `shared/model-migration.md`.
+  Follow them exactly. In particular for Haiku 5.5: no `temperature`/`top_p`, no assistant prefill, no `budget_tokens`; set a low `effort` or disable thinking where the docs allow, to keep it cheap. Get structured output through a tool with a JSON schema; validate its input with zod before using it, and treat a failure like no result.
+  - **Input:** the new text (capped at about 30k characters per source per night), the source name and URL, today's date in Cairo.
+  - **Instructions:** extract each distinct casting call (Arabic or English), ignore everything else (workshop ads, news, other posts), never invent fields (null when unknown), and keep the original language for title/summary. One call per source per night.
+- **Untrusted content:** page text is data, never instructions. The model has no tools with side effects; the only tool is the extraction schema. Show everything it returns as plain text, links only when http/https, and never act on anything automatically.
+- **Costs:** record `usage` from every response into `ai_usage`, priced at Haiku 5.5's rates ($0.10 per million input tokens and $0.50 per million output tokens for prompts up to 100k tokens). Before each call, if this month's spend plus an estimate would pass `aiMonthlyCapUsd`, skip the AI step and keep the item as an "unread change".
+- **No AI key:** without the `ANTHROPIC_API_KEY` secret on the Worker (or `ANTHROPIC_API_KEY` env on Node), the radar still runs. It stores each new item as an opportunity with status `new`, title "New post on <source>", the excerpt and the link. The team still sees what changed overnight, at $0.
+- **Dedupe:** same fingerprint → don't create again. An item already seen → skip.
+
+### Staff API (`/api/radar/...`)
+- **Opportunities:** `castings.read` sees them (`GET /api/radar/opportunities?status=&q=`, `GET /:id`); `castings.write` can `PATCH` the status, delete, and `POST /:id/to-casting`, which creates a casting prefilled from the opportunity (title, description with summary, roles as casting roles where the shapes fit, deadline, original link in notes), links it, and answers `{ castingId }`.
+- **Sources:** `castings.write` can create, update and delete them (`/api/radar/sources`). On create or update: validate the URL; for instagram.com/facebook.com/fb.com/tiktok.com answer a field error `radar:errors.socialNotSupported`; Telegram accepts `t.me/<name>`, `@name` or a bare name.
+- **Manual add:** `POST /api/radar/extract` (`castings.write`) takes `{ text }` or an uploaded image file id, runs the same extraction (image input for screenshots, as the skill docs show), records usage under `radar_manual`, and returns draft opportunities without saving them. `POST /api/radar/opportunities` saves one. Without a key: 409 `ai_not_configured`, and the UI shows how to add the key.
+- **Run now:** `POST /api/radar/run` (`castings.write`) runs the nightly check now, at most once per 10 minutes school-wide. It answers a summary `{ sources, newItems, opportunities, errors, aiUsed, skippedForCap }`.
+- **Status:** `GET /api/radar/status` gives the last run's time and summary, this month's AI spend and cap, and whether the key is configured.
+- **Dashboard:** `newOpportunities` (status `new`, needs `castings.read`) is added to `/api/dashboard`.
+
+### UI (Casting section)
+- **Casting home:** a card "Found overnight: N new opportunities" linking to the list. When N > 0, also show a gentle bar across the top of the Casting home (the start of the notification bar).
+- **`/casting/opportunities` (nav "Opportunities", with a count badge):**
+  - tabs New / Interested / Applied / Dismissed;
+  - cards with title, project type, deadline (red when within 3 days), roles summary, source name, found date;
+  - buttons "Open original", "Interested", "Not for us", and "Turn into a casting";
+  - an "Add from screenshot or text" button (opens a sheet: paste text or choose a screenshot → AI draft → edit → save).
+- **`/casting/sources`:**
+  - the list, with status (✓ checked last night / unchanged / ⚠ error with a plain explanation / blocked by the site), last checked time and an on/off switch;
+  - add/edit (kind picker with a plain explanation of each, plus the Instagram/Facebook notice and a pointer to the screenshot method);
+  - "Check now".
+- **Settings:** "AI" card with a monthly cap and this month's spend, and a "Nightly opportunity check" on/off switch.
+- **Demo seed:** two or three sources (clearly example URLs on `example.com`, inactive) and five or six realistic demo opportunities in Arabic and English, so the screens aren't empty.
+
+### Tests
+- **Unit:** text extraction (web, Telegram preview HTML fixture, RSS fixture), the new-items diff, robots.txt rules, fingerprint, the cost cap.
+- **AI calls:** test with a **mocked** Anthropic client. Never call the real API in tests; there is no key in the container.
+- **API tests:** permissions, social-URL refusal, run-now rate limit, to-casting, no-key mode, dashboard count.
+- **`cf:smoke`:** the radar endpoints with a source pointing at a local fixture server or the Worker's own `/site` page. No external network in tests.
