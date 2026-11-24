@@ -89,7 +89,6 @@ src/server/
   db/grantOwner.ts   `npm run owner -- email`: lockout recovery — give an account an owner position (CEO), reactivate it, lift its sign-in brakes
   routes/<module>.ts one Hono router per module (admissions: routes/leads.ts at /api/leads, interviews nested under their lead; site.ts at /api/site: content, coaches, workshops, summary;
                      castingApplications.ts at /api/casting-applications); routes/admin.ts: /api/admin (bearer ADMIN_TOKEN: seed-demo, seed-demo-website, reset, grant-owner, clear-demo, restore-point, restore);
-                     castingApplications.ts at /api/casting-applications); routes/admin.ts: /api/admin (bearer ADMIN_TOKEN);
                      opportunities.ts at /api/opportunities (Part K1: list ?status=&q=, counts, get, create, patch — fileIds is the whole list —, delete, POST /:id/to-casting; castingNotesFrom);
                      team pack: team.ts (/api/team), chat.ts (/api/chat), summons.ts (/api/summons), notifications.ts, push.ts, recordFiles.ts (/api/courses/:courseId/files, /api/castings/:castingId/files);
                      cafe.ts (/api/cafe), videos.ts (/api/videos: the video pipeline, Part L);
