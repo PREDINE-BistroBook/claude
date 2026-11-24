@@ -1,0 +1,12 @@
+# media, outputs and secrets never go in git
+raw/*
+notes/*
+photos/*
+music/*
+output/
+!raw/.gitkeep
+!notes/.gitkeep
+!photos/.gitkeep
+!music/.gitkeep
+.env
+__pycache__/

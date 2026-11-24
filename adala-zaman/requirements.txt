@@ -1,0 +1,5 @@
+faster-whisper>=1.0
+numpy
+Pillow>=10            # must have libraqm for Arabic shaping (setup check verifies)
+opencv-python-headless<5  # face tracking (Haar cascades were removed in OpenCV 5)
+anthropic>=1.0        # optional: AI-picked Shorts + Egyptian-Arabic titles/descriptions
