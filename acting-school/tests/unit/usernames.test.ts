@@ -175,7 +175,7 @@ describe('the sign-in request (loginInput)', () => {
     expect(loginInput.safeParse({ username: '', password: 'x' }).success).toBe(false);
     expect(loginInput.safeParse({ username: 'x'.repeat(255), password: 'x' }).success).toBe(false);
     // A temporary first password may be shorter than the policy (the operator's tool): sign-in takes any length.
-    expect(loginInput.safeParse({ username: 'ali', password: 'ali123' }).success).toBe(true);
+    expect(loginInput.safeParse({ username: 'ali', password: 'ali789' }).success).toBe(true);
   });
 
   it('adding a team member: username and email are both optional in the request (the route needs one), the email may be left empty', () => {

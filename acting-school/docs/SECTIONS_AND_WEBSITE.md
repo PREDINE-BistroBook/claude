@@ -811,7 +811,7 @@ They also said to keep "the website information we pulled from Instagram".
   - every API call except the auth ones answers 403 `password_change_required`.
 - **Rules for the new password:** it must meet the normal password policy and differ from the temporary one.
 - **After choosing:** the flag clears and their other sessions end.
-- **Why:** this makes simple first passwords ("salma123") safe to hand out. They stop working as soon as the person signs in once.
+- **Why:** this makes simple first passwords (a name and three digits) safe to hand out. They stop working as soon as the person signs in once.
 
 **Built 2026-11-23.** Notes for whoever builds on it:
 - The gate is `requireOwnPassword` (`middleware/auth.ts`), mounted in `app.ts` right after `/api/auth`: every router registered below it answers 403 `password_change_required` to such a session. `/api/auth/*` still answers (so the language can be switched and the person can sign out); `/api/admin/*` is bearer-only and not affected.
@@ -819,7 +819,7 @@ They also said to keep "the website information we pulled from Instagram".
 - A manager resetting **their own** password through `PATCH /api/staff/:id` does not set the flag (it is their own choice); the first owner (setup) and the demo accounts never have it.
 - **For the operator tool (I3):** insert each account with `mustChangePassword: true`; the password may be shorter than the policy (`hashPassword` takes any length and sign-in accepts any length), the person's own choice then has to meet it.
 - The web side: `RequireAuth` → `authGate` → `pages/ChoosePasswordPage.tsx` (no route of its own).
-- After review (2026-11-23): `POST /api/auth/password` checks "not the temporary one again" against the stored hash as choose-password does (a full-width spelling, "ｓalma123", is the same password to scrypt).
+- After review (2026-11-23): `POST /api/auth/password` checks "not the temporary one again" against the stored hash as choose-password does (a full-width spelling, "ｓalma789", is the same password to scrypt).
 
 ### I3. Clear the demo and create the real team (operator tool)
 - **`POST /api/admin/clear-demo`**, bearer `ADMIN_TOKEN`, with a **dry run first** (the default): it changes nothing and returns the exact plan and a `confirm` code. The real run must send that code, and is refused if the data changed in between.
@@ -855,19 +855,19 @@ They also said to keep "the website information we pulled from Instagram".
 
 | Name | Username | Position | First password |
 |---|---|---|---|
-| Ahmed Tamam | `ceo` | CEO (owner) | `tamam123` |
-| Abdelrahman Tamam | `cfo` | CFO (owner) | `abdelrahman123` |
-| Salma | `salma` | Executive Director | `salma123` |
-| Ahmed Abdellah | `ahmed` | Head of Casting | `abdellah123` |
-| Ayman Farouk | `ayman` | Head of Casting | `ayman123` |
-| Mohamed Hamzawy | `hamzawy` | Casting team | `mohamed123` |
-| Taha | `taha` | Casting team | `taha123` |
-| Ali El Gohary | `ali` | Video editor | `ali123` |
-| Moaty | `moaty` | Acting coach + Finance | `moaty123` |
+| Ahmed Tamam | `ceo` | CEO (owner) | given in person |
+| Abdelrahman Tamam | `cfo` | CFO (owner) | given in person |
+| Salma | `salma` | Executive Director | given in person |
+| Ahmed Abdellah | `ahmed` | Head of Casting | given in person |
+| Ayman Farouk | `ayman` | Head of Casting | given in person |
+| Mohamed Hamzawy | `hamzawy` | Casting team | given in person |
+| Taha | `taha` | Casting team | given in person |
+| Ali El Gohary | `ali` | Video editor | given in person |
+| Moaty | `moaty` | Acting coach + Finance | given in person |
 
 Each person is asked to choose their own password the first time they sign in. All nine accounts are created in Arabic (`"locale": "ar"` on each), with `"keep": []`, `"owner": "ceo"` and `"keepSiteContent": "contact"`.
 
-**Note (review, 2026-11-23):** the first version of this table gave `ceo` (an owner) and `ahmed` the same first password, `ahmed123`. A temporary password works for whoever types it first, and choosing a password asks for nothing more — so whichever Ahmed signed in as `ceo` first would have held the owner account; the dry run says so (`shared_password`, `owner: true`). **Resolved:** the two Ahmeds now have first passwords of their own (`tamam123`, `abdellah123`), and the dry run of this request answers no `shared_password` warning (rehearsed in local workerd on a database shaped like the live one: its only warning is `replaces_account` for `cfo`: the existing account named `cfo`, the CFO's current one, goes with the others). Hand the owner's first password over in person.
+**Note (review, 2026-11-23):** the first version of this table gave `ceo` (an owner) and `ahmed` the same first password, `ahmed789`. A temporary password works for whoever types it first, and choosing a password asks for nothing more — so whichever Ahmed signed in as `ceo` first would have held the owner account; the dry run says so (`shared_password`, `owner: true`). **Resolved:** the two Ahmeds now have first passwords of their own (`tamam789`, `abdellah789`), and the dry run of this request answers no `shared_password` warning (rehearsed in local workerd on a database shaped like the live one: its only warning is `replaces_account` for `cfo`: the existing account named `cfo`, the CFO's current one, goes with the others). Hand the owner's first password over in person.
 
 ### Tests
 - **Usernames:** rules, uniqueness, backfill, sign-in by username and by email, brakes per account.

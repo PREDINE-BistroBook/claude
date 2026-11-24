@@ -189,7 +189,7 @@ router.post('/password', requireAuth, async (c) => {
     ]);
   }
   // Someone still on a temporary password may change it this way too — to their own, not to the same one again.
-  // Checked against the stored hash, as choose-password does: a look-alike spelling ("ｓalma123") is the same
+  // Checked against the stored hash, as choose-password does: a look-alike spelling ("ｓalma789") is the same
   // password to scrypt (lib/password.ts normalises every password), so comparing the strings is not enough.
   if (row.mustChangePassword && (await verifyPassword(input.newPassword, row.passwordHash))) throw sameAsTemporaryError();
   const passwordHash = await hashPassword(input.newPassword);

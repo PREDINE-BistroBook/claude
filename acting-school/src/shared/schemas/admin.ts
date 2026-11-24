@@ -81,7 +81,7 @@ export const CLEAR_DEMO_MAX_ACCOUNTS = 50;
 /**
  * One account to create. `password` is temporary — the person must choose their
  * own at the first sign-in — so it may be shorter than the password policy
- * ("salma123"). `positions` are built-in position keys ('ceo', 'cfo',
+ * ("salma789"). `positions` are built-in position keys ('ceo', 'cfo',
  * 'executive_director', 'head_of_casting', 'casting_team', 'video_editor',
  * 'acting_coach', 'finance'). `email` left out: <username>@<the emailDomain setting>.
  */

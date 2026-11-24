@@ -250,21 +250,21 @@ describe('choosing your own password lifts the gate', () => {
     await t.login(coach.user.email);
   });
 
-  it('a temporary password shorter than the policy (the operator’s tool: "ali123") signs in, and is replaced by one that meets it', async () => {
+  it('a temporary password shorter than the policy (the operator’s tool: "ali789") signs in, and is replaced by one that meets it', async () => {
     const t = await makeTestContext();
     const row = t.db
       .insert(users)
-      .values({ username: 'ali', email: 'ali@turquoisestudio.app', name: 'Ali El Gohary', passwordHash: await hashPassword('ali123'), mustChangePassword: true })
+      .values({ username: 'ali', email: 'ali@turquoisestudio.app', name: 'Ali El Gohary', passwordHash: await hashPassword('ali789'), mustChangePassword: true })
       .returning()
       .get();
-    const ali = await t.login('ali', 'ali123');
+    const ali = await t.login('ali', 'ali789');
     expect((await ali.get('/api/auth/me')).body.user).toMatchObject({ id: row.id, mustChangePassword: true });
     expect(isGateRefusal(await ali.get('/api/team'))).toBe(true);
-    expect((await ali.post('/api/auth/choose-password', { newPassword: 'ali1234' })).status).toBe(400);
-    expect((await ali.post('/api/auth/choose-password', { newPassword: 'ali123' })).status).toBe(400);
+    expect((await ali.post('/api/auth/choose-password', { newPassword: 'ali7894' })).status).toBe(400);
+    expect((await ali.post('/api/auth/choose-password', { newPassword: 'ali789' })).status).toBe(400);
     expect((await ali.post('/api/auth/choose-password', { newPassword: 'ali-chose-this' })).status).toBe(200);
     expect((await ali.get('/api/team')).status).toBe(200);
-    expect((await t.anon.post('/api/auth/login', { username: 'ali', password: 'ali123' })).status).toBe(401);
+    expect((await t.anon.post('/api/auth/login', { username: 'ali', password: 'ali789' })).status).toBe(401);
   });
 
   it('"Change password" in My profile (current + new) lifts it too, with the same "not the temporary one again" rule', async () => {
@@ -285,14 +285,14 @@ describe('choosing your own password lifts the gate', () => {
     expect((await ahmed.post('/api/auth/password', { currentPassword: 'chosen-by-ahmed', newPassword: 'chosen-by-ahmed' })).status).toBe(200);
   });
 
-  it('"Change password" can’t keep the temporary password by spelling it another way (scrypt reads "ｓalma123" as "salma123")', async () => {
+  it('"Change password" can’t keep the temporary password by spelling it another way (scrypt reads "ｓalma789" as "salma789")', async () => {
     const t = await makeTestContext();
     const director = await t.as('executive_director');
-    const member = await addMember(t, director, 'salmat', { password: 'salma123' });
-    const salma = await t.login('salmat', 'salma123');
-    for (const lookAlike of ['ｓalma123', 'salma１２３', 'ｓａｌｍａ１２３']) {
-      expect(lookAlike).not.toBe('salma123');
-      const res = await salma.post('/api/auth/password', { currentPassword: 'salma123', newPassword: lookAlike });
+    const member = await addMember(t, director, 'salmat', { password: 'salma789' });
+    const salma = await t.login('salmat', 'salma789');
+    for (const lookAlike of ['ｓalma789', 'salma７８９', 'ｓａｌｍａ７８９']) {
+      expect(lookAlike).not.toBe('salma789');
+      const res = await salma.post('/api/auth/password', { currentPassword: 'salma789', newPassword: lookAlike });
       expect([res.status, res.body.error?.issues], lookAlike).toEqual([400, [{ path: ['newPassword'], code: 'custom', message: 'errors.passwordSameAsTemporary' }]]);
       // choose-password refuses it the same way.
       expect((await salma.post('/api/auth/choose-password', { newPassword: lookAlike })).status, lookAlike).toBe(400);
@@ -300,7 +300,7 @@ describe('choosing your own password lifts the gate', () => {
     expect(flag(t, member.id)).toBe(true);
     expect(isGateRefusal(await salma.get('/api/team'))).toBe(true);
     // The temporary password still signs in, and still opens nothing else.
-    expect((await t.anon.post('/api/auth/login', { username: 'salmat', password: 'salma123' })).body.user.mustChangePassword).toBe(true);
+    expect((await t.anon.post('/api/auth/login', { username: 'salmat', password: 'salma789' })).body.user.mustChangePassword).toBe(true);
   });
 
   it('a reset while the person is choosing: the choice made against the old temporary password is refused', async () => {

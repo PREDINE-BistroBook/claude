@@ -56,15 +56,15 @@ const TOKEN = 'test-admin-token-0123456789abcdef';
 
 /** The school's real team (docs/SECTIONS_AND_WEBSITE.md, "The real team"). */
 const REAL_TEAM = [
-  { name: 'Ahmed Tamam', username: 'ceo', password: 'ahmed123', positions: ['ceo'] },
-  { name: 'Abdelrahman Tamam', username: 'cfo', password: 'abdelrahman123', positions: ['cfo'] },
-  { name: 'Salma', username: 'salma', password: 'salma123', positions: ['executive_director'] },
-  { name: 'Ahmed Abdellah', username: 'ahmed', password: 'ahmed123', positions: ['head_of_casting'] },
-  { name: 'Ayman Farouk', username: 'ayman', password: 'ayman123', positions: ['head_of_casting'] },
-  { name: 'Mohamed Hamzawy', username: 'hamzawy', password: 'mohamed123', positions: ['casting_team'] },
-  { name: 'Taha', username: 'taha', password: 'taha123', positions: ['casting_team'] },
-  { name: 'Ali El Gohary', username: 'ali', password: 'ali123', positions: ['video_editor'] },
-  { name: 'Moaty', username: 'moaty', password: 'moaty123', positions: ['acting_coach', 'finance'] },
+  { name: 'Ahmed Tamam', username: 'ceo', password: 'ahmed789', positions: ['ceo'] },
+  { name: 'Abdelrahman Tamam', username: 'cfo', password: 'abdelrahman789', positions: ['cfo'] },
+  { name: 'Salma', username: 'salma', password: 'salma789', positions: ['executive_director'] },
+  { name: 'Ahmed Abdellah', username: 'ahmed', password: 'ahmed789', positions: ['head_of_casting'] },
+  { name: 'Ayman Farouk', username: 'ayman', password: 'ayman789', positions: ['head_of_casting'] },
+  { name: 'Mohamed Hamzawy', username: 'hamzawy', password: 'mohamed789', positions: ['casting_team'] },
+  { name: 'Taha', username: 'taha', password: 'taha789', positions: ['casting_team'] },
+  { name: 'Ali El Gohary', username: 'ali', password: 'ali789', positions: ['video_editor'] },
+  { name: 'Moaty', username: 'moaty', password: 'moaty789', positions: ['acting_coach', 'finance'] },
 ];
 const REAL_REQUEST = { create: REAL_TEAM, owner: 'ceo', keepSiteContent: 'contact' };
 
@@ -193,7 +193,7 @@ describe('the token rules are those of every admin route', () => {
 // ── What a request may say ──────────────────────────────────────────────────
 
 describe('the request', () => {
-  const one = { name: 'Salma', username: 'salma', password: 'salma123', positions: ['executive_director'] };
+  const one = { name: 'Salma', username: 'salma', password: 'salma789', positions: ['executive_director'] };
   const ok = { create: [one], owner: 'salma', keepSiteContent: 'contact' };
 
   it('is strict: unknown fields, a misspelt dryRun, a username that breaks the rules, an empty password — all 400, nothing changed', async () => {
@@ -346,7 +346,7 @@ describe('on the demo school (run in order)', () => {
     // Saying so explicitly is the same; the same request gives the same code, a different one another code.
     expect((await admin<DryRun>(t, 'clear-demo', { ...REAL_REQUEST, dryRun: true })).body).toEqual(dry);
     expect((await admin<DryRun>(t, 'clear-demo', { ...REAL_REQUEST, keep: [] })).body.confirm).toBe(dry.confirm);
-    const other = (await admin<DryRun>(t, 'clear-demo', { ...REAL_REQUEST, create: REAL_TEAM.map((a) => (a.username === 'ali' ? { ...a, password: 'ali1234' } : a)) })).body;
+    const other = (await admin<DryRun>(t, 'clear-demo', { ...REAL_REQUEST, create: REAL_TEAM.map((a) => (a.username === 'ali' ? { ...a, password: 'ali7894' } : a)) })).body;
     expect(other.confirm).not.toBe(dry.confirm);
     expect(other.willDelete).toEqual(dry.willDelete);
     // A confirm code sent with a dry run is ignored: still a dry run.
@@ -412,7 +412,7 @@ describe('on the demo school (run in order)', () => {
     // The code belongs to the request it was made for: other accounts, another owner, another website choice, a kept account.
     for (const request of [
       { ...REAL_REQUEST, create: REAL_TEAM.slice(0, 8) },
-      { ...REAL_REQUEST, create: REAL_TEAM.map((a) => (a.username === 'ali' ? { ...a, password: 'ali1234' } : a)) },
+      { ...REAL_REQUEST, create: REAL_TEAM.map((a) => (a.username === 'ali' ? { ...a, password: 'ali7894' } : a)) },
       { ...REAL_REQUEST, create: REAL_TEAM.map((a) => (a.username === 'ali' ? { ...a, positions: ['ceo'] } : a)) },
       { ...REAL_REQUEST, owner: 'cfo' },
       { ...REAL_REQUEST, keepSiteContent: 'all' },
@@ -551,7 +551,7 @@ describe('on the demo school (run in order)', () => {
       expect(u).toMatchObject({ email: `${u.username}@turquoisestudio.app`, mustChangePassword: true, active: true, locale: 'en', phone: null, photoFileId: null, lastLoginAt: null });
       expect(u.passwordHash).toMatch(/^scrypt\$/);
     }
-    expect(new Set(accounts.map((u) => u.passwordHash)).size).toBe(accounts.length); // "ahmed123" twice: two salts
+    expect(new Set(accounts.map((u) => u.passwordHash)).size).toBe(accounts.length); // "ahmed789" twice: two salts
 
     // What stays: the school's settings, the forms' secret, the email domain, the positions…
     const settingsNow = Object.fromEntries(t.db.select().from(settings).all().map((r) => [r.key, r.value]));
@@ -591,33 +591,33 @@ describe('on the demo school (run in order)', () => {
 
   it('each person signs in by username with the temporary password and must choose their own first', async () => {
     for (const name of ['ali', ' Ali ', 'ali@turquoisestudio.app']) {
-      const res = await t.anon.post('/api/auth/login', { username: name, password: 'ali123' });
+      const res = await t.anon.post('/api/auth/login', { username: name, password: 'ali789' });
       expect(res.status, name).toBe(200);
       expect(res.body.user).toMatchObject({ username: 'ali', mustChangePassword: true, isOwner: false });
     }
-    expect((await t.anon.post('/api/auth/login', { username: 'ali', password: 'salma123' })).status).toBe(401);
+    expect((await t.anon.post('/api/auth/login', { username: 'ali', password: 'salma789' })).status).toBe(401);
 
-    const ali = await t.login('ali', 'ali123');
+    const ali = await t.login('ali', 'ali789');
     expect((await ali.get('/api/auth/me')).body.user.positions.map((p: { key: string }) => p.key)).toEqual(['video_editor']);
     for (const url of ['/api/students', '/api/team', '/api/dashboard', '/api/settings']) {
       const gated = await ali.get(url);
       expect([gated.status, gated.body.error.code], url).toEqual([403, 'password_change_required']);
     }
     // Not the temporary one again, not a short one.
-    expect((await ali.post('/api/auth/choose-password', { newPassword: 'ali123' })).status).toBe(400);
-    expect((await ali.post('/api/auth/choose-password', { newPassword: 'ali12345' })).body.user.mustChangePassword).toBe(false);
+    expect((await ali.post('/api/auth/choose-password', { newPassword: 'ali789' })).status).toBe(400);
+    expect((await ali.post('/api/auth/choose-password', { newPassword: 'ali78945' })).body.user.mustChangePassword).toBe(false);
     expect((await ali.get('/api/students')).status).toBe(200);
     expect((await ali.get('/api/leads')).status).toBe(403); // a video editor, as asked
-    expect((await t.anon.post('/api/auth/login', { username: 'ali', password: 'ali123' })).status).toBe(401);
+    expect((await t.anon.post('/api/auth/login', { username: 'ali', password: 'ali789' })).status).toBe(401);
 
     // Two positions add up (Moaty: acting coach + finance).
-    const moaty = (await t.anon.post('/api/auth/login', { username: 'moaty', password: 'moaty123' })).body.user;
+    const moaty = (await t.anon.post('/api/auth/login', { username: 'moaty', password: 'moaty789' })).body.user;
     expect(moaty.positions.map((p: { key: string }) => p.key).sort()).toEqual(['acting_coach', 'finance']);
     expect(moaty.permissions).toEqual(expect.arrayContaining(['attendance.write', 'payments.manage']));
   });
 
   it('the app works afterwards: the owner adds a student, a workshop and an enquiry; Team lists exactly the nine; the website is a preview, not public', async () => {
-    const ceo = await t.login('ceo', 'ahmed123');
+    const ceo = await t.login('ceo', 'ahmed789');
     expect((await ceo.get('/api/auth/me')).body.user).toMatchObject({ username: 'ceo', name: 'Ahmed Tamam', isOwner: true, mustChangePassword: true });
     expect((await ceo.post('/api/auth/choose-password', { newPassword: 'a-password-of-my-own' })).status).toBe(200);
 
@@ -649,7 +649,7 @@ describe('on the demo school (run in order)', () => {
     expect(staff.map((s) => s.username).sort()).toEqual(REAL_TEAM.map((a) => a.username).sort());
     expect(staff.filter((s) => !s.mustChangePassword).map((s) => s.username).sort()).toEqual(['ali', 'ceo']);
     // The other owner is an owner too, and a manager can still add people.
-    expect((await t.anon.post('/api/auth/login', { username: 'cfo', password: 'abdelrahman123' })).body.user.isOwner).toBe(true);
+    expect((await t.anon.post('/api/auth/login', { username: 'cfo', password: 'abdelrahman789' })).body.user.isOwner).toBe(true);
     expect((await ceo.post('/api/staff', { name: 'One More', username: 'onemore', positionIds: [t.positionId('acting_coach')], password: 'onemore123' })).status).toBe(201);
 
     // The website: the switch is off, the previews render (with their banner), the forms' secret still signs.
@@ -1010,7 +1010,7 @@ describe('kept accounts and the owner', () => {
     const s = await school();
     const { t } = s;
     t.db.update(positions).set({ isOwner: false }).where(eq(positions.key, 'ceo')).run();
-    const request = { create: [{ name: 'Salma', username: 'salma', password: 'salma123', positions: ['ceo', 'acting_coach'] }], owner: 'salma', keepSiteContent: 'contact' };
+    const request = { create: [{ name: 'Salma', username: 'salma', password: 'salma789', positions: ['ceo', 'acting_coach'] }], owner: 'salma', keepSiteContent: 'contact' };
     const plan = (await admin<DryRun>(t, 'clear-demo', request)).body;
     expect(plan.accounts[0]).toMatchObject({ positions: [{ key: 'ceo', name: 'CEO' }, { key: 'acting_coach', name: 'Acting coach' }, { key: 'cfo', name: 'CFO' }], owner: true });
 
@@ -1023,7 +1023,7 @@ describe('kept accounts and the owner', () => {
     expect((await silently(() => admin(t, 'grant-owner', { username: 'goner' }))).status).toBe(200);
     const { real } = await silently(() => clear(t, request));
     expect(real.accounts[0]).toMatchObject({ positions: [{ key: 'ceo', name: 'CEO' }, { key: 'acting_coach', name: 'Acting coach' }], owner: true });
-    expect((await t.anon.post('/api/auth/login', { username: 'salma', password: 'salma123' })).body.user).toMatchObject({ isOwner: true, mustChangePassword: true });
+    expect((await t.anon.post('/api/auth/login', { username: 'salma', password: 'salma789' })).body.user).toMatchObject({ isOwner: true, mustChangePassword: true });
   });
 
   it('stays within the Durable Object limits with many accounts: 131 deleted, 50 kept', async () => {
@@ -1163,7 +1163,7 @@ describe('keepSiteContent', () => {
 describe('restore points', () => {
   const BOOKMARK = '0000007b-0000b26e-00001538-0c3e87bb37b3db5cc52eedb93cd3b96b';
   const UNDO = '0000007c-00000001-00001538-11111111111111111111111111111111';
-  const request = { create: [{ name: 'Salma', username: 'salma', password: 'salma123', positions: ['ceo'] }], owner: 'salma', keepSiteContent: 'contact' };
+  const request = { create: [{ name: 'Salma', username: 'salma', password: 'salma789', positions: ['ceo'] }], owner: 'salma', keepSiteContent: 'contact' };
 
   /** A runtime with point-in-time recovery, as the Durable Object gives it; `calls` records what was asked and what the database held then. */
   function fakeRecovery(t: () => Ctx) {
@@ -1379,7 +1379,7 @@ describe('planClearDemo and the confirm code', () => {
   it('reads only, is the same for the same data, and the code needs the token', async () => {
     const t = await makeTestContext({ config: { adminToken: TOKEN } });
     await t.as('owner', { username: 'boss' });
-    const input = clearDemoInput.parse({ create: [{ name: 'Salma', username: 'salma', password: 'salma123', positions: ['executive_director'] }], keep: ['boss'], owner: 'boss', keepSiteContent: 'contact' });
+    const input = clearDemoInput.parse({ create: [{ name: 'Salma', username: 'salma', password: 'salma789', positions: ['executive_director'] }], keep: ['boss'], owner: 'boss', keepSiteContent: 'contact' });
     const before = snapshot(t);
     const plan = planClearDemo(t.db, input);
     expect(snapshot(t)).toBe(before);

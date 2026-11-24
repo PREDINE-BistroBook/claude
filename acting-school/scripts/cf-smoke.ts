@@ -1114,15 +1114,15 @@ async function publicHostChecks(base: string, opts: { password: string }) {
 
 /** The school's real team, as the operator's request names it (docs/SECTIONS_AND_WEBSITE.md, Part I); Taha's account in Arabic. */
 const REAL_TEAM: { name: string; username: string; password: string; positions: string[]; locale?: 'en' | 'ar' }[] = [
-  { name: 'Ahmed Tamam', username: 'ceo', password: 'ahmed123', positions: ['ceo'] },
-  { name: 'Abdelrahman Tamam', username: 'cfo', password: 'abdelrahman123', positions: ['cfo'] },
-  { name: 'Salma', username: 'salma', password: 'salma123', positions: ['executive_director'] },
-  { name: 'Ahmed Abdellah', username: 'ahmed', password: 'ahmed123', positions: ['head_of_casting'] },
-  { name: 'Ayman Farouk', username: 'ayman', password: 'ayman123', positions: ['head_of_casting'] },
-  { name: 'Mohamed Hamzawy', username: 'hamzawy', password: 'mohamed123', positions: ['casting_team'] },
-  { name: 'Taha', username: 'taha', password: 'taha123', positions: ['casting_team'], locale: 'ar' },
-  { name: 'Ali El Gohary', username: 'ali', password: 'ali123', positions: ['video_editor'] },
-  { name: 'Moaty', username: 'moaty', password: 'moaty123', positions: ['acting_coach', 'finance'] },
+  { name: 'Ahmed Tamam', username: 'ceo', password: 'ahmed789', positions: ['ceo'] },
+  { name: 'Abdelrahman Tamam', username: 'cfo', password: 'abdelrahman789', positions: ['cfo'] },
+  { name: 'Salma', username: 'salma', password: 'salma789', positions: ['executive_director'] },
+  { name: 'Ahmed Abdellah', username: 'ahmed', password: 'ahmed789', positions: ['head_of_casting'] },
+  { name: 'Ayman Farouk', username: 'ayman', password: 'ayman789', positions: ['head_of_casting'] },
+  { name: 'Mohamed Hamzawy', username: 'hamzawy', password: 'mohamed789', positions: ['casting_team'] },
+  { name: 'Taha', username: 'taha', password: 'taha789', positions: ['casting_team'], locale: 'ar' },
+  { name: 'Ali El Gohary', username: 'ali', password: 'ali789', positions: ['video_editor'] },
+  { name: 'Moaty', username: 'moaty', password: 'moaty789', positions: ['acting_coach', 'finance'] },
 ];
 
 /**
@@ -1223,18 +1223,18 @@ async function clearDemoChecks(base: string, opts: { adminToken: string; passwor
     check(expectStatus(await c.get('/api/team'), 403, `${person.username} before choosing a password`).body.error.code === 'password_change_required', 'the app is closed until they choose');
   }
   const ali = new Client(base);
-  expectStatus(await ali.post('/api/auth/login', { username: 'ali@turquoisestudio.app', password: 'ali123' }), 200, 'ali signs in with the address');
-  expectStatus(await ali.post('/api/auth/choose-password', { newPassword: 'ali123' }), 400, 'the temporary password again');
+  expectStatus(await ali.post('/api/auth/login', { username: 'ali@turquoisestudio.app', password: 'ali789' }), 200, 'ali signs in with the address');
+  expectStatus(await ali.post('/api/auth/choose-password', { newPassword: 'ali789' }), 400, 'the temporary password again');
   expectStatus(await ali.post('/api/auth/choose-password', { newPassword: `ali-${opts.password}` }), 200, 'ali chooses a password');
   expectStatus(await ali.get('/api/students'), 200, 'ali is in');
   for (const name of ['admin', 'postmaster', 'info']) {
     check(expectStatus(await ali.patch('/api/auth/profile', { username: name }), 400, `ali can't take "${name}"`).body.error.issues[0].message === 'errors.usernameReserved', `"${name}" is kept for the studio`);
   }
   check(expectStatus(await ali.patch('/api/auth/profile', { username: 'owner' }), 400, 'ali can’t take "owner"').body.error.issues[0].message === 'errors.usernameForManagers', '"owner" is a manager’s to give');
-  expectStatus(await new Client(base).post('/api/auth/login', { username: 'ali', password: 'ali123' }), 401, 'the temporary password is over');
+  expectStatus(await new Client(base).post('/api/auth/login', { username: 'ali', password: 'ali789' }), 401, 'the temporary password is over');
 
   const ceo = new Client(base);
-  expectStatus(await ceo.post('/api/auth/login', { username: 'ceo', password: 'ahmed123' }), 200, 'the owner signs in');
+  expectStatus(await ceo.post('/api/auth/login', { username: 'ceo', password: 'ahmed789' }), 200, 'the owner signs in');
   check(expectStatus(await ceo.post('/api/auth/choose-password', { newPassword: opts.password }), 200, 'the owner chooses a password').body.user.isOwner === true, 'ceo is an owner');
   const team = expectStatus(await ceo.get('/api/team'), 200, 'team').body.items;
   check(team.length === REAL_TEAM.length + 1, `Team lists exactly the ten accounts (${team.length})`);
