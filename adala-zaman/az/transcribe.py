@@ -64,6 +64,15 @@ def transcribe(src: Path, ep: Path) -> dict:
                 if not any(abs(seg["start"] - r["start"]) < 0.3 for r in raw):
                     raw.append(seg)
     raw.sort(key=lambda s: s["start"])
+    # guard: drop lines that are just Whisper repeating the spelling hint back (happens on unclear audio)
+    if opts["initial_prompt"]:
+        from difflib import SequenceMatcher
+        from .common import norm_ar
+        hint = norm_ar(opts["initial_prompt"])
+        kept = [r for r in raw if SequenceMatcher(None, norm_ar(r["text"]), hint).ratio() < 0.6]
+        if len(kept) < len(raw):
+            print(f"  dropped {len(raw) - len(kept)} line(s) that only echoed the spelling hint", flush=True)
+        raw = kept
     out = {"source": str(src), "segments": []}
     for i, seg in enumerate(raw, 1):
         out["segments"].append({"id": i, **seg, "cut": False})

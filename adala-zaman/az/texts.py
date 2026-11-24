@@ -43,13 +43,14 @@ Arabic and English mixed, without spaces inside a tag."""
 
 
 def write(ep: Path, ep_name: str, ep_title: str, transcript_text: str, chapters_src: list, shorts: list[dict],
-          notes: list, cfg: dict, intro: float) -> dict:
+          notes: list, cfg: dict, intro: float, notes_txt: str = "") -> dict:
     res = None
     if ai.available():
         listing = "\n".join(f"({t:.0f}s) {txt}" for t, txt in chapters_src)
         sh = "\n".join(f"Short {n}: \"{m['title']}\" - {m['transcript']}" for n, m in enumerate(shorts, 1))
         content = [*[ai.image_block(p) for p in notes[:6]], {"type": "text", "text":
                    f"{'Above: her handwritten notes for this episode. ' if notes else ''}"
+                   f"{('Typed reading of the notes:' + chr(10) + notes_txt + chr(10) + chr(10)) if notes_txt else ''}"
                    f"Episode: {ep_name} - working title: {ep_title or '(none yet)'}\n\n"
                    f"Edited long-video transcript, each line with its start time in seconds (the intro card adds "
                    f"{intro:.0f}s; chapter times must include that offset and the first chapter must be 0):\n{listing}\n\n"

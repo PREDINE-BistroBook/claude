@@ -440,6 +440,119 @@ GRAPHICS = {
 }
 
 
+BRASS, BRASS_DK, BRASS_LT = (198, 152, 72), (146, 104, 42), (232, 196, 120)
+
+
+def draw_wabour(p: Pen, t):
+    """وابور الجاز: brass primus stove with a flickering flame and a kettle on top."""
+    # steam from the kettle spout
+    for k in range(2):
+        pts = [(0.74 + 0.03 * math.sin(u * 6 - t * 2.4 + k * 2) * (0.3 + u) + k * 0.04, 0.2 - u * 0.17) for u in [i / 20 for i in range(21)]]
+        for i in range(20):
+            p.line([pts[i], pts[i + 1]], fill=_alpha(INK_SOFT, 0.5 * math.sin(i / 20 * math.pi)), w=0.008)
+    # kettle (براد)
+    p.ellipse(0.5, 0.33, 0.17, 0.12, fill=METAL, w=0.009)
+    p.poly([(0.64, 0.32), (0.75, 0.22), (0.77, 0.24), (0.67, 0.36)], fill=METAL, w=0.007)
+    p.arc(0.5, 0.25, 0.1, 0.09, 200, 340, fill=METAL_DK, w=0.012)
+    p.ellipse(0.5, 0.22, 0.04, 0.015, fill=METAL_DK, w=0.006)
+    p.line([(0.4, 0.3), (0.43, 0.42)], fill=_alpha(METAL_LT, 0.8), w=0.01)
+    # flame ring under the kettle
+    for i in range(9):
+        a = i / 9
+        x = 0.38 + a * 0.24
+        h = 0.05 + 0.025 * math.sin(t * 13 + i * 1.7) * math.sin(t * 5.1 + i)
+        p.poly([(x - 0.014, 0.5), (x, 0.5 - h), (x + 0.014, 0.5)], fill=(236, 150, 60) if i % 2 else (250, 200, 110), outline=None)
+    p.ellipse(0.5, 0.5, 0.13, 0.02, fill=(110, 90, 80), w=0.006)          # burner
+    # legs / pot stand
+    for x0, x1 in ((0.3, 0.36), (0.7, 0.64)):
+        p.line([(x1, 0.48), (x0, 0.6)], fill=BRASS_DK, w=0.012)
+    p.line([(0.5, 0.52), (0.5, 0.6)], fill=BRASS_DK, w=0.016)
+    # tank
+    p.ellipse(0.5, 0.72, 0.24, 0.14, fill=BRASS, w=0.01)
+    p.arc(0.5, 0.72, 0.2, 0.1, 200, 300, fill=_alpha(BRASS_LT, 0.9), w=0.014)
+    p.ellipse(0.5, 0.6, 0.06, 0.02, fill=BRASS_DK, w=0.006)
+    # pump + key
+    p.rect(0.7, 0.62, 0.74, 0.7, fill=BRASS_DK, w=0.006)
+    p.line([(0.72, 0.62), (0.72, 0.56)], fill=INK, w=0.008)
+    p.circle(0.72, 0.555, 0.015, fill=WOOD, w=0.005)
+    for x in (0.32, 0.5, 0.68):   # feet
+        p.rect(x - 0.025, 0.84, x + 0.025, 0.88, fill=BRASS_DK, w=0.005)
+
+
+def draw_namlia(p: Pen, t):
+    """النملية: wooden food cabinet with fly-mesh doors (a fly tries and fails to get in)."""
+    p.poly([(0.22, 0.12), (0.78, 0.12), (0.82, 0.07), (0.18, 0.07)], fill=WOOD_DK, w=0.008)
+    p.rect(0.22, 0.12, 0.78, 0.86, fill=WOOD, w=0.01)
+    for x in (0.27, 0.53):
+        p.rect(x, 0.17, x + 0.2, 0.62, fill=(214, 200, 176), w=0.008)
+        # shelves + jars seen through the mesh
+        p.line([(x, 0.4), (x + 0.2, 0.4)], fill=_alpha(WOOD_DK, 0.6), w=0.008)
+        p.ellipse(x + 0.06, 0.35, 0.03, 0.04, fill=_alpha(CLAY, 0.6), outline=None)
+        p.rect(x + 0.11, 0.3, x + 0.17, 0.39, fill=_alpha(SEPIA_MID, 0.55), outline=None, r=0.01)
+        p.ellipse(x + 0.1, 0.57, 0.07, 0.02, fill=_alpha(CREAM, 0.7), outline=None)
+        for i in range(1, 12):                      # mesh
+            p.line([(x + i * 0.2 / 12, 0.17), (x + i * 0.2 / 12, 0.62)], fill=_alpha(INK_SOFT, 0.35), w=0.003)
+        for i in range(1, 24):
+            p.line([(x, 0.17 + i * 0.45 / 24), (x + 0.2, 0.17 + i * 0.45 / 24)], fill=_alpha(INK_SOFT, 0.35), w=0.003)
+        p.circle(x + (0.18 if x < 0.5 else 0.02), 0.4, 0.012, fill=BRASS if 'BRASS' in globals() else GOLD, w=0.004)
+    for y in (0.66, 0.76):   # drawers
+        p.rect(0.27, y, 0.73, y + 0.08, fill=WOOD_LT, w=0.007)
+        p.circle(0.5, y + 0.04, 0.012, fill=WOOD_DK, outline=None)
+    for x in (0.25, 0.75):
+        p.rect(x - 0.02, 0.86, x + 0.02, 0.93, fill=WOOD_DK, w=0.006)
+    # the fly
+    a = t * 2.2
+    fx, fy = 0.5 + 0.33 * math.cos(a) + 0.02 * math.sin(t * 9), 0.36 + 0.12 * math.sin(a * 1.6)
+    if 0.27 < fx < 0.73:
+        fx = 0.27 if fx < 0.5 else 0.73           # bounces off the mesh
+    p.ellipse(fx, fy, 0.012, 0.008, fill=INK, outline=None)
+    wing = 0.008 + 0.006 * abs(math.sin(t * 40))
+    p.ellipse(fx - 0.006, fy - 0.01, 0.01, wing, fill=_alpha(CREAM, 0.7), outline=_alpha(INK, 0.5), w=0.002)
+    p.ellipse(fx + 0.006, fy - 0.01, 0.01, wing, fill=_alpha(CREAM, 0.7), outline=_alpha(INK, 0.5), w=0.002)
+
+
+def draw_qubqab(p: Pen, t):
+    """القبقاب الخشب: a pair of wooden clogs stepping in turn - طق طق."""
+    for side, (cx, phase) in enumerate(((0.33, 0.0), (0.67, 0.5))):
+        ph = (t * 1.6 + phase) % 1.0
+        lift = max(0.0, math.sin(ph * 2 * math.pi)) * 0.07
+        y = 0.62 - lift
+        p.ellipse(cx, 0.82, 0.13 - lift * 0.6, 0.02, fill=_alpha(INK, 0.18), outline=None)   # shadow
+        p.rect(cx - 0.14, y + 0.04, cx + 0.14, y + 0.1, fill=WOOD_DK, r=0.02, w=0.008)       # sole
+        p.rect(cx - 0.12, y + 0.1, cx - 0.06, y + 0.17, fill=WOOD_DK, w=0.006)               # heels
+        p.rect(cx + 0.05, y + 0.1, cx + 0.11, y + 0.17, fill=WOOD_DK, w=0.006)
+        p.rect(cx - 0.15, y - 0.01, cx + 0.15, y + 0.05, fill=WOOD, r=0.025, w=0.008)       # footbed
+        p.arc(cx + 0.03, y + 0.01, 0.1, 0.09, 180, 360, fill=(120, 60, 40), w=0.03)          # leather strap
+        p.arc(cx + 0.03, y + 0.01, 0.1, 0.09, 200, 340, fill=_alpha(CREAM, 0.35), w=0.006)
+        if ph < 0.08 or ph > 0.97:                                                           # impact!
+            for k in range(5):
+                a = math.radians(200 + k * 35)
+                p.line([(cx + math.cos(a) * 0.17, 0.79 + math.sin(a) * 0.05 + 0.02),
+                        (cx + math.cos(a) * 0.23, 0.79 + math.sin(a) * 0.08 + 0.02)], w=0.007)
+            p.text(cx, 0.32, "طق!", 0.09, fill=INK)
+
+
+def draw_lamp(p: Pen, t):
+    """لمبة الجاز: kerosene lamp with a living flame (glow added by GraphicScene)."""
+    flick = 0.8 + 0.2 * math.sin(t * 11) * math.sin(t * 4.3)
+    p.ellipse(0.5, 0.9, 0.2, 0.035, fill=BRASS_DK, w=0.007)
+    p.poly([(0.36, 0.88), (0.64, 0.88), (0.6, 0.8), (0.4, 0.8)], fill=BRASS, w=0.008)
+    p.ellipse(0.5, 0.68, 0.17, 0.13, fill=_alpha(GLASS, 0.8), w=0.008)                     # fuel bowl
+    p.ellipse(0.5, 0.72, 0.14, 0.07, fill=_alpha((170, 110, 50), 0.55), outline=None)      # kerosene
+    p.rect(0.42, 0.53, 0.58, 0.57, fill=BRASS_DK, w=0.006)                                  # burner collar
+    p.circle(0.62, 0.55, 0.018, fill=BRASS, w=0.005)                                        # wick knob
+    # glass chimney (hourglass)
+    ch = [(0.44, 0.53), (0.4, 0.44), (0.4, 0.36), (0.45, 0.28), (0.45, 0.14), (0.55, 0.14), (0.55, 0.28),
+          (0.6, 0.36), (0.6, 0.44), (0.56, 0.53)]
+    p.poly(ch, fill=_alpha(CREAM, 0.35), w=0.006)
+    p.ellipse(0.5, 0.43, 0.035, 0.07 * flick, fill=(246, 178, 80), outline=None)            # flame
+    p.ellipse(0.5, 0.45, 0.018, 0.04 * flick, fill=(255, 238, 190), outline=None)
+    p.line([(0.43, 0.36), (0.44, 0.48)], fill=_alpha((255, 255, 255), 0.6), w=0.008)
+
+
+GRAPHICS.update({"wabour": draw_wabour, "namlia": draw_namlia, "qubqab": draw_qubqab, "lamp": draw_lamp})
+
+
 # ---------------------------------------------------------------- scene renderers
 @lru_cache(8)
 def _paper(size):
@@ -490,7 +603,7 @@ class GraphicScene:
             sh = sh.copy()
             sh.putalpha(sh.getchannel("A").point(lambda v: int(v * k)))
         canvas.alpha_composite(sh)
-        if self.name == "fanoos":
+        if self.name in ("fanoos", "lamp"):
             g = _glow(int(S * 1.3))
             g.putalpha(g.getchannel("A").point(lambda v: int(v * (0.45 + 0.15 * math.sin(t * 7)) * k)))
             canvas.alpha_composite(g, (cx - g.width // 2, int(cy - g.height // 2 + bob)))

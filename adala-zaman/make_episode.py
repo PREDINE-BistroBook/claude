@@ -49,8 +49,18 @@ def join_sources(srcs: list[Path], ep: Path) -> Path:
     return out
 
 
+NOTES_EP: Path = NOTES   # set per episode in main()
+
+
 def notes_images() -> list[Path]:
-    return sorted(p for p in NOTES.glob("*") if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp", ".heic"})
+    """Photos of her notes: notes/ep01/ (or notes/episode_01/), else loose files in notes/."""
+    return sorted(p for p in NOTES_EP.glob("*") if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp", ".heic"})
+
+
+def notes_text() -> str:
+    """A typed version of the notes (notes/ep01/notes.md), if someone wrote one - sent to Claude with the photos."""
+    f = NOTES_EP / "notes.md"
+    return f.read_text(encoding="utf-8") if f.exists() else ""
 
 
 # ------------------------------------------------------------------ stage 2: plan
@@ -84,7 +94,7 @@ def plan(src: Path, info: dict, ep: Path, name: str, cfg: dict) -> dict:
         moments = prev["moments"]
     else:
         say("  picking Shorts moments…")
-        moments = shorts.pick(tr, ed, cfg, notes_images())
+        moments = shorts.pick(tr, ed, cfg, notes_images(), notes_text())
         write_json(sp, {"transcript_hash": th, "moments": moments})
     for m in moments:
         m["transcript"] = " ".join(r["text"] for r in rows if m["start_id"] <= r["id"] <= m["end_id"])
@@ -188,7 +198,7 @@ def render(src: Path, info: dict, ep: Path, name: str, P: dict, cfg: dict, title
     chap_src = [(r["t0"] + intro, r["text"]) for r in P["rows"]]
     full_text = " ".join(r["text"] for r in P["rows"])
     shorts_in = [{**m} for m in P["moments"]]
-    tx = texts.write(ep, name, title, full_text, chap_src, shorts_in, notes_images(), cfg, intro)
+    tx = texts.write(ep, name, title, full_text, chap_src, shorts_in, notes_images(), cfg, intro, notes_text())
     if not title and tx.get("written_by") == "claude":
         title = re.sub(r"\s*[|｜-]\s*عدالة زمان\s*$", "", tx["long"]["titles"][0]).strip()
     if not title:
@@ -247,6 +257,12 @@ def main(argv=None):
             return 1
     ep, name = episode_dir(a.videos[0], a.ep)
     ep.mkdir(parents=True, exist_ok=True)
+    global NOTES_EP
+    num = int(name.split("_")[-1])
+    for cand in (NOTES / f"ep{num:02d}", NOTES / f"ep{num}", NOTES / name):
+        if cand.is_dir():
+            NOTES_EP = cand
+            break
     meta_p = ep / "episode.json"
     meta = read_json(meta_p) if meta_p.exists() else {"title": "", "keep_ids": []}
     if a.title is not None:

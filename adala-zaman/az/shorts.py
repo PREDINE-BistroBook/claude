@@ -101,7 +101,7 @@ def heuristic(rows: list[dict], k_min=3, k_max=5) -> list[dict]:
     return out
 
 
-def pick(tr: dict, edit: dict, cfg: dict, notes: list) -> list[dict]:
+def pick(tr: dict, edit: dict, cfg: dict, notes: list, notes_txt: str = "") -> list[dict]:
     rows = sentence_table(tr, edit)
     k_min, k_max = cfg["n_shorts"]
     moments = None
@@ -110,6 +110,7 @@ def pick(tr: dict, edit: dict, cfg: dict, notes: list) -> list[dict]:
         content = [*[ai.image_block(p) for p in notes[:6]],
                    {"type": "text", "text":
                     f"{'Above are photos of her handwritten notes for this episode. ' if notes else ''}"
+                    f"{('Typed reading of the notes:' + chr(10) + notes_txt + chr(10) + chr(10)) if notes_txt else ''}"
                     "Here is the edited transcript. Each line: [sentence id] (start-end seconds on the edited "
                     f"timeline) text.\n\n{listing}\n\n"
                     f"Pick {k_min}-{k_max} non-overlapping moments for Shorts. Each moment is a contiguous range "
