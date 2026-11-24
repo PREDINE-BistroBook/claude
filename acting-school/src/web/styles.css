@@ -1,0 +1,251 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter/wght.css";
+/* Arabic + Latin subsets only (the UI has no other scripts). */
+@import "@fontsource/ibm-plex-sans-arabic/arabic-400.css";
+@import "@fontsource/ibm-plex-sans-arabic/arabic-500.css";
+@import "@fontsource/ibm-plex-sans-arabic/arabic-600.css";
+@import "@fontsource/ibm-plex-sans-arabic/arabic-700.css";
+@import "@fontsource/ibm-plex-sans-arabic/latin-400.css";
+@import "@fontsource/ibm-plex-sans-arabic/latin-500.css";
+@import "@fontsource/ibm-plex-sans-arabic/latin-600.css";
+@import "@fontsource/ibm-plex-sans-arabic/latin-700.css";
+
+/*
+ * Design tokens. Use the semantic utilities (bg-surface, text-muted, border-line,
+ * bg-accent, text-danger, bg-success-soft …) rather than raw palette colours, so
+ * light and dark mode both work. Direction: always logical utilities
+ * (ps-/pe-/ms-/me-/start-/end-/text-start/border-s) — never left/right — so
+ * Arabic (RTL) mirrors correctly. Directional icons get `rtl:-scale-x-100`.
+ */
+@theme inline {
+  --font-sans: var(--font-ui);
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-success-ink: var(--success-ink);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-ink: var(--warning-ink);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-ink: var(--danger-ink);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-info-ink: var(--info-ink);
+  --color-brand-tile: var(--brand-tile);
+  --color-brand-mint: var(--brand-mint);
+  --color-brand-turquoise: var(--brand-turquoise);
+  /* Sections (layout/sections.ts): School, Casting, Website. bg-section-<key> + text-section-<key>-ink for a filled tab;
+     text-section-<key> for coloured text; bg-section-<key>-soft for a tinted background. */
+  --color-section-school: var(--section-school);
+  --color-section-school-ink: var(--section-school-ink);
+  --color-section-school-soft: var(--section-school-soft);
+  --color-section-casting: var(--section-casting);
+  --color-section-casting-ink: var(--section-casting-ink);
+  --color-section-casting-soft: var(--section-casting-soft);
+  --color-section-website: var(--section-website);
+  --color-section-website-ink: var(--section-website-ink);
+  --color-section-website-soft: var(--section-website-soft);
+  /* The section of the nearest [data-section] ancestor (the app shell sets it to the current section): bg-section, text-section … */
+  --color-section: var(--section);
+  --color-section-ink: var(--section-ink);
+  --color-section-soft: var(--section-soft);
+}
+
+:root {
+  --font-ui: "Inter Variable", "IBM Plex Sans Arabic", ui-sans-serif, system-ui, sans-serif;
+  /* Turquoise Studio: cool neutrals with a hint of mint, deep teal accent (white text on it passes AA). */
+  --canvas: #f2f6f5;
+  --surface: #ffffff;
+  --surface-2: #e8f0ee;
+  --ink: #132120;
+  --muted: #566664;
+  --line: #dbe4e2;
+  --line-strong: #c2cfcc;
+  --accent: #0c766c;
+  --accent-hover: #085f57;
+  --accent-soft: #ddf3ef;
+  --accent-ink: #ffffff;
+  /* --<status>-ink is the text on a solid status colour (bg-success text-success-ink …): white here, near-black in dark mode. */
+  /* Success leans yellow-green so it never reads as the teal accent. */
+  --success: #3d7a0c;
+  --success-soft: #ebf5da;
+  --success-ink: #ffffff;
+  --warning: #a34b07;
+  --warning-soft: #fcefdc;
+  --warning-ink: #ffffff;
+  --danger: #b91c1c;
+  --danger-soft: #fde8e8;
+  --danger-ink: #ffffff;
+  --info: #1d4ed8;
+  --info-soft: #e6edfc;
+  --info-ink: #ffffff;
+  /* The logo's own colours (black disc, mint → turquoise "T"): the same in both themes. */
+  --brand-tile: #000000;
+  --brand-mint: #a8f0e8;
+  --brand-turquoise: #50e0d0;
+  /*
+   * Section colours. Each one works as a fill (with its -ink text) and as text on
+   * surface, canvas, surface-2 and its own -soft — at least 4.5:1 everywhere
+   * (WCAG relative luminance). Light, -ink on fill / as text on surface · canvas · surface-2 · soft:
+   *   school  #0c766c  5.49 / 5.49 · 5.04 · 4.74 · 4.74
+   *   casting #8a5a00  5.93 / 5.93 · 5.44 · 5.12 · 5.24
+   *   website #4f46e5  6.29 / 6.29 · 5.77 · 5.43 · 5.22
+   */
+  --section-school: #0c766c;
+  --section-school-ink: #ffffff;
+  --section-school-soft: #ddf3ef;
+  --section-casting: #8a5a00;
+  --section-casting-ink: #ffffff;
+  --section-casting-soft: #fbf0d9;
+  --section-website: #4f46e5;
+  --section-website-ink: #ffffff;
+  --section-website-soft: #e9e8fd;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Near-black with a teal tint, like the studio's posts; brand turquoise accent. */
+    --canvas: #0e1514;
+    --surface: #151d1c;
+    --surface-2: #1c2725;
+    --ink: #e7f0ee;
+    --muted: #93a4a1;
+    --line: #24312f;
+    --line-strong: #33433f;
+    --accent: #2ccbbb;
+    --accent-hover: #5cdccf;
+    --accent-soft: #103230;
+    --accent-ink: #031a17;
+    --success: #a5d65a;
+    --success-soft: #1f2e12;
+    --success-ink: #031a17;
+    --warning: #f5b544;
+    --warning-soft: #33260e;
+    --warning-ink: #031a17;
+    --danger: #f87171;
+    --danger-soft: #3b1717;
+    --danger-ink: #031a17;
+    --info: #93b4fd;
+    --info-soft: #18233d;
+    --info-ink: #031a17;
+    /*
+     * Dark, -ink on fill / as text on surface · canvas · surface-2 · soft:
+     *   school  #2ccbbb   8.91 / 8.47 · 9.13 · 7.59 · 6.82
+     *   casting #f0b93e  10.05 / 9.57 · 10.31 · 8.57 · 8.07
+     *   website #a5b4fc   8.90 / 8.60 · 9.27 · 7.71 · 7.72
+     */
+    --section-school: #2ccbbb;
+    --section-school-ink: #031a17;
+    --section-school-soft: #103230;
+    --section-casting: #f0b93e;
+    --section-casting-ink: #1f1500;
+    --section-casting-soft: #33280f;
+    --section-website: #a5b4fc;
+    --section-website-ink: #0e1242;
+    --section-website-soft: #1e2147;
+    color-scheme: dark;
+  }
+}
+
+/* The current section's colour for everything inside (bg-section, text-section-ink, bg-section-soft …).
+   Outside any section (someone who sees none): the accent. */
+:root {
+  --section: var(--accent);
+  --section-ink: var(--accent-ink);
+  --section-soft: var(--accent-soft);
+}
+[data-section="school"] {
+  --section: var(--section-school);
+  --section-ink: var(--section-school-ink);
+  --section-soft: var(--section-school-soft);
+}
+[data-section="casting"] {
+  --section: var(--section-casting);
+  --section-ink: var(--section-casting-ink);
+  --section-soft: var(--section-casting-soft);
+}
+[data-section="website"] {
+  --section: var(--section-website);
+  --section-ink: var(--section-website-ink);
+  --section-soft: var(--section-website-soft);
+}
+
+/* Arabic: Plex Sans Arabic first (its Latin glyphs match well). */
+html[lang="ar"] {
+  --font-ui: "IBM Plex Sans Arabic", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    /* The sticky header (and a call-to-the-office banner) is --app-top tall (AppShell): a field
+       scrolled into view, or focused with the keyboard, mustn't land underneath it. */
+    scroll-padding-top: calc(var(--app-top, 0px) + 0.5rem);
+  }
+
+  body {
+    @apply bg-canvas text-ink antialiased;
+    font-family: var(--font-ui);
+  }
+
+  /* Arabic script needs more line height to stay legible. */
+  html[lang="ar"] body {
+    line-height: 1.65;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  dialog::backdrop {
+    background: rgb(0 0 0 / 0.45);
+  }
+}
+
+/* A list screen's "+ Add …" on phones (components/ui/AddAction.tsx ListAddAction): a button fixed at the
+   bottom-end, 0.75rem above the tab bar (4.25rem + 1px) and 3.5rem tall. While one is on screen the page
+   gets room enough at its end that the last row scrolls clear of it, and toasts sit above it. A sticky bar
+   at the bottom (a form's Save row — the cafeteria's "Send order" and "Save places" too —, a chat's
+   composer) owns that spot: the button steps aside while one is there. */
+@media (width < 64rem) {
+  body:has([data-add-fab]) [data-app-main] {
+    padding-bottom: calc(10rem + env(safe-area-inset-bottom));
+  }
+  body:has([data-add-fab]) [data-toasts] {
+    bottom: calc(9.5rem + env(safe-area-inset-bottom));
+  }
+  body:has([data-sticky-bottom]) [data-add-fab] {
+    display: none;
+  }
+}
+
+/* iOS: keep content clear of the home indicator / notch. */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,15 @@
+# Response headers for the web app on Cloudflare (Workers static assets) — the
+# same ones the Node server adds in src/server/index.ts; keep the two in step.
+# API responses get theirs from the app itself (Hono secureHeaders, no-store).
+# Without a Cache-Control here, files are served "public, max-age=0,
+# must-revalidate" with an ETag: index.html, sw.js and the manifest are
+# always revalidated.
+
+/*
+  Content-Security-Policy: default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: same-origin
+
+# Hashed build files never change: cache them for good.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

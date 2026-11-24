@@ -1,0 +1,81 @@
+import { Clapperboard } from 'lucide-react';
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { todayISO } from '@shared/dates';
+import { usesVideos } from '@shared/schemas/videos';
+import { AddButton, Card, EmptyState, ErrorState, Spinner } from '@web/components/ui';
+import { useAuth } from '@web/lib/auth';
+import { useVideos } from '../api';
+import { canAddVideoHere } from '../utils';
+import { AddVideoModal, type VideoFormStudent } from './AddVideoModal';
+import { VideoRow } from './VideoParts';
+
+/**
+ * The "Videos" block on a session's page (and on a workshop's): its videos with
+ * their status in words, and "+ Add video" at the top of the block — the shared
+ * AddButton (Part K2: a block's own Add, 48 px, icon and words) — for whoever
+ * may add a video here as the API checks it (canAddVideoHere: videos.add +
+ * courses.read, on a session or workshop the person can open, i.e. its class
+ * scope). Shown to anyone who uses the video pipeline at all.
+ */
+export function VideosBlock({
+  course,
+  session,
+  sessions,
+  students,
+  adding: addingProp,
+  onAddingChange,
+}: {
+  course: { id: number; name: string };
+  /** On a session's page: its videos, and new ones go to it. */
+  session?: { id: number; date: string };
+  /** On a workshop's page: its sessions so far, to pick one for a new video. */
+  sessions?: { id: number; date: string; startTime: string }[];
+  students: VideoFormStudent[];
+  /** The "Add a class video" sheet opened from elsewhere on the page (the session's "+ Add video" at the top). */
+  adding?: boolean;
+  onAddingChange?: (open: boolean) => void;
+}) {
+  const { t } = useTranslation('videos');
+  const { user, can } = useAuth();
+  const [addingHere, setAddingHere] = useState(false);
+  const adding = addingProp ?? addingHere;
+  const setAdding = onAddingChange ?? setAddingHere;
+  const show = !!user && usesVideos(user);
+  const list = useVideos(session ? { sessionId: session.id } : { courseId: course.id }, show);
+  if (!show) return null;
+  const canAdd = canAddVideoHere(can);
+  const today = todayISO();
+
+  return (
+    <section aria-labelledby="videos-title">
+      <Card
+        padded={false}
+        title={
+          <span id="videos-title" className="inline-flex items-center gap-2">
+            <Clapperboard className="size-5 text-muted" aria-hidden />
+            {t('block.title')}
+          </span>
+        }
+        actions={canAdd && <AddButton label={t('actions.add')} onClick={() => setAdding(true)} testId="add-video" />}
+      >
+        {list.isPending ? (
+          <div className="flex justify-center py-8">
+            <Spinner />
+          </div>
+        ) : list.isError ? (
+          <ErrorState error={list.error} onRetry={() => void list.refetch()} />
+        ) : list.data.items.length ? (
+          <ul className="divide-y divide-line">
+            {list.data.items.map((v) => (
+              <VideoRow key={v.id} video={v} today={today} />
+            ))}
+          </ul>
+        ) : (
+          <EmptyState icon={Clapperboard} title={t(session ? 'block.empty' : 'block.emptyWorkshop')} description={canAdd ? t('block.emptyHint') : undefined} className="py-8" />
+        )}
+      </Card>
+      {canAdd && <AddVideoModal open={adding} onClose={() => setAdding(false)} course={course} session={session ?? null} sessions={sessions} students={students} />}
+    </section>
+  );
+}

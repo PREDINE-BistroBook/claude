@@ -1,0 +1,14 @@
+node_modules/
+dist/
+data/
+.e2e-data/
+test-results/
+playwright-report/
+*.log
+.env
+# Cloudflare local dev (wrangler): local state and the throwaway local secrets
+.wrangler/
+.dev.vars
+
+# a worktree may link node_modules instead of holding the folder
+node_modules
