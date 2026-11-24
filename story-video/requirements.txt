@@ -1,0 +1,4 @@
+faster-whisper>=1.0
+numpy
+Pillow>=10   # needs libraqm for Arabic shaping (check: python -c "from PIL import features; print(features.check('raqm'))")
+requests

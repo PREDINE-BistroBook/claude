@@ -1,0 +1,11 @@
+# media + generated output never go in git
+input/*
+photos/*
+music/*
+work/
+output/
+!input/.gitkeep
+!photos/.gitkeep
+!music/.gitkeep
+__pycache__/
+.env
