@@ -58,7 +58,7 @@ def write_short(words: list[dict], size, out: Path, hook: str = "", cta: str = "
               _style("Hook", 86, outline=BOX, back=BOX, border=3, ol=24, sh=0, align=8, mv=260),
               _style("CTA", 54, outline=BOX, back=BOX, border=3, ol=16, sh=0, align=2, mv=200)]
     body = [_header(W, H, styles)]
-    cx, cy = W // 2, int(H * 0.70)
+    cx, cy = W // 2, int(H * 0.77)
     groups = caption_lines(words, max_chars=20, max_dur=2.0, gap=0.45)
     groups = [g[i:i + 3] for g in groups for i in range(0, len(g), 3)]
     for gi, g in enumerate(groups):

@@ -43,6 +43,8 @@ DEFAULTS = {
     "broll_graphics": True,        # use drawn vintage objects when no photo matches
     "n_shorts": [3, 5],
     "claude_model": "claude-opus-5-5",
+    "visual_mode": "auto",         # auto | face | graphics  (auto: graphics when she's not on camera)
+    "chapters": [],                # [{"start_id": 24, "title": "يوم الغسيل"}] -> chapter cards in graphics mode
 }
 
 
@@ -99,7 +101,7 @@ def probe(path: Path) -> dict:
     rot = rot or int((st.get("tags") or {}).get("rotate", 0) or 0)
     if abs(rot) % 180 == 90:      # phone videos: ffmpeg auto-rotates, so swap
         w, h = h, w
-    return {"width": w, "height": h, "duration": float(j["format"]["duration"]), "vertical": h > w}
+    return {"width": w, "height": h, "duration": float(j["format"]["duration"]), "vertical": h > w, "has_video": bool(w)}
 
 
 # ---------------------------------------------------------------- Arabic text

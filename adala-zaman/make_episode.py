@@ -81,7 +81,16 @@ def plan(src: Path, info: dict, ep: Path, name: str, cfg: dict) -> dict:
 
     rows = shorts.sentence_table(tr, ed)
     intro = cfg["intro_seconds"]
-    br = broll.plan_broll(rows, cfg, ed["edited_duration"])
+    mode = cfg["visual_mode"]
+    graphics = mode == "graphics" or (mode == "auto" and (not info["has_video"] or ftrack["hits"] == 0))
+    scenes = []
+    if graphics:
+        from az import mg
+        say("  she's not on camera -> motion-graphics episode")
+        scenes = mg.plan(edit.map_words(ed), ed["edited_duration"], cfg, broll.load_photos(), notes_images())
+        write_json(d / "scenes.json", scenes)
+        (d / "scenes.txt").write_text(mg.summary(scenes), encoding="utf-8")
+    br = [] if graphics else broll.plan_broll(rows, cfg, ed["edited_duration"])
     for b in br:
         b["t_final"] = round(b["t"] + intro, 2)
     write_json(d / "broll.json", br)
@@ -103,7 +112,39 @@ def plan(src: Path, info: dict, ep: Path, name: str, cfg: dict) -> dict:
     words = edit.map_words(ed, offset=intro)
     captions.write_long(words, LONG, ep / "work" / "long.ass", end_limit=intro + ed["edited_duration"])
     write_srt([], ep / f"{name}_long_captions.srt", words=words)
-    return {"tr": tr, "edit": ed, "face": ftrack, "broll": br, "moments": moments, "rows": rows, "words": words}
+    return {"tr": tr, "edit": ed, "face": ftrack, "broll": br, "moments": moments, "rows": rows, "words": words,
+            "graphics": graphics, "scenes": scenes}
+
+
+def short_scenes(P: dict, se: dict, cfg: dict) -> list[dict]:
+    from az import broll, edit, mg
+    # Shorts open straight on a drawn object (eye-catching), no notebook pages
+    return mg.plan(edit.map_words(se), se["edited_duration"], {**cfg, "chapters": []}, broll.load_photos(), [], seed=7)
+
+
+def mg_track(P: dict, scenes: list[dict], size, total: float, edited: Path, work: Path, tag: str, cfg: dict) -> Path:
+    """Render the motion-graphics picture and put the edited voice under it."""
+    import json as _json
+    from az import mg
+    key = hashlib.sha1((_json.dumps(scenes, ensure_ascii=False, sort_keys=True) + str(size)).encode()).hexdigest()[:10]
+    pic = mg.render(scenes, size, total, work / f"mg_{tag}_{key}.mp4", cfg)
+    out = work / f"mg_{tag}_{key}_with_voice.mkv"
+    if not out.exists():
+        run(["ffmpeg", "-y", "-v", "error", "-i", pic, "-i", edited, "-map", "0:v", "-map", "1:a", "-c", "copy", "-shortest", out])
+    return out
+
+
+def scene_still(scenes: list[dict], size, t: float, ass: Path | None, ass_t: float, cfg: dict, out: Path) -> Path:
+    """One finished-looking frame of a motion-graphics scene (+ grade, grain, captions) for previews."""
+    from az import mg, video
+    i = max([k for k, s in enumerate(scenes) if s["start"] <= t] or [0])
+    img = mg.build(scenes[i], size, i, cfg).frame(t - scenes[i]["start"] + 0.25)
+    tmp = out.with_suffix(".raw.png")
+    img.convert("RGB").save(tmp)
+    video.still(tmp, {"width": size[0], "height": size[1], "vertical": size[1] > size[0]}, size, 0.0,
+                f"scale={size[0]}:{size[1]}", cfg, ass, ass_t, out)
+    tmp.unlink()
+    return out
 
 
 def short_edit(ed: dict, m: dict) -> dict:
@@ -146,11 +187,19 @@ def previews(src: Path, info: dict, ep: Path, P: dict, cfg: dict, title: str) ->
         # snap to a moment where she's speaking so a caption shows
         w = min(P["words"], key=lambda w: abs(w["start"] - intro - te)) if P["words"] else None
         te = (w["start"] - intro + 0.3) if w else te
-        i = max(k for k in range(len(ed["keep"])) if ed["keep"][k]["out"] <= te)
-        k = ed["keep"][i]
         out = d / f"02_long_{n}.jpg"
-        video.still(src, info, LONG, k["a"] + te - k["out"], filters[i], cfg, ep / "work" / "long.ass", te + intro, out)
+        if P["graphics"]:
+            scene_still(P["scenes"], LONG, te, ep / "work" / "long.ass", te + intro, cfg, out)
+        else:
+            i = max(k for k in range(len(ed["keep"])) if ed["keep"][k]["out"] <= te)
+            k = ed["keep"][i]
+            video.still(src, info, LONG, k["a"] + te - k["out"], filters[i], cfg, ep / "work" / "long.ass", te + intro, out)
         tiles.append(out)
+    if P["graphics"]:   # a few more scenes, so the variety is visible
+        for n, sc in enumerate([s for s in P["scenes"] if s["type"] in ("chapter", "graphic", "notes")][1::4][:3], 1):
+            out = d / f"03_scene_{n}.jpg"
+            scene_still(P["scenes"], LONG, (sc["start"] + sc["end"]) / 2, ep / "work" / "long.ass", (sc["start"] + sc["end"]) / 2 + intro, cfg, out)
+            tiles.append(out)
     for n, b in enumerate(P["broll"][:2], 1):
         im = (KenBurns(R / b["file"], LONG, b["dur"], n, 0.75) if b["type"] == "photo"
               else GraphicScene(b["name"], LONG, b.get("label"))).frame(b["dur"] / 2)
@@ -165,11 +214,15 @@ def previews(src: Path, info: dict, ep: Path, P: dict, cfg: dict, title: str) ->
         ass = captions.write_short(words, SHORT, ep / "work" / f"short_{n}.ass", m["hook"], cfg["shorts_cta"],
                                    se["edited_duration"])
         f = video.piece_filters(info, SHORT, se["keep"], P["face"], cfg)
+        ss = short_scenes(P, se, cfg) if P["graphics"] else []
         for tag, te in (("a", 0.8), ("b", min(se["edited_duration"] - 1, (words[len(words) // 2]["start"] + 0.15) if words else 10))):
             i = max(k for k in range(len(se["keep"])) if se["keep"][k]["out"] <= te)
             k = se["keep"][i]
             out = d / f"05_short_{n}{tag}.jpg"
-            video.still(src, info, SHORT, k["a"] + te - k["out"], f[i], cfg, ass, te, out)
+            if ss:
+                scene_still(ss, SHORT, te, ass, te, cfg, out)
+            else:
+                video.still(src, info, SHORT, k["a"] + te - k["out"], f[i], cfg, ass, te, out)
             vtiles.append(out)
     # contact sheet
     tw, th = 640, 360
@@ -208,6 +261,9 @@ def render(src: Path, info: dict, ep: Path, name: str, P: dict, cfg: dict, title
 
     say("▶ long video: cutting pieces…")
     edited = video.render_pieces(src, info, LONG, ed["keep"], P["face"], cfg, work / "pieces", "long")
+    if P["graphics"]:
+        say("▶ long video: motion graphics…")
+        edited = mg_track(P, P["scenes"], LONG, ed["edited_duration"], edited, work, "long", cfg)
     say("▶ long video: cards, B-roll, music…")
     intro_mp4 = video.render_card("title", cfg["channel"], title, LONG, cfg["intro_seconds"],
                                   work / f"intro_{hashlib.sha1(title.encode()).hexdigest()[:8]}.mp4")
@@ -229,6 +285,8 @@ def render(src: Path, info: dict, ep: Path, name: str, P: dict, cfg: dict, title
         words = edit.map_words(se)
         ass = captions.write_short(words, SHORT, work / f"short_{n}.ass", m["hook"], cfg["shorts_cta"], se["edited_duration"])
         sedited = video.render_pieces(src, info, SHORT, se["keep"], P["face"], cfg, work / "pieces", f"short{n}")
+        if P["graphics"]:
+            sedited = mg_track(P, short_scenes(P, se, cfg), SHORT, se["edited_duration"], sedited, work, f"short{n}", cfg)
         smusic = make_music(se["edited_duration"] + 1, work / f"music_{int(se['edited_duration'])}.wav")
         out = ep / f"{name}_short_{n}_9x16.mp4"
         video.finish_short(sedited, ass, smusic, out, cfg, se["edited_duration"])
@@ -271,6 +329,14 @@ def main(argv=None):
     cfg = load_config(ep)
     src = join_sources(a.videos, ep)
     info = probe(src)
+    if not info["has_video"]:
+        av = ep / "work" / "audio_with_blank_video.mp4"
+        if not av.exists():
+            av.parent.mkdir(parents=True, exist_ok=True)
+            run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "color=c=0x2a1e14:s=1280x720:r=25", "-i", src,
+                 "-shortest", "-c:v", "libx264", "-preset", "veryfast", "-crf", "30", "-c:a", "aac", "-b:a", "192k", av])
+        src = av
+        info = {**probe(src), "has_video": False}
     say(f"■ {name}: {src.name}  {info['width']}x{info['height']}  {info['duration'] / 60:.1f} min"
         f"{'  (vertical phone video)' if info['vertical'] else ''}")
 

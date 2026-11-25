@@ -553,6 +553,74 @@ def draw_lamp(p: Pen, t):
 GRAPHICS.update({"wabour": draw_wabour, "namlia": draw_namlia, "qubqab": draw_qubqab, "lamp": draw_lamp})
 
 
+def draw_roof(p: Pen, t):
+    """السطوح: white laundry flapping on a line in the sun, rooftop parapet."""
+    # sun with slow rays
+    p.circle(0.82, 0.16, 0.07, fill=(246, 214, 140), outline=None)
+    for k in range(12):
+        a = k * math.pi / 6 + t * 0.15
+        p.line([(0.82 + math.cos(a) * 0.09, 0.16 + math.sin(a) * 0.09), (0.82 + math.cos(a) * 0.13, 0.16 + math.sin(a) * 0.13)],
+               fill=_alpha((236, 196, 110), 0.8), w=0.008)
+    # parapet wall + roof floor
+    p.rect(0.0, 0.78, 1.0, 0.98, fill=(206, 182, 146), outline=None)
+    p.rect(0.0, 0.7, 1.0, 0.78, fill=(222, 200, 166), w=0.008)
+    for x in range(0, 10):
+        p.line([(x * 0.11, 0.7), (x * 0.11, 0.78)], fill=_alpha(INK_SOFT, 0.4), w=0.004)
+    # poles + rope (sags)
+    p.line([(0.08, 0.72), (0.08, 0.3)], fill=WOOD_DK, w=0.014)
+    p.line([(0.92, 0.72), (0.92, 0.3)], fill=WOOD_DK, w=0.014)
+    rope = [(0.08 + u * 0.84, 0.32 + 0.06 * math.sin(u * math.pi)) for u in [i / 30 for i in range(31)]]
+    p.line(rope, fill=INK_SOFT, w=0.005)
+    # clothes: shirt, sheet, galabeya - flapping in the breeze
+    items = [(0.2, 0.13, 0.2, "shirt"), (0.42, 0.18, 0.3, "sheet"), (0.66, 0.12, 0.26, "gal"), (0.82, 0.07, 0.14, "towel")]
+    for k, (cx, w, h, kind) in enumerate(items):
+        y0 = 0.32 + 0.06 * math.sin((cx - 0.08) / 0.84 * math.pi)
+        sway = 0.02 * math.sin(t * 2.2 + k * 1.3)
+        col = (248, 244, 232) if kind != "towel" else (214, 186, 140)
+        pts = [(cx - w / 2, y0), (cx + w / 2, y0), (cx + w / 2 + sway, y0 + h), (cx - w / 2 + sway * 1.3, y0 + h)]
+        if kind == "shirt":
+            pts = [(cx - w / 2, y0), (cx + w / 2, y0), (cx + w / 2 + 0.03, y0 + 0.05), (cx + w / 2 - 0.01, y0 + 0.07),
+                   (cx + w / 2 - 0.01 + sway, y0 + h), (cx - w / 2 + 0.01 + sway, y0 + h), (cx - w / 2 + 0.01, y0 + 0.07),
+                   (cx - w / 2 - 0.03, y0 + 0.05)]
+        p.poly(pts, fill=col, w=0.006)
+        for f in range(1, 3):   # folds
+            fx = cx - w / 2 + f * w / 3
+            p.line([(fx, y0 + 0.02), (fx + sway * 1.1, y0 + h - 0.02)], fill=_alpha(INK_SOFT, 0.25), w=0.004)
+        for px_ in (cx - w / 2 + 0.015, cx + w / 2 - 0.015):   # pegs
+            p.rect(px_ - 0.006, y0 - 0.015, px_ + 0.006, y0 + 0.02, fill=WOOD, w=0.003)
+    # a bird passing
+    bx = (t * 0.08) % 1.4 - 0.2
+    by = 0.12 + 0.02 * math.sin(t * 3)
+    flap = 0.015 * math.sin(t * 12)
+    p.line([(bx - 0.03, by - flap), (bx, by), (bx + 0.03, by - flap)], fill=INK, w=0.006)
+
+
+def draw_door(p: Pen, t):
+    """باب البيت: the old wooden street door, always ajar, warm light from inside."""
+    p.rect(0.18, 0.06, 0.82, 0.92, fill=(196, 170, 134), outline=None)                 # wall
+    for y in (0.2, 0.4, 0.6, 0.8):
+        p.line([(0.18, y), (0.82, y)], fill=_alpha(INK_SOFT, 0.15), w=0.004)
+    p.arc(0.5, 0.26, 0.2, 0.16, 180, 360, fill=WOOD_DK, w=0.03)                          # arch
+    p.rect(0.3, 0.26, 0.7, 0.9, fill=(250, 224, 160), outline=None)                     # light inside
+    glow = 0.35 + 0.1 * math.sin(t * 1.5)
+    p.poly([(0.3, 0.9), (0.7, 0.9), (0.95, 1.0), (0.05, 1.0)], fill=_alpha((250, 224, 160), glow), outline=None)
+    swing = 0.06 + 0.015 * math.sin(t * 0.9)                                             # door leaf, ajar
+    leaf = [(0.3, 0.26), (0.3 + 0.4 - swing * 3, 0.24), (0.3 + 0.4 - swing * 3, 0.92), (0.3, 0.9)]
+    p.poly(leaf, fill=WOOD, w=0.009)
+    lx = 0.3 + (0.4 - swing * 3) / 2
+    for y0 in (0.32, 0.6):                                                              # carved panels
+        p.rect(lx - 0.1, y0, lx + 0.08, y0 + 0.22, fill=WOOD_LT, w=0.006)
+    p.circle(0.3 + 0.4 - swing * 3 - 0.03, 0.58, 0.012, fill=BRASS, w=0.004)            # knocker
+    p.arc(0.3 + 0.4 - swing * 3 - 0.03, 0.6, 0.02, 0.025, 0, 180, fill=BRASS_DK, w=0.006)
+    p.rect(0.26, 0.9, 0.74, 0.94, fill=(170, 150, 120), w=0.006)                        # step
+    for k in range(6):                                                                  # dust in the light
+        ph = (t * 0.1 + k / 6) % 1
+        p.circle(0.4 + 0.2 * ((k * 37) % 10) / 10, 0.85 - ph * 0.5, 0.004, fill=_alpha((255, 248, 230), 0.8 * (1 - ph)), outline=None)
+
+
+GRAPHICS.update({"roof": draw_roof, "door": draw_door})
+
+
 # ---------------------------------------------------------------- scene renderers
 @lru_cache(8)
 def _paper(size):
@@ -705,7 +773,7 @@ class CardScene:
         k1 = ease(t / 1.0)
         k2 = ease((t - 0.6) / 1.0)
         out = 1.0 - ease((t - (self.duration - 0.6)) / 0.6) if self.kind in ("title", "outro") else 1.0
-        if self.kind in ("title", "outro", "cta"):
+        if self.kind in ("title", "outro", "cta", "chapter"):
             px = int((W * 0.13) if portrait else (H * 0.15))
             f = _font(font_display(), px)
             lines = wrap_ar(self.title, f, W * 0.8)

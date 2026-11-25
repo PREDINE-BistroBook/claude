@@ -14,7 +14,8 @@ TOPICS = [
     dict(id="namlia", graphic="namlia", label="النملية", words=["نمليه", "النمليه", "تلاجه", "التلاجه", "نحفظ الاكل"]),
     dict(id="qubqab", graphic="qubqab", label="القبقاب الخشب", words=["قبقاب", "القبقاب", "طرقعه", "الطرقعه"]),
     dict(id="lamp", graphic="lamp", label="لمبة الجاز", words=["لمبه الجاز", "لمبه جاز", "شمعه", "الشمعه", "النور قطع", "النور يقطع", "الكهربا قطعت"]),
-    dict(id="roof", words=["السطوح", "سطوح", "السطح", "ننشر", "نشر الغسيل", "في الشمس"]),
+    dict(id="roof", graphic="roof", label="السطوح", words=["السطوح", "سطوح", "السطح", "ننشر", "نشر الغسيل", "في الشمس"]),
+    dict(id="door", graphic="door", label="باب البيت", words=["مدخل", "المدخل", "باب على الشارع", "الباب مفتوح", "بيتقفل", "بابها", "باب البيت"]),
     dict(id="brassbed", words=["سرير نحاس", "السرير النحاس", "سرير النحاس"]),
     dict(id="bathroom", words=["حمام بلدي", "الحمام البلدي"]),
     # --- objects with a drawn motion graphic ---
