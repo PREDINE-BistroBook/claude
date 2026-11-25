@@ -174,7 +174,8 @@ def build(sc: dict, size, idx: int, cfg: dict):
     from .graphics import CardScene, GraphicScene
     dur = sc["end"] - sc["start"] + XF
     if sc["type"] == "graphic":
-        label = sc.get("label") if size[0] > size[1] else None     # vertical: captions carry the words
+        # no name label in vertical (captions carry the words) or in close-ups (the zoom pushes it under the captions)
+        label = sc.get("label") if size[0] > size[1] and not sc.get("move", "").startswith("close") else None
         return Camera(GraphicScene(sc["name"], size, label), size, dur, sc.get("move", "in"))
     if sc["type"] == "photo":
         return KenBurns(ROOT / sc["file"], size, dur, idx + 3, 0.75)

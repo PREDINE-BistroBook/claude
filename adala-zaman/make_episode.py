@@ -176,7 +176,8 @@ def mg_track(P: dict, scenes: list[dict], size, total: float, edited: Path, work
     """Render the motion-graphics picture and put the edited voice under it."""
     import json as _json
     from az import mg
-    key = hashlib.sha1((_json.dumps(scenes, ensure_ascii=False, sort_keys=True) + str(size)).encode()).hexdigest()[:10]
+    code = "".join((ROOT / "az" / f).read_text() for f in ("mg.py", "graphics.py", "broll.py"))   # code change = re-render
+    key = hashlib.sha1((_json.dumps(scenes, ensure_ascii=False, sort_keys=True) + str(size) + code).encode()).hexdigest()[:10]
     pic = mg.render(scenes, size, total, work / f"mg_{tag}_{key}.mp4", cfg)
     out = work / f"mg_{tag}_{key}_with_voice.mkv"
     if not out.exists():
