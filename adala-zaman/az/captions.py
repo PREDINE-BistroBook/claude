@@ -39,7 +39,7 @@ def _style(name, size, primary=CREAM, outline=BROWN, back="&H96000000", border=1
 
 def write_long(words: list[dict], size, out: Path, end_limit: float | None = None) -> Path:
     W, H = size
-    body = [_header(W, H, [_style("Cap", 64, ol=4, sh=2.5, mv=70)])]
+    body = [_header(W, H, [_style("Cap", 62, outline=BOX, back=BOX, border=3, ol=14, sh=0, mv=60)])]
     cues = caption_lines(words, max_chars=44, max_dur=4.8)
     for i, c in enumerate(cues):
         st, en = c[0]["start"], c[-1]["end"] + 0.3
@@ -54,7 +54,7 @@ def write_long(words: list[dict], size, out: Path, end_limit: float | None = Non
 
 def write_short(words: list[dict], size, out: Path, hook: str = "", cta: str = "", duration: float = 0.0) -> Path:
     W, H = size
-    styles = [_style("Word", 132, ol=8, sh=3, align=5),
+    styles = [_style("Word", 124, outline=BOX, back=BOX, border=3, ol=20, sh=0, align=5),
               _style("Hook", 86, outline=BOX, back=BOX, border=3, ol=24, sh=0, align=8, mv=260),
               _style("CTA", 54, outline=BOX, back=BOX, border=3, ol=16, sh=0, align=2, mv=200)]
     body = [_header(W, H, styles)]

@@ -91,7 +91,7 @@ def plan(src: Path, info: dict, ep: Path, name: str, cfg: dict) -> dict:
     sp = d / "shorts.json"
     prev = read_json(sp) if sp.exists() else {}
     if prev.get("transcript_hash") == th and prev.get("moments"):
-        moments = prev["moments"]
+        moments = shorts.validate(rows, prev["moments"])     # hand-edited picks get checked too
     else:
         say("  picking Shorts moments…")
         moments = shorts.pick(tr, ed, cfg, notes_images(), notes_text())

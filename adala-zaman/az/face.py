@@ -43,9 +43,17 @@ def track(src: Path, out: Path) -> dict:
             pts.append([i / SAMPLE_FPS, (x + w / 2) / SW, (y + h / 2) / sh, w / SW])
         i += 1
     p.wait()
-    data = {"n_samples": i, "hits": len(pts), "points": pts}
+    raw_hits = len(pts)
+    # keep only detections consistent with where her face usually is (drops false hits on
+    # patterns, pictures, handwriting...); if too few agree, treat the video as faceless
+    if pts:
+        a = np.array(pts)
+        mx, my, mw = np.median(a[:, 1]), np.median(a[:, 2]), np.median(a[:, 3])
+        ok = (np.hypot(a[:, 1] - mx, a[:, 2] - my) < 0.15) & (a[:, 3] > mw * 0.6) & (a[:, 3] < mw * 1.6)
+        pts = a[ok].tolist() if ok.sum() >= 0.25 * i else []
+    data = {"n_samples": i, "hits": len(pts), "raw_hits": raw_hits, "points": pts}
     write_json(out, data)
-    print(f"  face found in {len(pts)}/{i} sampled frames", flush=True)
+    print(f"  face found in {len(pts)}/{i} sampled frames" + (f" (ignored {raw_hits - len(pts)} inconsistent detections)" if raw_hits > len(pts) else ""), flush=True)
     return data
 
 

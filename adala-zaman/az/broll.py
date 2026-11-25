@@ -43,11 +43,15 @@ def load_photos() -> list[dict]:
 def plan_broll(sentences: list[dict], cfg: dict, total: float) -> list[dict]:
     """sentences: [{t0, t1, text}] on the edited timeline."""
     photos = load_photos()
-    used, last_t, plan = {}, -1e9, []
+    used, last_t, last_end, plan = {}, -1e9, -1e9, []
     for s in sentences:
-        if s["t0"] < 8 or s["t0"] - last_t < cfg["broll_every"] or s["t0"] > total - 6:
+        if s["t0"] < 8 or s["t0"] - last_end < 2 or s["t0"] > total - 3:
             continue
         topics = match_topics(s["text"])
+        # normal spacing is broll_every seconds; a topic not shown yet may come sooner
+        fresh = any(tp.get("graphic") and not used.get("g:" + tp["graphic"]) for tp, _ in topics)
+        if s["t0"] - last_t < (cfg["broll_every"] / 2 if fresh else cfg["broll_every"]):
+            continue
         toks = set()
         for tok in norm_ar(s["text"]).split():
             toks |= token_forms(tok)
@@ -56,19 +60,19 @@ def plan_broll(sentences: list[dict], cfg: dict, total: float) -> list[dict]:
             sc = len(ph["tokens"] & toks) * 2 + sum(h * 3 for tp, h in topics if tp["id"] in ph["topics"]) - used.get(ph["file"], 0) * 3
             if sc > score:
                 best, score = ph, sc
-        dur = float(min(6.0, max(4.0, s["t1"] - s["t0"] + 0.5)))
+        dur = float(min(6.0, max(4.0, s["t1"] - s["t0"] + 0.5), total - s["t0"] - 0.3))
         if best:
             used[best["file"]] = used.get(best["file"], 0) + 1
             plan.append({"t": round(s["t0"] + 0.2, 2), "dur": dur, "type": "photo", "file": best["file"],
                          "why": f"she says: {s['text'][:50]}"})
-            last_t = s["t0"]
+            last_t, last_end = s["t0"], s["t0"] + 0.2 + dur
         elif cfg.get("broll_graphics"):
             g = next((tp for tp, _ in topics if tp.get("graphic") and used.get("g:" + tp["graphic"], 0) == 0), None)
             if g:
                 used["g:" + g["graphic"]] = 1
                 plan.append({"t": round(s["t0"] + 0.2, 2), "dur": dur, "type": "graphic", "name": g["graphic"],
                              "label": g.get("label"), "why": f"mentions {g['id']} (no matching photo)"})
-                last_t = s["t0"]
+                last_t, last_end = s["t0"], s["t0"] + 0.2 + dur
     return plan
 
 

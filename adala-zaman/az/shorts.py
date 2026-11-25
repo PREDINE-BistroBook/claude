@@ -124,7 +124,11 @@ def pick(tr: dict, edit: dict, cfg: dict, notes: list, notes_txt: str = "") -> l
             moments = [{**m, "picked_by": "claude"} for m in res["moments"]]
     if not moments:
         moments = heuristic(rows, k_min, k_max)
-    # validate & snap durations to 30-60 s
+    return validate(rows, moments)
+
+
+def validate(rows: list[dict], moments: list[dict]) -> list[dict]:
+    """Snap each moment to 30-60 s on the edited timeline and attach its raw range."""
     idx = {r["id"]: n for n, r in enumerate(rows)}
     good = []
     for m in moments:
