@@ -787,6 +787,18 @@ class CardScene:
                 fs = _font(font_text(), int(px * 0.38))
                 d.text((W / 2, oy + px * 0.75), self.subtitle, font=fs, fill=(*INK_SOFT, int(255 * k2 * out)), anchor="mm")
             _ornament(d, W / 2, y0 - px * 0.95, W * 0.12 * k2 + 1, int(px * 0.35), int(255 * k2 * out))
+        elif self.kind == "endscreen":
+            # title + subtitle in the top band; the middle stays clear for YouTube's end-screen boxes
+            px = int((W * 0.1) if portrait else (H * 0.11))
+            f = _font(font_display(), px)
+            y = H * 0.17 - (H * 0.02) * (1 - k1)
+            d.text((W / 2, y), self.title, font=f, fill=(*INK, int(255 * k1)), anchor="mm")
+            _ornament(d, W / 2, y + px * 0.85, W * 0.2 * k2 + 1, int(px * 0.45), int(255 * k2))
+            if self.subtitle:
+                fs = _font(font_text(), int(px * 0.42))
+                d.text((W / 2, y + px * 1.5), self.subtitle, font=fs, fill=(*INK_SOFT, int(255 * k2)), anchor="mm")
+            fs = _font(font_display(), int(px * 0.5))
+            d.text((W / 2, H * 0.9), "عدالة زمان", font=fs, fill=(*INK_SOFT, int(200 * k2)), anchor="mm")
         elif self.kind == "quote":
             px = int((W * 0.085) if portrait else (H * 0.085))
             f = _font(font_display(), px)

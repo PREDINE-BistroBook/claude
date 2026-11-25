@@ -18,7 +18,9 @@ from .keywords import emotion_score, match_topics
 
 SCHEMA = {
     "type": "object",
-    "properties": {"moments": {"type": "array", "items": {
+    "properties": {
+        "cold_open_id": {"type": "integer", "description": "sentence id of the best 4-8 s line to open the long video with, before the title card"},
+        "moments": {"type": "array", "items": {
         "type": "object",
         "properties": {
             "start_id": {"type": "integer"}, "end_id": {"type": "integer"},
@@ -27,7 +29,7 @@ SCHEMA = {
             "why": {"type": "string", "description": "1-3 sentences in English: why this moment works as a Short"},
         },
         "required": ["start_id", "end_id", "hook", "title", "why"], "additionalProperties": False}}},
-    "required": ["moments"], "additionalProperties": False,
+    "required": ["cold_open_id", "moments"], "additionalProperties": False,
 }
 
 SYSTEM = """You are the editor of "عدالة زمان", a YouTube channel where an Egyptian mother, عدالة, tells stories
@@ -118,10 +120,14 @@ def pick(tr: dict, edit: dict, cfg: dict, notes: list, notes_txt: str = "") -> l
                     "self-contained (understandable with no context), start on a strong opening line (no 'و', 'فـ' or "
                     "mid-thought start), and carry an emotional or funny story with a payoff before it ends. "
                     "Prefer variety across the episode. Write the hook as text a viewer reads in the first 2 seconds: "
-                    "Egyptian Arabic, max 8 words, curiosity or emotion, no clickbait lies."}]
+                    "Egyptian Arabic, max 8 words, curiosity or emotion, no clickbait lies. Also give cold_open_id: the "
+                    "one sentence (4-8 s) that best hooks a viewer in the first seconds of the long video - funny, "
+                    "surprising or emotional, understandable alone, and not a spoiler of the episode's best payoff."}]
         res = ai.ask_json(SYSTEM, content, SCHEMA, cfg["claude_model"])
         if res and res.get("moments"):
             moments = [{**m, "picked_by": "claude"} for m in res["moments"]]
+            if res.get("cold_open_id") and not cfg.get("cold_open_id"):
+                moments[0]["cold_open_id"] = res["cold_open_id"]
     if not moments:
         moments = heuristic(rows, k_min, k_max)
     return validate(rows, moments)

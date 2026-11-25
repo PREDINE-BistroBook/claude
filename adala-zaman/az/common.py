@@ -30,7 +30,7 @@ DEFAULTS = {
     "outro_sub": "واحكولنا ذكرياتكم في التعليقات",
     "shorts_cta": "تابعونا لحكايات زمان",
     "intro_seconds": 5.0,
-    "outro_seconds": 6.0,
+    "outro_seconds": 12.0,         # room for YouTube end-screen elements (5-20 s)
     "whisper_model": "large-v3",
     "whisper_prompt": "",          # optional spelling hint, e.g. names from her notes
     "max_pause": 0.6,              # pauses longer than this get shortened

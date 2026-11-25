@@ -126,25 +126,41 @@ def _ass_arg(p: Path) -> str:
 
 
 def finish_long(edited: Path, intro: Path, outro: Path, broll: list[tuple[Path, float, float]], ass: Path,
-                music: Path, out: Path, cfg: dict, edited_dur: float) -> Path:
+                music: Path, out: Path, cfg: dict, edited_dur: float, teaser: tuple[float, float] | None = None) -> Path:
+    """teaser = (start, end) on the edited timeline: a cold open played BEFORE the title card."""
     W, H = LONG
     ti, to = cfg["intro_seconds"], cfg["outro_seconds"]
-    total = ti + edited_dur + to
+    tt = (teaser[1] - teaser[0]) if teaser else 0.0
+    total = tt + ti + edited_dur + to
     ins = ["-i", intro, "-i", edited, "-i", outro, "-i", music]
     fc = ["[1:v]setpts=PTS-STARTPTS[m0]"]
     cur = "m0"
+    nb = len(broll)
     for n, (clip, t, d) in enumerate(broll):
         ins += ["-i", clip]
-        idx = 4 + n
-        fc.append(f"[{idx}:v]format=yuva420p,fade=t=in:d=0.45:alpha=1,fade=t=out:st={d - 0.45:.2f}:d=0.45:alpha=1,"
+        fc.append(f"[{4 + n}:v]format=yuva420p,fade=t=in:d=0.45:alpha=1,fade=t=out:st={d - 0.45:.2f}:d=0.45:alpha=1,"
                   f"setpts=PTS-STARTPTS+{t:.3f}/TB[b{n}]")
         fc.append(f"[{cur}][b{n}]overlay=enable='between(t,{t:.3f},{t + d:.3f})':eof_action=pass[m{n + 1}]")
         cur = f"m{n + 1}"
+    vparts, aparts = [], []
+    if teaser:   # separate decoder on the same file, so nothing has to be buffered
+        k = 4 + nb
+        ins += ["-ss", f"{teaser[0]:.3f}", "-t", f"{tt:.3f}", "-i", edited]
+        fc.append(f"[{k}:v]setpts=PTS-STARTPTS,fade=t=out:st={tt - 0.25:.3f}:d=0.25[tv]")
+        fc.append(f"[{k}:a]asetpts=PTS-STARTPTS,aformat=sample_rates=48000:channel_layouts=stereo,"
+                  f"afade=t=in:d=0.05,afade=t=out:st={tt - 0.3:.3f}:d=0.3[ta]")
+        vparts.append("[tv]")
+        aparts.append("[ta]")
+    fc.append(f"aevalsrc=0:d={ti:.3f}:s=48000:c=stereo[sil]")
+    fc.append("[1:a]asetpts=PTS-STARTPTS,aformat=sample_rates=48000:channel_layouts=stereo[ma]")
+    vparts += ["[0:v]", f"[{cur}]", "[2:v]"]
+    aparts += ["[sil]", "[ma]"]
     grain = f"noise=alls={cfg['grain']}:allf=t," if cfg["grain"] else ""
-    fc += [f"[0:v][{cur}][2:v]concat=n=3:v=1:a=0,{grain}vignette=angle=PI/5,"
-           f"ass='{_ass_arg(ass)}':fontsdir='{Path(font_text()).parent}',"
-           f"fade=t=in:d=0.5,fade=t=out:st={total - 0.8:.3f}:d=0.8,format=yuv420p[vout]"]
-    fc += _audio_mix(ti, total, cfg["music_db"])
+    fc.append(f"{''.join(vparts)}concat=n={len(vparts)}:v=1:a=0,{grain}vignette=angle=PI/5,"
+              f"ass='{_ass_arg(ass)}':fontsdir='{Path(font_text()).parent}',"
+              f"fade=t=in:d=0.4,fade=t=out:st={total - 0.8:.3f}:d=0.8,format=yuv420p[vout]")
+    fc.append(f"{''.join(aparts)}concat=n={len(aparts)}:v=0:a=1[voice]")
+    fc += _audio_mix(0.0, total, cfg["music_db"], src="[voice]")
     _encode(ins, fc, out, total)
     return out
 
@@ -159,11 +175,12 @@ def finish_short(edited: Path, ass: Path, music: Path, out: Path, cfg: dict, dur
     return out
 
 
-def _audio_mix(delay: float, total: float, music_db: float) -> list[str]:
+def _audio_mix(delay: float, total: float, music_db: float, src: str = "[1:a]") -> list[str]:
     d = int(delay * 1000)
-    return [f"[1:a]highpass=f=70,afftdn=nf=-28,acompressor=threshold=0.1:ratio=2.5:attack=10:release=200,"
-            f"loudnorm=I=-16:TP=-1.5:LRA=9,aformat=sample_rates=48000:channel_layouts=stereo,"
-            f"adelay={d}|{d},apad=whole_dur={total:.3f}[vox]",
+    adelay = f"adelay={d}|{d}," if d else ""
+    return [f"{src}highpass=f=70,afftdn=nf=-28,acompressor=threshold=0.1:ratio=2.5:attack=10:release=200,"
+            f"loudnorm=I=-14:TP=-1.5:LRA=9,aformat=sample_rates=48000:channel_layouts=stereo,"
+            f"{adelay}apad=whole_dur={total:.3f}[vox]",
             "[vox]asplit=2[vox1][vox2]",
             f"[3:a]aformat=sample_rates=48000:channel_layouts=stereo,volume={music_db}dB[mus]",
             "[mus][vox2]sidechaincompress=threshold=0.012:ratio=9:attack=20:release=650:makeup=1[duck]",

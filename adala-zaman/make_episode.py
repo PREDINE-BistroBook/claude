@@ -91,8 +91,6 @@ def plan(src: Path, info: dict, ep: Path, name: str, cfg: dict) -> dict:
         write_json(d / "scenes.json", scenes)
         (d / "scenes.txt").write_text(mg.summary(scenes), encoding="utf-8")
     br = [] if graphics else broll.plan_broll(rows, cfg, ed["edited_duration"])
-    for b in br:
-        b["t_final"] = round(b["t"] + intro, 2)
     write_json(d / "broll.json", br)
 
     # Shorts: reuse previous picks if the transcript is unchanged (saves API calls)
@@ -109,11 +107,63 @@ def plan(src: Path, info: dict, ep: Path, name: str, cfg: dict) -> dict:
         m["transcript"] = " ".join(r["text"] for r in rows if m["start_id"] <= r["id"] <= m["end_id"])
     (d / "shorts.md").write_text(shorts_md(moments), encoding="utf-8")
 
-    words = edit.map_words(ed, offset=intro)
-    captions.write_long(words, LONG, ep / "work" / "long.ass", end_limit=intro + ed["edited_duration"])
+    # cold open: her strongest line plays before the title card
+    teaser = pick_teaser(rows, moments, cfg)
+    tt = (teaser[1] - teaser[0]) if teaser else 0.0
+    if teaser:
+        say(f"  cold open ({tt:.1f}s): «{teaser[2]}»")
+    lead = tt + intro                                     # where the edited story starts in the final video
+    all_w = edit.map_words(ed)
+    words = ([{**w, "start": w["start"] - teaser[0], "end": w["end"] - teaser[0]} for w in all_w
+              if teaser and teaser[0] <= w["start"] and w["end"] <= teaser[1]]
+             + [{**w, "start": w["start"] + lead, "end": w["end"] + lead} for w in all_w])
+    captions.write_long(words, LONG, ep / "work" / "long.ass", end_limit=lead + ed["edited_duration"])
     write_srt([], ep / f"{name}_long_captions.srt", words=words)
+    for b in br:
+        b["t_final"] = round(b["t"] + lead, 2)
     return {"tr": tr, "edit": ed, "face": ftrack, "broll": br, "moments": moments, "rows": rows, "words": words,
-            "graphics": graphics, "scenes": scenes}
+            "graphics": graphics, "scenes": scenes, "teaser": teaser, "lead": lead}
+
+
+def thumbnails(ep: Path, name: str, P: dict, cfg: dict, src: Path, title: str) -> list[Path]:
+    from az import thumbs
+    exact = bool(cfg.get("thumb_texts"))          # 2-4 words per thumbnail, chosen by hand (episode.json)
+    texts = cfg.get("thumb_texts") or ([title] + [m["hook"] for m in P["moments"][:2]])
+    objs = []
+    for s_ in P.get("scenes", []):
+        if s_.get("type") == "graphic" and s_["name"] not in objs:
+            objs.append(s_["name"])
+    if not objs:
+        from az.keywords import match_topics
+        objs = [t["graphic"] for t, _ in match_topics(" ".join(r["text"] for r in P["rows"])) if t.get("graphic")]
+    contexts = [" ".join(r["text"] for r in P["rows"][:12])] + [m.get("transcript", m["hook"]) for m in P["moments"]]
+    return thumbs.make(ep, name, texts, None if P["graphics"] else src, None if P["graphics"] else P["face"], objs, exact,
+                       contexts)
+
+
+def pick_teaser(rows: list[dict], moments: list[dict], cfg: dict):
+    """(start, end, text) on the edited timeline: 4-8 s, the most hook-like sentence(s).
+    Override with "cold_open_id": <sentence number> in episode.json, or false to switch it off."""
+    from az.keywords import emotion_score, match_topics
+    if cfg.get("cold_open_id") is False or not rows:
+        return None
+    def score(r):
+        t = r["text"]
+        return (emotion_score(t) * 2 + sum(h for _, h in match_topics(t)) + 3 * bool(re.search(r"[؟?!]", t))
+                + 2 * any(r["id"] == m["end_id"] for m in moments))      # a Short's payoff line
+    cands = [r for r in rows if r["t0"] > 3] or rows
+    pick_id = cfg.get("cold_open_id") or next((m.get("cold_open_id") for m in moments if m.get("cold_open_id")), None)
+    if pick_id:
+        cands = [r for r in rows if r["id"] == pick_id] or cands
+    best = max(cands, key=score)
+    i = rows.index(best)
+    a, b, text = best["t0"] - 0.1, best["t1"] + 0.25, best["text"]
+    while b - a < 4 and i + 1 < len(rows) and rows[i + 1]["t1"] - a <= 8.5:   # too short: add the next sentence
+        i += 1
+        b, text = rows[i]["t1"] + 0.25, text + " " + rows[i]["text"]
+    if b - a < 2.5:
+        return None
+    return (max(0.0, round(a, 3)), round(min(b, a + 8.5), 3), text)
 
 
 def short_scenes(P: dict, se: dict, cfg: dict) -> list[dict]:
@@ -186,26 +236,26 @@ def previews(src: Path, info: dict, ep: Path, P: dict, cfg: dict, title: str) ->
         te = ed["edited_duration"] * frac
         # snap to a moment where she's speaking so a caption shows
         w = min(P["words"], key=lambda w: abs(w["start"] - intro - te)) if P["words"] else None
-        te = (w["start"] - intro + 0.3) if w else te
+        te = (w["start"] - P["lead"] + 0.3) if w else te
         out = d / f"02_long_{n}.jpg"
         if P["graphics"]:
-            scene_still(P["scenes"], LONG, te, ep / "work" / "long.ass", te + intro, cfg, out)
+            scene_still(P["scenes"], LONG, te, ep / "work" / "long.ass", te + P["lead"], cfg, out)
         else:
             i = max(k for k in range(len(ed["keep"])) if ed["keep"][k]["out"] <= te)
             k = ed["keep"][i]
-            video.still(src, info, LONG, k["a"] + te - k["out"], filters[i], cfg, ep / "work" / "long.ass", te + intro, out)
+            video.still(src, info, LONG, k["a"] + te - k["out"], filters[i], cfg, ep / "work" / "long.ass", te + P["lead"], out)
         tiles.append(out)
     if P["graphics"]:   # a few more scenes, so the variety is visible
         for n, sc in enumerate([s for s in P["scenes"] if s["type"] in ("chapter", "graphic", "notes")][1::4][:3], 1):
             out = d / f"03_scene_{n}.jpg"
-            scene_still(P["scenes"], LONG, (sc["start"] + sc["end"]) / 2, ep / "work" / "long.ass", (sc["start"] + sc["end"]) / 2 + intro, cfg, out)
+            scene_still(P["scenes"], LONG, (sc["start"] + sc["end"]) / 2, ep / "work" / "long.ass", (sc["start"] + sc["end"]) / 2 + P["lead"], cfg, out)
             tiles.append(out)
     for n, b in enumerate(P["broll"][:2], 1):
         im = (KenBurns(R / b["file"], LONG, b["dur"], n, 0.75) if b["type"] == "photo"
               else GraphicScene(b["name"], LONG, b.get("label"))).frame(b["dur"] / 2)
         im.save(d / f"03_broll_{n}.jpg", quality=90)
         tiles.append(d / f"03_broll_{n}.jpg")
-    CardScene("outro", LONG, cfg["outro_title"], cfg["outro_sub"], cfg["outro_seconds"]).frame(3).save(d / "04_outro.jpg", quality=90)
+    CardScene("endscreen", LONG, cfg["outro_title"], cfg["outro_sub"], cfg["outro_seconds"]).frame(3).save(d / "04_outro.jpg", quality=90)
     tiles.append(d / "04_outro.jpg")
     vtiles = []
     for n, m in enumerate(P["moments"], 1):
@@ -248,10 +298,10 @@ def render(src: Path, info: dict, ep: Path, name: str, P: dict, cfg: dict, title
     t0 = time.time()
 
     say("▶ texts (titles, descriptions, hashtags, pinned comments)…")
-    chap_src = [(r["t0"] + intro, r["text"]) for r in P["rows"]]
+    chap_src = [(r["t0"] + P["lead"], r["text"]) for r in P["rows"]]
     full_text = " ".join(r["text"] for r in P["rows"])
     shorts_in = [{**m} for m in P["moments"]]
-    tx = texts.write(ep, name, title, full_text, chap_src, shorts_in, notes_images(), cfg, intro, notes_text())
+    tx = texts.write(ep, name, title, full_text, chap_src, shorts_in, notes_images(), cfg, P["lead"], notes_text())
     if not title and tx.get("written_by") == "claude":
         title = re.sub(r"\s*[|｜-]\s*عدالة زمان\s*$", "", tx["long"]["titles"][0]).strip()
     if not title:
@@ -259,6 +309,8 @@ def render(src: Path, info: dict, ep: Path, name: str, P: dict, cfg: dict, title
     if title:
         say(f"  episode title: {title}")
 
+    say("▶ thumbnails…")
+    thumbnails(ep, name, P, cfg, src, title)
     say("▶ long video: cutting pieces…")
     edited = video.render_pieces(src, info, LONG, ed["keep"], P["face"], cfg, work / "pieces", "long")
     if P["graphics"]:
@@ -267,16 +319,17 @@ def render(src: Path, info: dict, ep: Path, name: str, P: dict, cfg: dict, title
     say("▶ long video: cards, B-roll, music…")
     intro_mp4 = video.render_card("title", cfg["channel"], title, LONG, cfg["intro_seconds"],
                                   work / f"intro_{hashlib.sha1(title.encode()).hexdigest()[:8]}.mp4")
-    outro_mp4 = video.render_card("outro", cfg["outro_title"], cfg["outro_sub"], LONG, cfg["outro_seconds"], work / "outro.mp4")
+    outro_mp4 = video.render_card("endscreen", cfg["outro_title"], cfg["outro_sub"], LONG, cfg["outro_seconds"], work / f"outro_end_{int(cfg['outro_seconds'])}.mp4")
     clips = []
     for n, b in enumerate(P["broll"]):
         key = hashlib.sha1(repr(sorted(b.items())).encode()).hexdigest()[:10]
         clips.append((broll.render_clip(b, LONG, work / "broll" / f"broll_{key}.mp4", n + 1), b["t"], b["dur"]))
-    total = intro + ed["edited_duration"] + cfg["outro_seconds"]
+    total = P["lead"] + ed["edited_duration"] + cfg["outro_seconds"]
     music = make_music(total + 1, work / f"music_{int(total)}.wav")
     say("▶ long video: finishing (grade, grain, captions, mix)…")
     long_out = ep / f"{name}_long_16x9.mp4"
-    video.finish_long(edited, intro_mp4, outro_mp4, clips, work / "long.ass", music, long_out, cfg, ed["edited_duration"])
+    video.finish_long(edited, intro_mp4, outro_mp4, clips, work / "long.ass", music, long_out, cfg, ed["edited_duration"],
+                      teaser=P["teaser"][:2] if P["teaser"] else None)
     say(f"  ✓ {long_out.relative_to(ROOT)}")
 
     for n, m in enumerate(P["moments"], 1):
@@ -354,6 +407,8 @@ def main(argv=None):
     P = plan(src, info, ep, name, cfg)
     if not (a.render or a.all):
         sheet = previews(src, info, ep, P, cfg, meta["title"] or "عنوان الحلقة")
+        th = thumbnails(ep, name, P, cfg, src, meta["title"] or "عنوان الحلقة")
+        say(f"  thumbnails: {', '.join(p.name for p in th)}")
         say(f"\n  cuts:     {(ep / '02_edit' / 'cuts.txt').relative_to(ROOT)}")
         say(f"  B-roll:   {len(P['broll'])} inserts  ({(ep / '02_edit' / 'broll.json').relative_to(ROOT)})")
         for n, m in enumerate(P["moments"], 1):
